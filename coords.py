@@ -1,18 +1,17 @@
 import math
 import numpy as np
-import matplotlib as mpl
 import svg
-import scipy.spatial as spatial
-from scipy.spatial.transform import Rotation
 import json
-from random import random
 import cv2
+# import matplotlib as mpl
+# import scipy.spatial as spatial
+# from scipy.spatial.transform import Rotation
+# from random import random
 
 
 def xyz_ll(xyz: tuple) -> tuple:
     x, y, z = xyz
     return math.degrees(math.atan2(z, math.sqrt(x * x + y * y))), math.degrees(math.atan2(y, x))
-
 
 def ll_xyz(ll: tuple) -> tuple:
     phi, theta = math.radians(ll[0]), math.radians(ll[1])
@@ -264,32 +263,44 @@ class Photo:
         # self.lat = np.linspace(0., 90., num=self.height, endpoint=True)
         # self.lon = np.linspace(-90., 90., num=self.width, endpoint=True)
 
-        img = cv2.imread('world.topo.bathy.200406.3x5400x2700.png')
-        grid_col = (255, 255, 255)
-        grid_thk = 5
-        gr, gc = 30, 60
+        img = cv2.imread('assets/world.topo.bathy.200406.3x5400x2700.png')
         self.height, self.width = img.shape[:2]
-        dy, dx = self.height / gr, self.width / gc
-        for x in np.linspace(start=dx, stop=self.width - dx, num=gc - 1):
-            x = int(round(x))
-            cv2.line(img, (x, 0), (x, self.height), color=grid_col, thickness=grid_thk)
 
-        # draw horizontal lines
-        for y in np.linspace(start=dy, stop=self.height - dy, num=gr - 1):
-            y = int(round(y))
-            cv2.line(img, (0, y), (self.width, y), color=grid_col, thickness=grid_thk)
+        # # Draw a grid..
+        # grid_col = (255, 255, 255)
+        # grid_thk = 5
+        # gr, gc = 30, 60
+        # dy, dx = self.height / gr, self.width / gc
+        # for x in np.linspace(start=dx, stop=self.width - dx, num=gc - 1):
+        #     x = int(round(x))
+        #     cv2.line(img, (x, 0), (x, self.height), color=grid_col, thickness=grid_thk)
+        #
+        # # draw horizontal lines
+        # for y in np.linspace(start=dy, stop=self.height - dy, num=gr - 1):
+        #     y = int(round(y))
+        #     cv2.line(img, (0, y), (self.width, y), color=grid_col, thickness=grid_thk)
+        #
+        # cv2.imwrite('output/world.png', img)
+        #
 
-        cv2.imwrite('world.png', img)
+        # cv2.line(img, (0, 1), (self.width, 1), color=(0, 255, 0), thickness=3)
+        # cv2.line(img, (1, 0), (1, self.height), color=(0, 0, 255), thickness=3)
+        # cv2.imwrite('output/world.png', img)
         self.img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+        # img pt 0,0 = top left, which is 90,-180
         # Latitude measures the distance north or south of the equator.
+        # the image starts from 90,-180 and goes to -90,180
+        # but searchsorted seems to need low to high.
+        # `If sorter is None, then it must be sorted in ascending order`
         self.lat = np.linspace(-90., 90., num=self.height, endpoint=True)
         self.lon = np.linspace(-180., 180., num=self.width, endpoint=True)
 
     def col(self, lat: float, lon: float):
         w = np.searchsorted(self.lon, lon) % self.width
-        h = np.searchsorted(self.lat, lat) % self.height
-        pixel = self.img[self.height - h - 1, w]
+        # flip self.lat in result such that the last now points to the first.
+        h = self.height - (np.searchsorted(self.lat, lat) % self.height) - 1
+        pixel = self.img[h, w]
         return pixel
 
 
@@ -299,22 +310,9 @@ if __name__ == '__main__':
     Tri.set_photo(p)
     np.set_printoptions(precision=12, suppress=True)
     dym = IcoSphere('fuller.json')
-    # et = dym.sides['North Atlantic']  # 'Europe' Up Triangle [Liberia,Norway,Arabian]
-    # na = et.get_hh(0, 0)   # uk and w. europe hh 7 should be england.
-    # en = na.triangles[2].get_hh(2, 1)
-    # se = en.triangles[1].get_hh(0, 2)
-    # lb = se.triangles[2].get_hh(1, 3)      # london, camberly, oxford, birmingham
-    # ln = lb.triangles[0].get_hh(2, 4)      # st.Albans,gillingham,caterham,greenford.
-    # nl = ln.triangles[2].get_hh(2, 5)
-    # hy = nl.triangles[1].get_hh(1, 6)      #
-    # dg = hy.triangles[0].get_hh(2, 7)
-    # dg.add_districts()
-    # hm = dg.districts[5]        # home district! falkland rd/duckets common/waldeck-carling+/vincent-linden+
-    # for pt in hm.pts:
-    #     print(xyz_ll(pt))
 
     dx = Drawing()
-    file_name = 'd4_lines'
+    file_name = 'output/d2f'
     for side in dym.sides.values():
         for i in range(3):
             d0 = side.get_hh(i)
@@ -322,11 +320,12 @@ if __name__ == '__main__':
             for d1 in d0.districts.values():
                 d1.add_districts()
                 for d2 in d1.districts.values():
-                    d2.add_districts()
-                    for d3 in d2.districts.values():
-                        d3.add_districts()
-                        for d4 in d3.districts.values():
-                            dx.hh(d4)
+                    dx.hh(d2)
+                    # d2.add_districts()
+                    # for d3 in d2.districts.values():
+                    #     d3.add_districts()
+                    #     for d4 in d3.districts.values():
+                    #         dx.hh(d4)
 
     # side = dym.sides['North Atlantic']
     # d0 = side.get_hh(0)
