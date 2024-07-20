@@ -1,17 +1,18 @@
+import os
+os.environ["OPENCV_IO_MAX_IMAGE_PIXELS"] = pow(2, 40).__str__()
 import math
 import numpy as np
 import svg
 import json
-import cv2
-# import matplotlib as mpl
-# import scipy.spatial as spatial
-# from scipy.spatial.transform import Rotation
-# from random import random
+
+from photo import Photo
+
 
 
 def xyz_ll(xyz: tuple) -> tuple:
     x, y, z = xyz
     return math.degrees(math.atan2(z, math.sqrt(x * x + y * y))), math.degrees(math.atan2(y, x))
+
 
 def ll_xyz(ll: tuple) -> tuple:
     phi, theta = math.radians(ll[0]), math.radians(ll[1])
@@ -60,7 +61,7 @@ class HalfHex:
             for tr in self.triangles:
                 col[ch] += tr.col[ch]
         self.col = [int(c/3.) for c in col]
-        # self.col = self.triangles[1].col
+
 
     def add_districts(self):
         for t in range(3):
@@ -81,6 +82,16 @@ class Tri:
     def set_photo(cls, ph):
         cls.photo = ph
 
+    @staticmethod
+    def slerp(p0, p1, t):
+        # works only with unit vectors.
+        dot = np.dot(p0, p1)
+        th = math.acos(dot)
+        s = math.sin(th)
+        j = math.sin((1. - t) * th)
+        k = math.sin(t * th)
+        return (j * np.array(p0) + k * np.array(p1)) / s
+
     def __init__(self, ijk: tuple, up: bool, abc: tuple, parent=None, pos: int = None) -> None:
         # ijk is a tuple of three cartesian points on a unit sphere in clockwise order.
         # abc is a tuple of three 2D cartesian points for a grid (or a grid_position for starting).
@@ -96,14 +107,15 @@ class Tri:
         _pts = [
             np.mean([i, j, k], axis=0),  # centre.
             i,  # pt i
-            np.mean([i, i, j], axis=0),  # iij.
-            np.mean([i, j, j], axis=0),  # ijj.
+            #
+            self.slerp(i, j, 1./3.),
+            self.slerp(i, j, 2./3.),
             j,  # p_j.
-            np.mean([j, j, k], axis=0),  # jjk.
-            np.mean([j, k, k], axis=0),  # jkk.
+            self.slerp(j, k, 1. / 3.),
+            self.slerp(j, k, 2. / 3.),
             k,  # p_k.
-            np.mean([k, k, i], axis=0),  # kki.
-            np.mean([k, i, i], axis=0)  # kii.
+            self.slerp(k, i, 1. / 3.),
+            self.slerp(k, i, 2. / 3.),
         ]
         # now normalise!!
         self.pts = np.array(_pts) / np.linalg.norm(_pts, axis=1, keepdims=True)
@@ -125,7 +137,6 @@ class Tri:
             np.mean([k, k, i], axis=0),  # kki.
             np.mean([k, i, i], axis=0)  # kii.
         ])
-
 
     def prep_hh(self, n: int, px: tuple):
         # return five vertices of half_hex indicated by i where i=[0,1,2] starting at pt0, going clockwise
@@ -208,141 +219,112 @@ class IcoSphere:
             if 'sides' in obj and obj['sides']:
                 self.sides = {side['name']: IcoSide(side, self.vertices) for side in obj['sides']}
 
-    # def map(self, mapping: str):
-    #     if mapping in self.mapping:
-    #         return np.array([self.xyz[m] for m in self.mapping[mapping]])
-
 
 class Drawing:
-    def __init__(self):
+    def __init__(self, colour_tweak: tuple = (0.0, 1.0), grid: tuple = (0, 0, 11, 4)):
+        self.cp, self.cm = colour_tweak  # add color cp then multiply by cm.
+        self.graph = None
         a, h = Tri.sh
-        lines = 4
-        columns = 11  # half-width per column
+        # # self.width, self.height = size
+        # # self.size = size
+        # self.canvas = svg.SVG(
+        #     viewBox=svg.ViewBoxSpec(0, 0, self.width, self.height),
+        #     width=self.width, height=self.height,
+        #     elements=[]
+        # )
+        # self.defs = svg.Defs(elements=[])
+        # self.canvas.elements.append(self.defs)
+        # if bg:
+        #     ax, ay, bx, by = [0, 0, self.width, self.height]
+        #     bp = svg.Polygon(fill=f'white', stroke="none")
+        #     bp.points = [(ax, ay), (ax, by), (bx, by), (bx, ay)]
+        #     self.canvas.elements.append(bp)
+        lines = grid[3] - grid[1]    # lines (y-steps) are defined by 1..3
+        columns = grid[2] - grid[0]  # cols  (x-steps) are defined by 0..2 -> [x0,y0,x2,y2]
+        x_off = a * 0.5 * grid[0]
+        y_off = h * grid[1]
         v_height = lines * h
         v_width = columns * a * 0.5
-        vb_min_x, vb_min_y, vb_max_x, vb_max_y = 0, 0, v_width, v_height
+        vb_min_x, vb_min_y, vb_max_x, vb_max_y = x_off, y_off, v_width, v_height
         self.maxy = vb_max_y
         self.canvas = svg.SVG(
-            # ViewBoxSpec are the coordinates used in the world of the drawing
-            # width/height are the size of the rendered svg.
             viewBox=svg.ViewBoxSpec(vb_min_x, vb_min_y, vb_max_x, vb_max_y),
             width=v_width, height=v_height, elements=[]
         )
+        self.defs = svg.Defs(elements=[])
+        self.canvas.elements.append(self.defs)
 
     def tri(self, t: Tri):
         # <polygon points="100,100 150,25 150,75 200,0" fill="none" stroke="black" />
-        r, g, b = [int(t) for t in t.col]
+        r, g, b = [int(self.cm * (t+self.cp)) for t in t.col]
         tx = svg.Polygon(fill=f'rgb({r},{g},{b})', stroke="none")
-        tx.points = [tuple(p) for p in t.gxy]
+        tx.points = [tuple(pt) for pt in t.gxy]
         self.canvas.elements.append(tx)
 
     def hh(self, h: HalfHex):
         # <polygon points="100,100 150,25 150,75 200,0" fill="none" stroke="black" />
-        r, g, b = [int(i) for i in h.col]
+        r, g, b = [int(self.cm * (h+self.cp)) for h in h.col]
         tx = svg.Polygon(fill=f'rgb({r},{g},{b})', stroke="none")
-        tx.points = [tuple(p) for p in h.gxy[:-1]]
+        tx.points = [tuple(pt) for pt in h.gxy[:-1]]
         self.canvas.elements.append(tx)
 
-    def save(self, name: str = 'output'):
-        f = open(f"{name}.svg", "w")
+    def add(self, thing):
+        self.canvas.elements.append(thing)
+
+    def define(self, thing):
+        self.defs.elements.append(thing)
+
+    def save(self, f_name: str = 'result'):
+        f = open(f"{f_name}.svg", "w")
         f.write(self.canvas.as_str())
         f.close()
 
 
-class Photo:
-    def __init__(self):
-        # b1f = 'world.topo.bathy.200407.3x21600x21600.B1.png'
-        # c1f = 'world.topo.bathy.200407.3x21600x21600.C1.png'
-        # b1i = cv2.imread(b1f)
-        # c1i = cv2.imread(c1f)
-        # img = cv2.hconcat([b1i, c1i])
-        # self.img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # self.height, self.width = self.img.shape[:2]
-        # # 90N90W - 0N90E
-        # # I got this South to North... No wonder my grid is backwards.
-        # self.lat = np.linspace(0., 90., num=self.height, endpoint=True)
-        # self.lon = np.linspace(-90., 90., num=self.width, endpoint=True)
-
-        img = cv2.imread('assets/world.topo.bathy.200406.3x5400x2700.png')
-        self.height, self.width = img.shape[:2]
-
-        # # Draw a grid..
-        # grid_col = (255, 255, 255)
-        # grid_thk = 5
-        # gr, gc = 30, 60
-        # dy, dx = self.height / gr, self.width / gc
-        # for x in np.linspace(start=dx, stop=self.width - dx, num=gc - 1):
-        #     x = int(round(x))
-        #     cv2.line(img, (x, 0), (x, self.height), color=grid_col, thickness=grid_thk)
-        #
-        # # draw horizontal lines
-        # for y in np.linspace(start=dy, stop=self.height - dy, num=gr - 1):
-        #     y = int(round(y))
-        #     cv2.line(img, (0, y), (self.width, y), color=grid_col, thickness=grid_thk)
-        #
-        # cv2.imwrite('output/world.png', img)
-        #
-
-        # cv2.line(img, (0, 1), (self.width, 1), color=(0, 255, 0), thickness=3)
-        # cv2.line(img, (1, 0), (1, self.height), color=(0, 0, 255), thickness=3)
-        # cv2.imwrite('output/world.png', img)
-        self.img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        # img pt 0,0 = top left, which is 90,-180
-        # Latitude measures the distance north or south of the equator.
-        # the image starts from 90,-180 and goes to -90,180
-        # but searchsorted seems to need low to high.
-        # `If sorter is None, then it must be sorted in ascending order`
-        self.lat = np.linspace(-90., 90., num=self.height, endpoint=True)
-        self.lon = np.linspace(-180., 180., num=self.width, endpoint=True)
-
-    def col(self, lat: float, lon: float):
-        w = np.searchsorted(self.lon, lon) % self.width
-        # flip self.lat in result such that the last now points to the first.
-        h = self.height - (np.searchsorted(self.lat, lat) % self.height) - 1
-        pixel = self.img[h, w]
-        return pixel
-
 
 if __name__ == '__main__':
-    p = Photo()
+    adj = tuple([0.3, 1.25])  # brightness add 0.2 then multiply by 1.1.
+    p = Photo(False)
     Tri.set_sh(729.)  # 3^6
     Tri.set_photo(p)
     np.set_printoptions(precision=12, suppress=True)
     dym = IcoSphere('fuller.json')
-
-    dx = Drawing()
-    file_name = 'output/d2f'
+    # side = dym.sides['North Atlantic']
+    # gx, gy = side.grid  # [6,2]
+    # bounds = tuple([gx-1, gy, gx+1, gy+1])
+    # dx0 = Drawing(adj, bounds)
+    # dx0 = Drawing(adj, )
+    dx1 = Drawing(adj, )
+    # dx2 = Drawing(adj, )
+    # dx3 = Drawing(adj, )
+    # dx4 = Drawing(adj, )
+    # dx5 = Drawing(adj, )
+    # dx6 = Drawing(adj, )
     for side in dym.sides.values():
         for i in range(3):
             d0 = side.get_hh(i)
+            # dx0.hh(d0)
             d0.add_districts()
             for d1 in d0.districts.values():
-                d1.add_districts()
-                for d2 in d1.districts.values():
-                    dx.hh(d2)
-                    # d2.add_districts()
-                    # for d3 in d2.districts.values():
-                    #     d3.add_districts()
-                    #     for d4 in d3.districts.values():
-                    #         dx.hh(d4)
-
-    # side = dym.sides['North Atlantic']
-    # d0 = side.get_hh(0)
-    # file_name = 'uk_hh_6'
-    # d0 = side.get_hh(0).triangles[2].get_hh(2)
-    # d0.add_districts()
-    # for d1 in d0.districts.values():
-    #     d1.add_districts()
-    #     for d2 in d1.districts.values():
-    #         d2.add_districts()
-    #         for d3 in d2.districts.values():
-    #             d3.add_districts()
-    #             for d4 in d3.districts.values():
-    #                 d4.add_districts()
-    #                 for d5 in d4.districts.values():
-    #                     d5.add_districts()
-    #                     for d6 in d5.districts.values():
-    #                         dx.hh(d6)
-
-    dx.save(file_name)
+                dx1.hh(d1)
+                # d1.add_districts()
+                # for d2 in d1.districts.values():
+                #     # dx2.hh(d2)
+                #     d2.add_districts()
+                #     for d3 in d2.districts.values():
+                #         # dx3.hh(d3)
+                #         d3.add_districts()
+                #         for d4 in d3.districts.values():
+                #             # dx4.hh(d4)
+                #             d4.add_districts()
+                #             for d5 in d4.districts.values():
+                #                 dx5.hh(d5)
+                #             #     d5.add_districts()
+                #             #     for d6 in d5.districts.values():
+                #             #         dx6.hh(d6)
+    # dx0.save('output/globe_hh0')
+    dx1.save('output/globe_hh1')
+    # dx2.save('output/globe_hh2')
+    # dx3.save('output/globe_hh3')
+    # dx4.save('output/globe_hh4')
+    # dx5.save('output/globe_hh5')
+    # dx6.save('output/globe_hh6')
