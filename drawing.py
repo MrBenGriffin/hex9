@@ -70,11 +70,12 @@ class H2(Drawing):
         self.a2 = 2. * self.a
         self.a3 = 1.5 * self.a
         self.ah = 0.5 * self.a
+        self.a4 = 0.25 * self.a
         self.h2 = 2. * self.h
         self.wid, self.hgt, self.vx, self.vy = 0, 0, 0, 0
         self.define(self._sym(identity))
         self.cx, self.cy = self.vx * 0.5, self.vy * 0.5
-        self.ofx, self.ofy = self.ah, self.h2
+        self.ofx, self.ofy = self.a4, self.h2
 
     def dim(self) -> tuple:
         return self.wid, self.hgt

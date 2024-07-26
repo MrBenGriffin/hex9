@@ -1,22 +1,31 @@
 import numpy as np
 import math
-from pixel import Pixel
+from pixel import SQ2HXPixel, HX2SQPixel
 from photo import Photo
 from drawing import H2
-from plot import HexPlot
-import matplotlib.pyplot as plt
+from plot import HexPlotter, SqrPlotter
 
 
-def hexify(pxl, ph, hp, name: str, h_size: float):
+def hexify(ar, pxl, ph, hp, name: str, h_size: float):
     hw, hh = math.ceil(ph.width*adj), ph.height
-    dsize = hw * h_size * 1.5, hh * h_size * 1.75
+    dsize = hw * h_size * 1.5 + h_size, hh * h_size * 1.75
     dhx = H2(name, dsize, False, h_size)
     for hy in range(hh):
         for hx in range(hw):
-            rgb = pxl.hex_col(ph.img, hx, hy)
+            rgb = pxl.col(ph.img, hx, hy)
+            ar[hy, hx] = rgb
             dhx.hex([hx, hy], rgb)
-            hp.hex([hx, hy], rgb)
+            hp.plot([hx, hy], rgb)
     dhx.save()
+
+
+def hex_to_square(sqp, pxl, hex_img):
+    hh, hw = hex_img.shape[:2]
+    for hy in range(hh):
+        for hx in range(hw):
+            rgb = pxl.col(hex_img, hx, hy)
+            sqp.plot([hx, hy], rgb)
+    sqp.show()
 
 
 def do_globe():
@@ -42,10 +51,19 @@ def do_globe():
 if __name__ == '__main__':
     adj = 2. / np.sqrt(3)
     p = Photo()
-    px = Pixel()
-    p.load('tn')
+    r = Photo()
+    h2s, s2h = HX2SQPixel(), SQ2HXPixel()
+    p.load('tn', True)  # convert
     hx_dim = p.width, p.height
-    hxp = HexPlot(hx_dim)
-    hexify(px, p, hxp, 'res_256', 81.)
-    plt.tight_layout()
-    plt.show()
+    hw = math.ceil(p.width*adj)
+    hxp = HexPlotter(hx_dim, 0.5)
+    sqp = SqrPlotter(hx_dim, 0.5)
+    hex_i = np.zeros([p.height, hw,  3])
+    hexify(hex_i, s2h, p, hxp, 'res_256', 81.)
+    hxp.show()
+    hex_to_square(sqp, h2s, hex_i)
+    r.adopt(hex_i, True)
+    r.show('hex', True)
+    done = True
+
+

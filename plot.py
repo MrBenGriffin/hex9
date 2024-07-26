@@ -25,18 +25,22 @@ class Plotter:
     def save(self, filename: str):
         self.fig.savefig(f'output/{filename}.png', bbox_inches='tight', pad_inches=0)
 
+    def show(self):
+        self.fig.show()
+        plt.show()
 
-class HexPlot(Plotter):
-    def __init__(self, limits: tuple):
+
+class HexPlotter(Plotter):
+    def __init__(self, limits: tuple, mux: float = 0.75):
         self.xm = np.sqrt(3.) * 0.5  # x multiplier for cartesian x
         self.r = np.sqrt(3.) / 3.  # radius for hexagon in matplotlib for hex 1.0 0.568
         w, h = limits
         plot_lims = [-self.r, w], [-1, h]
-        screen_dim = math.ceil(w * 0.75), math.ceil((h-1) * 0.75)
+        screen_dim = math.ceil(w * mux), math.ceil((h-1) * mux)
         super().__init__(plot_lims, screen_dim)
         self.r30 = np.radians(30.)
 
-    def hex(self, where, c: tuple):
+    def plot(self, where, c: tuple):
         r, g, b = c
         px, py = where
         col = f'#{int(r):02X}{int(g):02X}{int(b):02X}'
@@ -46,3 +50,19 @@ class HexPlot(Plotter):
                             linewidth=0.5, orientation=self.r30,
                             facecolor=col, alpha=None, edgecolor=col, aa=True)
         self.ax.add_patch(hx)
+
+
+class SqrPlotter(Plotter):
+    def __init__(self, limits: tuple, mux: float = 0.75):
+        w, h = limits
+        plot_lims = [-0.5, w], [-0.5, h]
+        screen_dim = math.ceil(w * mux), math.ceil(h * mux)
+        super().__init__(plot_lims, screen_dim)
+        self.r45 = np.radians(45.)
+
+    def plot(self, where, c: tuple):
+        r, g, b = c
+        px, py = where
+        col = f'#{int(r):02X}{int(g):02X}{int(b):02X}'
+        sx = RegularPolygon((px, py), orientation=self.r45, numVertices=4, radius=0.717, linewidth=None, facecolor=col, alpha=None, edgecolor=col, aa=True)
+        self.ax.add_patch(sx)

@@ -1,9 +1,11 @@
 import math
-import numpy as np
 import svg
 import json
-import cv2
-from halfhex import HalfHexFn
+
+#This is the old one..
+# It's now broken b/c I changed HalfHexFns for normalised..
+# have a look at sq_hx_lut.py
+from shape_functions import HalfHexFns
 
 # Todo - show both a pixel grid and a hex-grid.
 # Calculate the contribution of each hex.px in a square.px. √
@@ -239,7 +241,7 @@ def st_off(hex_count: int) -> dict:
 def do_squares(hexes: int) -> dict:
     # hx_px = hex_side * 1.5 = column width.
     adj = rt3_2
-    hhf = HalfHexFn(hex_side)
+    hhf = HalfHexFns(hex_side)
     lut = st_off(hexes)
     sqd = {}
     for sq, (hidx, sq_x) in lut.items():
@@ -253,14 +255,16 @@ def do_squares(hexes: int) -> dict:
         for idx, offset in hx_offs.items():
             if offset < 0:
                 if offset+sq_px > hx_px:
-                    fx = hhf.area_props_at_lst([-offset, -offset+sq_px])
+                    fx = hhf.areas([-offset, -offset+sq_px])
                     c = fx[1]
                     # print('eep')
                     # _, c = hhf.area_props_at_x(-offset)
                 else:
-                    _, c = hhf.area_props_at_x(-offset)
+                    _, c = hhf.areas_at_x(-offset)
+                    c /= hhf.a
             else:
-                c, _ = hhf.area_props_at_x(sq_px - offset)
+                c, _ = hhf.areas_at_x(sq_px - offset)
+                c /= hhf.a
             sqd[sq][idx] = c * rt3_2
     for k, i in sqd.items():
         x = sum(i.values())
@@ -316,10 +320,10 @@ def do_hexes(hexes: int, hx_side: float):
             hx[hex_id][sq] = h_off
     # we now have a dict of hex ids, each of which have a dict of squares ids with offset that it comes in.
     h_final = {}
-    hhf = HalfHexFn(hx_side)
+    hhf = HalfHexFns(hx_side)
     for hx, sd in hx.items():
         sq = next(iter(sd)) - 1  # first square value.
-        rx = hhf.area_props_at_lst(list(sd.values()))
+        rx = hhf.areas(list(sd.values()))
         h_final[hx] = {i+sq: p for i, p in enumerate(rx)}
     with open('sq_to_hx_lut.json', 'w', encoding='utf-8') as f:
         json.dump(h_final, f, ensure_ascii=False, indent=4)

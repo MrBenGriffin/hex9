@@ -272,43 +272,13 @@ if __name__ == '__main__':
     Tri.set_photo(p)
     np.set_printoptions(precision=12, suppress=True)
     dym = IcoSphere('fuller.json')
-    # side = dym.sides['North Atlantic']
-    # gx, gy = side.grid  # [6,2]
-    # bounds = tuple([gx-1, gy, gx+1, gy+1])
-    # dx0 = Drawing(adj, bounds)
-    # dx0 = Drawing(adj, )
     dx2 = Drawing(adj, )
-    # dx2 = Drawing(adj, )
-    # dx3 = Drawing(adj, )
-    # dx4 = Drawing(adj, )
-    # dx5 = Drawing(adj, )
-    # dx6 = Drawing(adj, )
     for side in dym.sides.values():
         for i in range(3):
             d0 = side.get_hh(i)
-            # dx0.hh(d0)
             d0.add_districts()
             for d1 in d0.districts.values():
-                # dx1.hh(d1)
                 d1.add_districts()
                 for d2 in d1.districts.values():
                     dx2.hh(d2)
-                    # d2.add_districts()
-                    # for d3 in d2.districts.values():
-                #         dx2.hh(d3)
-                #         d3.add_districts()
-                #         for d4 in d3.districts.values():
-                #             # dx4.hh(d4)
-                #             d4.add_districts()
-                #             for d5 in d4.districts.values():
-                #                 dx5.hh(d5)
-                #             #     d5.add_districts()
-                #             #     for d6 in d5.districts.values():
-                #             #         dx6.hh(d6)
-    # dx0.save('output/globe_hh0')
     dx2.save('output/globe_hh1')
-    # dx2.save('output/globe_hh2')
-    # dx3.save('output/globe_hh3')
-    # dx4.save('output/globe_hh4')
-    # dx5.save('output/globe_hh5')
-    # dx6.save('output/globe_hh6')

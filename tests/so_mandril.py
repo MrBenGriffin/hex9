@@ -51,11 +51,11 @@ def hex_draw(img):
 
 if __name__ == '__main__':
     # load and set the lookup table
-    with (open('assets/sq_to_hx_lut.json', 'r') as infile):
+    with (open('../assets/sq_to_hx_lut.json', 'r') as infile):
         str_lut = json.load(infile)
         h_lut = {int(i): {int(j): k for j, k in v.items()} for i, v in str_lut.items()}
     # read the image to convert
-    src_img = cv2.imread(f'assets/tn.png')  # 382 x256
+    src_img = cv2.imread(f'../assets/tn.png')  # 382 x256
     sqh, sqw = src_img.shape[:2]
     # convert the image to hexagonal pixel grid.
     adj = 2. / np.sqrt(3)

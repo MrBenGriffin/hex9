@@ -1,4 +1,4 @@
-from halfhex import HalfHexFn
+from shape_functions import HalfHexFn
 
 # def solve():
 #     x, s = sp.symbols('x s')
