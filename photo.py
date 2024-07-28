@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from h9 import H9
+from h9 import H9, H6
 os.environ["OPENCV_IO_MAX_IMAGE_PIXELS"] = pow(2, 40).__str__()
 import cv2
 
@@ -14,9 +14,21 @@ class Photo:
         self.lon_min, self.lon_max = None, None
         self.lat, self.lon = None, None
         self._h9 = None
+        self._h6 = None
+
+    @staticmethod
+    def h9_size(w, h, s) -> tuple:
+        return H9.size_for(w, h, s)
+
+    @staticmethod
+    def h6_size(w, h, s) -> tuple:
+        return H6.size_for(w, h, s)
 
     def h9_get_limits(self) -> tuple:
         return self._h9.get_limits()
+
+    def h6_get_limits(self) -> tuple:
+        return self._h6.get_limits()
 
     def set_h9(self, size: int, limits: tuple = None):
         self._h9 = H9(size=size)
@@ -24,6 +36,13 @@ class Photo:
         if limits:
             lr, tb,  = limits  # eg (-4,4), (-5,9)
             self._h9.set_limits(tb, lr)
+
+    def set_h6(self, size: int, limits: tuple = None):
+        self._h6 = H6(size=size)
+        self._h6.set_offset(self.width, self.height)
+        if limits:
+            lr, tb,  = limits  # eg (-4,4), (-5,9)
+            self._h6.set_limits(tb, lr)
 
     def h9(self, where: list, c: list):
         if self._h9 is None:
@@ -34,7 +53,19 @@ class Photo:
                 px = self._h9.place_district(wc, i)
                 pts = np.array([px], dtype=np.int32)
                 r, g, b = c[i]
-                cv2.fillPoly(p0.img, pts=pts, color=(b, g, r))
+                cv2.fillPoly(self.img, pts=pts, color=(b, g, r))
+
+    def h6(self, where: list, c: list):
+        if self._h6 is None:
+            self.set_h6(27)
+        wc = self._h6.wxy(where)
+        for dy in range(4):
+            for dx in range(3):
+                if self._h6.may_place(wc, (dx, dy)):
+                    px = self._h6.place_district(wc, (dx, dy))
+                    pts = np.array([px], dtype=np.int32)
+                    r, g, b = c[dy * 3 + dx]
+                    cv2.fillPoly(self.img, pts=pts, color=(b, g, r))
 
     def new(self, width, height):
         vis = np.zeros((height, width), np.uint8)
@@ -135,23 +166,63 @@ class Photo:
         else:
             raise RuntimeError('col requires setting latitude and longitude first.')
 
+    def at(self, x: int, y: int):
+        if min(self.height-1, max(0, y)) != y or min(self.width-1, max(0, x)) != x:
+            return 0, 255, 0
+        b, g, r = self.img[min(self.height-1, max(0, y)), min(self.width-1, max(0, x))]
+        return int(r), int(g), int(b)
 
-if __name__ == '__main__':
+
+def test_h9():
     import matplotlib as mpl
     cmap0 = mpl.colormaps['plasma'].resampled(18)
     cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
     cmap1 = mpl.colormaps['cividis'].resampled(18)
     cols1 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap1(i))]) for i in range(18)]
     p0 = Photo()
-    p0.new(3035, 1735)   # 1720
-    p0.set_h9(9)
-    rw, rh = p0.h9_get_limits()
+    pw, ph = p0.h9_size(5, 5, 27)
+    p0.new(pw, ph+10)   # 1720
+    p0.set_h9(27)
+    rw, rh, offs = p0.h9_get_limits()
     for i in rh:
         for j in rw:
             p0.h9([j, i], cols1 if i == 0 and j == 0 else cols0)
-
-    # photo.despeckle()
     p0.show('h9', True)
+
+
+def test_h6():
+    import matplotlib as mpl
+    cmap0 = mpl.colormaps['plasma'].resampled(12)
+    cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(12)]
+    cmap1 = mpl.colormaps['cividis'].resampled(12)
+    cols1 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap1(i))]) for i in range(12)]
+    p0 = Photo()
+    pw, ph = p0.h6_size(5, 5, 27)
+    p0.new(pw, ph)   # 1720
+    p0.set_h6(27)
+    rw, rh, offs = p0.h6_get_limits()
+    for i in rh:
+        for j in rw:
+            p0.h6([j, i], cols1 if i == 0 and j == 0 else cols0)
+    p0.show('h6', True)
+
+
+if __name__ == '__main__':
+    test_h6()
+
+    # cmap0 = mpl.colormaps['plasma'].resampled(18)
+    # cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
+    # cmap1 = mpl.colormaps['cividis'].resampled(18)
+    # cols1 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap1(i))]) for i in range(18)]
+    # p0 = Photo()
+    # pw, ph = p0.h9_size(5, 5, 27)
+    # p0.new(pw, ph+10)   # 1720
+    # p0.set_h9(27)
+    # rw, rh, offs = p0.h9_get_limits()
+    # for i in rh:
+    #     for j in rw:
+    #         p0.h9([j, i], cols1 if i == 0 and j == 0 else cols0)
+    # p0.show('h9', True)
     # p1 = Photo()
     # p1.load('tn', False)
     # p1.resize(5.0)

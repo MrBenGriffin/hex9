@@ -266,7 +266,7 @@ class Drawing:
 if __name__ == '__main__':
     adj = tuple([0.2, 1.1])  # brightness add 0.2 then multiply by 1.1.
     p = Photo()
-    p.load('world.topo.bathy.200406.3x5400x2700')
+    p.load('world.topo.bathy.200406.3x5400x2700')  # blue marble.
     p.set_latlon([-90., 90.], [-180., 180.])
     Tri.set_sh(729.)  # 3^6
     Tri.set_photo(p)

@@ -95,17 +95,16 @@ class SQ2TRPixel(Pixel):
         return r, g, b
 
 
-class TR2HH8Pixel(Pixel):
+class TR2H6Pixel(Pixel):
     def __init__(self):
         super().__init__(None)
         self.nm = 1./3.
-        self.lut = [[
+        self.lut = [
             [(0, 0), (0, 1), (1, 1)], [(1, 0), (2, 0), (2, 1)], [(3, 0), (4, 0), (5, 0)],  # line 0
-            [(0, 1), (1, 1), (2, 1)], [(3, 0), (4, 0), (3, 1)], [(5, 0), (5, 1), (4, 1)]   # line 1
-            ], [
-            [(0, 0), (1, 0), (2, 0)], [(3, 0), (3, 1), (4, 1)], [(4, 0), (5, 0), (5, 1)],  # line 2
-            [(0, 0), (1, 0), (0, 1)], [(1, 1), (2, 0), (2, 1)], [(3, 1), (4, 1), (5, 1)]   # line 3
-        ]]
+            [(0, 2), (1, 2), (2, 2)], [(3, 2), (3, 1), (4, 1)], [(4, 2), (5, 2), (5, 1)],  # line 1
+            [(0, 3), (1, 3), (2, 3)], [(3, 3), (3, 4), (4, 4)], [(4, 3), (5, 3), (5, 4)],  # line 2
+            [(0, 4), (0, 5), (1, 4)], [(1, 5), (2, 4), (2, 5)], [(3, 5), (4, 5), (5, 5)]   # line 3
+        ]
 
         # tr to h9 6x6 tr = [2/3]x1 H9 (12 hh)
         # --------------
@@ -118,22 +117,21 @@ class TR2HH8Pixel(Pixel):
         # | 1 2 2 | 2 2 2 /  define 6 hh px.
         # ---------------
 
-    def col(self, img: ndarray, hx, hy) -> tuple:
-        # image size will be w/3,h/2
-        # given a triangle px img, get hh12 pixel at hh12 coordinates.
-        # hh12 rows are 4 to 6 tr rows (hh 0,1 use [0,1]/[1,2], hh 2,3 use [3,4]/[4,5]
-        ty = math.floor(hy*1.5)   # [0, 1, 3, 4, 6, 7, 9, 10, 12..]
-        tx = 3 * hx
-        lut_y_offset = hy & 1   # [0  2  0  2  0  2  0   2   0..]
-        lut_x_offset = hx % 3
-        rec = self.lut[lut_y_offset][lut_x_offset]
+    def cols(self, img: ndarray, hx, hy, rev=False) -> list:
+        # given a triangle px img, get h6 (3x6) half-hex colour group at h6 coordinates.
+        # h6 rows are 3 to 6 tr rows (hh 0,1 use [0,1]/[1,2], hh 2,3 use [3,4]/[4,5]
+        ty = 6 * hy
+        tx = 6 * hx
+        result = []
         h, w = img.shape[:2]
-        r, g, b = 0., 0., 0.
-        for (x, y) in rec:
-            ix = min(w-1, tx+x)
-            iy = min(h-1, ty+y)
-            rd, gd, bd = (img[iy, ix])
-            r += rd * self.nm
-            g += gd * self.nm
-            b += bd * self.nm
-        return r, g, b
+        for i in self.lut:
+            r, g, b = 0., 0., 0.
+            for (x, y) in i:
+                ix = min(w-1, tx+x)
+                iy = min(h-1, ty+y)
+                rd, gd, bd = (img[iy, ix])
+                r += rd * self.nm
+                g += gd * self.nm
+                b += bd * self.nm
+            result.append((r, g, b) if not rev else (b, g, r))
+        return result
