@@ -1,3 +1,4 @@
+
 Up until now this has mainly been a repository of ideas in progress.
 The project is centred on the idea of hierarchic hexagonal grids, while keeping the number of polygons to a minimum.
 
@@ -28,7 +29,7 @@ So I gave up on that, and more recently worked on this half-hexagon solution.
 Here is the basic unit hexagon, showing it's division into the 18 half-hexagons that compose it.  The numbering is one
 way of indexing the half-hexagons.
 
-![h9_idx.jpg](assets/docs/h9_idx.jpg)
+![index_units.png](assets/docs/index_units.png)
 
 A hexagonal grid hierarchy can be seen below, with the outer hexagon in white, 
 then the successive lower hierarchies in green, blue and red. The hierarchy is unlimited in depth.
@@ -53,5 +54,11 @@ Moreover, merely by shortening the address, we may derive the parent.
 Grid coordinates are best done, for this, using base 9, and using a signifier for the half-hex specialisation.
 One can work out the entire half-hex address from a given hex address - but it does require following some rules.
 
-I will document this soon.
+![calculations](assets/docs/hierarchic.jpg)
+Here we see a hierarchic grid addressing system.  The 'a/b' of each half-hex could be replaced with
+symbols, but the point is that we only need to store the final half-hex place (when we have one), as 
+we can derive the ancestral half-hexagons according to the address we are given.
+
+This is recent work - so it's even more chaotic than other stuff.
+
 
