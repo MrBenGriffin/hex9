@@ -54,7 +54,7 @@ Moreover, merely by shortening the address, we may derive the parent.
 Grid coordinates are best done, for this, using base 9, and using a signifier for the half-hex specialisation.
 One can work out the entire half-hex address from a given hex address - but it does require following some rules.
 
-![calculations](assets/docs/hierarchic.jpg)
+![calculations](assets/docs/hierarchic.png)
 Here we see a hierarchic grid addressing system.  The 'a/b' of each half-hex could be replaced with
 symbols, but the point is that we only need to store the final half-hex place (when we have one), as 
 we can derive the ancestral half-hexagons according to the address we are given.
