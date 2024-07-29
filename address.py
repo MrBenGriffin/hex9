@@ -10,7 +10,6 @@ def set_lut():
         g, i = divmod(n, 3)  # g = 0/1/2 for 0..2/3..5/6..8
         for p in range(9):
             # v = [f'{p}X{n}X', f'{p}a{n}', f'{p}b{n}', f'{p}X{n}Y']
-
             idx = fn((p % 3), i) if g != 1 else fn(i, (p % 3))
             rx = v[idx] if g != 2 else v[3] if idx == 0 else v[0]
             # print(f'{p}{n}={rx}')
@@ -41,4 +40,4 @@ def canon(lut, addr: str):
 
 if __name__ == '__main__':
     hx2hh = set_lut()
-    print(canon(hx2hh, '4184a'))
+    print(canon(hx2hh, '318705251a'))

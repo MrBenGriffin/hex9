@@ -155,18 +155,18 @@ class H9:
         [-2.5, -1.0, 5.], [0.5, -3, 0], [2., -2., 1],
         [2., 2., 2], [0.5, 3., 3], [-2.5, 1., 4]
     ]
-    h9_hh = {  # h9_hh: given an address in h9 coordinates, return list of equivalent hh coordinates.
-        0: (1, 1), 1: (2, 1), 2: (3, 1), 3: (3, 2), 4: (2, 2), 5: (1, 2),
-        6: (1, 0), 7: (2, 0), 8: (4, 1), 9: (4, 2), 10: (2, 3), 11: (1, 3),
-        12: (0, 1), 13: (3, 0), 14: (4, 0), 15: (4, 3), 16: (3, 3), 17: (0, 2)
-    }
-    hh_h9 = {  # hh_h9: given an address in hh coordinates, return list of equivalent h9 coordinates.
-        (0, 1): 12, (0, 2): 17,
-        (1, 0): 6,  (1, 1): 0, (1, 2): 5, (1, 3): 11,
-        (2, 0): 7,  (2, 1): 1, (2, 2): 4, (2, 3): 10,
-        (3, 0): 13, (3, 1): 2, (3, 2): 3, (3, 3): 16,
-        (4, 0): 14, (4, 1): 8, (4, 2): 9, (4, 3): 15
-    }
+    # h9_hh = {  # h9_hh: given an address in h9 coordinates, return list of equivalent hh coordinates.
+    #     0: (1, 1), 1: (2, 1), 2: (3, 1), 3: (3, 2), 4: (2, 2), 5: (1, 2),
+    #     6: (1, 0), 7: (2, 0), 8: (4, 1), 9: (4, 2), 10: (2, 3), 11: (1, 3),
+    #     12: (0, 1), 13: (3, 0), 14: (4, 0), 15: (4, 3), 16: (3, 3), 17: (0, 2)
+    # }
+    # hh_h9 = {  # hh_h9: given an address in hh coordinates, return list of equivalent h9 coordinates.
+    #     (0, 1): 12, (0, 2): 17,
+    #     (1, 0): 6,  (1, 1): 0, (1, 2): 5, (1, 3): 11,
+    #     (2, 0): 7,  (2, 1): 1, (2, 2): 4, (2, 3): 10,
+    #     (3, 0): 13, (3, 1): 2, (3, 2): 3, (3, 3): 16,
+    #     (4, 0): 14, (4, 1): 8, (4, 2): 9, (4, 3): 15
+    # }
     # This is a proper half-hex symbol not merely a grid.,
     a: float       # This is the length of each side of the unit equilateral triangles of a district.
     h: float       # This is the height of a unit equilateral of a district (of which there are 3).
@@ -268,14 +268,14 @@ class H9:
         else:
             return translate(self.districts[district], where)
 
-    @classmethod
-    def h92hh(cls, where) -> list:
-        # given an address in h9 coordinates, return list of equivalent hh8 coordinates.
-        # following dict maps region to hh8. Used, for instance, to find colours for an h9
-        ix, iy = where  # this is in h9 co-ordinates
-        ofx = ix << 2
-        ofy = (iy << 2) + ((ix & 1) << 1)
-        return [(ofx+x, ofy+y) for (x, y) in [cls.h9_hh[k] for k in range(18)]]
+    # @classmethod
+    # def h92hh(cls, where) -> list:
+    #     # given an address in h9 coordinates, return list of equivalent hh8 coordinates.
+    #     # following dict maps region to hh8. Used, for instance, to find colours for an h9
+    #     ix, iy = where  # this is in h9 co-ordinates
+    #     ofx = ix << 2
+    #     ofy = (iy << 2) + ((ix & 1) << 1)
+    #     return [(ofx+x, ofy+y) for (x, y) in [cls.h9_hh[k] for k in range(18)]]
 
     @classmethod
     def hh2r(cls, where) -> tuple:
@@ -294,7 +294,7 @@ class H9:
 if __name__ == '__main__':
     cmap = mpl.colormaps['plasma'].resampled(18)
     cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(18)]
-    dim = H6.size_for(3, 4, 9)
+    dim = H9.size_for(3, 4, 9)
     cs = Drawing('test9', dim, False)
     h0 = H9(cs, 'h1', 9., 0, op=0.90)
     (xx, yy, oo) = h0.get_limits()
@@ -303,13 +303,13 @@ if __name__ == '__main__':
             h0.place([i, j], cols)
     cs.save()
 
-    cmap = mpl.colormaps['plasma'].resampled(12)
-    cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(12)]
-    dim = H6.size_for(60, 30, 9)
-    cs = Drawing('test8', dim, False)
-    h0 = H6(cs, 'h1', 9., 0, op=0.90)
-    xx, yy, oo = h0.get_limits()
-    for j in yy:
-        for i in xx:
-            h0.place([i, j], cols)
-    cs.save()
+    # cmap = mpl.colormaps['plasma'].resampled(12)
+    # cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(12)]
+    # dim = H6.size_for(60, 30, 9)
+    # cs = Drawing('test8', dim, False)
+    # h0 = H6(cs, 'h1', 9., 0, op=0.90)
+    # xx, yy, oo = h0.get_limits()
+    # for j in yy:
+    #     for i in xx:
+    #         h0.place([i, j], cols)
+    # cs.save()
