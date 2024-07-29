@@ -25,7 +25,6 @@ not easily allow fine resolution - nor is it easy (when in a ragged edge) to wor
 
 So I gave up on that, and more recently worked on this half-hexagon solution.
 
-
 Here is the basic unit hexagon, showing it's division into the 18 half-hexagons that compose it.  The numbering is one
 way of indexing the half-hexagons.
 

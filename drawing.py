@@ -26,6 +26,10 @@ class Drawing:
     def define(self, thing):
         self.defs.elements.append(thing)
 
+    def label(self, text, sz, x1, y1, dx, dy):
+        label = svg.Text(x=x1, y=y1, dx=dx, dy=dy, text=text, font_family='monospace', font_size=sz)
+        self.canvas.elements.append(label)
+
     def line(self, x1, y1, x2, y2, w=0.5):
         line = svg.Line(x1=x1, y1=y1, x2=x2, y2=y2, stroke_width=w, stroke="black")
         self.canvas.elements.append(line)
