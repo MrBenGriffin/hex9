@@ -31,6 +31,10 @@ way of indexing the half-hexagons.
 
 ![index_units.png](assets/docs/index_units.png)
 
+The plane can be tiled using the following:
+![tiling.png](assets/docs/tiling.png)
+
+
 A hexagonal grid hierarchy can be seen below, with the outer hexagon in white, 
 then the successive lower hierarchies in green, blue and red. The hierarchy is unlimited in depth.
 
