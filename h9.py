@@ -155,6 +155,17 @@ class H9:
         [-2.5, -1.0, 5.], [0.5, -3, 0], [2., -2., 1],
         [2., 2., 2], [0.5, 3., 3], [-2.5, 1., 4]
     ]
+    lb = ['0b', '1a', '1b', '2a', '2b', '0a',
+          '5b', '5a', '3b', '3a', '4b', '4a',
+          '7b', '6a', '8b', '7a', '6b', '8a']
+    lpt = [
+        [-0.85, -0.05], [-0.53, -0.72], [-0.36, 0.94],   # 012
+        [-0.36, -0.72], [-0.46, 0.94], [-0.85, 0.28],   # 345
+        [-0.46, 0.94], [-0.36, -0.72], [-0.85, -0.05], [-0.85, 0.28],  # 6789
+        [-0.36, 0.94], [-0.48, -0.72],  # 10,11
+        [-0.36, 0.94], [-0.85, 0.28], [-0.46, 0.94],  # 12,13,14
+        [-0.53, -0.72], [-0.85, -0.05], [-0.36, -0.72],  # 15,16,17
+    ]
     # h9_hh = {  # h9_hh: given an address in h9 coordinates, return list of equivalent hh coordinates.
     #     0: (1, 1), 1: (2, 1), 2: (3, 1), 3: (3, 2), 4: (2, 2), 5: (1, 2),
     #     6: (1, 0), 7: (2, 0), 8: (4, 1), 9: (4, 2), 10: (2, 3), 11: (1, 3),
@@ -265,6 +276,8 @@ class H9:
             t = svg.Translate(tx+px+self.a, ty+py)
             inst = svg.Use(href=self.id_ref, fill=color, transform=[t, r])
             self.owner.add(inst)
+            dx, dy = self.lpt[district]
+            self.owner.label(self.lb[district], 2.5, tx+px, ty+py, dx*self.a, dy*self.h)
         else:
             return translate(self.districts[district], where)
 
