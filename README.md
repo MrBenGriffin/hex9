@@ -2,6 +2,8 @@
 Up until now this has mainly been a repository of ideas in progress.
 The project is centred on the idea of hierarchic hexagonal grids, while keeping the number of polygons to a minimum.
 
+Also - do not be surprised if you find bugs!  This is still very much a work in progress!
+
 My solution to this quandary is to use half-hexagons ('regular' trapezoids composed of three equilateral triangles) as
 the primary fundamental.  This can be used in a vertex centred / offset 'H9 aperture', where any hexagon can be subtended into 
 9 smaller hexagons, albeit with three hexagons shared directly along the half-hex line. 
