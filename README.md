@@ -62,8 +62,8 @@ Here we see a hierarchic grid addressing system.  The 'a/b' of each half-hex cou
 symbols, but the point is that we only need to store the final half-hex place (when we have one), as 
 we can derive the ancestral half-hexagons according to the address we are given.
 
-For example, and address 318705251a, even though it only refers to a hexagon address (+the final half-hex),
-can be reliably decomposed to it's half-hex address (3b1a8a7a0b5a2a5a1a) - which is sort of magical (to me anyhow).
+For example, an address 318705251a, even though it only refers by hexagon address (+the final half-hex),
+can be reliably decomposed to it's full-half-hex address (3b1a8a7a0b5a2a5a1a) - which is sort of magical (to me anyhow).
 Needless to say, it also identifies the entire hierarchy, and likewise the depth of this address (9).
 In terms of spatial coordinates, such a 10-character address provides a location
 (if we are using the entire surface of the world, on an equal area projection) to a patch of earth
