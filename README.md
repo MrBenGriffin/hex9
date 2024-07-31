@@ -59,7 +59,7 @@ One can work out the entire half-hex address from a given hex address - but it d
 
 ![calculations](assets/docs/hierarchic.png)
 Here we see a hierarchic grid addressing system.  The 'a/b' of each half-hex could be replaced with
-symbols, but the point is that we only need to store the final half-hex place (when we have one), as 
+symbols (I currently show the 'a' address, and leave the 'b' blank - 2 explicit characters are not necessary - and maybe the 'a' could be handled with just a '+'), but the point is that we only need to store the final half-hex place (when we have one), as 
 we can derive the ancestral half-hexagons according to the address we are given.
 
 For example, an address 318705251a, even though it only refers by hexagon address (+the final half-hex),
