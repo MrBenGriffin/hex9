@@ -135,3 +135,61 @@ class TR2H6Pixel(Pixel):
                 b += bd * self.nm
             result.append((r, g, b) if not rev else (b, g, r))
         return result
+
+
+class TR2H9Pixel(Pixel):
+    def __init__(self):
+        super().__init__(None)
+        self.nm = 1./3.
+        # for each region, work out the triangle pixel based on a patch 11 across and 6 down.
+        # this is in district order. patch top left is above 7b (15).
+        self.lut = [
+            [(2, 3), (3, 3), (4, 3)],   # district 0a / 0
+            [(2, 2), (3, 2), (4, 2)],   # district 0b / 1
+            [(5, 2), (5, 1), (6, 1)],   # district 1a / 2
+            [(6, 2), (7, 1), (7, 2)],   # district 1b / 3
+            [(7, 4), (7, 3), (6, 3)],   # district 2a / 4
+            [(5, 3), (5, 4), (6, 4)],   # district 2b / 5
+            [(8, 3), (9, 3), (10, 3)],  # district 3a / 6
+            [(8, 2), (9, 2), (10, 2)],  # district 3b / 7
+            [(2, 4), (2, 5), (3, 4)],   # district 4a / 8
+            [(3, 5), (4, 5), (4, 4)],   # district 4b / 9
+            [(3, 0), (4, 0), (4, 1)],   # district 5a / 10
+            [(2, 0), (2, 1), (3, 1)],   # district 5b / 11
+            [(5, 0), (6, 0), (7, 0)],   # district 6a / 12
+            [(5, 5), (6, 5), (7, 5)],   # district 6b / 13
+            [(8, 5), (8, 4), (9, 4)],   # district 7a / 14
+            [(0, 2), (1, 1), (1, 2)],   # district 7b / 15
+            [(0, 3), (1, 3), (1, 4)],   # district 8a / 16
+            [(8, 0), (8, 1), (9, 1)]    # district 8b / 17
+        ]
+
+    def cols(self, img: ndarray, hx, hy, rev=False) -> list:
+        # given an x, y (in h9 coords)
+        tx = hx * 9
+        ty = hy * 6 - (hx & 1) * 3
+        result = []
+        h, w = img.shape[:2]
+        for i in self.lut:
+            r, g, b = 0., 0., 0.
+            for (x, y) in i:
+                ix = max(0, min(w-1, tx+x))
+                iy = max(0, min(h-1, ty+y))
+                rd, gd, bd = (img[iy, ix])
+                r += rd * self.nm
+                g += gd * self.nm
+                b += bd * self.nm
+            result.append((r, g, b) if not rev else (b, g, r))
+        return result
+
+    def set(self, img: ndarray, hx, hy, cols: list):
+        tx = hx * 9
+        ty = hy * 6 - (hx & 1) * 3
+        h, w = img.shape[:2]
+        for i, m in enumerate(self.lut):
+            for (x, y) in m:
+                ix = max(0, min(w-1, tx+x))
+                iy = max(0, min(h-1, ty+y))
+                r, g, b = cols[i]
+                img[iy, ix] = b, g, r
+

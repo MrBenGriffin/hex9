@@ -1,6 +1,9 @@
 import os
 import numpy as np
-from h9 import H9, H6
+from h9 import H9
+from h6 import H6
+from pixel import TR2H9Pixel
+
 os.environ["OPENCV_IO_MAX_IMAGE_PIXELS"] = pow(2, 40).__str__()
 import cv2
 
@@ -47,13 +50,17 @@ class Photo:
     def h9(self, where: list, c: list):
         if self._h9 is None:
             self.set_h9(27)
+
+        # px = self._h9.place_hex(where)
+        # pts = np.array([px], dtype=np.int32)
+        # r, g, b = c[0]
+        # cv2.fillPoly(self.img, pts=pts, color=(int(b), int(g), int(r)))
         for i in range(18):
-            wc = self._h9.wxy(where)
-            if self._h9.may_place(wc, i):
-                px = self._h9.place_district(wc, i)
-                pts = np.array([px], dtype=np.int32)
-                r, g, b = c[i]
-                cv2.fillPoly(self.img, pts=pts, color=(b, g, r))
+            # if self._h9.may_place(i, wc):
+            px = self._h9.place_district(where, i)
+            pts = np.array([px], dtype=np.int32)
+            r, g, b = c[i]
+            cv2.fillPoly(self.img, pts=pts, color=(int(b), int(g), int(r)))
 
     def h6(self, where: list, c: list):
         if self._h6 is None:
@@ -173,7 +180,7 @@ class Photo:
         return int(r), int(g), int(b)
 
 
-def test_h9():
+def h9_test():
     import matplotlib as mpl
     cmap0 = mpl.colormaps['plasma'].resampled(18)
     cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
@@ -186,11 +193,11 @@ def test_h9():
     rw, rh, offs = p0.h9_get_limits()
     for i in rh:
         for j in rw:
-            p0.h9([j, i], cols1 if i == 0 and j == 0 else cols0)
+            p0.h9([j, i, 0], cols1 if i == 0 and j == 0 else cols0)
     p0.show('h9', True)
 
 
-def test_h6():
+def h6_test():
     import matplotlib as mpl
     cmap0 = mpl.colormaps['plasma'].resampled(12)
     cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(12)]
@@ -208,7 +215,34 @@ def test_h6():
 
 
 if __name__ == '__main__':
-    test_h6()
+    t2h9 = TR2H9Pixel()
+    import matplotlib as mpl
+    cmap0 = mpl.colormaps['plasma'].resampled(18)
+    cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
+
+    p0 = Photo()
+    radius = 27
+    pw, ph = p0.h9_size(8, 8, radius)
+    p0.new(pw, ph)   # 1720
+    p0.set_h9(radius)
+    rw, rh, (ow, oh) = p0.h9_get_limits()
+    for i in rh:
+        for j in rw:
+            t2h9.set(p0.img, ow+i, oh+j, cols0)
+    p0.show('h9')
+    pt1 = Photo()
+    pt1.new(pw, ph)  # pw/ph is in photo-pixels.
+    pt1.set_h9(radius)
+    rw, rh, (oxf, oyf) = pt1.h9_get_limits()  # should be small
+    for wx in rw:      # range(hhw):
+        for wy in rh:  # range(hhh):
+            cx = t2h9.cols(p0.img, wx+oxf, wy+oyf, True)
+            pt1.h9([wx, wy, 0], cx)
+    # pt1.save('tr_h9')
+    pt1.show('tr->h9', pause=True)
+
+
+    # h9_test()
 
     # cmap0 = mpl.colormaps['plasma'].resampled(18)
     # cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]

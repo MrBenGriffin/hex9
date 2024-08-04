@@ -7,6 +7,7 @@ import matplotlib as mpl
 import numpy as np
 from hexutil import HexUtil
 
+# h9a is frozen just for ease.
 
 def translate(p, t):
     tx, ty = t
@@ -19,6 +20,125 @@ def rotate(p, r):  # rotate around angle r.
     th = np.radians(r)
     pts = p if isinstance(p[0], Sequence) else batched(p, 2)
     return [(x * np.cos(th) - y * np.sin(th), x * np.sin(th) + y * np.cos(th)) for (x, y) in pts]
+
+
+class H6:
+    @classmethod
+    def size_for(cls, hw, hh, rx) -> tuple:
+        return math.ceil(hw * 3 * rx + .5*rx), math.ceil(hh * rx * 3.0 * cls.rt3)
+
+    dx = [  # left to right, top to bottom.
+        [0.0, 1., 1.], [0.0, 1., 4.], [1.5, 0., 0],    # 6, 7, 13
+        [0.0, 3., 3.], [1.5, 2., 2.], [1.5, 2., 5.],   # 0, 1, 2
+        [0.0, 3., 0.], [1.5, 4., 1.], [1.5, 4., 4.],   # 5, 4, 3
+        [0.0, 5., 2.], [0.0, 5., 5.], [1.5, 6., 3],   # 11, 10, 16
+    ]
+    a: float       # This is the length of each side of the unit equilateral triangles of a district.
+    h: float       # This is the height of a unit equilateral of a district (of which there are 3).
+    id_ref: str    # The width of each H9 is 6a, the height is 6h.
+    rt3 = math.sqrt(3.)   # the left/right edges have a width of 5a, and top/bottom: 3h
+    stroke: float  # the pixel-width/height of H9 are 4.5a / 3h
+
+    def __init__(self, owner: Drawing | None = None, identity: str = 'h6', size: float = 81., stroke: float = 0.5, op=0.9):
+        self.owner = owner
+        self.opacity = op
+        self.id_ref = f'#{identity}'
+        self.stroke = stroke
+        self.tb, self.lr = [], []
+        self.a = float(size)
+        self.h = self.a * 0.5 * self.rt3  # height of any equilateral triangle.
+        self.a2 = 2. * self.a
+        self.a_2 = 0.5 * self.a
+        self.scx, self.scy = self.a*3, self.h*6
+
+        # return the district polygons for radius rad.
+        a, h = self.a, self.h  # height of any equilateral triangle.
+        a_2, a = self.a_2, self.a
+        self.pts = [-a, 0., +a, 0., a_2,  h, -a_2, h]
+        # self.pts = [0., 0., a2, 0., a_2+a, h, a_2, h]
+        self.districts = [translate(rotate(self.pts, rt[2]*60.), (a * rt[0], h * rt[1])) for rt in self.dx]
+        self.tx = [translate([0, 0], (a * rt[0], h * (rt[1]-3)))[0] for rt in self.dx]
+        self.bboxes = self._bboxes()
+        if self.owner is not None:
+            self.owner.define(self._sym(identity))
+            self.set_offset(self.owner.width, self.owner.height)
+
+        # draw grid.
+        # for i in range(12):
+        #     for j in range(7):
+        #         sqp = [-0.2, -0.2,  0.2, -0.2, 0.2, 0.2, -0.2, 0.2]
+        #         t = svg.Translate(j*a, i*h)
+        #         px = svg.Polygon(stroke_width=self.stroke, fill='black', fill_opacity=self.opacity, points=sqp, transform=[t])
+        #         self.owner.add(px)
+
+        # show bb
+        # for i in range(len(self.bboxes)):
+        #     t, l, b, r = self.bboxes[i]
+        #     px = svg.Polygon(stroke_width=self.stroke, fill_opacity=0.3, points=[t, l, t, r, b, r, b, l])
+        #     self.owner.add(px)
+
+    def _sym(self, idx: str):
+        pts = [p for xy in self.districts[6] for p in xy]
+        return svg.Polygon(id=idx, stroke_width=self.stroke, fill_opacity=self.opacity, points=pts)
+
+    def _bboxes(self):  # set bounding boxes.
+        ll, rl, tl, bl = [], [], [], []
+        for r in self.districts:
+            xs, ys = list(zip(*r))
+            ll.append(min(xs))
+            rl.append(max(xs))
+            tl.append(min(ys))
+            bl.append(max(ys))
+        return list(zip(ll, tl, rl, bl))
+
+    def set_offset(self, w, h):
+        self.scx = w
+        self.scy = h
+        x = math.ceil(w / (self.a * 3))
+        y = math.ceil(h / (self.h * 6))
+        self.tb, self.lr = [0, y], [0, x]
+
+    def wxy(self, where) -> tuple:
+        x, y = where
+        return x * self.a * 3 + self.a, y * self.h * 6
+
+    def points(self) -> list:
+        return self.pts
+
+    def set_limits(self, tb, lr):
+        self.tb, self.lr = tb, lr
+
+    def get_limits(self) -> tuple:
+        x0, x1 = self.lr
+        y0, y1 = self.tb
+        return range(x0, x1), range(y0, y1), (0, 0)
+
+    def may_place(self, where, district: tuple) -> bool:  # where is in wc - use wxy before if using hex_coords
+        x, y = district
+        dx = y * 3 + x
+        (l, t), (r, b) = translate(self.bboxes[dx], where)
+        return -3. <= l and r <= self.scx+3. and -3. <= t and b <= self.scy+3.
+
+    def place_district(self, where, district: tuple, color: str = 'black'):
+        if self.may_place(where, district):
+            x, y = district
+            dx = y * 3 + x
+            if self.owner is not None:
+                px, py = where
+                tx, ty = self.tx[dx]
+                rot = self.dx[dx][2]
+                r = svg.Rotate(rot * 60., 0, +self.h*3)
+                t = svg.Translate(tx+px, ty+py)
+                inst = svg.Use(href=self.id_ref, fill=color, transform=[t, r])
+                self.owner.add(inst)
+            else:
+                return translate(self.districts[dx], where)
+
+    def place(self, where, colors):
+        wc = self.wxy(where)
+        for dy in range(4):
+            for dx in range(3):
+                self.place_district(wc, (dx, dy), colors[dy*3+dx])
 
 
 class H9:
@@ -151,17 +271,10 @@ class H9:
     rt3 = math.sqrt(3.)   # the left/right edges have a width of 5a, and top/bottom: 3h
     stroke: float  # the pixel-width/height of H9 are 4.5a / 3h
 
-    def scale_translate(self, p, xys):
-        tx, ty, sc = xys
-        #  p points, ts is translate/scale
-        # gx = int(math.log(sc, 3))
-        # tx += self.a * 2 * gx
-        ps = p if isinstance(p[0], Sequence) else list(batched(p, 2))
-        return [(sc * x + tx, sc * y + ty) for (x, y) in ps]
-
     def axial(self, where, b3=False, district=None):
         # currently does not multiply by 3 when district is none.
-        dq, dr = self._hu.to_nested_axial(where)
+        # This might be a mistake for usability.
+        dq, dr = self._hu.to_axial(where)
         if district is not None:
             di, dj = self.d_ax[district]
             dq, dr = dq * 3 + di, dr * 3 + dj
@@ -201,10 +314,6 @@ class H9:
     def _sym(self, idx: str):
         pts = [p for xy in self.districts[self.master] for p in xy]
         return svg.Polygon(id=idx, stroke_width=self.stroke, fill_opacity=self.opacity, points=pts)
-
-    def _sym_hex(self, idx: str):
-        pts = [p*3. for p in self.hex]
-        return svg.Polygon(id=idx, stroke='black', stroke_width=self.hex_stroke, fill_opacity=self.hex_opacity, points=pts)
 
     def _bboxes(self):  # set bounding boxes.
         ll, rl, tl, bl = [], [], [], []
@@ -257,7 +366,7 @@ class H9:
         # ax_dof: Bit 0:1 / Bit 1:2 so a=1,b=2,x=3  // 1 + (district & 1)
         hx, rr = 0, []  # debug vars.
         hx_c, ab = district >> 1, 1 + (district & 1)
-        aq, ar = self._hu.to_nested_axial(where)
+        aq, ar = self._hu.to_axial(where)
         rs, qs, qno, rno, result = 0, 0, 0, 0, [(hx_c, ab)]
         for i in range(self.hierarchy+1):  # len(r) and len(q) are the same.
             aq, pqi, qs = self.dm3(aq + qs * qno)
@@ -332,10 +441,7 @@ class H9:
         self.owner = owner
         self.opacity = op
         self.id_ref = f'#{identity}'
-        self.hex_ref = f'#{identity}hex'
         self.stroke = stroke
-        self.hex_stroke = 0.2
-        self.hex_opacity = 0.05
         self.hierarchy = 1
         self.tb, self.lr = [], []
         # self.rt3 = math.sqrt(3.)  # tan(60) == math.sqrt(3.)
@@ -361,30 +467,18 @@ class H9:
         a, h = self.a, self.h  # height of any equilateral triangle.
         ah = self.ah
         # self.addr_lut = {}  # address decomposition lut
-        self.pts = [a, 0., ah, h, -ah, h, 0. - a, 0.]
-        self.hex = [a, 0., ah, h, -ah, h, 0. - a, 0., -ah, -h, ah, -h]
+        self.pts = [0. - a, 0., a, 0., ah, h, -ah, h]
         self.districts = [translate(rotate(self.pts, rt[2]*60.), (a * rt[0], h * rt[1])) for rt in self.dx]
         self.tx = [translate([0, 0], (a * rt[0], h * rt[1]))[0] for rt in self.dx]
         self.bboxes = self._bboxes()
         # self._set_address_lut()
         if self.owner is not None:
             self.owner.define(self._sym(identity))
-            self.owner.define(self._sym_hex(f'{identity}hex'))
             self.set_offset(self.owner.width, self.owner.height)
 
     def wxy(self, where) -> list:
-        xi, yi, level = where   # record hierarchy. 0 = normal.
-        wl = 3 ** level
-        # for each level we need to shift a bit left or right.
-        # The amount, in a is (3**(level+1)-3)0.5 a
-        # Why?! 3**0-3 = 2 so, this is the amount in ah we shift
-        # the 0-district from the centre inside the current level.
-        ov = (3**(level+1)-3) * self.ah
-        return [
-            self.ofx + wl * xi * self.a45 + ov,
-            self.ofy + wl * (yi * self.h6 - (xi & 1) * self.h3),
-            ov
-        ]
+        xi, yi = where
+        return [self.ofx + xi * self.a45, self.ofy + yi * self.h6 - (xi & 1) * self.h3]
 
     def points(self) -> list:
         return self.pts
@@ -401,62 +495,40 @@ class H9:
         y0, y1 = int(math.floor(self.tb[0])), int(math.ceil(self.tb[1]))
         return range(x0, x1+1), range(y0, y1+1), (int(self.ofx / self.a45), int(self.ofy / self.h6))
 
-    def may_place(self, district: int, xys) -> bool:  # where is in wc - use wxy before if using hex_coords
-        (l, t), (r, b) = self.scale_translate(self.bboxes[district], xys)
+    def may_place(self, where: list, district: int) -> bool:  # where is in wc - use wxy before if using hex_coords
+        (l, t), (r, b) = translate(self.bboxes[district], where)
         return 0 <= l and r <= self.scx and 0 <= t and b <= self.scy
 
     def place_district(self, where: list, district: int, color: str = 'black', label=None):
-        lv = 3 ** where[2]
-        (px, py, ov) = self.wxy(where)
-        dx, dy = self.tx[district]
-        tx = px + dx * lv + self.a * lv  # px + lv * dx + ov
-        ty = py + dy * lv
         if self.owner is not None:
-            t = svg.Translate(tx, ty)
-            s = svg.Scale(lv)
+            px, py = where
+            tx, ty = self.tx[district]
             rot = self.dx[district][2]
-            r = svg.Rotate(rot * 60., -self.a * lv, 0)
-            inst = svg.Use(href=self.id_ref, fill=color, transform=[t, r, s])
+            r = svg.Rotate(rot * 60., -self.a, 0)
+            t = svg.Translate(tx+px+self.a, ty+py)
+            inst = svg.Use(href=self.id_ref, fill=color, transform=[t, r])
             self.owner.add(inst)
             if label is not None:
                 lx, ly = self.lpt[district]
                 self.owner.label(label, self.a/12, tx+px, ty+py, lx*self.a, ly*self.h)
         else:
-            xys = tx, ty, lv
-            return self.scale_translate(self.districts[district], xys)
+            return translate(self.districts[district], where)
 
     def place(self, where, colors):
         wc = self.wxy(where)
-        xys = wc[0], wc[1], 3 ** where[2]
         for i in range(len(self.districts)):
-            if self.may_place(i, xys):
+            if self.may_place(wc, i):
                 label = self.label_text(where, i)
                 a = int(label[0]) * 2
                 a += 0 if label[1] == 'a' else 1
                 label = label[3:]
-                x, y, h = where
+                x, y = where
                 q, r = self.axial(where, False, i)
-                label = f';{q},{r}'
-                if i in []:  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]:
-                    self.place_district(where, i, colors[i], label)
+                label += f';{q},{r}'
+                if i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]:
+                    self.place_district(wc, i, colors[a], label)
                 else:
-                    self.place_district(where, i, colors[i], None)
-
-    def place_hex(self, where, color: str = 'black', label=None):
-        lv = 3 ** where[2]
-        wco = self.wxy(where)
-        if self.owner is not None:
-            px, py, ov = wco
-            t = svg.Translate(px, py)
-            s = svg.Scale(lv)
-            # ls = 3 ** lv
-            inst = svg.Use(href=self.hex_ref, stroke=color, fill=None, transform=[t, s])
-            self.owner.add(inst)
-            # if label is not None:
-            #     lx, ly = -ls*0.033,  0
-            #     self.owner.label(label, ls*self.a/18, px, py, lx*self.a, ly*self.h)
-        else:
-            return self.scale_translate(self.hex, wco)
+                    self.place_district(wc, i, colors[a], None)
 
 
 if __name__ == '__main__':
@@ -464,29 +536,13 @@ if __name__ == '__main__':
     cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(18)]
     # cmap = mpl.colormaps['plasma'].resampled(30)
     # cols = [mpl.colors.rgb2hex(cmap(i+6)) for i in range(18)]
-    radius = 27.
-    dim = H9.size_for(8, 8, radius)
+    radius = 120.
+    dim = H9.size_for(4, 4, radius)
     cs = Drawing('test1', dim, False)
     h0 = H9(cs, 'h1', radius, 0, op=0.90)
     h0.hierarchy = 2
     (xx, yy, oo) = h0.get_limits()
     for j in yy:
         for i in xx:
-            h0.place([i, j, 0], cols)
-    # h0.place([0, 0, -1], cols)
-    # h0.place([0, 0, -2], cols)
-    # h0.place([0, 0, -3], cols)
-    for j in yy:
-        for i in xx:
-            h0.place([i, j, -1], cols)
-    for j in yy:
-        for i in xx:
-            h0.place([i, j, -2], cols)
-    h0.place_hex((0, 0, 2))
-    h0.place_hex((0, 0, 1))
-    h0.place_hex((0, 0, 0))
-    h0.place_hex((0, 0, -1))
-    h0.place_hex((0, 0, -2))
-    h0.place_hex((0, 0, -3))
-    h0.place_hex((0, 0, -4))
+            h0.place([i, j], cols)
     cs.save()
