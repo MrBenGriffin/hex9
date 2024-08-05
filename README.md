@@ -1,4 +1,13 @@
 
+New hierarchic drawing getting better, and everlasting hexes is a thing.
+![hierarchy drawing](assets/docs/hierarchies.jpg)
+
+There are still some address issues that I want to knock out. I struggled for a couple of weeks with scaling - 
+and it was because I forgot the inter-hierarchy offset which is fine when reading or manually composing the hexgrid,
+but it's got to be remembered when doing automatic calculations. Now that is fixed, it should be much easier to do 
+the hierarchic address calculations - the current codebase shows my old/broken work. It's got some good stuff there but
+you can see (if you know how to look) that I was tearing my hair out.
+
 Up until now this has mainly been a repository of ideas in progress.
 The project is centred on the idea of hierarchic hexagonal grids, while keeping the number of polygons to a minimum.
 Also - do not be surprised if you find bugs!  This is still very much a work in progress!
