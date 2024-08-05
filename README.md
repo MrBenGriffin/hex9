@@ -1,7 +1,6 @@
 
 Up until now this has mainly been a repository of ideas in progress.
 The project is centred on the idea of hierarchic hexagonal grids, while keeping the number of polygons to a minimum.
-
 Also - do not be surprised if you find bugs!  This is still very much a work in progress!
 
 My solution to this quandary is to use half-hexagons ('regular' trapezoids composed of three equilateral triangles) as
@@ -9,23 +8,12 @@ the primary fundamental.  This can be used in a vertex centred / offset 'H9 aper
 9 smaller hexagons, albeit with three hexagons shared directly along the half-hex line. 
 ('Apertures' normally remain shape centred. Here we do not do that.)
 
+My [past research](assets/docs/past.md) was based on something very similar to the H3 methods currently funded by Uber (the ride company).
+
 This is auxiliary to the work that has been done by many others, including Buckminster Fuller, and Snyder at Oregon University,
-regarding hexgrids in general, as well as discrete global grids (ISEA DGGs), but my focus is more on general 2D grids, 
+regarding hex grids in general, as well as discrete global grids (ISEA DGGs), but my focus is more on general 2D grids, 
 rather than just global mapping - also, the grid I use here is vertex centred,
 whereas most research has been developed on hexagon-centred hierarchic grids.
-
-How about H3?  Back in 2010 I worked on grids very similar to H3, while examining the √7 rotation of each 
-level of the hierarchy leading to an approximate correspondence along the edges.
-
-![angles.jpg](assets/docs/angles.png)
-
-However, I didn't like the ragged-edge issues that this sort of rotated hexgrid introduces and, again, 
-the entire grid is oriented at each level of the hierarchy. It works well enough for one or two layers, but it does 
-not easily allow fine resolution - nor is it easy (when in a ragged edge) to work out it's hierarchy.
-
-![subgrid.png](assets/docs/subgrid.png)
-
-So I gave up on that, and more recently worked on this half-hexagon solution.
 
 Here is the basic unit hexagon, showing it's division into the 18 half-hexagons that compose it.  The numbering is one
 way of indexing the half-hexagons.
