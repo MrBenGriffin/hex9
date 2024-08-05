@@ -1,9 +1,8 @@
 import math
 
 import numpy as np
-from pixel import SQ2HXPixel, HX2SQPixel, SQ2TRPixel, TR2SQPixel, TR2H6Pixel, TR2H9Pixel
+from pixel import SQ2TRPixel, TR2H9Pixel
 from photo import Photo
-import matplotlib as mpl
 from h9 import H9
 
 
@@ -37,10 +36,9 @@ def plot_image(plotter, img):
 
 
 if __name__ == '__main__':
-    s2t, t2h6 = SQ2TRPixel(), TR2H6Pixel()
     p = Photo()
     pt = Photo()
-    p.load('grad2', False)
+    p.load('mona_422', False)
     p.show('mandrill original')
     sqw, sqh = p.width, p.height
     # h_adj = 2. / np.sqrt(3.)
@@ -49,6 +47,7 @@ if __name__ == '__main__':
     # convert(p.img, ph.img, s2h)
     # # ph.show('mandrill hx')
 
+    s2t = SQ2TRPixel()
     t_adj = np.sqrt(3.)
     trw, trh = int(np.ceil(sqw * t_adj)), sqh
     pt.new(trw, trh)
@@ -85,16 +84,19 @@ if __name__ == '__main__':
     t2h9 = TR2H9Pixel()
     pt0 = pt
     pt1 = Photo()
-    # z = [(255, 255, 255), (0, 0, 0)]
     ptw, pth, radius = int(math.ceil(trw / 9)), int(math.ceil(trh / 6)), 27
     dw, dh = H9.size_for(ptw, pth, radius)
     pt1.new(dw, dh)  # pw/ph is in photo-pixels.
+    for wx in range(dw):
+        for wy in range(dh):
+            pt1.img[wy, wx] = (0, 255, 0)
+
     pt1.set_h9(radius)
     rw, rh, (oxf, oyf) = pt1.h9_get_limits()  # should be small
-    for wx in range(-1, ptw+1):      # range(hhw):
-        for wy in range(-1, pth+1):  # range(hhh):
-            cx = t2h9.cols(pt.img, wx, wy, True)
-            pt1.h9([int(wx - oxf), int(wy - oyf), 0], cx)
+    btz = oxf & 1 == 1
+    for wx in rw:      # range(hhw):
+        for wy in rh:  # range(hhh):
+            cx = t2h9.cols(pt.img, wx+oxf, wy+oyf, btz, True)  # this is in jiggly hex. so wx is %2 sensitive.
+            pt1.h9([wx, wy, 0], cx)
     # pt1.save('tr_h9')
     pt1.show('mandrill tr->h9', pause=True)
-

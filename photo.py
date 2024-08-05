@@ -1,3 +1,4 @@
+import math
 import os
 import numpy as np
 from h9 import H9
@@ -33,12 +34,12 @@ class Photo:
     def h6_get_limits(self) -> tuple:
         return self._h6.get_limits()
 
-    def set_h9(self, size: int, limits: tuple = None):
-        self._h9 = H9(size=size)
-        self._h9.set_offset(self.width, self.height)
+    def set_h9(self, radius: int, limits: tuple = None):
+        self._h9 = H9(size=radius)
         if limits:
             lr, tb,  = limits  # eg (-4,4), (-5,9)
             self._h9.set_limits(tb, lr)
+        self._h9.set_offset(self.width, self.height)
 
     def set_h6(self, size: int, limits: tuple = None):
         self._h6 = H6(size=size)
@@ -50,15 +51,14 @@ class Photo:
     def h9(self, where: list, c: list):
         if self._h9 is None:
             self.set_h9(27)
-
-        # px = self._h9.place_hex(where)
-        # pts = np.array([px], dtype=np.int32)
-        # r, g, b = c[0]
-        # cv2.fillPoly(self.img, pts=pts, color=(int(b), int(g), int(r)))
+        a, h = self._h9.a, self._h9.h
+        ox, oy = 1.4 * a * 9, 2.5 * h * 6
         for i in range(18):
             # if self._h9.may_place(i, wc):
-            px = self._h9.place_district(where, i)
+            hp = self._h9.place_district(where, i)
+            px = [(x + ox, y + oy) for (x, y) in hp]
             pts = np.array([px], dtype=np.int32)
+
             r, g, b = c[i]
             cv2.fillPoly(self.img, pts=pts, color=(int(b), int(g), int(r)))
 
@@ -180,20 +180,19 @@ class Photo:
         return int(r), int(g), int(b)
 
 
-def h9_test():
+def h9_test(radius = 27, side = 30):
     import matplotlib as mpl
     cmap0 = mpl.colormaps['plasma'].resampled(18)
     cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
-    cmap1 = mpl.colormaps['cividis'].resampled(18)
-    cols1 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap1(i))]) for i in range(18)]
     p0 = Photo()
-    pw, ph = p0.h9_size(5, 5, 27)
-    p0.new(pw, ph+10)   # 1720
-    p0.set_h9(27)
+    pw, ph = p0.h9_size(side, side, radius)
+    p0.new(pw, ph)   # 1720
+    p0.set_h9(radius)
     rw, rh, offs = p0.h9_get_limits()
     for i in rh:
         for j in rw:
-            p0.h9([j, i, 0], cols1 if i == 0 and j == 0 else cols0)
+            p0.h9([j, i, 0], cols0)
+    p0.save(f'h9_{radius}_{side}')
     p0.show('h9', True)
 
 
@@ -214,13 +213,51 @@ def h6_test():
     p0.show('h6', True)
 
 
+def make_borders(side, sz):
+    clut = [(255, 255, 255), (0, 0, 0)]
+    p0 = Photo()
+    p0.new(side, side)
+    for i in range(side):
+        for j in range(side):
+            c = 1 if (i < sz) or (i >= side-sz) or (j < sz) or (j >= side - sz) else 0
+            p0.img[j, i] = clut[c]
+    p0.save(f'borders/{side}x{sz}')
+
+
+def make_grid(side, u_size, cols):
+    # eg single pixel bw 64 = 64,1,2
+    p0 = Photo()
+    if side % (cols * u_size) > 0:
+        unit = (cols * u_size)
+        units = math.ceil(side/unit)
+        side = int(units * unit)
+        # side = int((cols * u_size) * math.ceil(side / (cols * u_size)))
+    # side += side % (cols * u_size)  # 64 5,9 45
+    p0.new(side, side)
+    clut = [(255, 255, 255), (0, 0, 0), (0, 0, 255), (0, 255, 0), (255, 0, 0)]
+    for i in range(side):
+        for j in range(side):
+            p0.img[j, i] = clut[(math.floor(i / u_size) + math.floor(j / u_size)) % cols]
+    for i in range(u_size):
+        for j in range(u_size):
+            p0.img[j, i] = (0, 255, 255)
+            p0.img[side-u_size+j, side-u_size+i] = (255, 255, 0)
+    p0.save(f'grids/c{cols}_{u_size}x{u_size}_{side}')
+
+
 if __name__ == '__main__':
+    for i in [32, 33, 64]:
+        for j in [2]:
+            make_borders(i, j)
+
+    exit(0)
     t2h9 = TR2H9Pixel()
     import matplotlib as mpl
     cmap0 = mpl.colormaps['plasma'].resampled(18)
     cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
 
-    p0 = Photo()
+
+
     radius = 27
     pw, ph = p0.h9_size(8, 8, radius)
     p0.new(pw, ph)   # 1720

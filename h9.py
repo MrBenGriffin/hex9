@@ -15,10 +15,14 @@ def translate(p, t):
     return [(x+tx, y+ty) for x, y in ps]
 
 
-def rotate(p, r):  # rotate around angle r.
+def rotate(p, r, o=(0, 0)):  # rotate around angle r.
     th = np.radians(r)
+    ox, oy = o
     pts = p if isinstance(p[0], Sequence) else batched(p, 2)
-    return [(x * np.cos(th) - y * np.sin(th), x * np.sin(th) + y * np.cos(th)) for (x, y) in pts]
+    return [(
+                (x - ox) * np.cos(th) - (y - oy) * np.sin(th) + ox,
+                (x - ox) * np.sin(th) + (y - oy) * np.cos(th) + oy
+            ) for (x, y) in pts]
 
 
 class H9:
@@ -150,6 +154,17 @@ class H9:
     id_ref: str    # The width of each H9 is 6a, the height is 6h.
     rt3 = math.sqrt(3.)   # the left/right edges have a width of 5a, and top/bottom: 3h
     stroke: float  # the pixel-width/height of H9 are 4.5a / 3h
+
+    @staticmethod
+    def trs(p, trs):
+        #  p points, trs is translate/rotate/scale
+        (tx, ty), (rot, ox, oy), sc = trs
+        th = np.radians(rot)
+        pb = p if isinstance(p[0], Sequence) else list(batched(p, 2))
+        sp = [(sc * x, sc * y) for (x, y) in pb]
+        rp = [((x - ox) * np.cos(th) - (y - oy) * np.sin(th) + ox, (x - ox) * np.sin(th) + (y - oy) * np.cos(th) + oy) for (x, y) in sp]
+        tp = [(x + tx, y + ty) for (x, y) in rp]
+        return tp
 
     def scale_translate(self, p, xys):
         tx, ty, sc = xys
@@ -394,12 +409,16 @@ class H9:
 
     @classmethod
     def size_for(cls, hw, hh, rx) -> tuple:
-        return math.ceil(hw * 4.5 * rx), math.ceil(hh * rx * 3.0 * cls.rt3)
+        # returns results in 'pixels' - not h9 but inner hexes.
+        # a = rx
+        # h = rx * 0.5 * cls.rt3
+        # # return math.floor(4.5 * a * (hw-2.) + 2*a), math.floor(6. * h * (hh-1.) + 2*h)
+        return math.ceil((0 + hw) * 4.5 * rx), math.ceil((0 + hh) * rx * 3.0 * cls.rt3)
 
-    def get_limits(self) -> tuple:
-        x0, x1 = int(math.floor(self.lr[0])), int(math.ceil(self.lr[1]))
-        y0, y1 = int(math.floor(self.tb[0])), int(math.ceil(self.tb[1]))
-        return range(x0, x1+1), range(y0, y1+1), (int(self.ofx / self.a45), int(self.ofy / self.h6))
+    def get_limits(self, over=True) -> tuple:
+        x0, x1 = int(math.floor(self.lr[0])) - 2, int(math.floor(self.lr[1]) + 1)
+        y0, y1 = int(math.floor(self.tb[0])) - 2, int(math.floor(self.tb[1]) + 1)
+        return range(x0, x1), range(y0, y1), (-x0 - 0, -y0 - 1)
 
     def may_place(self, district: int, xys) -> bool:  # where is in wc - use wxy before if using hex_coords
         (l, t), (r, b) = self.scale_translate(self.bboxes[district], xys)
@@ -411,19 +430,19 @@ class H9:
         dx, dy = self.tx[district]
         tx = px + dx * lv + self.a * lv  # px + lv * dx + ov
         ty = py + dy * lv
+        rot, ox, oy = self.dx[district][2] * 60., -self.a * lv, 0
         if self.owner is not None:
             t = svg.Translate(tx, ty)
+            r = svg.Rotate(rot, ox, oy)
             s = svg.Scale(lv)
-            rot = self.dx[district][2]
-            r = svg.Rotate(rot * 60., -self.a * lv, 0)
             inst = svg.Use(href=self.id_ref, fill=color, transform=[t, r, s])
             self.owner.add(inst)
             if label is not None:
                 lx, ly = self.lpt[district]
                 self.owner.label(label, self.a/12, tx+px, ty+py, lx*self.a, ly*self.h)
         else:
-            xys = tx, ty, lv
-            return self.scale_translate(self.districts[district], xys)
+            pts = self.trs(self.districts[self.master], ((tx, ty), (rot, ox, oy), lv))
+            return pts
 
     def place(self, where, colors):
         wc = self.wxy(where)
@@ -468,7 +487,7 @@ if __name__ == '__main__':
     dim = H9.size_for(8, 8, radius)
     cs = Drawing('test1', dim, False)
     h0 = H9(cs, 'h1', radius, 0, op=0.90)
-    h0.hierarchy = 2
+    h0.hierarchy = 3
     (xx, yy, oo) = h0.get_limits()
     for j in yy:
         for i in xx:

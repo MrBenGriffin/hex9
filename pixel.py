@@ -64,8 +64,9 @@ class TR2SQPixel(Pixel):
     def col(self, img: ndarray, sx, sy) -> tuple:
         height, width = img.shape[:2]
         r, g, b = 0., 0., 0.
-        sxo = self.window * math.floor(sx / self.window)
-        rec = self.lut[sx % self.window]
+        sxd, sxm = divmod(sx, self.window)
+        sxo = self.window * sxd
+        rec = self.lut[sxm]
         for ofx, bit in rec.items():
             x = max(min(width - 1, sxo + ofx), 0)
             y = max(min(height - 1, sy), 0)
@@ -77,17 +78,19 @@ class TR2SQPixel(Pixel):
 
 
 class SQ2TRPixel(Pixel):
+    # convert square pixels to triangle pixels.
     def __init__(self):
         super().__init__('assets/sq_tr_lut.json')
 
-    def col(self, img: ndarray, hx, hy) -> tuple:
+    def col(self, img: ndarray, tx, ty) -> tuple:
         height, width = img.shape[:2]
         r, g, b = 0., 0., 0.
-        sxo = self.window * math.floor(hx / self.window)
-        rec = self.lut[hx % self.window]
+        sxd, sxm = divmod(tx, self.window)
+        sxo = self.window * sxd
+        rec = self.lut[sxm]
         for ofx, bit in rec.items():
             x = max(min(width - 1, sxo + ofx), 0)
-            y = max(min(height - 1, hy), 0)
+            y = max(min(height - 1, ty), 0)
             rd, gd, bd = (img[y, x])
             r += rd * bit
             g += gd * bit
@@ -164,10 +167,12 @@ class TR2H9Pixel(Pixel):
             [(8, 0), (8, 1), (9, 1)]    # district 8b / 17
         ]
 
-    def cols(self, img: ndarray, hx, hy, rev=False) -> list:
-        # given an x, y (in h9 coords)
+    def cols(self, img: ndarray, hx, hy, xf=True, rev=False) -> list:
+        # given an x, y (in h9 coords), get the colours from an img in triangle coordinates.
+        # xf is used for offset adjustment to indicate that x-parity is off.
+        parity = hx & 1 if xf else 1 - hx & 1
         tx = hx * 9
-        ty = hy * 6 - (hx & 1) * 3
+        ty = hy * 6 + parity * 3 - 2
         result = []
         h, w = img.shape[:2]
         for i in self.lut:
@@ -180,6 +185,7 @@ class TR2H9Pixel(Pixel):
                 g += gd * self.nm
                 b += bd * self.nm
             result.append((r, g, b) if not rev else (b, g, r))
+        # result[0] = (0, 0, 0)
         return result
 
     def set(self, img: ndarray, hx, hy, cols: list):
