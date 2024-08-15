@@ -38,7 +38,7 @@ def plot_image(plotter, img):
 if __name__ == '__main__':
     p = Photo()
     pt = Photo()
-    p.load('mona_422', False)
+    p.load('mandrill_128', False)
     p.show('mandrill original')
     sqw, sqh = p.width, p.height
     # h_adj = 2. / np.sqrt(3.)
@@ -87,9 +87,9 @@ if __name__ == '__main__':
     ptw, pth, radius = int(math.ceil(trw / 9)), int(math.ceil(trh / 6)), 27
     dw, dh = H9.size_for(ptw, pth, radius)
     pt1.new(dw, dh)  # pw/ph is in photo-pixels.
-    for wx in range(dw):
+    for wx in range(dw):  # stick on a green backdrop
         for wy in range(dh):
-            pt1.img[wy, wx] = (0, 255, 0)
+            pt1.img[wy, wx] = (0, 128, 0)
 
     pt1.set_h9(radius)
     rw, rh, (oxf, oyf) = pt1.h9_get_limits()  # should be small

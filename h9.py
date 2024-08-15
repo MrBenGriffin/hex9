@@ -34,7 +34,6 @@ class H9:
         [0.5, -3, 0], [0.5, 3., 3], [2., 2., 2], [-2.5, -1.0, 5.],
         [-2.5, 1., 4], [2., -2., 1]
     ]
-    lb = ['0a', '0b', '1a', '1b', '2a', '2b', '3a', '3b', '4a', '4b', '5a', '5b', '6a', '6b', '7a', '7b', '8a', '8b']
     lpt = [
         [-0.85,  0.20], [-0.85, -0.05], [-0.50, -0.80], [-0.36, 0.95],
         [-0.36, -0.80], [-0.50, 0.95], [-0.85, 0.20], [-0.85, -0.05],
@@ -42,17 +41,6 @@ class H9:
         [-0.85,  0.20], [-0.85, -0.05], [-0.50, -0.80], [-0.36, 0.95],
         [-0.36, -0.80], [-0.50, 0.95]
     ]
-    d_ax = [
-        (0, 0, 1), (0, 0, 2), (1, 0, 1), (1, 0, 2), (1, -1, 1), (1, -1, 2),
-        (2, -1, 1), (2, -1, 2), (0, -1, 1), (0, -1, 2), (0, 1, 1), (0, 1, 2),
-        (1, 1, 1), (1, -2, 2),  (2, -2, 1), (-1, 1, 2), (-1, 0, 1), (2, 0, 2)
-    ]
-    ax3_to_d = {
-        (-2, +1): 6, (-2, +2): 2, (-2, -1): 2, (-2, -2): 6, (-2, 0): 1, (-1, +1): 7, (-1, +2): 3,
-        (-1, -1): 3, (-1, -2): 7, (-1, 0): 8, (0, +1): 5, (0, +2): 4, (0, -1): 4,
-        (0, -2): 5, (0, 0): 0, (+1, +2): 2, (+1, -1): 2, (+1, -2): 6, (+1, 0): 1,
-        (+1, +1): 6, (+2, +1): 7, (+2, +2): 3, (+2, -1): 3, (+2, -2): 7, (+2, 0): 8,
-    }
     # This is a proper half-hex symbol not merely a grid.,
     a: float       # This is the length of each side of the unit equilateral triangles of a district.
     h: float       # This is the height of a unit equilateral of a district (of which there are 3).
@@ -77,56 +65,19 @@ class H9:
         ps = p if isinstance(p[0], Sequence) else list(batched(p, 2))
         return [(sc * x + tx, sc * y + ty) for (x, y) in ps]
 
-    def axial(self, where, district):
-        # This now looks much healthier
-        ab = 0
+    @staticmethod
+    def axial(where, district):
+        d_ax = [
+            (0, 0, 1), (0, 0, 2), (1, 0, 1), (1, 0, 2), (1, -1, 1), (1, -1, 2),
+            (2, -1, 1), (2, -1, 2), (0, -1, 1), (0, -1, 2), (0, 1, 1), (0, 1, 2),
+            (1, 1, 1), (1, -2, 2), (2, -2, 1), (-1, 1, 2), (-1, 0, 1), (2, 0, 2)
+        ]
         x, y, lv = where
         q, r = x, -y - (x - (x & 1)) // 2  # This from offset 'odd-q' to qrs
-        i, j, ab = self.d_ax[district]
+        i, j, ab = d_ax[district]
         q, r = q * 3 + i, r * 3 + j
         m = 3 ** lv
         return m*q, m*r, ab
-
-    @staticmethod
-    def addr_bx(p, prev) -> int:
-        # given parent hex p child hex c as h9 ids (0..8)
-        # along with child-half.hex (a=1,/b=2,x=3),
-        # return parent's half-hex (a/b/'') character. 1,2
-        c, ab = prev
-        p_ab_lut = {
-            (0, 0): 'X', (0, 1): 'b', (0, 2): 'a',
-            (0, 3): 'X', (0, 4): 'a', (0, 5): 'b',
-            (0, 6): 'Y', (0, 7): 'X', (0, 8): 'X',
-            (1, 0): 'a', (1, 1): 'X', (1, 2): 'b',
-            (1, 3): 'b', (1, 4): 'X', (1, 5): 'a',
-            (1, 6): 'X', (1, 7): 'Y', (1, 8): 'X',
-            (2, 0): 'b', (2, 1): 'a', (2, 2): 'X',
-            (2, 3): 'a', (2, 4): 'b', (2, 5): 'X',
-            (2, 6): 'X', (2, 7): 'X', (2, 8): 'Y'
-        }
-        dx = {'a': 1, 'b': 2, 'X': ab, 'Y': 3 if ab == 3 else 3 - ab}
-        res = p_ab_lut[(p % 3, c)]
-        return dx[res]
-
-    @staticmethod
-    def addr_bx2(p, c, ab: int = 3) -> int:
-        # given parent hex p child hex c as h9 ids (0..8)
-        # along with child-half.hex (a=1,/b=2,x=3),
-        # return parent's half-hex (a/b/'') character. 1,2
-        p_ab_lut = {
-            (0, 0): 'X', (0, 1): 'b', (0, 2): 'a',
-            (0, 3): 'X', (0, 4): 'a', (0, 5): 'b',
-            (0, 6): 'Y', (0, 7): 'X', (0, 8): 'X',
-            (1, 0): 'a', (1, 1): 'X', (1, 2): 'b',
-            (1, 3): 'b', (1, 4): 'X', (1, 5): 'a',
-            (1, 6): 'X', (1, 7): 'Y', (1, 8): 'X',
-            (2, 0): 'b', (2, 1): 'a', (2, 2): 'X',
-            (2, 3): 'a', (2, 4): 'b', (2, 5): 'X',
-            (2, 6): 'X', (2, 7): 'X', (2, 8): 'Y'
-        }
-        dx = {'a': 1, 'b': 2, 'X': ab, 'Y': 3 if ab == 3 else 3 - ab}
-        res = p_ab_lut[(p % 3, c)]
-        return dx[res]
 
     def _sym(self, idx: str):
         pts = [p for xy in self.districts[self.master] for p in xy]
@@ -146,27 +97,6 @@ class H9:
             bl.append(max(ys))
         return list(zip(ll, tl, rl, bl))
 
-    @classmethod
-    def hh2r(cls, where) -> tuple:
-        # hh: given coordinates - eg (3,3), return h9 coordinates and region.
-        ix, iy = where  # this is in hh co-ordinates
-        ofx = ix >> 2
-        ofy = (iy >> 2) + ((ix & 1) << 1)
-        return ofx, ofy
-
-    @staticmethod
-    def dx_conf_short(adr: list):
-        df = ['', 'a', 'b', '']
-        dq = [f'{a}' for (a, b) in adr[::-1]]
-        fx = df[adr[0][1]] if adr else ''
-        return ''.join(dq)+f'{fx}'
-
-    @staticmethod
-    def dx_conf_full(adr: list):
-        df = ['', 'a', 'b', '']
-        dq = [f'{a}{df[b]}' for (a, b) in adr[::-1]]
-        return ''.join(dq)
-
     @staticmethod
     def axial_dm(x, denominator):
         if x == 0:
@@ -178,28 +108,58 @@ class H9:
     def d3(self, x):
         return self.axial_dm(x, 3)
 
-    def label_text(self, where, district=0, long=True):
-        level = where[2]
-        sc = 3 ** level
-        digits = self.hierarchy - where[2]
-        result = []
-        dx = district
-        (sq, sr, ab) = self.axial(where, dx)
+    def _label_text(self, where, ab=1, level=0):
+        n_dxd = {
+            (0, 1): (0, 0, 0), (0, 2): (0, 0, 1), (1, 1): (1, 0, 2), (1, 2): (1, 0, 3),
+            (2, 1): (1, -1, 4), (2, 2): (1, -1, 5), (3, 1): (2, -1, 6), (3, 2): (2, -1, 7),
+            (4, 1): (0, -1, 8), (4, 2): (0, -1, 9), (5, 1): (0, 1, 10), (5, 2): (0, 1, 11),
+            (6, 1): (1, 1, 12), (6, 2): (1, -2, 13), (7, 1): (2, -2, 14), (7, 2): (-1, 1, 15),
+            (8, 1): (-1, 0, 16), (8, 2): (2, 0, 17)
+        }
+        ax3_to_d = {
+            (-2, +1): 6, (-2, +2): 2, (-2, -1): 2, (-2, -2): 6, (-2, 0): 1, (-1, +1): 7, (-1, +2): 3,
+            (-1, -1): 3, (-1, -2): 7, (-1, 0): 8, (0, +1): 5, (0, +2): 4, (0, -1): 4,
+            (0, -2): 5, (0, 0): 0, (+1, +2): 2, (+1, -1): 2, (+1, -2): 6, (+1, 0): 1,
+            (+1, +1): 6, (+2, +1): 7, (+2, +2): 3, (+2, -1): 3, (+2, -2): 7, (+2, 0): 8,
+        }
+        ab_lut = [{}, {
+            (0, 0): 1, (0, 1): 2, (0, 2): 1,
+            (0, 3): 1, (0, 4): 1, (0, 5): 2,
+            (0, 6): 2, (0, 7): 1, (0, 8): 1,
+            (1, 0): 1, (1, 1): 1, (1, 2): 2,
+            (1, 3): 2, (1, 4): 1, (1, 5): 1,
+            (1, 6): 1, (1, 7): 2, (1, 8): 1,
+            (2, 0): 2, (2, 1): 1, (2, 2): 1,
+            (2, 3): 1, (2, 4): 2, (2, 5): 1,
+            (2, 6): 1, (2, 7): 1, (2, 8): 2
+        }, {
+            (0, 0): 2, (0, 1): 2, (0, 2): 1,
+            (0, 3): 2, (0, 4): 1, (0, 5): 2,
+            (0, 6): 1, (0, 7): 2, (0, 8): 2,
+            (1, 0): 1, (1, 1): 2, (1, 2): 2,
+            (1, 3): 2, (1, 4): 2, (1, 5): 1,
+            (1, 6): 2, (1, 7): 1, (1, 8): 2,
+            (2, 0): 2, (2, 1): 1, (2, 2): 2,
+            (2, 3): 1, (2, 4): 2, (2, 5): 2,
+            (2, 6): 2, (2, 7): 2, (2, 8): 1
+        }]
+        od, result = 0, []
+        q, r, = where
         if level > 0:
-            sq, qd = self.axial_dm(sq, sc)
-            sr, rd = self.axial_dm(sr, sc)
-        q, r = sq, sr
-        for i in range(digits):
-            result.append(dx)  # store district 0..17
-            dq, dr, ab = self.d_ax[dx]   # this is the current q,r, ab for dx
-            q, _ = self.d3(q - dq)  # here we are removing district and
-            r, _ = self.d3(r - dr)  # dividing..
+            sc = 3 ** level
+            q, qd = self.axial_dm(q, sc)
+            r, rd = self.axial_dm(r, sc)
+        for i in range(self.hierarchy - level):
             _, qi = self.d3(q)  # we want to keep q, r
-            _, ri = self.d3(r)  # here we are getting the new qi,ri as district.
-            nd = self.ax3_to_d[(qi, ri)]  # this is the region.
-            ab = self.addr_bx2(nd, dx >> 1, ab)  # here we get the new ab. the function could be written better.
-            dx = (nd << 1) + (ab - 1)  # This gives us the new district proper.
-        rez = ''.join([self.lb[d][0] for d in result[::-1]]) + self.lb[result[0]][1]
+            _, ri = self.d3(r)  # the qi,ri of the district-hex.
+            nd = ax3_to_d[(qi, ri)]  # convert to district-hex.
+            ab = ab_lut[ab][(nd % 3, od)] if i > 0 else ab  # identify the district a/b
+            dq, dr, dx = n_dxd[(nd, ab)]  # get offset of district and it's id.
+            result.append(dx)  # store district 0..17
+            q, _ = self.d3(q - dq)  # divide from district 0
+            r, _ = self.d3(r - dr)  # divide from district 0
+            od = nd  # keep the old district for calculating next a/b
+        rez = ''.join([f'{d >> 1}' for d in result[::-1]]) + ['a', 'b'][result[0] & 1]
         return rez
 
     def set_offset(self, w, h):
@@ -293,7 +253,7 @@ class H9:
         (l, t), (r, b) = self.scale_translate(self.bboxes[district], xys)
         return 0 <= l and r <= self.scx and 0 <= t and b <= self.scy
 
-    def place_district(self, where, district: int, color: str = 'black', label=None):
+    def place_district(self, where, district: int, color=None, label=None):
         lv = 3 ** where[2]
         (px, py, ov) = self.wxy(where)
         dx, dy = self.tx[district]
@@ -304,7 +264,7 @@ class H9:
             t = svg.Translate(tx, ty)
             r = svg.Rotate(rot, ox, oy)
             s = svg.Scale(lv)
-            if lv == -1:
+            if color is not None:
                 inst = svg.Use(href=self.id_ref, fill=color, transform=[t, r, s])
             else:
                 inst = svg.Use(href=self.id_ref, stroke_width=0.02, stroke="#000000", fill="none", stroke_opacity=0.4, transform=[t, r, s])
@@ -316,16 +276,21 @@ class H9:
             pts = self.trs(self.districts[self.master], ((tx, ty), (rot, ox, oy), lv))
             return pts
 
-    def place(self, where, colors, ignore_bounds=False, label=True):
+    def label_txt(self, where, district):
+        iq, ir, _ = self.axial(where, district)  # where is x, y, level using odd coords.
+        return self._label_text((iq, ir), 1 + (district & 1), where[2])
+
+    def place(self, where, colors=None, label=True, ignore_bounds=False):
         wc = self.wxy(where)
         xys = wc[0], wc[1], 3 ** where[2]
-        for i in range(len(self.districts)):
-            if ignore_bounds or self.may_place(i, xys):
+        for district in range(len(self.districts)):
+            if ignore_bounds or self.may_place(district, xys):
+                color = None if colors is None else colors[district]
                 if label:
-                    label = self.label_text(where, i, False)
-                    self.place_district(where, i, colors[i], label)
+                    label = self.label_txt(where, district)
+                    self.place_district(where, district, color, label)
                 else:
-                    self.place_district(where, i, colors[i], None)
+                    self.place_district(where, district, color, None)
 
     def place_hex(self, where, color: str = 'black', label=None):
         lv = 3 ** where[2]
@@ -345,12 +310,13 @@ class H9:
 
 
 if __name__ == '__main__':
-    cmap = mpl.colormaps['tab20'].resampled(20)
-    cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(18)]
-    # cmap = mpl.colormaps['plasma'].resampled(30)
-    # cols = [mpl.colors.rgb2hex(cmap(i+6)) for i in range(18)]
+
+    # cmap = mpl.colormaps['tab20'].resampled(20)
+    # cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(18)]
+    cmap = mpl.colormaps['plasma'].resampled(30)
+    cols = [mpl.colors.rgb2hex(cmap(i+6)) for i in range(18)]
     radius = 9.
-    dim = H9.size_for(10, 7, radius)
+    dim = H9.size_for(10, 10, radius)
     cs = Drawing('test4', dim, False)
     h0 = H9(cs, 'h1', radius, 1, op=0.50)
     h0.hierarchy = 6
@@ -358,15 +324,15 @@ if __name__ == '__main__':
 
     for j in yy:
         for i in xx:
-            h0.place([i, j, 0], cols, ignore_bounds=False)
+            h0.place([i, j, 0], cols, label=True, ignore_bounds=False)
     for j in yy:
         for i in xx:
-            h0.place([i, j, 1], cols, ignore_bounds=False)
+            h0.place([i, j, 1], None, label=True, ignore_bounds=False)
     for j in yy:
         for i in xx:
-            h0.place([i, j, 2], cols, ignore_bounds=False)
+            h0.place([i, j, 2], None, label=True, ignore_bounds=False)
     for j in range(0, 2):
         for i in range(-1, 1):
-            h0.place([i, j, 3], cols, ignore_bounds=True)
+            h0.place([i, j, 3], None, label=True, ignore_bounds=True)
 
     cs.save()

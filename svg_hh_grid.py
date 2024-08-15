@@ -90,13 +90,14 @@ if __name__ == '__main__':
     cmap = mpl.colormaps['cividis'].resampled(288)
     cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(288)]
     shuffle(cols)
-
     canvas = Drawing('test7', (600, 600), False)
     h1 = H9(canvas, 'h1', 9., 0, op=0.90)
     h1.set_limits((-5, 4), (-5, 4))
+    h1.hierarchy = 4
+    level = 0
     for j in range(-5, 5):
         for i in range(-5, 5):
             shuffle(cols)
-            h1.place([i, j], cols)
+            h1.place([i, j, level], cols)
 
     canvas.save()

@@ -264,6 +264,7 @@ class Drawing:
 
 
 if __name__ == '__main__':
+    # TODO:  implement these using h9
     adj = tuple([0.2, 1.1])  # brightness add 0.2 then multiply by 1.1.
     p = Photo()
     p.load('world.topo.bathy.200406.3x5400x2700')

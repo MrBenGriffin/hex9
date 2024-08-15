@@ -1,14 +1,19 @@
+Next Steps:
+coords.py is great but it doesn't use the H9 class yet - it was my earliest file, and it needs refactoring.
+It should be straightforward - I will have to consider how best to map the integrate the regions into Fuller/Snyder equilaterals.
+My guess is that it should be fine, as long as I consider the boundaries correctly.
 
+Also, I want to show off using large hexes where there isn't much data (represented by colour) to demonstrate good 
+hierarchic control. The actual drawing/placement tools are in -but not being exploited to show them off.
+
+Distance management, etc, including neighbours, have not yet been implemented.
+Documentation on district identity could be far better.
+
+News:
 New hierarchic drawing getting better, and everlasting hexes is a thing.
 ![hierarchy drawing](assets/docs/hierarchies.jpg)
+Hierarchic Labels are working.
 
-There are still some address issues that I want to knock out. I struggled for a couple of weeks with scaling - 
-and it was because I forgot the inter-hierarchy offset which is fine when reading or manually composing the hexgrid,
-but it's got to be remembered when doing automatic calculations. Now that is fixed, it should be much easier to do 
-the hierarchic address calculations - the current codebase shows my old/broken work. It's got some good stuff there but
-you can see (if you know how to look) that I was tearing my hair out.
-
-Up until now this has mainly been a repository of ideas in progress.
 The project is centred on the idea of hierarchic hexagonal grids, while keeping the number of polygons to a minimum.
 Also - do not be surprised if you find bugs!  This is still very much a work in progress!
 
@@ -21,17 +26,22 @@ My [past research](assets/docs/past.md) was based on something very similar to t
 
 This is auxiliary to the work that has been done by many others, including Buckminster Fuller, and Snyder at Oregon University,
 regarding hex grids in general, as well as discrete global grids (ISEA DGGs), but my focus is more on general 2D grids, 
-rather than just global mapping - also, the grid I use here is vertex centred,
-whereas most research has been developed on hexagon-centred hierarchic grids.
+rather than just global mapping - also, the grid I use here is vertex centred, whereas most research has been developed 
+on hexagon-centred hierarchic grids. H9 is “only” a left half-shifted Aperture 9 But what makes it special (to me) is that
+the overlapping hexes only share two parents, not three - the cost being steep enough: no central hex, and an extra overlapped hex.
+But the advantage is that no matter how high in the hierarchy one goes, one never splits a hexagon into anything more than a half, 
+and only hexagons '6', '7', '8' (districts 12/13, 14/15, 16/17 respectively) ever get sliced in half. 
 
-Here is the basic unit hexagon, showing it's division into the 18 half-hexagons that compose it.  The numbering is one
+![h9a9.png](assets/docs/h9a9.png)
+
+
+Below is the basic unit hexagon, showing it's division into the 18 half-hexagons that compose it.  The numbering is one
 way of indexing the half-hexagons.
 
 ![index_units.png](assets/docs/index_units.png)
 
 The plane can be tiled using the following:
 ![tiling.png](assets/docs/tiling.png)
-
 
 A hexagonal grid hierarchy can be seen below, with the outer hexagon in white, 
 then the successive lower hierarchies in green, blue and red. The hierarchy is unlimited in depth.
@@ -40,7 +50,8 @@ then the successive lower hierarchies in green, blue and red. The hierarchy is u
 
 This method can be used on any map projection - ad it is a space partitioning mechanism rather than a projection, but
 it lends itself particularly well to the Dymaxion (and similar) icosahedral maps. Here one can see my hometown (London)
-marked out in yellow.
+marked out in yellow. What is stunning is that for every hexagon at a given hierarchy for Dymaxion, 
+the area is always the same.
 
 ![gis](assets/docs/gis.jpg)
 
@@ -69,6 +80,4 @@ In terms of spatial coordinates, such a 10-character address provides a location
 consistently 658 square metres in area – a resolution of just over 80 metres. 
 (for contrast, Lat/Long require 2x 3 decimal places on top of the degrees for that, 
 and give an inconsistent areas that depend on how close one is to the equator, being non-equal area projection of course).
-
-
 
