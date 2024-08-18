@@ -1,6 +1,7 @@
 {
     "comment": "keys are the tri idx showing the sq column contributions for that row",
-    "mod": 2340,
+    "o_mod": 2340,
+    "i_mod": 1350,
     "lut": {
         "0": {
             "0": 1.0

@@ -1,6 +1,7 @@
 {
     "comment": "keys are the square idx showing the hex column contributions for that row",
-    "mod": 1351,
+    "o_mod": 1350,
+    "i_mod": 1560,
     "lut": {
         "0": {
             "0": 0.7216878364870322,

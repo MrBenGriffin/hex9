@@ -10,7 +10,8 @@ class Pixel:
         if filename is not None:
             with (open(filename, 'r') as infile):
                 data = json.load(infile)
-                self.window = data['mod']
+                self.i_window = data['i_mod']
+                self.o_window = data['o_mod']
                 lut = data['lut']
                 self.lut = {int(i): {int(j): k for j, k in v.items()} for i, v in lut.items()}
 
@@ -85,8 +86,9 @@ class SQ2TRPixel(Pixel):
     def col(self, img: ndarray, tx, ty) -> tuple:
         height, width = img.shape[:2]
         r, g, b = 0., 0., 0.
-        sxd, sxm = divmod(tx, self.window)
-        sxo = self.window * sxd
+        sxd, sxm = divmod(tx, self.o_window)
+        sxo = self.i_window * sxd
+
         rec = self.lut[sxm]
         for ofx, bit in rec.items():
             x = max(min(width - 1, sxo + ofx), 0)

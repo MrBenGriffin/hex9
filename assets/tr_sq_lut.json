@@ -1,6 +1,7 @@
 {
     "comment": "keys are the square idx showing the tri column contributions for that row",
-    "mod": 1351,
+    "o_mod": 1350,
+    "i_mod": 2340,
     "lut": {
         "0": {
             "0": 0.2886751345948129,
