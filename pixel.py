@@ -44,10 +44,11 @@ class HX2SQPixel(Pixel):
     def col(self, img: ndarray, sx, sy) -> tuple:
         height, width = img.shape[:2]
         r, g, b = 0., 0., 0.
-        hxo = self.window * math.floor(sx / self.window)
-        rec = self.lut[sx % self.window]
+        sxd, sxm = divmod(sx, self.o_window)
+        sxo = self.i_window * sxd
+        rec = self.lut[sxm]
         for ofx, bit in rec.items():
-            x = max(min(width - 1, hxo + ofx), 0)
+            x = max(min(width - 1, sxo + ofx), 0)
             oyy, nv = [[sy, sy + 1], 2.] if x & 1 == 1 else [[sy], 1.]
             for ofy in oyy:
                 y = max(min(height - 1, ofy), 0)
@@ -65,8 +66,8 @@ class TR2SQPixel(Pixel):
     def col(self, img: ndarray, sx, sy) -> tuple:
         height, width = img.shape[:2]
         r, g, b = 0., 0., 0.
-        sxd, sxm = divmod(sx, self.window)
-        sxo = self.window * sxd
+        sxd, sxm = divmod(sx, self.o_window)
+        sxo = self.i_window * sxd
         rec = self.lut[sxm]
         for ofx, bit in rec.items():
             x = max(min(width - 1, sxo + ofx), 0)
