@@ -3,7 +3,7 @@ import math
 import matplotlib as mpl
 from random import shuffle
 from drawing import Drawing
-from h9 import H9
+from h9 import H9Grid
 
 
 class HexUtil:
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(288)]
     shuffle(cols)
     canvas = Drawing('test7', (600, 600), False)
-    h1 = H9(canvas, 'h1', 9., 0, op=0.90)
+    h1 = H9Grid(canvas, 'h1', 9., 0, op=0.90)
     h1.set_limits((-5, 4), (-5, 4))
     h1.hierarchy = 4
     level = 0

@@ -5,6 +5,7 @@ import numpy as np
 import svg
 import json
 from photo import Photo
+from drawing import Drawing
 
 
 def xyz_ll(xyz: tuple) -> tuple:
@@ -83,10 +84,10 @@ class Tri:
     def slerp(p0, p1, t):
         # works only with unit vectors.
         dot = np.dot(p0, p1)
-        th = math.acos(dot)
-        s = math.sin(th)
-        j = math.sin((1. - t) * th)
-        k = math.sin(t * th)
+        th = np.arccos(dot)
+        s = np.sin(th)
+        j = np.sin((1. - t) * th)
+        k = np.sin(t * th)
         return (j * np.array(p0) + k * np.array(p1)) / s
 
     def __init__(self, ijk: tuple, up: bool, abc: tuple, parent=None, pos: int = None) -> None:
@@ -117,7 +118,7 @@ class Tri:
         # now normalise!!
         self.pts = np.array(_pts) / np.linalg.norm(_pts, axis=1, keepdims=True)
         self.sp = xyz_ll(self.pts[0])
-        self.col = self.__class__.photo.col(*self.sp)
+        self.col = self.__class__.photo.col(*self.sp, flip=True)
 
         # now do 2D equivalents.
         self.gxy = abc
@@ -168,10 +169,10 @@ class Tri:
 class IcoVertex:
     def __init__(self, idx: int, obj):
         self.idx = idx
-        self.name = obj['name']
-        self.ll = obj['ll']
+        # self.name = obj['name']
+        # self.ll = obj['ll']
         self.xyz = obj['xyz']
-        self.sp = obj['sp']
+        # self.sp = obj['sp']
 
 
 class IcoSide:
@@ -200,86 +201,96 @@ class IcoSide:
 
 
 class IcoSphere:
-    def __init__(self, file: str):
+    def __init__(self, file: str, transform=None):
         self.vertices = {}
         self.mapping = {}
         self.sides = {}
+        self.grid = 0, 0, 11, 4
         with (open(file, 'r') as infile):
             obj = json.load(infile)
             infile.close()
             for idx, vertex in enumerate(obj['vertices']):
                 self.vertices[idx] = IcoVertex(idx, vertex)
+            if transform is not None:
+                for idx in self.vertices.keys():
+                    xyz = self.vertices[idx].xyz
+                    self.vertices[idx].xyz = transform @ np.array(xyz)
             if 'mapping' in obj and obj['mapping']:
                 self.mapping = obj['mapping']
             # Each side is set to be either 'up' or 'down'
             # But each side is made up of three half-hexes 0,1,2
             if 'sides' in obj and obj['sides']:
                 self.sides = {side['name']: IcoSide(side, self.vertices) for side in obj['sides']}
+            if 'grid' in obj and obj['grid']:
+                self.grid = tuple(obj['grid'])
+
+def draw_hh(d: Drawing, h: HalfHex, adj: tuple):
+    cp, cm = adj
+    # <polygon points="100,100 150,25 150,75 200,0" fill="none" stroke="black" />
+    r, g, b = [int(cm * (h+cp)) for h in h.col]
+    tx = svg.Polygon(fill=f'rgb({r},{g},{b})', stroke="none")
+    tx.points = [tuple(pt) for pt in h.gxy[:-1]]
+    d.canvas.elements.append(tx)
 
 
-class Drawing:
-    def __init__(self, colour_tweak: tuple = (0.0, 1.0), grid: tuple = (0, 0, 11, 4)):
-        self.cp, self.cm = colour_tweak  # add color cp then multiply by cm.
-        self.graph = None
-        a, h = Tri.sh
-        lines = grid[3] - grid[1]    # lines (y-steps) are defined by 1..3
-        columns = grid[2] - grid[0]  # cols  (x-steps) are defined by 0..2 -> [x0,y0,x2,y2]
-        x_off = a * 0.5 * grid[0]
-        y_off = h * grid[1]
-        v_height = lines * h
-        v_width = columns * a * 0.5
-        vb_min_x, vb_min_y, vb_max_x, vb_max_y = x_off, y_off, v_width, v_height
-        self.maxy = vb_max_y
-        self.canvas = svg.SVG(
-            viewBox=svg.ViewBoxSpec(vb_min_x, vb_min_y, vb_max_x, vb_max_y),
-            width=v_width, height=v_height, elements=[]
-        )
-        self.defs = svg.Defs(elements=[])
-        self.canvas.elements.append(self.defs)
+def rot(x, y, z):
+    xr = np.deg2rad(x)
+    yr = np.deg2rad(y)
+    zr = np.deg2rad(z)
 
-    def tri(self, t: Tri):
-        # <polygon points="100,100 150,25 150,75 200,0" fill="none" stroke="black" />
-        r, g, b = [int(self.cm * (t+self.cp)) for t in t.col]
-        tx = svg.Polygon(fill=f'rgb({r},{g},{b})', stroke="none")
-        tx.points = [tuple(pt) for pt in t.gxy]
-        self.canvas.elements.append(tx)
+    rotation_alpha = [
+        [1, 0, 0],
+        [0, np.cos(xr), -np.sin(xr)],
+        [0, np.sin(xr), np.cos(xr)],
+    ]
+    rx = np.array(rotation_alpha)
 
-    def hh(self, h: HalfHex):
-        # <polygon points="100,100 150,25 150,75 200,0" fill="none" stroke="black" />
-        r, g, b = [int(self.cm * (h+self.cp)) for h in h.col]
-        tx = svg.Polygon(fill=f'rgb({r},{g},{b})', stroke="none")
-        tx.points = [tuple(pt) for pt in h.gxy[:-1]]
-        self.canvas.elements.append(tx)
+    rotation_beta = [
+        [np.cos(yr), 0, np.sin(yr)],
+        [0, 1, 0],
+        [-np.sin(yr), 0, np.cos(yr)]
+    ]
+    ry = np.array(rotation_beta)
 
-    def add(self, thing):
-        self.canvas.elements.append(thing)
+    rotation_gamma = [
+        [np.cos(zr), -np.sin(zr), 0,],
+        [np.sin(zr), np.cos(zr), 0],
+        [0, 0, 1],
+    ]
+    rz = np.array(rotation_gamma)
 
-    def define(self, thing):
-        self.defs.elements.append(thing)
-
-    def save(self, f_name: str = 'result'):
-        f = open(f"{f_name}.svg", "w")
-        f.write(self.canvas.as_str())
-        f.close()
+    return np.matmul(np.matmul(rx, ry), rz)
 
 
 if __name__ == '__main__':
-    # Todo use external classes!
-    adj = tuple([0.2, 1.1])  # brightness add 0.2 then multiply by 1.1.
+    adj = tuple([0.25, 1.1])  # brightness add 0.2 then multiply by 1.1.
     p = Photo()
-    p.load('world.topo.bathy.200406.3x5400x2700')  # blue marble.
+    p.load('world.topo.bathy.200406.3x5400x2700')
     p.set_latlon([-90., 90.], [-180., 180.])
-    Tri.set_sh(729.)  # 3^6
+    Tri.set_sh(81.)  # 3^6
     Tri.set_photo(p)
     np.set_printoptions(precision=12, suppress=True)
-    dym = IcoSphere('fuller.json')
-    dx2 = Drawing(adj, )
-    for side in dym.sides.values():
-        for i in range(3):
-            d0 = side.get_hh(i)
+    # This now centres and 'northifies' UK. via NA/HH2/T2
+    # alt_mat = rot(14, -25, 66)
+    sphere = IcoSphere('assets/maps/phi.json', None)
+    a, h = Tri.sh
+    lines = sphere.grid[3] - sphere.grid[1]
+    columns = sphere.grid[2] - sphere.grid[0]
+    dims = columns * a * 0.5, lines * h
+    dx2 = Drawing('uk_h9_3', dims, False)
+
+    # So sphere is 1xH9 divided into a bunch of 20 triangles.
+    # The render of each triangle is what we need to do for that.
+
+    for side in sphere.sides.values():
+        for hh in range(3):
+            d0 = side.get_hh(hh)
             d0.add_districts()
             for d1 in d0.districts.values():
                 d1.add_districts()
                 for d2 in d1.districts.values():
-                    dx2.hh(d2)
-    dx2.save('output/globe_hh1')
+                    d2.add_districts()
+                    for d3 in d2.districts.values():
+                        draw_hh(dx2, d3, adj)
+    dx2.save()
+

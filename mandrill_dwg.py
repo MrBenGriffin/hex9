@@ -2,7 +2,7 @@ import math
 import numpy as np
 from pixel import SQ2TRPixel, TR2H9Pixel
 from photo import Photo
-from h9 import H9
+from h9 import H9Grid
 from drawing import Drawing
 
 
@@ -27,9 +27,9 @@ if __name__ == '__main__':
 
     t2h9 = TR2H9Pixel()
     ptw, pth, radius = int(math.ceil(trw / 9)), int(math.ceil(trh / 6)), 27
-    dim = H9.size_for(ptw, pth, radius)
+    dim = H9Grid.size_for(ptw, pth, radius)
     cs = Drawing('mandrill_64', dim, False)
-    h0 = H9(cs, 'h1', radius, 0, op=1.0)
+    h0 = H9Grid(cs, 'h1', radius, 0, op=1.0)
     h0.hierarchy = 4
     rw, rh, (oxf, oyf) = h0.get_limits()
     btz = oxf & 1 == 1

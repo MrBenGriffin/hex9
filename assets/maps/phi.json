@@ -1,0 +1,39 @@
+{
+	"vertices":[
+		{"name":"Tierra del Fuego","xyz":[0.0, -0.5257311121191336, -0.85065080835204] },
+		{"name":"Hudson Bay",      "xyz":[0.0, -0.5257311121191336, 0.85065080835204] },
+		{"name":"McDonald Islands","xyz":[0.0, 0.5257311121191336, -0.85065080835204] },
+		{"name":"Russia",          "xyz":[0.0, 0.5257311121191336, 0.85065080835204] },
+		{"name":"West Galapagos",  "xyz":[-0.5257311121191336, -0.85065080835204, 0.0] },
+		{"name":"Indonesia",       "xyz":[-0.5257311121191336, 0.85065080835204, 0.0] },
+		{"name":"Amazon",          "xyz":[0.5257311121191336, -0.85065080835204, 0.0] },
+		{"name":"Arabian Sea",     "xyz":[0.5257311121191336, 0.85065080835204, 0.0] },
+		{"name":"New Zealand ",    "xyz":[-0.85065080835204, 0.0, -0.5257311121191336] },
+		{"name":"Midway",          "xyz":[-0.85065080835204, 0.0, 0.5257311121191336] },
+		{"name":"Cape Town",       "xyz":[0.85065080835204, 0.0, -0.5257311121191336] },
+		{"name":"Algeria",         "xyz":[0.85065080835204, 0.0, 0.5257311121191336]}
+	],
+    "sides": [
+		{ "vx": [0, 2, 8 ], "grid":[8, 1], "up":true,  "name": "Pacific Antarctica" },
+		{ "vx": [2, 0, 10], "grid":[7, 0], "up":false, "name": "Atlantic Antarctica" },
+		{ "vx": [6, 10, 0], "grid":[7, 2], "up":true,  "name": "Paraguay" },
+		{ "vx": [2, 10, 7 ], "grid":[5, 0], "up":false, "name": "Madagascar" },
+		{ "vx": [11, 7, 10],  "grid":[5, 2], "up":true,  "name": "Central Africa" },
+		{ "vx": [1, 3, 11 ], "grid":[4, 3], "up":true, "name": "UK" },
+		{ "vx": [10, 6, 11], "grid":[6, 1], "up":false, "name": "Liberia" },
+		{ "vx": [1, 11,  6], "grid":[6, 3], "up":true, "name": "North Atlantic" },
+		{ "vx": [7, 11, 3], "grid":[4, 1], "up":false, "name": "Arabia" },
+		{ "vx": [3, 5,  7], "grid":[3, 2],  "up":true, "name": "Himalaya" },
+		{ "vx": [2, 7, 5], "grid":[3, 0], "up":false, "name": "Indian Ocean" },
+		{ "vx": [5, 8, 2], "grid":[2, 1], "up":true, "name": "Australia" },
+		{ "vx": [8, 5, 9], "grid":[1, 0], "up":false, "name": "PNG" },
+		{ "vx": [9, 4, 8], "grid":[10, 3], "up":true, "name": "Kiribati" },
+		{ "vx": [4, 9, 1], "grid":[9, 2], "up":false,  "name": "San Francisco" },
+		{ "vx": [5, 3, 9], "grid":[2, 1], "up":false,  "name": "Japan" },
+		{ "vx": [1, 9, 3], "grid":[2, 3], "up":true,  "name": "Bering Strait" },
+		{ "vx": [4, 0, 8], "grid":[9, 2], "up":true, "name": "French Polynesia" },
+		{ "vx": [0, 4, 6], "grid":[8, 1], "up":false, "name": "Peru" },
+		{ "vx": [1, 6, 4 ], "grid":[8, 3], "up":true,  "name": "Cuba/USA" }
+	],
+	"grid": [0, 0, 11, 3]
+}

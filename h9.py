@@ -1,3 +1,5 @@
+# from __future__ import annotations
+from typing import List, Any
 import svg
 import math
 from itertools import batched
@@ -25,7 +27,8 @@ def rotate(p, r, o=(0, 0)):  # rotate around angle r.
             ) for (x, y) in pts]
 
 
-class H9:
+class H9Grid:
+    # This class could be refactored quite a bit.
     master = 0
     dx = [  # clockwise, starting \–/
         [-1., 0., 0], [-1., 0., 3.], [0.5, -1.0, 2.], [0.5, -1.0, 5.],  # 0a,0b,1a,1b,
@@ -253,7 +256,7 @@ class H9:
         (l, t), (r, b) = self.scale_translate(self.bboxes[district], xys)
         return 0 <= l and r <= self.scx and 0 <= t and b <= self.scy
 
-    def place_district(self, where, district: int, color=None, label=None):
+    def place_district(self, where, district: int, color: [str | None], label=None):
         lv = 3 ** where[2]
         (px, py, ov) = self.wxy(where)
         dx, dy = self.tx[district]
@@ -309,17 +312,84 @@ class H9:
             return self.scale_translate(self.hex, wco)
 
 
-if __name__ == '__main__':
+class H9District:
+    def __init__(self, grid: H9Grid):
+        self._grid = grid
+        self.parent = None
+        self.color = None
+        self.tris = None, None, None
 
-    # cmap = mpl.colormaps['tab20'].resampled(20)
-    # cols = [mpl.colors.rgb2hex(cmap(i)) for i in range(18)]
-    cmap = mpl.colormaps['plasma'].resampled(30)
-    cols = [mpl.colors.rgb2hex(cmap(i+6)) for i in range(18)]
-    radius = 9.
-    dim = H9.size_for(10, 10, radius)
-    cs = Drawing('test4', dim, False)
-    h0 = H9(cs, 'h1', radius, 1, op=0.50)
-    h0.hierarchy = 6
+    def set_color(self, color=None):
+        if color is not None:
+            self.color = color
+
+    def place(self, depth=0, ignore_bounds=False):
+        pass
+
+class H9Hex:
+    districts: list[H9District]
+
+    def __init__(self, grid: H9Grid):
+        self._grid = grid
+        self.a = grid.a
+        self.h = grid.h
+        self.parent = None
+        self.ab = None, None
+        self.colour = None
+        self.districts = []
+        self.colour = None
+        self.wx, self.wy, self.lv = None, None, None
+        self.scale = None
+
+    def set_where(self, where):
+        self.wx, self.wy, self.lv = where
+        self.scale = self.lv ** 3
+
+    # def place_label(self, where, label):
+    #     if label is not None:
+    #         lx, ly = self._grid.lpt[district]
+    #         self._grid.owner.label(label, self._grid.a / 8 * lv, tx, ty, (lx - 1) * self.a * lv, ly * self.h * lv)
+
+    def set_colors(self, colors=None):
+        if colors is not None:
+            for i, district in enumerate(self.districts):
+                district.color = colors[i]
+
+    def place(self, depth=0, colors=None, ignore_bounds=False):
+        xys =self.wx, self.wy, self.scale
+        if colors is not None:
+            for district in enumerate(self.districts):
+                pass
+        for district in enumerate(self.districts):
+            district.place(depth, ignore_bounds)
+
+class H9Tri:
+    def __init__(self, grid: H9Grid):
+        self._grid = grid
+        self.parent = None
+        self.color = None
+        self.hh = [None, None, None]
+
+
+
+    def set_spherical(self, ijk):
+        # ijk is a tuple of three cartesian points on a unit sphere in clockwise order.
+        # these will be treated as a spherical equilateral triangle.
+        pass
+
+
+if __name__ == '__main__':
+    cmap = mpl.colormaps['plasma'].resampled(20)
+    cols = [mpl.colors.rgb2hex(cmap(i+1)) for i in range(18)]
+    # if we are drawing a sphere, we need to work out depth of resolution we want.
+    # eg 1x9^4 = 6561
+    # radius 9 = so 2x9x6561
+    # measuring in h9, though, it's 3^4 hh width: 81
+    radius = 81.
+    dim = H9Grid.size_for(30, 20, radius)
+    cs = Drawing('test_6', dim, False)
+    h0 = H9Grid(cs, 'h0', radius, 20, op=0.90)
+    h0.hierarchy = 5
     (xx, yy, oo) = h0.get_limits()
 
     for j in yy:
@@ -327,12 +397,12 @@ if __name__ == '__main__':
             h0.place([i, j, 0], cols, label=True, ignore_bounds=False)
     for j in yy:
         for i in xx:
-            h0.place([i, j, 1], None, label=True, ignore_bounds=False)
+            h0.place([i, j, 1], None, label=False, ignore_bounds=False)
     for j in yy:
         for i in xx:
-            h0.place([i, j, 2], None, label=True, ignore_bounds=False)
-    for j in range(0, 2):
-        for i in range(-1, 1):
-            h0.place([i, j, 3], None, label=True, ignore_bounds=True)
+            h0.place([i, j, 2], None, label=False, ignore_bounds=False)
+    # for j in range(0, 2):
+    #     for i in range(-1, 1):
+    #         h0.place([i, j, 3], None, label=True, ignore_bounds=True)
 
     cs.save()

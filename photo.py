@@ -1,7 +1,7 @@
 import math
 import os
 import numpy as np
-from h9 import H9
+from h9 import H9Grid
 from h6 import H6
 from pixel import TR2H9Pixel
 
@@ -22,7 +22,7 @@ class Photo:
 
     @staticmethod
     def h9_size(w, h, s) -> tuple:
-        return H9.size_for(w, h, s)
+        return H9Grid.size_for(w, h, s)
 
     @staticmethod
     def h6_size(w, h, s) -> tuple:
@@ -35,7 +35,7 @@ class Photo:
         return self._h6.get_limits()
 
     def set_h9(self, radius: int, limits: tuple = None):
-        self._h9 = H9(size=radius)
+        self._h9 = H9Grid(size=radius)
         if limits:
             lr, tb,  = limits  # eg (-4,4), (-5,9)
             self._h9.set_limits(tb, lr)
@@ -55,10 +55,9 @@ class Photo:
         ox, oy = 1.4 * a * 9, 2.5 * h * 6
         for i in range(18):
             # if self._h9.may_place(i, wc):
-            hp = self._h9.place_district(where, i)
+            hp = self._h9.place_district(where, i, c[i])
             px = [(x + ox, y + oy) for (x, y) in hp]
             pts = np.array([px], dtype=np.int32)
-
             r, g, b = c[i]
             cv2.fillPoly(self.img, pts=pts, color=(int(b), int(g), int(r)))
 
@@ -88,7 +87,7 @@ class Photo:
 
     def load(self, img_file: str | list, convert: bool = True):
         if isinstance(img_file, list):
-            if len(img_file) > 1:
+            if len(img_file) > 1 or isinstance(img_file[0], list):
                 images = []
                 for item in img_file:
                     if isinstance(item, list):
@@ -114,6 +113,19 @@ class Photo:
         rev = cv2.resize(self.img, (int(sc*self.width), int(sc*self.height)), interpolation=cv2.INTER_NEAREST)
         self.img = rev
         # cv2.resize(self.img, None, amount, cv2.INTER_AREA)
+
+    def crop(self, x0, x1, y0, y1):
+        cropped = self.img[y0:y1, x0:x1]
+        self.img = cropped
+
+    def flip(self, code=0):
+        # flip code: A flag to specify how to flip the array;
+        # 0 means flipping around the x-axis and positive value
+        # (for example, 1) means flipping around y-axis.
+        # Negative value (for example, -1) means flipping around both axes.
+        # Return Value: It returns an image.
+        image = cv2.flip(self.img, code)
+        self.img = image
 
     def set_latlon(self, lat_range, lon_range):
         self.height, self.width = self.img.shape[:2]
@@ -162,12 +174,16 @@ class Photo:
         bz = cv2.merge([ib, ib, ib])
         self.img = np.where(bz == (0, 0, 0), blr, img)
 
-    def col(self, lat: float, lon: float):
+    def col(self, lat: float, lon: float, flip: bool = True):
         if self.lat is not None and self.lon is not None:
             # given latitude and longitude return it's colour.
             w = np.searchsorted(self.lon, lon) % self.width
             # flip self.lat in result such that the last now points to the first.
-            h = self.height - (np.searchsorted(self.lat, lat) % self.height) - 1
+            # This is because we look at maps as being 90 at the top, and -90 at the bottom
+            if flip:
+                h = self.height - (np.searchsorted(self.lat, lat) % self.height) - 1
+            else:
+                h = np.searchsorted(self.lat, lat) % self.height
             pixel = self.img[h, w]
             return pixel
         else:
@@ -180,7 +196,7 @@ class Photo:
         return int(r), int(g), int(b)
 
 
-def h9_test(radius = 27, side = 30):
+def h9_test(radius=27, side=30):
     import matplotlib as mpl
     cmap0 = mpl.colormaps['plasma'].resampled(18)
     cols0 = [tuple([int(c * 255.) for c in mpl.colors.to_rgb(cmap0(i))]) for i in range(18)]
@@ -246,4 +262,12 @@ def make_grid(side, u_size, cols):
 
 
 if __name__ == '__main__':
-    h9_test()
+    # h9_test()
+    p0 = Photo()
+    p0.load([
+        ['preparatory/world.topo.bathy.200407.3x21600x21600.B1.png', 'preparatory/world.topo.bathy.200407.3x21600x21600.C1.png']
+    ], False)
+    p0.crop(10800, 21600+10800, 0, 21600)
+    p0.save(f'45EW0_90N_21600')
+
+

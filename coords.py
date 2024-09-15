@@ -272,7 +272,7 @@ if __name__ == '__main__':
     Tri.set_sh(729.)  # 3^6
     Tri.set_photo(p)
     np.set_printoptions(precision=12, suppress=True)
-    dym = IcoSphere('fuller.json')
+    dym = IcoSphere('assets/maps/fuller.json')
     # side = dym.sides['North Atlantic']
     # gx, gy = side.grid  # [6,2]
     # bounds = tuple([gx-1, gy, gx+1, gy+1])

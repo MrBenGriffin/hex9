@@ -188,7 +188,6 @@ class TR2H9Pixel(Pixel):
                 g += gd * self.nm
                 b += bd * self.nm
             result.append((r, g, b) if not rev else (b, g, r))
-        # result[0] = (0, 0, 0)
         return result
 
     def set(self, img: ndarray, hx, hy, cols: list):

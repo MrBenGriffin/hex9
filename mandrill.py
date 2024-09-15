@@ -3,7 +3,7 @@ import math
 import numpy as np
 from pixel import SQ2TRPixel, TR2H9Pixel
 from photo import Photo
-from h9 import H9
+from h9 import H9Grid
 
 
 def convert(src, result, lut):
@@ -38,7 +38,7 @@ def plot_image(plotter, img):
 if __name__ == '__main__':
     p = Photo()
     pt = Photo()
-    p.load('mandrill_128', False)
+    p.load('world.topo.bathy.200406.3x5400x2700', False)
     p.show('mandrill original')
     sqw, sqh = p.width, p.height
     # h_adj = 2. / np.sqrt(3.)
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     pt0 = pt
     pt1 = Photo()
     ptw, pth, radius = int(math.ceil(trw / 9)), int(math.ceil(trh / 6)), 27
-    dw, dh = H9.size_for(ptw, pth, radius)
+    dw, dh = H9Grid.size_for(ptw, pth, radius)
     pt1.new(dw, dh)  # pw/ph is in photo-pixels.
     for wx in range(dw):  # stick on a green backdrop
         for wy in range(dh):
