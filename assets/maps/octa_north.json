@@ -1,0 +1,23 @@
+{
+	"vertices": [
+		{"idx":0 ,"name": "South Pole",  "ll": [-90.0,  0.0],  "xyz":[ 0.0,  0.0,  -1.0]},
+		{"idx":1 ,"name": "North Pole",  "ll": [ 90.0,  0.0],  "xyz":[ 0.0,  0.0,   1.0]},
+		{"idx":2 ,"name": "Zulu",        "ll": [  0.0,  0.0],  "xyz":[ 1.0,  0.0,   0.0]},
+		{"idx":3 ,"name": "East",        "ll": [  0.0,  90.0], "xyz":[ 0.0,  1.0,   0.0]},
+		{"idx":4 ,"name": "+12h",        "ll": [  0.0, 180.0], "xyz":[ -1.0, 0.0,   0.0]},
+		{"idx":5 ,"name": "West",        "ll": [  0.0, -90.0], "xyz":[ 0.0, -1.0,   0.0]}
+	],
+	"sides": [
+		{"p": "0a2", "name": "SZW", "grid": [1, 3], "up": true, "vx": [5, 2, 0]},
+		{"p": "0a1", "name": "SOW", "grid": [2, 2], "up": false, "vx": [0, 4, 5]},
+		{"p": "0a0", "name": "SOE", "grid": [3, 3], "up": true, "vx": [4, 0, 3]},
+		{"p": "0b2", "name": "SZE", "grid": [3, 1], "up": false, "vx": [2, 3, 0]},
+
+		{"p": "1a0", "name": "NZE", "grid": [4, 2], "up": true, "vx": [3, 2, 1]},
+		{"p": "1b2", "name": "NOE", "grid": [5, 1], "up": false, "vx": [1, 4, 3]},
+		{"p": "1b1", "name": "NOW", "grid": [6, 2], "up": true, "vx": [4, 1, 5]},
+		{"p": "1b0", "name": "NZW", "grid": [6, 0], "up": false, "vx": [2, 5, 1]}
+	],
+	"topo": "WGS84",
+	"grid": [0, 0, 7, 3]
+}
