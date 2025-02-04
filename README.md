@@ -1,15 +1,9 @@
-Next Steps:
-coords.py is great but it doesn't use the H9 class yet - it was my earliest file, and it needs refactoring.
-It should be straightforward - I will have to consider how best to map the integrate the regions into Fuller/Snyder equilaterals.
-My guess is that it should be fine, as long as I consider the boundaries correctly.
+A vast amount of work has been accomplished.
+I am yet to upload it all, as it's quite a mess still.
+However, here are the latest documents.
+My [new documentation](enumeration.md) 
 
-Also, I want to show off using large hexes where there isn't much data (represented by colour) to demonstrate good 
-hierarchic control. The actual drawing/placement tools are in -but not being exploited to show them off.
 
-Distance management, etc, including neighbours, have not yet been implemented.
-Documentation on district identity could be far better.
-
-News:
 New hierarchic drawing getting better, and everlasting hexes is a thing.
 ![hierarchy drawing](assets/docs/hierarchies.jpg)
 Hierarchic Labels are working.
