@@ -102,12 +102,19 @@ class Photo:
             else:
                 image = cv2.imread(img_file[0])
         else:
-            image = cv2.imread(f'assets/{img_file}.png')
+            image = None
+            if not os.path.isfile(img_file):
+                image = cv2.imread(f'assets/{img_file}.png')
+            else:
+                image = cv2.imread(img_file)
+            if image is None:
+                print('image not found.')
+                exit(-1)
         self.img = image if not convert else cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         self.height, self.width = self.img.shape[:2]
 
     def save(self, filename):
-        cv2.imwrite(f'output/{filename}.png', self.img)
+        cv2.imwrite(f'{filename}.png', self.img)
 
     def resize(self, sc: float):
         rev = cv2.resize(self.img, (int(sc*self.width), int(sc*self.height)), interpolation=cv2.INTER_NEAREST)

@@ -81,6 +81,9 @@ class EPSG32662(LatLonSampler):  # WGS84 Plate Carrée
         if self.lon_flip:
             self.lon = np.flip(self.lon)
 
+    def unit(self):
+        return self.lat[1]-self.lat[0], self.lon[1]-self.lon[0]
+
     def sample(self, point: tuple[float, float]):  # given in lat/lon
         lat, lon = point
         w = np.searchsorted(self.lon, lon) % self.fv.width
@@ -288,7 +291,7 @@ def do_flat_samples():
 
 
 def do_spherical_triangle():
-    src = CVFlatValues.load(f'assets/world.topo.bathy.200406.3x5400x2700.png')
+    src = CVFlatValues.load(f'preparatory/world.topo.bathy.200406.3x5400x2700.png')
     world = EPSG32662(src, (90., -90.), (-180., 180.))
     width = 1000
     height = int(np.round(np.sqrt(3.) / 2. * width))
