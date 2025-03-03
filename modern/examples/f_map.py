@@ -22,12 +22,12 @@ if __name__ == '__main__':
     s = {face: side_f(octa, face, n) for face in octa.matrices}
     fx = []
     for face, pts in s.items():
-        th = octa.grid_th[face]
-        xy = octa.grid_xy[face]
-        ud = octa.side_ud[face]      # use this for theta
-        o_th = th+octa.oct_th[ud]    # use for orientation.
+        obj = octa.sides[face]
+        th = obj.grid_theta + obj.theta
+        xy = obj.offs
+        ud = obj.ud     # use this for theta
         r_mat = octa.matrices[face]  # get the face rotation.
-        px = Util.d3_2(pts @ (r_mat.T @ Util.rz(o_th))) + xy  # rotate and adjust to plane
+        px = Util.d3_2(pts @ (r_mat.T @ Util.rz(th))) + xy  # rotate and adjust to plane
         fx.append(px)
     pts = np.vstack(fx)
     Display.show_pts_2d(pts, octa.glx, octa.gly, 'F Map')
