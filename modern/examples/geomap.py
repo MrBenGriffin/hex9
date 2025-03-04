@@ -6,6 +6,10 @@ from modern.util import Util
 from photo import Photo
 
 # Depict (in mpl) Blue Marble as Octahedral Map
+# This is a little slow, because it goes through every pixel when generating.
+# It is NOT efficient, but does show how arbitrary pixel values can be converted
+# To grid coordinates.
+# Last run on March3/25 it looked ok.
 
 if __name__ == '__main__':
     octa = H9Octahedron()

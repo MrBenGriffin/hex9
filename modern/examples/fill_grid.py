@@ -3,6 +3,7 @@ from modern.octahedron_h9 import H9Octahedron
 from modern.display import Display
 
 # Fill a grid with points.
+# Uses glx/gly for size.
 
 if __name__ == '__main__':
     octa = H9Octahedron()

@@ -3,13 +3,22 @@ from modern.octahedron import Octahedron
 from modern.grid_h9 import GridH9
 from modern.util import Util
 
+# This currently conflates the H9 addressing / Hierarchic hexagons
+# and the 2D projected octahedron 'net' map.
+
 
 class H9Side:
     def __init__(self, ctx, key, ud, theta, offs, hx, c2, c1=(0, 1, 2)):
+        d120 = 2 * np.pi / 3.
         self.oct = ctx
         self.ud = ud
         self.grid_theta = theta
-        self.theta = ctx.oct_th[ud]
+        self.rot_theta = ctx.oct_th[ud]
+        self.theta = self.rot_theta if key != 'NWP' else 0.5 * np.pi / 1.5
+        if self.ud != 'V':
+            self.theta += np.pi - d120
+        else:
+            self.theta += d120
         self.a_theta = self.theta + np.pi  # hmm. octagon is inverted.
         self.offs = offs
         self.hx = hx
@@ -69,8 +78,8 @@ class H9Octahedron (Octahedron):
         self.gh = gh
         self.sides = {
             'NEA': H9Side(self, 'NEA', 'V', 0, (gw * 3., gh * 4.),
-                          #  'V' 120= 1*3+0;'NE', 'EA', 'NA'2*3+1;0*3+2; = [3,7,2]
-                          (), (1, 2, 0)),  # [3,7,2]
+                          #  'V' 120= 1*3+0;2*3+1;0*3+2; = [3,7,2]
+                          ('NE', 'EA', 'NA'), (1, 2, 0)),  # [3,7,2]
             'NEP': H9Side(self, 'NEP', 'Λ', +rt, (gw * 4., gh * 5.),
                           #  'Λ' 102= 1*3+0;0*3+1;2*3+2 = [3,1,8]
                           ('NE', 'NP', 'EP'), (1, 0, 2)),  # [3,1,8]

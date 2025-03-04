@@ -9,15 +9,23 @@ from photo import Photo
 # Save Blue Marble as Octahedral Map PNG
 # 5400x2700 => 4725x3507:  315º by 233.826859º (√3/2*3*90)
 # 86400x43200 =>: 75600x56118:  315º by 233.826859º (√3/2*3*90)
+# There are two versions of this - 'huge'  takes days.
+# The smaller version takes about ten minutes.
+
+huge = False
 
 if __name__ == '__main__':
     octa = H9Octahedron()
     ak = AK()
     ps = Photo()   # source image
-    ps.load('w86400x43200.png', False)
+    if huge:
+        ps.load('w86400x43200.png', False)
+        dw, dh = 75600, 56118  # 315º by 233.826859º
+    else:
+        ps.load('w5400x2700.png', False)
+        dw, dh = 4725, 3507  # 315º by 233.826859º
     ps.set_latlon([-90., 90.], [-180., 180.])
     pd = Photo()
-    dw, dh = 75600, 56118  # 315º by 233.826859º (√3/2*3*90) for 15px / degree.
     dws = octa.glx[1] / dw
     dhs = octa.gly[1] / dh
     pd.new(dw, dh)  # photo-pixels.
@@ -39,4 +47,4 @@ if __name__ == '__main__':
                 ll = Util.xyz_ll(xyz)
                 la, lo = ll[0]
                 pd.img[iy, wx] = ps.col(la, lo, True)
-    pd.save(f'huge_map')
+    pd.save(f'{dw}x{dh}map.png')

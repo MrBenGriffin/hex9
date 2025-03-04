@@ -1,7 +1,14 @@
 import numpy as np
-from modern.octahedron_h9 import H9Octahedron
+from modern.octahedron import Octahedron
 from modern.util import Util
 from modern.display import Display
+
+# This generates a set of octahedral points and then
+# Displays them in 3D. It shows that the sides
+# match correctly to the 3D octahedron.
+# Util: oct0_rnd(), ball_rnd()
+# Octahedron: signs[], ov[] (and explicit keys)
+# Display: show_pts_3d()
 
 
 def rnd_pts_for_side(o, side, n):
@@ -16,14 +23,7 @@ def rnd_pts_for_side(o, side, n):
 
 
 if __name__ == '__main__':
-    octa = H9Octahedron()
-    nwa = rnd_pts_for_side(octa, 'NWA', 1000)
-    nea = rnd_pts_for_side(octa, 'NEA', 1000)
-    nwp = rnd_pts_for_side(octa, 'NWP', 1000)
-    nep = rnd_pts_for_side(octa, 'NEP', 1000)
-    swa = rnd_pts_for_side(octa, 'SWA', 1000)
-    sea = rnd_pts_for_side(octa, 'SEA', 1000)
-    swp = rnd_pts_for_side(octa, 'SWP', 1000)
-    sep = rnd_pts_for_side(octa, 'SEP', 1000)
-    pts = np.vstack([nwa, nea, nwp, nep, swa, sea, swp, sep])
-    Display.show_pts_3d(pts, (-1.1, 1.1), (-1.1, 1.1), (-1.1, 1.1), 'quick')
+    octa = Octahedron()
+    sides = [rnd_pts_for_side(octa, face, 4000) for face in octa.matrices]
+    pts = np.vstack(sides)
+    Display.show_pts_3d(pts, (-1.1, 1.1), (-1.1, 1.1), (-1.1, 1.1))

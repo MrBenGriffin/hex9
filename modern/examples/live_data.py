@@ -9,6 +9,9 @@ from modern.display import Display
 from modern.ak import AK
 from modern.util import Util
 
+# Work in progress - generating live animation of a rotating triangle.
+# This will be used for populating a grid with new stuff.
+
 
 def r2d(theta):
     ct, st = np.cos(theta), np.sin(theta)
