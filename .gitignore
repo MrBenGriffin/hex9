@@ -3,7 +3,5 @@
 /historic/
 /tests/
 .DSStore
-/modern/examples/huge_map.png
-/modern/examples/w86400x43200.png
-/modern/examples/huge_map.ai
-/modern/examples/geo_map_img.png
+/modern/examples/*.png
+/modern/examples/*.ai
