@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib.collections import PolyCollection
-from modern.grid_h9 import GridH9
+from modern.hhg_tetrahedral import HHGTetrahedral
 from modern.octahedron_h9 import H9Octahedron
 from modern.util import Util
 from modern.display import Display
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     h8 = ['#0d0887', '#6100a7', '#8e0ca4', '#b42e8d', '#d24f71', '#e97257', '#f99a3e', '#fdc627', '#f0f921']
     o = H9Octahedron()
     u = Util()
-    g = GridH9()
+    g = HHGTetrahedral()
     all_polys = []
     ro = 2*np.pi/3.  # 2π/3 = 120
     for key in o.sides.keys():

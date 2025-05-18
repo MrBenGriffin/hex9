@@ -1,16 +1,20 @@
+
 import numpy as np
 from modern.octahedron import Octahedron
-from modern.grid_h9 import GridH9
+from modern.hhg_tetrahedral import HHGTetrahedral
 from modern.util import Util
 
 # This currently conflates the H9 addressing / Hierarchic hexagons
 # and the 2D projected octahedron 'net' map.
+# This is 'old'
 
 
 class H9Side:
     def __init__(self, ctx, key, ud, theta, offs, hx, c2, c1=(0, 1, 2)):
         d120 = 2 * np.pi / 3.
-        self.oct = ctx
+        self.ctx = ctx
+        self.util = ctx.util
+        self.oct = ctx.oct
         self.ud = ud
         self.grid_theta = theta
         self.rot_theta = ctx.oct_th[ud]
@@ -36,11 +40,14 @@ class H9Side:
         return [f'{h}{self.ud}' for h in self.hx]
 
     def addr_pt(self, uvw):
-        return Util.d3_2(uvw @ (self.matrix.T @ Util.rz(self.a_theta)))
+        return self.util.d3_2(uvw @ (self.matrix.T @ self.util.rz(self.a_theta)))
 
     def enc(self, pt):                      # Given X,Y address...
-        addr = self.oct.grid.encode(pt, self.c2s, 32)
+        addr = self.ctx.grid.encode(pt, self.c2s, 32)
         # (0, 1, 2)
+        if addr is None:
+            print(f'pt {pt} failed for some reason')
+            return None
         hb = self._fwd[int(addr[0])]   # eg 5
         return f'{hb}{self.ud}{addr[1:]}'   # {addr[1]}{hn}{addr[2::2]}'
 
@@ -49,14 +56,14 @@ class H9Side:
 
     def dec(self, sig, addr):  # decode to a full 3D octahedral.
         xy = self.decode_xy(sig, addr)
-        return Util.d2_3(np.array([xy]), self.oct.i3) @ (self.matrix.T @ Util.rz(self.a_theta)).T
+        return self.util.d2_3(np.array([xy]), self.ctx.oct.i3) @ (self.matrix.T @ self.util.rz(self.a_theta)).T
 
     def decode_xy(self, sig, addr=''):  # decode to x,y for the side.
         v = self._rev[sig]
-        return self.oct.grid.decode(f'{v}{addr}')
+        return self.ctx.grid.decode(f'{v}{addr}')
 
 
-class H9Octahedron (Octahedron):
+class H9Octahedron:
     oct_th = {
         # having rotated from octahedron
         # this adjusts so the N/S point is apex.
@@ -65,13 +72,16 @@ class H9Octahedron (Octahedron):
         'Λ': np.pi / 1.5
     }
 
-    def __init__(self):
+    def __init__(self, o):
         super().__init__()
-        self.grid = GridH9()
+        self.util = Util()
+        self.oct = o
+        self.grid = HHGTetrahedral()
         rt = np.pi / 1.5  # grid rotation in 120º
-        gw = Octahedron.r2 / 2.  # grid unit width
-        gh = Octahedron.r6 / 6.  # grid unit height
-        glx, gly = (0, Octahedron.r2 * 3.5), (0, gh * 9)
+        self.r3 = o.r3
+        gw = o.r2 / 2.  # grid unit width
+        gh = o.r6 / 6.  # grid unit height
+        glx, gly = (0, o.r2 * 3.5), (0, gh * 9)
         self.gw = gw
         self.glx = glx
         self.gly = gly
@@ -152,8 +162,24 @@ class H9Octahedron (Octahedron):
         return self.sides[side].dec(key, body)
 
     def h9side(self, addr):
+        if addr is None:
+            return None, None, None
         key = addr[:3]
         return self._adr_side[addr[:3]], key[:2], addr[3:]
+
+    def pt_face(self, uvw):
+        """
+         Which face does this point belong to?
+         Calculated by testing the polarity/sign of each dimension.
+         This does *not* test that the points are on the surface of the octahedron.
+         That is done with pt_valid / pts_valid
+        """
+        if np.all(uvw):  # not = 0..
+            key = np.sign(uvw)
+        else:
+            dx = np.mean(uvw, keepdims=True) * 1E-100
+            key = np.sign(uvw - dx)
+        return self.oct.pt_signs[tuple(key.astype(int))]
 
     def enc(self, uvw, key=None):
         if key is None:

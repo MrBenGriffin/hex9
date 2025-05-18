@@ -1,28 +1,44 @@
+"""
+    == Calculations ==
+    Some of the methods may seem obscure: It is worth reading the documentation, especially
+    covering the meaning of C1/C2,UD etc.
+    Calculations are done for both an up-pointing triangle and a down-pointing triangle,
+    because of the nature of the underlying triangle grid, so it becomes onerous to transform coordinates
+    especially as they repeatedly flip from one orientation to the other.
+
+    == Encodings ==
+    The initial encoding has a long/short structure.
+    Easily transposed -
+    22035211610266553407865006553346V;
+    2Λ2Λ0Λ3Λ5V2V1Λ1Λ6Λ1V0V2V6V6Λ5V5V3V4V0Λ7Λ8Λ6Λ5Λ0V0V6Λ5V5V3V3V4V6V
+    the former can be expanded to the latter, however it requires reverse
+    calculations especially when dealing with 678.
+    Therefore, there are two alternative encodings being considered;
+    'Extended': 678 for V and GTX for Λ. (`VΛ` convention).
+    'HalfHex':  V[abc/def/ghi]; Λ[ABC/DEF/GHI]
+                V[012/345/678]; Λ[oiz/eas/gtx]
+"""
 from enum import Enum, unique
 import numpy as np
-
-# Encodings
-# The initial encoding has a long/short structure.
-# Easily transposed -
-# 22035211610266553407865006553346V;
-# 2Λ2Λ0Λ3Λ5V2V1Λ1Λ6Λ1V0V2V6V6Λ5V5V3V4V0Λ7Λ8Λ6Λ5Λ0V0V6Λ5V5V3V3V4V6V
-# the former can be expanded to the latter, however it requires reverse
-# calculations especially when dealing with 678.
-# Therefore, there are two alternative encodings being considered;
-# 'Extended': 678 for V and GTX for Λ. (`VΛ` convention).
-# 'HalfHex':  V[abc/def/ghi]; Λ[ABC/DEF/GHI]
-#             V[012/345/678]; Λ[oiz/eas/gtx]
 
 
 @unique
 class Style(Enum):
+    """
+    Various Encoding styles.
+    Most work has been done with HEX/FULL.
+    However, for hexgrid binning, it may be useful to consider others.
+    """
     HEX = 0
     FULL = 1
     EXTENDED = 2
     HALFHEX = 3
 
 
-class GridH9:
+class H9Engine:
+    """
+    AKA H9 - This is a hierarchic hexagonal grid (HHG) that uses regular tetrahedrons
+    """
     R3 = 3 ** 0.5
     W = 2 ** 0.5
     H = 6 ** 0.5 / 2.
@@ -53,12 +69,17 @@ class GridH9:
     }
 
     @classmethod
-    def poly(cls, c1=0, ud='Λ', d3=False):
+    def poly(cls, c1=0, ud='Λ', d3=False) -> np.ndarray:
+        """
+        Return the half-hex coordinates of c1 for the triangle.
+        In accordance with Octahedron_Net dimensions.
+        Probably correct only for CHIRAL=1
+        :param c1: the c1 required (0,1,2)
+        :param ud: up/down
+        :param d3: return 3d results.
+        :return: the half-hex coordinates of c1 for the triangle
+        """
         u, v = cls.U, cls.H / 3.
-        # Return the half-hex coordinates of c1 for the triangle.
-        # This is in accordance with H9Grid dimensions.
-        # This is probably correct only for CHIRAL=1
-        # d3 = 3d results.
         pts = {
             'Λ': [
                 [(-1, -1), (0, 0), (2, 0), (3, -1)],
@@ -78,15 +99,27 @@ class GridH9:
 
     @classmethod
     def in_scope(cls, ẋ, y, ud='Λ') -> bool:
-        if ud == 'Λ':  # `ẋ` is a synonym for `√3(x)`
-            # barycentre at 0, triangle point up.
+        """
+        This is a barycentric scope test, for a unit equilateral triangle.
+        This expects x to already be pre-calculated as √3(x).
+        :param ẋ: `ẋ` is a synonym for `√3(x)` on x co-ordinate.
+        :param y: y co-ordinate
+        :param ud: triangle pointing up/down
+        :return: boolean (in scope or not)
+        """
+        if ud == 'Λ':  # barycentre at 0, triangle point up.
             return cls.ΛF <= y <= cls.ΛC - np.abs(ẋ)
-        else:
-            # barycentre at 0, triangle point down.
+        else:  # barycentre at 0, triangle point down.
             return cls.VF + np.abs(ẋ) <= y <= cls.VC
 
     @classmethod
     def get_c1(cls, ẋ, y, ud='Λ'):
+        """
+        :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
+        :param y: y coordinate
+        :param ud: triangle pointing up/down
+        :return: 0,1,2 representing the c1 component of the container triangle
+        """
         if cls.CHIRAL < 0:  # lazy chiral check
             if ud == 'Λ':
                 if 0 >= y < -ẋ:
@@ -115,11 +148,20 @@ class GridH9:
                     return 0  # flat
                 elif 0 > y <= ẋ:
                     return 1  # forward.
-                else:  #  ẋ < y <= -ẋ
+                else:  # ẋ < y <= -ẋ
                     return 2  # back.
 
     @classmethod
     def get_c2(cls, ẋ, y, c1, ud='Λ'):
+        """
+        # c1, ẋ, y to identify the next c2
+        # return c2 is not determined by the input ud! It will be any one of the six available.
+        :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
+        :param y: y coordinate
+        :param c1: (0,1,2).
+        :param ud: [Λ,V] /triangle pointing up/down
+        :return: Will be one of ['201', '120', '012', '210', '021', '102']
+        """
         if cls.CHIRAL < 0:  # lazy chiral check
             if ud == 'Λ':
                 if c1 == 0:
@@ -223,6 +265,12 @@ class GridH9:
 
     @classmethod
     def xy_to_h9(cls, pt, c2='021'):
+        """
+        Within the scope of a c2 triangle. identify the c1 and remaining components.
+        :param pt: 2d coordinate.
+        :param c2: containing c2 triangle
+        :return: the hex (0...8), the remaining point,and ud/c2 container for the remaining point.
+        """
         ud = 'Λ' if c2 in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
         x, y = pt  # This is a point on the plane
         ẋ = cls.R3 * x  # We will be using √3x for everything.
@@ -236,13 +284,23 @@ class GridH9:
         return hx, ud, (3. * x2, 3. * y2), cc2  # return the values.
 
     @classmethod
-    def encode(cls, pt, loc='021', _depth=32, style=Style.HEX):
+    def encode(cls, pt, loc='021', _depth=31, style=Style.HEX):
+        """
+        This is the Barycentric->H9 projection.
+        Given a 2D coordinate and a c2 triangle (one of six), return its address.
+        :param pt: 2d coordinate
+        :param loc: 'Λ': ['021', '102', '210'], 'V': ['201', '120', '012']
+        :param _depth: Put a limit to the encoding
+        :param style: Style of encoding being asked for.
+        :return: The encoded coordinate.
+        """
         result = []
+        # following seems to be backwards.
         ud = 'Λ' if loc in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
         for d in range(_depth):
             vals = cls.xy_to_h9(pt, loc)
             if not vals:
-                return None
+                return None  # Outside triangle bounds.
                 # print('Encode error {pt}, {loc}, {"".join(result)}')
                 # break
             # print(f'{vals}')
@@ -273,9 +331,17 @@ class GridH9:
         return ''.join(result)
 
     @classmethod
-    def enmesh(cls, pt, loc='021', _depth=32, single=False):
+    def enmesh(cls, pt, loc='021', _depth=31, single=False) -> list:
+        """
+        Given a 2d coordinate and a c2 triangle (one of six), return hierarchy of polygons it belongs to.
+        Alternatively just the one at the depth we want.
+        :param pt:
+        :param loc:
+        :param _depth:
+        :param single:
+        :return:
+        """
         result = []
-        ud = 'V'
         mx = 1.
         xo, yo = 0., 0.
         for d in range(_depth):
@@ -291,14 +357,20 @@ class GridH9:
             xd, yd = cls.OFS[c1, ud, loc]
             xo, yo = xo - xd * mx, yo - yd * mx
             mx /= 3.
-        return result
+        return np.array(result)
 
     @classmethod
     def h9_to_xy(cls, ud, hx, ch, pt):
+        """
+        :param ud: ΛV of current environment.
+        :param hx: current hex digit
+        :param ch: c2 of current triangle.
+        :param pt: existing 2d coordinate.
+        :return: new c2, and revised 2d coordinate
+        """
         x2, y2 = pt  # Extract x2, y2 from pt
         x2 /= 3.
         y2 /= 3.
-        # 'Λ' hx will determine 0,1,2 only.
         c1 = hx % 3
         c2 = {  # Determine c2 from hx
             #        0,     1,     2,     3,     4,     5,     6,     7,     8
@@ -310,13 +382,18 @@ class GridH9:
 
     @classmethod
     def decode(cls, addr):
+        """
+        This is the H9->Barycentric projection.
+        Given an address string, return its xy coordinates.
+        This is the loop part that drives h9_to_xy
+        :param addr:
+        :return: xy coordinate
+        """
         c2i = {  # Determine c2 from hx
-            #      036,   147,   258,          036,   147,   258,
             'Λ': ['201', '120', '012'], 'V': ['210', '021', '102']
         }
         _hints = cls.hint(addr)
         pt = (0.0, 0.0)  # Start from the origin
-        # depth = len(_hints)  #
         _addr, tail = cls.un_tail(addr)
         ch = c2i[_hints[-1]][int(_addr[-1]) % 3]
         for hx, ud in zip(reversed(_addr), reversed(_hints)):
@@ -324,7 +401,12 @@ class GridH9:
         return pt
 
     @classmethod
-    def un_tail(cls, addr):  # split ΛV from tail of address and return both,
+    def un_tail(cls, addr):
+        """
+        split ΛV from tail of address and return both.
+        :param addr: Initial HEX format address with or without ΛV tail.
+        :return: address without tail, and ΛV tail.
+        """
         if addr[-1] in {'Λ', 'V'}:
             return addr[:-1], addr[-1]
         else:
@@ -333,6 +415,11 @@ class GridH9:
 
     @classmethod
     def print_lut(cls):
+        """
+        This generates a list of rules used to understand how,
+        given parent, child and child-UD the parent UD.
+        :return: printout.
+        """
         fn = (lambda a, b: (a - b) % 3)
         for n in range(9):
             print(f'?{n}')
@@ -346,16 +433,21 @@ class GridH9:
                 print(f'{p}?{n}X={rx}; {p}{vl}{n}Λ; {p}{vv}{n}V')
 
     @classmethod
-    def exp(cls, par, chd, hh):
+    def exp(cls, par, chd, ud='V'):
+        """
+        Given a parent & child address and child ud, return the parent ud.
+        # parental half-hex identity.
+        # Eg (0,0,V) as in 00V => V as for (0V0V)
         # VΛ convention: V is default.
         # Hex address in base 3 is [C2C1]
         # C2 can be seen as distance from Centre (0,1,2)
-        # C1 can be seen as orientation (–,/,\ for 0,1,2 respectively).
-        # Given a parent/child address (with child half-hex VΛ) we calculate the
-        # parental half-hex identity.
-        # Eg 00V => 0V0V
-        # a = 'V', b='Λ'
-        lut = [hh, 'V', 'Λ', ('Λ' if hh == 'V' else 'V')]
+        # C1 can be seen as orientation (flat/forward/back for 0,1,2 respectively).
+        :param par:
+        :param chd:
+        :param ud: child ud, one of VΛ
+        :return: parent ud
+        """
+        lut = [ud, 'V', 'Λ', ('Λ' if ud == 'V' else 'V')]
         c2, c1 = divmod(chd, 3)  # unravel base 3 values.
         p_c1 = par % 3  # we only use the c1 value of parent.
         if c2 != 1:
@@ -366,8 +458,15 @@ class GridH9:
 
     @classmethod
     def hint(cls, addr, h=None):
-        # 520826162014320318416260730241
-        # VVVVVVΛΛVVVVΛVVVVVΛΛΛVVVVΛΛVΛΛ
+        """
+        Given a HEX address, return hint string.
+        :param addr: eg 520826162014320318416260730241
+        :param h: the trailing triangle identity (UD) for the least significant digit.
+        :return: The full hint result.
+        example
+         520826162014320318416260730241
+         VVVVVVΛΛVVVVΛVVVVVΛΛΛVVVVΛΛVΛΛ
+        """
         result = []
         if h is None:
             addr, h = cls.un_tail(addr)
@@ -380,3 +479,4 @@ class GridH9:
             chd = par
             result.append(h)
         return ''.join(reversed(result))
+

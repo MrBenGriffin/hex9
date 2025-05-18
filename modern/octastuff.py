@@ -6,13 +6,13 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+# from modern.octahedron import Octahedron
 from modern.octahedron_h9 import H9Octahedron
 from util import Util
-from ak import AK
+from ak_projection import AKProjection
 from osprojection import OSProjection
-from grid_h9 import GridH9
+from hhg_tetrahedral import HHGTetrahedral, OctahedronHHG
 from photo import Photo
-
 
 # This rotates an octahedral face onto the plane.
 # It checks that a point is on the face.
@@ -23,10 +23,27 @@ from photo import Photo
 # It now plots to a global map, including the full list of containing half-hexes.
 
 
+def init_mpl(dims=3, w=30, h=10):
+    mpl.rcParams['savefig.pad_inches'] = 0
+    _fig = plt.figure(figsize=(w, h), dpi=200, frameon=False)
+    _fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    if dims == 3:
+        _ax = _fig.add_subplot(111, projection='3d')
+        _ax.set_xlabel('X', fontsize=30)
+        _ax.set_ylabel('Y', fontsize=30)
+        _ax.set_zlabel('Z', fontsize=30)
+        _ax.view_init(90, -90, 0)  # x,y top down.
+        _ax.set_proj_type('ortho')  # FOV = 0 deg
+    else:
+        _ax = _fig.add_subplot(111)
+        _ax.set_xlabel('X', fontsize=30)
+        _ax.set_ylabel('Y', fontsize=30)
+    return _ax, _fig
+
 
 class Grid:  # Octahedral Side
     def __init__(self, _ti, _c2: tuple, _nm: tuple, _c1: [tuple | None] = None):
-        self.h9 = GridH9()
+        self.h9 = HHGTetrahedral()
         self.ti = _ti  # 'VΛ'
         self.c1 = _c1  # c1 override (normally 0,1,2)
         self.nm = _nm  # hex names, following c2.
@@ -266,261 +283,265 @@ class Octant:
         # given 3D Octahedral, return 2D projected visual map address.
         return np.delete(self.offset(uvw @ self.map_rotate()), 2, -1)
 
+class Octahedron:
+    def __init__(self, _proj: OSProjection):
+        self.r3 = np.sqrt(3)
+        self.r2 = np.sqrt(2)
+        self.r6 = np.sqrt(6)
+        self.h_ = HHGTetrahedral
+        self.hc = self.h_()
+        self.u = Util()
+        self._proj = _proj
+        self.dict = dict()
+        self.hx = self.dict
+        self._v = [
+            [0.0, 0.0, +1.0], [0.0, 0.0, -1.0],  # NS 0 1 (z is vertical)
+            [0.0, +1.0, 0.0], [0.0, -1.0, 0.0],  # EW 2 3 (y is left to right).
+            [+1.0, 0.0, 0.0], [-1.0, 0.0, 0.0],  # AP 4 5 (x is front to back) Atlantic/Pacific
+        ]
+        self.sides = {
+            # Names are N/S, W/E, AP (north/south, west/east, atlantic/pacific)
+            'NWP': [  # √ North West Pacific: PNW 035: 012/201/120
+                # Points are in clockwise, starting North
+                Octant([self._v[pt] for pt in (0, 3, 5)], 'V', 5, 10, (2, 7, -1)),
+                # 201/714 is the C2 order
+                Grid('V', (0, 1, 2), ('NP', 'NW', 'WP'), (1, 4, 7))
+            ],
+            'NWA': [  # √ North West Atlantic AWN: 102/021/210 430-4-2 034-2-2
+                Octant([self._v[pt] for pt in (0, 3, 4)], 'Λ', 2, 2, (2, 5, -1)),
+                Grid('Λ', (1, 0, 2), ('NA', 'NW', 'WA'))
+            ],
+            'NEA': [  # North East Atlantic EAN
+                Octant([self._v[pt] for pt in (2, 4, 0)], 'V', 11, 6, (3, 4, -1)),
+                Grid('V', (1, 2, 0), ('NA', 'NE', 'EA'))  # 1x3+0,2x3+1,0x3+2 = 372
+            ],
+            'NEP': [  # North East Pacific NPE 102/021/210 0=topleft. NEP-052-2-10==NEP-052-6-6
+                Octant([self._v[pt] for pt in (0, 2, 5)], 'Λ', 0, 6, (4, 5, -1)),
+                Grid('Λ', (0, 2, 1), ('NE', 'NP', 'EP'))  # 3x1+0,0x3+1,2x3+2 = 318
+            ],
+            'SEA': [  # South East Atlantic AES:421 102/021/210 : SEA-124-3-2
+                Octant([self._v[pt] for pt in (1, 2, 4)], 'Λ', 3, 2, (3, 2, 1)),
+                Grid('Λ', (2, 1, 0), ('SA', 'SE', 'EA'), (7, 4, 1))
+            ],
+            'SEP': [  # South East Pacific:PSE  012/201/120
+                Octant([self._v[pt] for pt in (5, 1, 2)], 'V', 8, 10, (5, 4, 1)),
+                Grid('V', (2, 0, 1), ('SP', 'SE', 'EP'))  # 0x3+0,1x3+1,2x3+2 = 048
+            ],
+            'SWP': [  # South West Pacific:SPW 021 (102,021,210) SWP-153-7-10
+                Octant([self._v[pt] for pt in (1, 5, 3)], 'Λ', 7, 10, (6, 5, 1)),
+                Grid('Λ', (2, 1, 0), ('SP', 'SW', 'WP'))  # 0x3+0, 2x3+1, 1x3+2 = 075
+            ],
+            'SWA': [  # South West Atlantic:WAS 012/201/120
+                Octant([self._v[pt] for pt in (3, 4, 1)], 'V', 2, 2, (1, 4, 1)),
+                Grid('V', (0, 1, 2), ('SA', 'SW', 'WA'))  # 2x3+0,0x3+1,1x3+2 = 615
+            ]
+        }
+        self.signs = {
+            (+1, -1, +1): 'NWA',
+            (-1, -1, +1): 'NWP',
+            (+1, +1, +1): 'NEA',
+            (-1, +1, +1): 'NEP',
+            (+1, -1, -1): 'SWA',
+            (-1, -1, -1): 'SWP',
+            (+1, +1, -1): 'SEA',
+            (-1, +1, -1): 'SEP'
+        }
+        self.grid_offs = {s[0].off_val[:-1]: k for (k, s) in self.sides.items()}
+        for ky, (_o, _g) in self.sides.items():
+            _o.set_proj(_proj)
+            _o.set_grid(_g)
+            for n in _g.nm:
+                self.hx[f'{n}{_g.ti}'] = {v: k for k, v in _g.hx.items()}
 
+    def xyz_side(self, uvw):  # given a 3D pt, return the geo/grid tuple.
+        key = tuple(np.sign(uvw).astype(int).tolist())
+        return self.signs[key]
 
-# class Octahedron:
-#     def __init__(self, _proj: OSProjection):
-#         self.hc = GridH9()
-#         self._proj = _proj
-#         self.hx = dict()
-#         self._v = [
-#             [0.0, 0.0, +1.0], [0.0, 0.0, -1.0],  # NS 0 1 (z is vertical)
-#             [0.0, +1.0, 0.0], [0.0, -1.0, 0.0],  # EW 2 3 (y is left to right).
-#             [+1.0, 0.0, 0.0], [-1.0, 0.0, 0.0],  # AP 4 5 (x is front to back) Atlantic/Pacific
-#         ]
-#         self.sides = {
-#             # Names are N/S, W/E, AP (north/south, west/east, atlantic/pacific)
-#             'NWP': [  # √ North West Pacific: PNW 035: 012/201/120
-#                 # Points are in clockwise, starting North
-#                 Octant([self._v[pt] for pt in (0, 3, 5)], 'V', 5, 10, (2, 7, -1)),
-#                 # 201/714 is the C2 order
-#                 Grid('V', (0, 1, 2), ('NP', 'NW', 'WP'), (1, 4, 7))
-#             ],
-#             'NWA': [  # √ North West Atlantic AWN: 102/021/210 430-4-2 034-2-2
-#                 Octant([self._v[pt] for pt in (0, 3, 4)], 'Λ', 2, 2, (2, 5, -1)),
-#                 Grid('Λ', (1, 0, 2), ('NA', 'NW', 'WA'))
-#             ],
-#             'NEA': [  # North East Atlantic EAN
-#                 Octant([self._v[pt] for pt in (2, 4, 0)], 'V', 11, 6, (3, 4, -1)),
-#                 Grid('V', (1, 2, 0), ('NA', 'NE', 'EA'))  # 1x3+0,2x3+1,0x3+2 = 372
-#             ],
-#             'NEP': [  # North East Pacific NPE 102/021/210 0=topleft. NEP-052-2-10==NEP-052-6-6
-#                 Octant([self._v[pt] for pt in (0, 2, 5)], 'Λ', 0, 6, (4, 5, -1)),
-#                 Grid('Λ', (0, 2, 1), ('NE', 'NP', 'EP'))  # 3x1+0,0x3+1,2x3+2 = 318
-#             ],
-#             'SEA': [  # South East Atlantic AES:421 102/021/210 : SEA-124-3-2
-#                 Octant([self._v[pt] for pt in (1, 2, 4)], 'Λ', 3, 2, (3, 2, 1)),
-#                 Grid('Λ', (2, 1, 0), ('SA', 'SE', 'EA'), (7, 4, 1))
-#             ],
-#             'SEP': [  # South East Pacific:PSE  012/201/120
-#                 Octant([self._v[pt] for pt in (5, 1, 2)], 'V', 8, 10, (5, 4, 1)),
-#                 Grid('V', (2, 0, 1), ('SP', 'SE', 'EP'))  # 0x3+0,1x3+1,2x3+2 = 048
-#             ],
-#             'SWP': [  # South West Pacific:SPW 021 (102,021,210) SWP-153-7-10
-#                 Octant([self._v[pt] for pt in (1, 5, 3)], 'Λ', 7, 10, (6, 5, 1)),
-#                 Grid('Λ', (2, 1, 0), ('SP', 'SW', 'WP'))  # 0x3+0, 2x3+1, 1x3+2 = 075
-#             ],
-#             'SWA': [  # South West Atlantic:WAS 012/201/120
-#                 Octant([self._v[pt] for pt in (3, 4, 1)], 'V', 2, 2, (1, 4, 1)),
-#                 Grid('V', (0, 1, 2), ('SA', 'SW', 'WA'))  # 2x3+0,0x3+1,1x3+2 = 615
-#             ]
-#         }
-#         self.signs = {
-#             (+1, -1, +1): 'NWA',
-#             (-1, -1, +1): 'NWP',
-#             (+1, +1, +1): 'NEA',
-#             (-1, +1, +1): 'NEP',
-#             (+1, -1, -1): 'SWA',
-#             (-1, -1, -1): 'SWP',
-#             (+1, +1, -1): 'SEA',
-#             (-1, +1, -1): 'SEP'
-#         }
-#         self.grid_offs = {s[0].off_val[:-1]: k for (k, s) in self.sides.items()}
-#         for ky, (_o, _g) in self.sides.items():
-#             _o.set_proj(_proj)
-#             _o.set_grid(_g)
-#             for n in _g.nm:
-#                 self.hx[f'{n}{_g.ti}'] = {v: k for k, v in _g.hx.items()}
-#
-#     def xyz_side(self, uvw):  # given a 3D pt, return the geo/grid tuple.
-#         key = tuple(np.sign(uvw).astype(int).tolist())
-#         return self.signs[key]
-#
-#     def xyz_octant(self, uvw):  # given a 3D pt return the geo
-#         return self.sides[self.xyz_side(uvw)][0]
-#
-#     def s_o(self, uvw):  # given a Spherical return the Octahedral.
-#         if uvw.shape == 1:
-#             return self._proj.so(uvw)
-#         else:
-#             return np.apply_along_axis(self._proj.so, -1, uvw)
-#
-#     def o_s(self, uvw):  # given an Octahedral return the Spherical.
-#         return self._proj.os(uvw)
-#
-#     def side(self, ref):
-#         return self.sides[ref]
-#
-#     def valid(self, pts):
-#         # given an array of 3d points, ensure that they are all on the surface of the unit octahedron.
-#         return np.all(np.apply_along_axis((lambda a: np.abs(np.sum(np.abs(a)) - 1.) < 1e-15), -1, pts))
-#
-#     def o_map_pt(self, uvw):
-#         # given 3D Octahedral address, 2D projected (visual) map address.
-#         _oc = self.sides[self.xyz_side(uvw)]
-#         _rtp = _oc.offset(uvw @ _oc.adr_rotate())
-#         return _rtp[0], _rtp[1]
-#         # return np.delete(_oc.offset(uvw @ _oc.map_rotate()), 2, -1)
-#
-#     def o_map(self, uvw):
-#         return np.apply_along_axis(self.o_map_pt, -1, uvw)  # side_keys
-#
-#     def xy_side(self, ax, ay):
-#         gh = Octant.GRID_H * 3
-#         gx = ax // Octant.GRID_W
-#         gy = ay // Octant.GRID_H
-#         dẋ = self.hc.R3 * ax
-#         if ay - gh <= dẋ <= ay + 5 * gh:  # We are in legal space...
-#             if dẋ <= ay + gh:  # We are in left-3 triangles
-#                 if 5 * gh - dẋ > ay and gy > 2:
-#                     if 3 * gh - dẋ < ay:
-#                         if gy >= 6:
-#                             return 'NWP'
-#                         return 'NWA'
-#                     return 'SWA'
-#                 return None
-#             if gy <= 5 and ay >= 3 * gh - dẋ:  # inside remaining 5
-#                 if dẋ <= ay + 3 * gh:  # We are in mid-3 triangles
-#                     if gy <= 2:
-#                         return 'SEA'
-#                     if 5 * gh - dẋ > ay:
-#                         return 'NEA'
-#                     return 'NEP'
-#                 if gy >= 3:
-#                     if 7 * gh - dẋ > ay:
-#                         return 'SEP'  # final 2 triangles
-#                     return 'SWP'
-#         return None
-#
-#     def _oad_pt(self, uvw):
-#         return self.sides[self.xyz_side(uvw)][0].o_adr(uvw)
-#
-#     def o_adr(self, uvw):
-#         # only use this if all the addresses belong to different sides.
-#         # otherwise use o_adr directly.
-#         return np.apply_along_axis(self._oad_pt, -1, uvw)  # side_keys
-#
-#     def o_kma_pt(self, uvw):
-#         # given 3D Octahedral address, return Side Key, 2D projected (visual) map address and H9 address.
-#         k = self.xyz_side(uvw)
-#         _oc = self.sides[k][0]
-#         return np.array([
-#             k,
-#             np.delete(_oc.offset(uvw @ _oc.map_rotate()), 2, -1),
-#             np.delete(uvw @ _oc.adr_rotate(), 2, -1)
-#         ], dtype=object)
-#
-#     def o_kma(self, uvw):
-#         return np.apply_along_axis(self.o_kma_pt, -1, uvw)  # side_keys
-#
-#     def oxy_tests(self):
-#         for ref, (geo, grid) in self.sides.items():
-#             vx = geo.vertices  # vertices are in Euclidean space.
-#             ok = [self.xyz_side(v + geo.e) for v in vx]
-#             ref_xyz = ll_xyz(np.array([geo.example]))
-#             ref_oc = [self.s_o(xyx) for xyx in ref_xyz][0]
-#             r_s = self.xyz_side(ref_oc)
-#             if r_s != ref:
-#                 print(f'{geo.example} appears to be in octant {r_s}, rather than {ref}')
-#             xy = self.oct_xy(ref_oc, r_s)  # now have the octal 2D point.
-#             h9a = 'unknown'
-#             h9o = h9a
-#             llr = None
-#             try:
-#                 h9o = self.xy_h9(xy, r_s)
-#                 h9a = self.hc.encode(xy, grid.c2s, 15, True)
-#                 cut = h9o[:12]
-#                 xyc = self.h9_xy(cut)
-#                 hpc = self.xy_oct(xyc, r_s)
-#                 llr = xyz_ll(self.o_s(hpc))
-#             except:
-#                 print(f'{xy} fails with {r_s}')
-#             print(f'{ref}:{geo.example}<=>{llr} is at {h9a} // {h9o} (via {h9o[:9]})')
-#
-#         for ref, (geo, grid) in self.sides.items():
-#             vx = geo.vertices  # vertices are in Euclidean space.
-#             for v in vx:
-#                 if not geo.valid(v):
-#                     print(f'{ref}: {v} vertex does not rest on the octahedron')
-#                 _s = np.linalg.norm(v) - 1.
-#                 if _s > 1E-245:
-#                     print(f'{ref}: {v} vertex does not rest on the unit sphere.')
-#                 # Now test s_o and o_s
-#                 x1, y1, z1 = v
-#                 p = self.s_o([v])
-#                 x2, y2, z2 = p
-#                 if x1 != x2 or y1 != y2 or z1 != z2:
-#                     print(f'{ref}: {v} s_o transform affected by octahedron transform {p}')
-#                 q = np.around(self.o_s(np.array([v])), 18)
-#                 x3, y3, z3 = q[0]
-#                 if x1 != x3 or y1 != y3 or z1 != z3:
-#                     print(f'{ref}: {v} o_s transform affected by octahedron transform {q}')
-#
-#     def axy_oct(self, xy, ref):
-#         geo = self.sides[ref][0]
-#         z = - geo.offs[2]
-#         x, y = xy
-#         xyz = np.array([x, y, z]) @ geo.adr_rotate().T
-#         return xyz
-#
-#     def xy_h9(self, xy, ref):  # Given side_name
-#         geo, grid = self.sides[ref]
-#         addr = self.hc.encode(xy, grid.c2s, 32, True)
-#         if addr is None:
-#             return None
-#         _hex = int(addr[0])
-#         hn = grid.hx[_hex]
-#         hb = grid.nm[hn // 3]  # reference by C2 (hi trit)
-#         return f'{hb}{addr[1]}{hn}{addr[2::2]}'
-#
-#     def h9_gen(self, ref, depth):
-#         # Generate an entire list of all addresses at a given depth.
-#         geo, grid = self.sides[ref]
-#
-#         # rt = self.hx[reg]
-#         # normative = f'{rt}{_addr}'
-#         # hints = self.hc.hint(normative)
-#         # return self.hc.decode(normative, hints)
-#
-#     def h9_xy(self, name):
-#         reg, x, _addr = name[:3], name[3], name[4:]
-#         ky = self.hx[reg][int(x)]
-#         return self.hc.decode(f'{ky}{_addr}')
-#
-#     def ll_depth(self, _uv, offset=1):
-#         # uv is a latitude longitude delta that indicates the maximum resolution of a source.
-#         # typically the distance between two pixels at the equator (plate carré).
-#         # stonehenge returned 9 [51.17886376133564, -1.826177068348142]
-#         # ref_ = [1.0, 22.5]  # stonehenge is probably not the best...
-#         ref_ = [51.17886376133564, -1.826177068348142]
-#         offs = [-1., 0., 1.]
-#         ll_refs = [[ref_[0] + _a * _uv[0], ref_[1] + _b * _uv[1]] for _a in offs for _b in offs]
-#         ref_xyz = ll_xyz(np.array(ll_refs))
-#         ref_oc = [self.s_o(xyx) for xyx in ref_xyz]
-#         ads = []
-#
-#         for oc in ref_oc:
-#             _o = self.xyz_side(oc)
-#             _xy = self.oct_xy(oc, _o)
-#             ads.append(self.xy_h9(_xy, _o))
-#         return self.h9_distinct(ads)  # if offset is zero we will lose fidelity.
-#
-#     @classmethod
-#     def h9_shared(cls, addrs):
-#         # find the index of where addresses deviate
-#         idx = next((i for i, c in enumerate(zip(*addrs)) if len(set(c)) > 1), -1)
-#         return addrs[0][:idx]  # they are all the same, so share the first.
-#
-#     @classmethod
-#     def h9_distinct(cls, addrs):
-#         idx = len(cls.h9_shared(addrs))
-#         dx = [a[idx:] for a in addrs]  # these are the tails.
-#         i = len(dx[0])
-#         for i in range(len(dx[0])):
-#             ab = [d[:i] for d in dx]
-#             if len(set([d[:i] for d in dx])) == len(addrs):
-#                 break
-#         return idx + i
+    def xyz_octant(self, uvw):  # given a 3D pt return the geo
+        return self.sides[self.xyz_side(uvw)][0]
+
+    def s_o(self, uvw):  # given a Spherical return the Octahedral.
+        if uvw.shape == 1:
+            return self._proj.so(uvw)
+        else:
+            return np.apply_along_axis(self._proj.so, -1, uvw)
+
+    def o_s(self, uvw):  # given an Octahedral return the Spherical.
+        return self._proj.os(uvw)
+
+    def side(self, ref):
+        return self.sides[ref]
+
+    def valid(self, pts):
+        # given an array of 3d points, ensure that they are all on the surface of the unit octahedron.
+        return np.all(np.apply_along_axis((lambda a: np.abs(np.sum(np.abs(a)) - 1.) < 1e-15), -1, pts))
+
+    def o_map_pt(self, uvw):
+        # given 3D Octahedral address, 2D projected (visual) map address.
+        _oc = self.sides[self.xyz_side(uvw)]
+        _rtp = _oc.offset(uvw @ _oc.adr_rotate())
+        return _rtp[0], _rtp[1]
+        # return np.delete(_oc.offset(uvw @ _oc.map_rotate()), 2, -1)
+
+    def o_map(self, uvw):
+        return np.apply_along_axis(self.o_map_pt, -1, uvw)  # side_keys
+
+    def xy_side(self, ax, ay):
+        gh = Octant.GRID_H * 3
+        gx = ax // Octant.GRID_W
+        gy = ay // Octant.GRID_H
+        dẋ = self.hc.R3 * ax
+        if ay - gh <= dẋ <= ay + 5 * gh:  # We are in legal space...
+            if dẋ <= ay + gh:  # We are in left-3 triangles
+                if 5 * gh - dẋ > ay and gy > 2:
+                    if 3 * gh - dẋ < ay:
+                        if gy >= 6:
+                            return 'NWP'
+                        return 'NWA'
+                    return 'SWA'
+                return None
+            if gy <= 5 and ay >= 3 * gh - dẋ:  # inside remaining 5
+                if dẋ <= ay + 3 * gh:  # We are in mid-3 triangles
+                    if gy <= 2:
+                        return 'SEA'
+                    if 5 * gh - dẋ > ay:
+                        return 'NEA'
+                    return 'NEP'
+                if gy >= 3:
+                    if 7 * gh - dẋ > ay:
+                        return 'SEP'  # final 2 triangles
+                    return 'SWP'
+        return None
+
+    def _oad_pt(self, uvw):
+        return self.sides[self.xyz_side(uvw)][0].o_adr(uvw)
+
+    def o_adr(self, uvw):
+        # only use this if all the addresses belong to different sides.
+        # otherwise use o_adr directly.
+        return np.apply_along_axis(self._oad_pt, -1, uvw)  # side_keys
+
+    def o_kma_pt(self, uvw):
+        # given 3D Octahedral address, return Side Key, 2D projected (visual) map address and H9 address.
+        k = self.xyz_side(uvw)
+        _oc = self.sides[k][0]
+        return np.array([
+            k,
+            np.delete(_oc.offset(uvw @ _oc.map_rotate()), 2, -1),
+            np.delete(uvw @ _oc.adr_rotate(), 2, -1)
+        ], dtype=object)
+
+    def o_kma(self, uvw):
+        return np.apply_along_axis(self.o_kma_pt, -1, uvw)  # side_keys
+
+    def oxy_thing(self):
+        for ref, (geo, grid) in self.sides.items():
+            vx = geo.vertices  # vertices are in Euclidean space.
+            ok = [self.xyz_side(v + geo.e) for v in vx]
+            ref_xyz = self.u.ll_xyz(np.array([geo.example]))
+            ref_oc = [self.s_o(xyx) for xyx in ref_xyz][0]
+            r_s = self.xyz_side(ref_oc)
+            if r_s != ref:
+                print(f'{geo.example} appears to be in octant {r_s}, rather than {ref}')
+            xy = self.oct_xy(ref_oc, r_s)  # now have the octal 2D point.
+            h9a = 'unknown'
+            h9o = h9a
+            llr = None
+            try:
+                h9o = self.xy_h9(xy, r_s)
+                h9a = self.hc.encode(xy, grid.c2s, 15, True)
+                cut = h9o[:12]
+                xyc = self.h9_xy(cut)
+                hpc = self.xy_oct(xyc, r_s)
+                llr = self.u.xyz_ll(self.o_s(hpc))
+            except:
+                print(f'{xy} fails with {r_s}')
+            print(f'{ref}:{geo.example}<=>{llr} is at {h9a} // {h9o} (via {h9o[:9]})')
+
+        for ref, (geo, grid) in self.sides.items():
+            vx = geo.vertices  # vertices are in Euclidean space.
+            for v in vx:
+                if not geo.valid(v):
+                    print(f'{ref}: {v} vertex does not rest on the octahedron')
+                _s = np.linalg.norm(v) - 1.
+                if _s > 1E-245:
+                    print(f'{ref}: {v} vertex does not rest on the unit sphere.')
+                # Now try s_o and o_s
+                x1, y1, z1 = v
+                p = self.s_o([v])
+                x2, y2, z2 = p
+                if x1 != x2 or y1 != y2 or z1 != z2:
+                    print(f'{ref}: {v} s_o transform affected by octahedron transform {p}')
+                q = np.around(self.o_s(np.array([v])), 18)
+                x3, y3, z3 = q[0]
+                if x1 != x3 or y1 != y3 or z1 != z3:
+                    print(f'{ref}: {v} o_s transform affected by octahedron transform {q}')
+
+    def axy_oct(self, xy, ref):
+        geo = self.sides[ref][0]
+        z = - geo.offs[2]
+        x, y = xy
+        xyz = np.array([x, y, z]) @ geo.adr_rotate().T
+        return xyz
+
+    def xy_h9(self, xy, ref):  # Given side_name
+        geo, grid = self.sides[ref]
+        addr = self.hc.encode(xy, grid.c2s, 32, True)
+        if addr is None:
+            return None
+        _hex = int(addr[0])
+        hn = grid.hx[_hex]
+        hb = grid.nm[hn // 3]  # reference by C2 (hi trit)
+        return f'{hb}{addr[1]}{hn}{addr[2::2]}'
+
+    def h9_gen(self, ref, depth):
+        # Generate an entire list of all addresses at a given depth.
+        geo, grid = self.sides[ref]
+
+        # rt = self.hx[reg]
+        # normative = f'{rt}{_addr}'
+        # hints = self.hc.hint(normative)
+        # return self.hc.decode(normative, hints)
+
+    def h9_xy(self, name):
+        reg, x, _addr = name[:3], name[3], name[4:]
+        ky = self.hx[reg][int(x)]
+        return self.hc.decode(f'{ky}{_addr}')
+
+    def ll_depth(self, _uv, offset=1):
+        # uv is a latitude longitude delta that indicates the maximum resolution of a source.
+        # typically the distance between two pixels at the equator (plate carré).
+        # stonehenge returned 9 [51.17886376133564, -1.826177068348142]
+        # ref_ = [1.0, 22.5]  # stonehenge is probably not the best...
+        ref_ = [51.17886376133564, -1.826177068348142]
+        offs = [-1., 0., 1.]
+        ll_refs = [[ref_[0] + _a * _uv[0], ref_[1] + _b * _uv[1]] for _a in offs for _b in offs]
+        ref_xyz = self.u.ll_xyz(np.array(ll_refs))
+        ref_oc = [self.s_o(xyx) for xyx in ref_xyz]
+        ads = []
+
+        for oc in ref_oc:
+            _o = self.xyz_side(oc)
+            _xy = self.oct_xy(oc, _o)
+            ads.append(self.xy_h9(_xy, _o))
+        return self.h9_distinct(ads)  # if offset is zero we will lose fidelity.
+
+    @classmethod
+    def h9_shared(cls, addrs):
+        # find the index of where addresses deviate
+        idx = next((i for i, c in enumerate(zip(*addrs)) if len(set(c)) > 1), -1)
+        return addrs[0][:idx]  # they are all the same, so share the first.
+
+    @classmethod
+    def h9_distinct(cls, addrs):
+        idx = len(cls.h9_shared(addrs))
+        dx = [a[idx:] for a in addrs]  # these are the tails.
+        i = len(dx[0])
+        for i in range(len(dx[0])):
+            ab = [d[:i] for d in dx]
+            if len(set([d[:i] for d in dx])) == len(addrs):
+                break
+        return idx + i
 
 
 def set_examples(o):
@@ -570,7 +591,7 @@ def tri_hollow(_o, depth=3):
     repo = []
     for key in _o.sides:
         geo, grd = _o.sides[key]
-        bas = geo.tri3d(0, False)[0]  # Get the 3 lines we want to test.
+        bas = geo.tri3d(0, False)[0]  # Get the 3 lines we want to try out.
         fnd = []
         for i in range(3):
             a, b = np.array(bas[i]), np.array(bas[(i + 1) % 3])
@@ -634,6 +655,7 @@ def draw_tri_map(o):
 
 
 def draw_eff_flat(_o):
+    u = Util()
     # This draws the triangle grid onto a 2D graph.
     w, h = 7 * Octant.GRID_W, 9 * Octant.GRID_H
     fw, fh = 4 * w, 4 * h
@@ -648,10 +670,10 @@ def draw_eff_flat(_o):
         mtx = geo.adr_rotate()
         mrt = geo.map_rotation(True)  # True = flat.
         trx = geo.tri3d(0, False) @ mtx + [0, 0, geo.GRID_Z]  # Base triangle.
-        fpt = oct_eff(_o, key) @ mtx + [0, 0, geo.GRID_Z]
-        res = geo.offset(np.delete(fpt, 2, -1) @ mrt).tolist()
+        # fpt = oct_eff(_o, key) @ mtx + [0, 0, geo.GRID_Z]
+        # res = geo.offset(np.delete(fpt, 2, -1) @ mrt).tolist()
         tri = geo.offset(np.delete(trx, 2, -1) @ mrt).tolist()
-        px = PolyCollection(res + tri, label=key, alpha=.45, edgecolor='k', linewidth=0.25)
+        px = PolyCollection(tri, label=key, alpha=.45, edgecolor='k', linewidth=0.25)
         px.set_facecolor(cols[i])
         ax.add_collection(px)
     ax.legend(loc=(0.9, 0.01))
@@ -662,7 +684,7 @@ def draw_eff_flat(_o):
 
 # def make_eff(z=None):
 #     # make an F shape from three polygons in octant-flattened space
-#     # for the purpose of testing correct orientation and reflection
+#     # for the purpose of ensuring correct orientation and reflection
 #     # of each octant under projection and on the map.
 #     u = Octant.OCT_EDGE / 8.
 #     v = Octant.TRI_HEIGHT / 9.
@@ -688,22 +710,25 @@ def draw_eff_flat(_o):
 #     return np.array(ef)
 
 
-# def oct_eff(_o, key):
-#     # This cannot use add_rotate etc, as
-#     # We need to test those against this.
-#     # It *does* use the geo.matrix however.
-#     rkz = {'NWP': 7.5, 'NWA': 8.5, 'NEA': 1.5, 'NEP': 2.5, 'SEA': 11.5, 'SEP': 4.5, 'SWP': 5.5, 'SWA': 10.5}
-#     geo, grd = o.sides[key]
-#     rmz = rz(rkz[key] * np.pi / 6.)
-#     z_off = -geo.GRID_Z
-#     fpt = make_eff(z_off)
-#     pts = (fpt @ mx()) @ (rmz @ geo.matrix)
-#     if not _o.valid(pts):
-#         print(f'oct_eff: z-offset ‘{z_off}’ and rotation to an octagon failed for EFF.')
-#     return pts
+def oct_eff(_o, key):
+    u = Util()
+    # This cannot use add_rotate etc, as
+    # We need to ensure those against this.
+    # It *does* use the geo.matrix however.
+    rkz = {'NWP': 7.5, 'NWA': 8.5, 'NEA': 1.5, 'NEP': 2.5, 'SEA': 11.5, 'SEP': 4.5, 'SWP': 5.5, 'SWA': 10.5}
+    geo, grd = o.sides[key]
+    rmz = u.rz(rkz[key] * np.pi / 6.)
+    z_off = -geo.GRID_Z
+    trx = u.tri_eff(5000)
+    fpt = u.d2_3(trx, z_off)
+    pts = (fpt @ u.mx()) @ (rmz @ geo.matrix)
+    if not _o.valid(pts):
+        print(f'oct_eff: z-offset ‘{z_off}’ and rotation to an octagon failed for EFF.')
+    return pts
 
 
 def draw_effs(_o):
+    u = Util()
     fig = plt.figure(figsize=(10, 10), dpi=200, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_subplot(111, projection='3d')
@@ -716,7 +741,7 @@ def draw_effs(_o):
     cols = mpl.colormaps['tab10'](np.linspace(0, 1, 8))
     for i, key in enumerate(o.sides):
         polys = tx[i]
-        pts = oct_eff(_o, key)
+        pts = u.oct_eff(_o, key)
         polys += pts.tolist()
         px = Poly3DCollection(polys, label=key, alpha=.95, edgecolor='k', linewidth=0.25)
         px.set_facecolor(cols[i])
@@ -728,6 +753,7 @@ def draw_effs(_o):
 
 
 def draw_adr_sides(_o, key):
+    u = Util()
     # Ensure that the rotation is correct for address calcs.
     fig = plt.figure(figsize=(10, 10), dpi=200, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
@@ -740,7 +766,7 @@ def draw_adr_sides(_o, key):
     ax.view_init(90, -90, 0)  # √ x,y top down.
     geo, grd = o.sides[key]
     mtx = geo.adr_rotate()
-    res = oct_eff(_o, key) @ mtx + [0, 0, geo.GRID_Z]
+    res = u.oct_eff(_o, key) @ mtx + [0, 0, geo.GRID_Z]
     px = Poly3DCollection(res, alpha=.95, edgecolor='k', linewidth=0.25)
     ax.add_collection3d(px)
     pts = [_o.hc.poly(i, grd.ti, True) for i in [0, 1, 2]]
@@ -755,6 +781,7 @@ def draw_adr_sides(_o, key):
 
 
 def do_grid_scatter(_o, samples=5000):
+    u = Util()
     # This uses a random set of spherical (xyz) coordinates,
     # identifies their h9 address, and then colours them accordingly.
     # here we are not identifying the side.
@@ -767,7 +794,7 @@ def do_grid_scatter(_o, samples=5000):
     for name, (geo, gr) in _o.sides.items():
         cts = []
         grx = gr.c2s
-        px = sph_rnd(samples)  # abs:=> fundamental octant.
+        px = u.sph_rnd(samples)  # abs:=> fundamental octant.
         pts = np.copysign(px, geo.e)
         ptx = _o.s_o(pts)
         tx = geo.offset(ptx @ geo.map_rotate())
@@ -790,6 +817,8 @@ def do_grid_scatter(_o, samples=5000):
 
 
 def full_scatter(_o, size=5000):
+    u = Util()
+
     # This uses a random set of spherical (xyz) coordinates,
     # identifies their h9 address, and then colours them accordingly.
     w, h = 7 * Octant.GRID_W, 9 * Octant.GRID_H
@@ -797,11 +826,11 @@ def full_scatter(_o, size=5000):
     ax, fig = init_mpl(2, fw, fh)
     ax.set(xlim=(0, w), ylim=(0, h), xticks=[], yticks=[])
     ax.text(0.1, 0.1, 'Random spherical', fontsize=20)
-    r_pts = sph_rnd(size)
+    r_pts = u.sph_rnd(size)
     p_oct = np.apply_along_axis(_o.xyz_side, -1, r_pts)  # side_keys
     o_pts = _o.s_o(r_pts)  # octahedron points.
     cts = []
-    col = col_rnd(9 ** 3)  # capturing 3 characters.
+    col = u.col_rnd(9 ** 3)  # capturing 3 characters.
     for (ky, pt) in zip(p_oct, o_pts):
         oc = _o.sides[ky][0]
         tx = oc.offset(pt @ oc.map_rotate())
@@ -855,7 +884,7 @@ def round_trip(_o: Octahedron):
 
             if np.allclose(lla, llb) and np.allclose(pt3, ptb) and h9a == h9b:
                 continue
-            print(f'\nTest {ky} {plc} , {lla}; Oct:{pt3}; Grid:{pta}; Map:{ptm}; Raw:{h9_raw}')
+            print(f'\nExample {ky} {plc} , {lla}; Oct:{pt3}; Grid:{pta}; Map:{ptm}; Raw:{h9_raw}')
             print(f'LL:{lla}=>{llb}')
             print(f'OC:{pt3}=>{ptb}')
             print(f'H9:{h9a}=>{h9b}')
@@ -889,7 +918,7 @@ def rnd_round_trip(_o: Octahedron, size=5000):
             ptb = _o.axy_oct(ipb, ky)  # [-0.21507068 -0.45977145  0.32515786]
             if np.allclose(pt, ptb) and h9a == h9b:
                 continue
-            print(f'\nTest {ky}; Oct:{pt}; Grid:{pta};')
+            print(f'\nExample {ky}; Oct:{pt}; Grid:{pta};')
             print(f'OC:{pt}=>{ptb}')
             print(f'H9:{h9a}=>{h9b}')
         except:
@@ -897,6 +926,7 @@ def rnd_round_trip(_o: Octahedron, size=5000):
 
 
 def draw_hex_map(_o):
+    u = Util()
     print('This function is not yet implemented...')
     # This intends to use a random set of spherical (xyz) coordinates,
     # identify their h9 address, and then colours them accordingly.
@@ -906,10 +936,10 @@ def draw_hex_map(_o):
     ax, fig = init_mpl(2, fw, fh)
     ax.set(xlim=(0, w), ylim=(0, h), xticks=[], yticks=[])
     ax.text(0.1, 0.1, 'Random Hexagons', fontsize=20)
-    col = col_rnd(5 * size)  # five scales across 500 pts.
+    col = u.col_rnd(5 * size)  # five scales across 500 pts.
     cts = []
     for scale in range(1, 6):
-        r_pts = sph_rnd(size)  # Random Euclidean points on surface of a sphere
+        r_pts = u.sph_rnd(size)  # Random Euclidean points on surface of a sphere
         o_pts = _o.s_o(r_pts)  # 3D Octahedron Projection.
         kma_pts = _o.o_kma(o_pts)  # return side id, map coordinate, h9 coordinate
         for k, mp, ap in kma_pts[:]:
@@ -917,8 +947,8 @@ def draw_hex_map(_o):
             col_idx = int(h9[11:12])  # add a col for it.
             # cts.append([*mp, int(h9[11:12])])  # add a col for it.
             # hh = _o.xy_hh(ap, k, scale)  # given h9 and a scale, return hh for it.
-    # va = np.array(cts)
-    # xs, ys, cs = va[:, 0], va[:, 1], va[:, 2]
+    va = np.array(cts)
+    xs, ys, cs = va[:, 0], va[:, 1], va[:, 2]
     ax.scatter(xs, ys, cmap=col, marker='o', s=0.25, c=cs)
     ax.set_aspect('equal', adjustable='box')
     plt.axis('off')
@@ -927,6 +957,7 @@ def draw_hex_map(_o):
 
 
 def sample_ll_map(_o):
+    u = Util()
     # given a map and arrays of latitudes and longitudes,
     # find the colour, and display it via an enmeshed half-hexagon.
     # Because latitude/longitude is non equal area.. there are loads
@@ -947,7 +978,7 @@ def sample_ll_map(_o):
     sz, stp = 6, 8
     # llm = np.array([[lat, lon] for lat in np.linspace(-89.99999, 89.99999, stp * 90) for lon in
     #                 np.linspace(-179.99999, 179.99999, stp * 2 * 90)])
-    mp_xyz = ll_xyz(llm)
+    mp_xyz = u.ll_xyz(llm)
     fns = np.apply_along_axis(_o.xyz_side, -1, mp_xyz)
     mp_oct = _o.s_o(mp_xyz)
     all_polys = []
@@ -986,7 +1017,7 @@ def sample_ll_map(_o):
     print(f'{len(all_polys)} fitted; {bad_poly} failures; {clash} clashes')
 
 
-def test_xy_sides(_o):
+def example_xy_sides(_o):
     map_w, map_h = 3.5 * Octant.OCT_EDGE, 3 * Octant.TRI_HEIGHT
     scale = 300.
     idx = {
@@ -1015,6 +1046,7 @@ def test_xy_sides(_o):
 
 
 def sample_map(_o):
+    u = Util()
     # here we find the x,y of the resultant map and
     # attempt to find out what it's latitude and longitude is
     # from which we take a sample.
@@ -1046,7 +1078,7 @@ def sample_map(_o):
                 sph = _o.o_s(po)
                 sso = _o.xyz_side(sph)
 
-                ll = xyz_ll(np.array([sph]))
+                ll = u.xyz_ll(np.array([sph]))
                 la, lo = ll[0]
                 c = ps.col(la, lo, False)
                 pd.img[iy, wx] = c
@@ -1110,6 +1142,7 @@ def sample_map(_o):
 
 
 if __name__ == '__main__':
+
     # Fix octahedron <=> plane
     # The mapping of a point onto the octahedron should be ok. (AK)
     #
@@ -1122,24 +1155,25 @@ if __name__ == '__main__':
     # To do a binning exercise looking at splitting hexes when they reach a threshold.
     np.random.seed(42)
     geod = Geodesic.WGS84
-    jk = AK()
-    o = H9Octahedron()
-    # draw_tri_grid(o)          # Draw 3D Octahedron as a triangle grid
+    jk = AKProjection()
+    o = Octahedron(jk)
+    h9 = H9Octahedron(o)
+    draw_tri_grid(o)          # Draw 3D Octahedron as a triangle grid
     # draw_tri_grid(o, True)    # Same, projected onto sphere.
     # for key in o.sides.keys():
     #     draw_adr_sides(o, key)   # check that address rotations are good.
     # draw_adr_sides(o, 'NEP')     # Or just one.
     # draw_effs(o)                # 3D Octahedron showing F in 'correct' rotation.
-    draw_eff_flat(o)             # 3D Octahedron Fs flattened onto 2D flat map grid.
+    # draw_eff_flat(o)             # 3D Octahedron Fs flattened onto 2D flat map grid.
     # draw_tri_map(o)           # 3D Octahedron as a triangle grid, flattened onto 3D grid.
 
     set_examples(o)
-    # test_xy_sides(o)
-    # sample_map(o)
+    # example_xy_sides(o)
+    sample_map(o)
     # sample_ll_map(o)          # very slow!
 
     # draw_mesh_map(o)          # Ensures that c2 colouring is correct.
-    # draw_adr_mesh(o, 'SEP')   # current test/debug..
+    # draw_adr_mesh(o, 'SEP')   # current stuff/debug..
 
     # do_grid_scatter(o)        # random spherical coordinates, coloured according to their h9 address.
     # full_scatter(o, 5000)    # this time without hints and using h9.

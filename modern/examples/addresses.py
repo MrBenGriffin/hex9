@@ -1,8 +1,9 @@
 import numpy as np
-from modern.ak import AK
-from modern.grid_h9 import Style
+from modern.ak_projection import AKProjection
+from modern.hhg_tetrahedral import Style
 from modern.util import Util
 from modern.octahedron_h9 import H9Octahedron
+from modern.octahedron import Octahedron
 
 # Using the json file 'examples'
 # generate the H9 addresses for each location, and then use the inverse to reconstitute the address.
@@ -15,17 +16,19 @@ from modern.octahedron_h9 import H9Octahedron
 
 
 if __name__ == '__main__':
-    ak = AK()  # An implementation of octagon/sphere projection.
+    ak = AKProjection()  # An implementation of octagon/sphere projection.
     u = Util()
-    o = H9Octahedron()
-    ex = u.json_load('examples.json')
+    c = Octahedron()
+    o = H9Octahedron(c)
+    ex = u.json_load('locations.json')
     for side, values in ex.items():
         props = o.sides[side]
         places = list(values.keys())
         lls = list(values.values())
         xyz = u.ll_xyz(lls)  # converted from gcd to xyz
         # Following lines are merely for test/verification
-        sides = o.pts_faces(xyz)
+        sides = np.array([o.pt_face(p) for p in xyz])
+        # sides = o.pts_faces(xyz)
         if np.any(sides != side):
             print(f'An example in {side} is out of context.')
         uvw = ak.so(xyz)  # these are now octahedral values.

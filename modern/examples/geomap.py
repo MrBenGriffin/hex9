@@ -1,5 +1,6 @@
 import numpy as np
-from modern.ak import AK
+from modern.ak_projection import AKProjection
+from modern.octahedron import Octahedron
 from modern.octahedron_h9 import H9Octahedron
 from modern.display import Display
 from modern.util import Util
@@ -9,11 +10,13 @@ from photo import Photo
 # This is a little slow, because it goes through every pixel when generating.
 # It is NOT efficient, but does show how arbitrary pixel values can be converted
 # To grid coordinates.
-# Last run on March3/25 it looked ok.
+# Last run on May 11/25; it needed tweaking.
 
 if __name__ == '__main__':
-    octa = H9Octahedron()
-    ak = AK()
+    u = Util()
+    o = Octahedron()
+    octa = H9Octahedron(o)
+    ak = AKProjection()
     ps = Photo()   # source image
     ps.load('../../preparatory/world.topo.bathy.200406.3x5400x2700.png', False)
     ps.set_latlon([-90., 90.], [-180., 180.])
@@ -29,11 +32,11 @@ if __name__ == '__main__':
             th = octa.grid_th[face]
             ud = octa.side_ud[face]  # use this for theta
             o_th = th + octa.oct_th[ud]  # use for orientation.
-            r_mat = octa.matrices[face]  # get the face rotation.
-            xya = Util.d2_3(np.array([xy - octa.grid_xy[face]]), octa.i3)
-            uv = xya @ (r_mat.T @ Util.rz(o_th)).T
+            r_mat = octa.sides[face].matrix  # get the face rotation.
+            xya = u.d2_3(np.array([xy - octa.grid_xy[face]]), octa.oct.i3)
+            uv = xya @ (r_mat.T @ u.rz(o_th)).T
             xyz = ak.os(uv)
-            ll = Util.xyz_ll(xyz)
+            ll = u.xyz_ll(xyz)
             la, lo = ll[0]
             bgr = ps.col(la, lo, True)
             c = tuple([bgr[i]/255. for i in [2, 1, 0]])

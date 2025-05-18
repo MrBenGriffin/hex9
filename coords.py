@@ -114,11 +114,10 @@ class Tri:
             self.slerp(k, i, 1. / 3.),
             self.slerp(k, i, 2. / 3.),
         ]
-        # now normalise!!
+        # now normalise to sphere.
         self.pts = np.array(_pts) / np.linalg.norm(_pts, axis=1, keepdims=True)
         self.sp = xyz_ll(self.pts[0])
         self.col = self.__class__.photo.col(*self.sp)
-
         # now do 2D equivalents.
         self.gxy = abc
         i, j, k = abc

@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from mpl_toolkits.basemap import Basemap
 import numpy as np
 
 
 class Display:
+    """Show stuff"""
 
     @classmethod
     def colours(cls, n, cmap='tab10'):
@@ -89,3 +91,14 @@ class Display:
         ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], marker='o', s=0.5)
         ax.set_aspect('equal', adjustable='box')
         plt.show()
+
+    @classmethod
+    def show_global(cls, gcd_pts, cols=None):
+        """Project GCD points onto global space."""
+        fig = plt.figure(figsize=(12, 12), dpi=150, frameon=False)
+        m = Basemap(projection='ortho', lon_0=-105, lat_0=40, resolution='l')
+        m.fillcontinents(color='coral', lake_color='aqua')
+        xpt, ypt = m(gcd_pts[..., 1], gcd_pts[..., 0])
+        m.scatter(xpt, ypt, c=cols)
+        plt.show()
+

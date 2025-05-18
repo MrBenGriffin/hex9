@@ -1,8 +1,8 @@
 # This draws onto a spherical projection of the world
 # using the mpl basemap
 from mpl_toolkits.basemap import Basemap
-from utility.spheremap import SphereMap, SphereMapHalfHex
-from utility.spherical import Spherical
+from support.spheremap import SphereMap, SphereMapHalfHex
+from support.spherical import Spherical
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np

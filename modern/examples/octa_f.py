@@ -14,7 +14,7 @@ from modern.display import Display
 # Display: show_pts_3d()
 
 
-def side_f(matrix, z, _n):  # octahedral-F for side.
+def side_f(matrix, z, _n):  # octahedral-F for side. octa.i3
     rotate = -np.pi/3.  # -120; because(?)
     spt = Util.d2_3(Util.tri_eff(_n), z)
     return spt @ (matrix.T @ Util.rz(rotate)).T  # rotate and adjust.
@@ -27,3 +27,10 @@ if __name__ == '__main__':
     s = {face: side_f(octa.matrices[face], octa.i3, n) for face in octa.matrices}
     pts = np.vstack(list(s.values()))
     Display.show_pts_3d(pts, lm, lm, lm)
+
+# Alternative using octant class.
+#     lm = (-1.1, 1.1)
+#     octa = Octahedron()
+#     eff = Util.tri_eff(10000)
+#     effs = [octa.faces[face].adopt(eff) for face in octa.faces]
+#     Display.show_pts_3d(np.vstack(effs), lm, lm, lm)

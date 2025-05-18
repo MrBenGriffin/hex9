@@ -3,10 +3,10 @@ import numpy as np
 import matplotlib.animation as animation
 import matplotlib.patches as patches
 from matplotlib.collections import PolyCollection
-from modern.grid_h9 import GridH9
+from modern.hhg_tetrahedral import HHGHH
 from modern.octahedron_h9 import H9Octahedron
 from modern.display import Display
-from modern.ak import AK
+from modern.ak_projection import AK
 from modern.util import Util
 
 # Work in progress - generating live animation of a rotating triangle.
@@ -32,9 +32,9 @@ def animate(i):
 if __name__ == '__main__':
     o = H9Octahedron()
     u = Util()
-    grid = GridH9()
+    grid = HHGHH()
     ak = AK()
-    ex = u.json_load('examples.json')
+    ex = u.json_load('locations.json')
     cols = Display.colours(20, 'tab20')
     all_polys = []
     names = []

@@ -1,22 +1,30 @@
+"""
+ Part of  h9 by Ben Griffin.
+ This file defines a spherical/octahedral projection
+"""
 from modern.osprojection import OSProjection
 import sympy as sp
 import numpy as np
 from scipy.optimize import root
 
 
-class AK(OSProjection):
-    # This is concerned with generating the actual point values
-    # for a sphere.
+class AKProjection(OSProjection):
+    """
+        An Octahedron/Sphere Projection generated via an analytical approximation to a
+        force-directed dataset. Approximation designer: Anders Kaseorg
+    """
     _ALPHA = 3.227806237143884260376580641604959964752197265625  # 𝛂 - vis. Kaseorg.
     _jac_fn = None
-    _e = 1e-20
+    _e = 1e-40
 
     @classmethod
     def os(cls, uvw):
-        # Convert a np.array of octahedral points projected onto a sphere
-        # Anders Kaseorg: https://math.stackexchange.com/questions/5016695/
-        # input:  uvw is an array of Euclidean points on the surface of a unit octahedron.
-        # output: UVW on a unit sphere.
+        """
+        Convert a NDArray of octahedral points projected onto a sphere
+        Anders Kaseorg: https://math.stackexchange.com/questions/5016695/
+        :param uvw:  An array of Euclidean points on the surface of a unit octahedron.
+        :return: UVW on a unit sphere.
+        """
         t_uvw = np.tan((np.pi * uvw + cls._e) * 0.5)
         xu, xv, xw = t_uvw[..., 0], t_uvw[..., 1], t_uvw[..., 2]
         u2, v2, w2 = xu ** 2., xv ** 2., xw ** 2.
@@ -30,24 +38,27 @@ class AK(OSProjection):
 
     @classmethod
     def so(cls, tsp):
-        # Projected a spherical point onto the octahedron
-        # This inverse function using numerical optimization
-        # input:  uvw is an array of Euclidean points on the surface of a unit sphere.
-        # output: UVW on a unit octahedron.
+        """
+         Projected a spherical point onto the octahedron
+         This inverse function using numerical optimization
+         :param tsp:  An array of Euclidean points on the surface of a unit sphere.
+         :return: UVW on a unit octahedron.
+        """
         if not cls._jac_fn:
             cls._set_jac()
 
         def wrapped_jac(x, _):
+            """
+            scipy jac wrapper.
+            """
             return cls._jac_fn(*x)
 
         def find_root(uvw):
-            result = root(
-                cls._root_fn,
-                np.sign(uvw) * 1. / 3.,  # initial_guess,
-                args=(uvw,),
-                jac=wrapped_jac,
-                method='hybr', tol=1e-12
-            )
+            """
+            :param uvw: Euclidean point on the unit sphere.
+            :return: That spherical point on the octahedron
+            """
+            result = root(cls._root_fn, np.sign(uvw) * 1. / 3., args=(uvw,), jac=wrapped_jac, tol=1e-12)
             result.x /= np.linalg.norm(result.x, ord=1)
             return result.x
 

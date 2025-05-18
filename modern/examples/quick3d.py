@@ -10,6 +10,14 @@ from modern.display import Display
 # Octahedron: signs[], ov[] (and explicit keys)
 # Display: show_pts_3d()
 
+# def rnd_pts_for_side(octal, n):
+#     """ This uses the Octant class """
+#     from modern.util import Util
+#     opt = Util.oct0_rnd(n)  # random points on face.0
+#     spt = np.copysign(opt, octal.signs)  # opt is corrected.
+#     bl = Util.ball_rnd(octal.apex, 500)
+#     return np.vstack([spt, bl])  # add to the points.
+
 
 def rnd_pts_for_side(o, side, n):
     opt = Util.oct0_rnd(n)  # random points on face.0

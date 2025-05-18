@@ -85,6 +85,10 @@ class Photo:
     def convert(self):
         self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
 
+    def convert_a(self, solid=False):
+        self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGBA)
+        self.img[:, :, 3] = (0 if not solid else 255)
+
     def load(self, img_file: str | list, convert: bool = True):
         if isinstance(img_file, list):
             if len(img_file) > 1 or isinstance(img_file[0], list):
