@@ -1,7 +1,9 @@
 /output/
 /preparatory/
 /historic/
-/tests/
+/other/
 .DSStore
 /modern/examples/*.png
 /modern/examples/*.ai
+/modern/examples/*.pdf
+
