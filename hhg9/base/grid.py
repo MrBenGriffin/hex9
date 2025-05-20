@@ -123,4 +123,4 @@ class Grid:
                 if (w0 >= 0 and w1 >= 0 and w2 >= 0) or (w0 <= 0 and w1 <= 0 and w2 <= 0):
                     pixels.append((x, y))
 
-        return np.array(pixels)
+        return np.array(pixels) / scale

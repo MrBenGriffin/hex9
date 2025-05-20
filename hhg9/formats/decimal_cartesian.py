@@ -21,10 +21,12 @@ class DecimalCartesian(PointFormat):
         """
         return True
 
-    def format(self, arr: NDArray, sub):
+    def format(self, arr: NDArray, _, sub):
         """
         return decimal formatted address(es)
         :return:
         """
-        vals = np.array([arr]) if len(arr.shape) == 1 else arr
-        return '\n'.join([f'{p[-3]:.7f}, {p[-2]:.7f}, {p[-1]:.7f}' for p in vals[..., :]])
+        # vals = np.array([arr]) if len(arr.shape) == 1 else arr
+        if arr.ndim == 1 or arr.shape[0] == 1:
+            return ''.join([f'{p[-3]:.7f}, {p[-2]:.7f}, {p[-1]:.7f}' for p in arr[..., :]])
+        return '\n'.join([f'{p[-3]:.7f}, {p[-2]:.7f}, {p[-1]:.7f}' for p in arr[..., :]])

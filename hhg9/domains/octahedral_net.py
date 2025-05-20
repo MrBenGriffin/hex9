@@ -48,14 +48,14 @@ class OctahedralNet(CompositeDomain):
         self.projs = {}
         # self.signs = {}
         grid = {
-            (+1, +1, +1): (0, 3., 4.),  # NEA
-            (+1, +1, -1): (-1, 4., 5.),  # NEP
+            (+1, +1, +1): (+0, 3., 4.),  # NEA
+            (-1, +1, +1): (-1, 4., 5.),  # NEP
             (+1, -1, +1): (+1, 2., 5.),  # NWA
-            (+1, -1, -1): (+2, 2., 7.),  # NWP
-            (-1, +1, +1): (+3, 3., 2.),  # SEA
+            (-1, -1, +1): (+2, 2., 7.),  # NWP
+            (+1, +1, -1): (+3, 3., 2.),  # SEA
             (-1, +1, -1): (+2, 5., 4.),  # SEP
-            (-1, -1, +1): (-2, 1., 4.),  # SWA
-            (-1, -1, -1): (+3, 6., 5.)  # SWP
+            (+1, -1, -1): (-2, 1., 4.),  # SWA
+            (-1, -1, -1): (+3, 6., 5.)   # SWP
         }
         for sign, val in grid.items():
             side = self.o.signs[sign]
@@ -64,6 +64,8 @@ class OctahedralNet(CompositeDomain):
             b_sig = f'{b_oct.name}:{side}'
             self.sides[sign] = OctantNet(registrar, n_sig, sign)
             self.projs[side] = BaryNet(registrar, side, b_sig, n_sig, th * self.rt, (gx * self.gw, gy * self.gh))
+            self.components[sign] = self.sides[sign]
+        init = True
 
     def ratio(self):
         """Return width/height ratio"""
@@ -101,48 +103,58 @@ class OctahedralNet(CompositeDomain):
                 if 5 * gh3 - dẋ > ay and gy > 2:
                     if 3 * gh3 - dẋ < ay:
                         if gy >= 6:
-                            return 1, -1, -1  # 'NWP'
+                            return -1, -1, 1  # 'NWP'
                         return 1, -1, 1  # 'NWA'
-                    return -1, -1, 1  # 'SWA'
+                    return 1, -1, -1  # 'SWA'
                 return bad
             if gy <= 5 and ay >= 3 * gh3 - dẋ:  # inside remaining 5
                 if dẋ <= ay + 3 * gh3:  # We are in mid-3 triangles
                     if gy <= 2:
-                        return -1, 1, 1  # 'SEA'
+                        return 1, 1, -1  # 'SEA'
                     if 5 * gh3 - dẋ > ay:
                         return 1, 1, 1  # 'NEA'
-                    return 1, 1, -1  # 'NEP'
+                    return -1, 1, 1  # 'NEP'
                 if gy >= 3:
                     if 7 * gh3 - dẋ > ay:
                         return -1, 1, -1  # 'SEP'  # final 2 triangles
                     return -1, -1, -1  # 'SWP'
         return bad
 
-    def _pts_faces(self, pts: Points) -> NDArray:
-        """ Return face keys from np_array of 3d Octahedron/Spherical points"""
-        xy = np.array(pts[..., -2:])
-        return np.apply_along_axis(self._pt_face, -1, xy)
-
-    def bins(self) -> dict:
-        return {k: v.name for k, v in self.sides.items()}
-
-    def binning(self, _pts: Points):
+    def adopt(self, pts: NDArray):
         """
-        Given a set of 2D points on the net, identify those which are valid
-        and then 'bin' them according to which octant they belong to.
-        This means assigning their domain.
-        :param uvw_s:
+        Take an array and adopt as this domain.
         """
-
-        result = _pts.view(Points)
-        faces = self._pts_faces(_pts)
-        fdx = (faces >= 0)@(1, 2, 4)
-        for face, dom in self.sides.items():
-            ref = (np.asarray(face) >= 0)@(1, 2, 4)
-            result[fdx == ref].set_domain(dom)
-        return result
+        good = self.where_valid(pts)
+        pts = Points(good, domain=self)
+        cmp = np.apply_along_axis(self._pt_face, -1, pts.coords)
+        pts.components = np.array(cmp, dtype='b')
+        return pts
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
         for side in self.sides:
             self.sides[side].register_format(af)
+
+    @classmethod
+    def image(cls, pts: Points) -> NDArray:
+        """
+        return the image that these points represent.
+        """
+        xs, ys = pts.coords[:, 0], pts.coords[:, 1]
+        ux, uy = np.unique(xs, axis=0), np.unique(ys, axis=0)
+        w = ux.size
+        h = uy.size
+        x0 = np.min(xs)
+        y0 = np.min(ys)
+        y_adj = (h-1e-6)/(np.max(ys)-y0)
+        x_adj = (w-1e-6)/(np.max(xs)-x0)
+        yy = np.floor(y_adj*(ys-y0)).astype(np.uint64)
+        xx = np.floor(x_adj*(xs-x0)).astype(np.uint64)
+        ch = pts.samples
+        y = (h - 1) - yy.astype(np.uint64)  # still in cartesian (ie, 0 is bottom left).
+        x = xx.astype(np.uint64)
+        channels = 1 if ch.ndim == 1 else ch.shape[1]
+        ch = ch.reshape(-1, channels)
+        img = np.ones((h, w, channels), dtype=ch.dtype)
+        img[y, x] = ch
+        return img

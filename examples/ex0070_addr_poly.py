@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-HHex.tree binning by coordinate. (is the plan).
+HHex addressing.
 """
 import numpy as np
 from hhg9 import Registrar, H9Engine

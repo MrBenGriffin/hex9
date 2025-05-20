@@ -5,6 +5,8 @@ This loads a Plate Carrée png image,
 converts it to Octagon NET, via latitude/longitude and sphere and displays it.
 It's SLOW because it has to manage an inverse of the AK projection.
 """
+from pathlib import Path
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -13,6 +15,22 @@ from hhg9.domains import PlatePixel, SphericalGCD, SphericalCartesian, Octahedra
     OctahedralNet
 from hhg9.projections import PlatePixelGCD, CartesianGCD, AKOctahedralSpherical
 from support import Photo, Display, Util
+
+
+def load_cache(pc_map: str = 'world1350x675'):
+    """
+    Load cached octahedral and colours from original.
+    cf. 0040 / 0041
+    """
+    cache = Path(f'{pc_map}.npy')
+    if not cache.exists():
+        raise ValueError('Far better to load a cache. See ex_0041')
+    ps.load(f'../preparatory/{pc_map}.png')
+    pc_pix = p_plt.adopt(ps.img)
+    oc = np.load(cache)
+    oc_px = c_oct.adopt(oc)
+    oc_px.samples = pc_pix.samples
+    return oc_px
 
 
 if __name__ == '__main__':
@@ -39,14 +57,19 @@ if __name__ == '__main__':
     ps = Photo()
     u = Util()
 
-    ps.load('../preparatory/world360x180.png')
-    # use plate_carrée pc_px domain to adopt the ps.image (shape [675,1350,4], with RGBA)
-    pc_px = p_plt.adopt(ps.img)
-    oc_px = reg.project(pc_px, [p_plt, g_sph, c_sph, c_oct, b_oct, n_oct])
-    d.show_pts_2d(oc_px)
-    w, h = int(300*n_oct.ratio()), 300
-    img = p_plt.image(np.asarray(oc_px), w, h)   # convert points back to an [675,1350,4] image.
-    plt.imshow(img, origin='upper')
-    plt.show()
+    oc_px = load_cache('world1350x675')  #'world1350x675'
+    ob_px = reg.project(oc_px, [c_oct, b_oct])
+    c1_px = reg.project(ob_px, [b_oct, c_oct])
+
+    on_px = reg.project(oc_px, [c_oct, b_oct, n_oct])
+    c2_px = reg.project(on_px, [n_oct, b_oct, c_oct])
+
+    d.show_pts_3d(c2_px)  # after reverse
+    d.show_pts_2d(on_px)  # net.
+
+    # w, h = int(675*n_oct.ratio()), 675
+    # img = p_plt.image(on_px, w, h)   # convert points back to an [675,1350,4] image.
+    # plt.imshow(img, origin='upper')
+    # plt.show()
 
 

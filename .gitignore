@@ -1,9 +1,9 @@
+.DSStore
 /output/
 /preparatory/
 /historic/
 /other/
-.DSStore
 /modern/examples/*.png
 /modern/examples/*.ai
 /modern/examples/*.pdf
-
+/hex/examples/*.npy

@@ -33,6 +33,7 @@ class Style(Enum):
     FULL = 1
     EXTENDED = 2
     HALFHEX = 3
+    NUMERIC = 4
 
 
 class H9Engine:
@@ -272,7 +273,7 @@ class H9Engine:
         :return: the hex (0...8), the remaining point,and ud/c2 container for the remaining point.
         """
         ud = 'Λ' if c2 in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
-        x, y = pt  # This is a point on the plane
+        x, y = pt[0], pt[1]  # This is a point on the plane
         ẋ = cls.R3 * x  # We will be using √3x for everything.
         if not cls.in_scope(ẋ, y, ud):  # Ensure we are in the equilateral
             return None
@@ -295,7 +296,6 @@ class H9Engine:
         :return: The encoded coordinate.
         """
         result = []
-        # following seems to be backwards.
         ud = 'Λ' if loc in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
         for d in range(_depth):
             vals = cls.xy_to_h9(pt, loc)
@@ -307,6 +307,8 @@ class H9Engine:
             hx, ud, pt, loc = vals
             match style:
                 case Style.HEX:
+                    result.append(f'{hx}')
+                case Style.NUMERIC:
                     result.append(f'{hx}')
                 case Style.FULL:
                     result.append(f'{hx}{ud}')
@@ -328,6 +330,8 @@ class H9Engine:
                         result.append(f'{fx[hx]}')
         if style == Style.HEX:
             result.append(f'{ud}')
+        # if style == Style.NUMERIC:
+        #     result.append(f'0') if ud == 'V' else result.append('1')
         return ''.join(result)
 
     @classmethod

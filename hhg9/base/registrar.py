@@ -91,27 +91,23 @@ class Registrar:
             else:
                 raise ValueError(f'chain {dom} Unregistered Domain')
 
-    def _project_composites(self, pts, a, ab, a2b):
-        bundle = []
-        if isinstance(pts, tuple):
-            for group in pts:
-                bundle.append(self._project_composites(group, a, ab, a2b))
-            return tuple(bundle)
-        if isinstance(pts, Points) and pts.dom.name in a2b.keys():
-            key = (pts.dom.name, a2b[pts.dom.name])
-            name = next(iter(self._projections[key]))
-            return self._projections[key][name](pts)
-        repo = a.binning(pts)  # generate the tuple.
-        for bin_pts in repo:
-            inc = bin_pts.domain()
-            key = (inc, a2b[inc])
-            alts = self._projections[key]
-            name = next(iter(alts))  # *currently*  grab the first projection.
-            if name == 'chain':
-                bundle.extend([self._domains[k] for k in self._projections[key][name]])
-            else:
-                bundle.extend([self._projections[key][name](bin_pts)])
-        return tuple(bundle)
+    def _project_composites(self, pts: Points, a, a2b):
+        if pts.components is None:
+            pts = a.binning(pts)
+        res = np.zeros_like(pts.coords)
+        uvw = (pts.components >= 0) @ (4, 2, 1)
+        for sig, cmp in a.components.items():
+            key = (cmp.name, a2b[cmp].name)
+            facilitator = next(iter(self._projections[key]))
+            side = np.asarray(sig, dtype='b')
+            ref = (side >= 0) @ (4, 2, 1)
+            crds = pts.coords[uvw == ref]  # these are the coordinates for this projection.
+            if crds.size > 0:
+                rex = self._projections[key][facilitator](crds)
+                if rex.shape[-1] != res.shape[-1]:
+                    res = np.zeros([pts.coords.shape[0], rex.shape[-1]])
+                res[uvw == ref] = rex
+        return Points(res, samples=pts.samples, components=pts.components)
 
     def project(self, coords: Points, chain: NDArray) -> Points:
         """Transform coordinates from one set to another."""
@@ -119,15 +115,16 @@ class Registrar:
         for (a, b) in pairwise(chain):
             key = a.name, b.name
             if key not in self._projections:
-                a_bins = a.bins() if isinstance(a, CompositeDomain) else None
-                b_bins = b.bins() if isinstance(b, CompositeDomain) else None
-                if not (a_bins and b_bins):
-                    key = self._cmp_key(a, b, a_bins, b_bins)
+                a_components = a.components if isinstance(a, CompositeDomain) else None
+                b_components = b.components if isinstance(b, CompositeDomain) else None
+                if not (a_components and b_components):
+                    key = self._cmp_key(a, b, a_components, b_components)
                 else:
-                    ab = a_bins.keys() & b_bins.keys()
-                    if len(ab) == len(a_bins):
-                        a2b = {a_bins[k]: b_bins[k] for k in ab}
-                        coords = self._project_composites(coords, a, ab, a2b)
+                    ab = a_components.keys() & b_components.keys()
+                    if len(ab) == len(a_components):
+                        a2b = {a_components[k]: b_components[k] for k in ab}
+                        coords = self._project_composites(coords, a, a2b)
+                        coords.domain = b
                     else:
                         raise ValueError(f'A projection {key} is not registered.')
             else:
@@ -139,6 +136,4 @@ class Registrar:
                     coords = self.project(coords, sub_ch)
                 else:
                     coords = self._projections[key][name](coords)
-        if isinstance(coords, tuple) and len(coords) == 1:
-            return coords[0]
         return coords

@@ -174,30 +174,28 @@ class AKOctahedralSpherical(Projection):
                 a = z
         return np.copysign(a, xyz)
 
-    def forward(self, pts: Points) -> NDArray:
+    def forward(self, arr: Points) -> NDArray:
         """
         Convert a NDArray of octahedral points projected onto a sphere
         Anders Kaseorg: https://math.stackexchange.com/questions/5016695/
         :param pts:  An array of Euclidean points on the surface of a unit octahedron.
         :return: UVW on a unit sphere.
         """
-        pts = pts / (np.linalg.norm(pts, ord=1, axis=-1, keepdims=True))
-        res = pts.copy()
-        xyz = np.array(pts[..., -3:])
-        res[..., -3:] = np.copysign(self._fwd_do(xyz), res)
-        return res.view(Points).set_domain(self.fwd_cs)
+        xyz = arr.coords
+        uvw = xyz / (np.linalg.norm(xyz, ord=1, axis=-1, keepdims=True))
+        res = np.copysign(self._fwd_do(uvw), xyz)
+        return Points(res, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
 
-    def backward(self, pts: Points) -> NDArray:
+    def backward(self, arr: Points) -> NDArray:
         """
          Projected a spherical point onto the octahedron
          This inverse function using numerical optimization
          :param pts:  An array of Euclidean points on the surface of a unit sphere.
          :return: UVW on a unit octahedron.
         """
-        res = pts.copy()
-        xyz = np.array(pts[..., -3:])
-        res[..., -3:] = np.copysign(self._rev_do(xyz), xyz)
-        return res.view(Points).set_domain(self.rev_cs)
+        xyz = arr.coords
+        res = np.copysign(self._rev_do(xyz), arr.coords)
+        return Points(res, domain=self.rev_cs, samples=arr.samples, components=arr.components)
 
 
 if __name__ == '__main__':
@@ -247,15 +245,14 @@ if __name__ == '__main__':
     x = u.oct_rnd(25000)
     x = np.abs(x)
     x = x / (np.linalg.norm(x, ord=1, axis=1, keepdims=True))
-    fd = ak.forward(x)
+    ox = c_oct.adopt(x)
+    fd = ak.forward(ox)
     bk = ak.backward(fd)
-    rt = bk - x
+    rt = bk.coords - ox.coords
     zk = abs(rt) / np.linalg.norm(rt)
-    mx = np.max(zk)
-    zk *= 1000.
+    mx = np.max(rt)
+    zk *= 10000.
     oc = c_oct.adopt(x)
     bc = reg.project(oc, [c_oct, b_oct])
-    bc = np.insert(bc, 0, zk[:, 0], axis=1)
-    bc = np.insert(bc, 0, zk[:, 1], axis=1)
-    bc = np.insert(bc, 0, zk[:, 2], axis=1)
-    d.show_pts_2d(bc, label=f'{mx}')
+    bc.samples = zk
+    d.show_pts_2d(bc, label=f'{mx}', clip=True)

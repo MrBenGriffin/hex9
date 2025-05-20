@@ -3,6 +3,8 @@ Part of the H9 project
 """
 from abc import ABC, abstractmethod
 import numpy as np
+
+
 # from .points import Points
 
 
@@ -29,7 +31,7 @@ class PointFormat(ABC):
         ...
 
     @abstractmethod
-    def format(self, _: np.ndarray, sub: str) -> str:
+    def format(self, _: np.ndarray, dom, sub: str) -> str:
         """
         Return the address formatted according to it's Domain
         :return:

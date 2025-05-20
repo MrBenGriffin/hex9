@@ -3,7 +3,7 @@ Part of the H9 project
 """
 import numpy as np
 from numpy.typing import NDArray
-from hhg9 import Projection
+from hhg9 import Projection, Points
 
 
 class OctahedralOctants(Projection):
@@ -13,18 +13,31 @@ class OctahedralOctants(Projection):
 
     def __init__(self, registrar, name, o, n):
         super().__init__(registrar, o.name, n.name)
+        self.matrix = None
+        self.orient = None
+        self.z_off = None
 
-    def forward(self, pts: NDArray[np.float64]):
+    def forward(self, arr):
         """
         Find octants and then project.
         """
-        transformed = pts @ (self.matrix.T @ self.orient)  # These are now in barycentric 3D.
-        return np.delete(transformed, 2, -1)
+        xyz = arr.coords if isinstance(arr, Points) else arr
+        xyo = xyz @ (self.matrix.T @ self.orient)  # These are now in barycentric 3D.
+        xy = np.delete(xyo, 2, -1)  # These are now in barycentric 2D.
+        if isinstance(arr, Points):
+            return Points(xy, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
+        else:
+            return xy
 
-    def backward(self, pts: NDArray[np.float64]):
+    def backward(self, arr):
         """
         Unflatten points of this octant. (inverse of flatten).
         2D points are un-flattened from the Z-Plane.
         """
-        pts3 = np.insert(pts, pts.shape[1], self.z_off, axis=1)  # These are now in 3D.
-        return pts3 @ (self.matrix.T @ self.orient).T
+        xy = arr.coords if isinstance(arr, Points) else arr
+        xyz = np.insert(xy, xy.shape[1], self.z_off, axis=1)
+        xyo = xyz @ (self.matrix.T @ self.orient).T  # These are now in barycentric 3D.
+        if isinstance(arr, Points):
+            return Points(xyo, domain=self.rev_cs, samples=arr.samples, components=arr.components)
+        else:
+            return xyo

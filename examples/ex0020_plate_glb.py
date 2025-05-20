@@ -3,6 +3,7 @@ Part of the H9 project
 This follows ex0010_plate_px.py (which loaded a png and displayed it).
 This loads a Plate Carrée png, converts it to latitude/longitude, and displays it.
 """
+import numpy as np
 
 from hhg9 import Registrar
 from hhg9.domains import PlatePixel, SphericalGCD
@@ -30,6 +31,9 @@ if __name__ == '__main__':
     pc_px = p_plt.adopt(ps.img)
     # project it into GCD spherical
     sp_ll = reg.project(pc_px, [p_plt, g_sph])
+    llx = np.array(sp_ll.coords)
+    # test g_sph can adopt ll array.
+    g_sph.adopt(llx)
     # Display it as an overlay on the globe.
     d.show_global(sp_ll, alpha=0.1)
     # Round trip to Pixels

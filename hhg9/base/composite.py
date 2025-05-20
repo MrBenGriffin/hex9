@@ -15,14 +15,14 @@ class CompositeDomain(Domain):
         For example, 8 octants for a sphere.
     """
 
-    def binning(self, pts: Points, sig: tuple = None) -> dict:
-        """Return points with domain set by composite set_domain. This is overridden"""
-        return pts
+    def __init__(self, registrar, name: str):
+        super().__init__(registrar, name)
+        self.components = {}  # class static
 
-    @abstractmethod
-    def bins(self) -> dict:
-        """Return a dict of key->cset that this is composed of."""
-        ...
+    def binning(self, pts: Points, sig: tuple = None):
+        """Return points with domain set by composite set_domain. This can be overridden"""
+        pts.components = np.sign(pts.coords).astype(np.int8)
+        return pts
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
@@ -42,7 +42,9 @@ class CompositeDomain(Domain):
         Take an array and adopt as this domain.
         """
         good = self.where_valid(pts)
-        return self.binning(good)
+        pts = Points(good, domain=self)
+        pts.components = np.zeros((good.shape[0], 3), dtype='b')  # signed byte.  was using <U9 but seems crazy.
+        return self.binning(pts)
 
 
 class ComponentDomain(Domain):

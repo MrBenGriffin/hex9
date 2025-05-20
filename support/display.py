@@ -3,6 +3,8 @@ import matplotlib as mpl
 from mpl_toolkits.basemap import Basemap
 import numpy as np
 
+from hhg9 import Points
+
 
 class Display:
     """Show stuff"""
@@ -12,32 +14,32 @@ class Display:
         return mpl.colormaps[cmap](np.linspace(0, 1, n))
 
     @classmethod
-    def show_pts_2d(cls, pts, x_lim=None, y_lim=None, label=None, clip=False):
-        if isinstance(pts, tuple):
-            pts = np.vstack(pts)
-        pts = np.asarray(pts)
+    def show_pts_2d(cls, arr: Points, x_lim=None, y_lim=None, label=None, clip=False):
+        xx, yy = arr.coords[:, 0], arr.coords[:, 1]
         cols = None
-        if pts.shape[1] > 2:
-            cols = np.array(pts[:, :-2])
+        if arr.samples is not None:
+            cols = arr.samples
             if clip:
                 cols = np.clip(cols, 0, 1)
             else:
-                if np.max(cols) > 1.0:
-                    cols = cols / 256
+                max = np.max(cols)
+                if max > 1.0:
+                    top = 1.0 / max
+                    cols = np.array(cols) * top
         fig = plt.figure(figsize=(10, 10), dpi=150, frameon=False)
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
         ax = fig.add_subplot(111)
         if x_lim is None:
-            x_lim = (pts[:, -2].min()-0.1, pts[:, -2].max()+0.1)
+            x_lim = (xx.min()-0.1, xx.max()+0.1)
         if y_lim is None:
-            y_lim = (pts[:, -1].min()-0.1, pts[:, -1].max()+0.1)
+            y_lim = (yy.min()-0.1, yy.max()+0.1)
         if label is not None:
             ofx = (x_lim[1] - x_lim[0]) / 20
             ofy = (y_lim[1] - y_lim[0]) / 20
             ax.text(x_lim[0] + ofx, y_lim[1] - ofy, label, fontsize=20)
         if x_lim is not None:
             ax.set(xlim=x_lim, ylim=y_lim)
-        ax.scatter(pts[:, -2], pts[:, -1], s=1.5, c=cols)
+        ax.scatter(xx, yy, s=1.5, c=cols)
         ax.set_aspect('equal', adjustable='box')
         plt.show()
 
@@ -91,15 +93,14 @@ class Display:
         plt.show()
 
     @classmethod
-    def show_pts_3d(cls, pts, x_lim=None, y_lim=None, z_lim=None, label=None, clip=False):
-        cols = None
-        if pts.shape[1] > 3:
-            cols = np.array(pts[:, :-3])
-            if clip:
-                cols = np.clip(cols, 0, 1)
-            else:
-                if np.max(cols) > 1.0:
-                    cols /= 256.
+    def show_pts_3d(cls, arr: Points, x_lim=None, y_lim=None, z_lim=None, label=None, clip=False):
+        xx, yy, zz = arr.coords[:, 0], arr.coords[:, 1], arr.coords[:, 2]
+        cols = arr.samples
+        if clip:
+            cols = np.clip(cols, 0, 1)
+        else:
+            if np.max(cols) > 1.0:
+                cols = np.array(cols) / 256
         fig = plt.figure(figsize=(10, 10), dpi=200, frameon=False)
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
         ax = fig.add_subplot(111, projection='3d')
@@ -109,21 +110,21 @@ class Display:
         ax.set_zlabel('Z', fontsize=15)
         ax.set_proj_type('ortho')  # FOV = 0 deg
         ax.auto_scale_xyz(x_lim, y_lim, z_lim)
-        ax.scatter(pts[:, -3], pts[:, -2], pts[:, -1], marker='o', s=0.5, c=cols)
+        ax.scatter(xx, yy, zz, marker='o', s=0.5, c=cols)
         ax.set_aspect('equal', adjustable='box')
         plt.show()
 
     @classmethod
-    def show_global(cls, gcd_pts, proj='ortho', alpha=1.0):
+    def show_global(cls, pts: Points, proj='ortho', alpha=1.0):
         cols = None
-        if gcd_pts.shape[1] > 2:
-            cols = gcd_pts[:, :-2] / 255.0
+        lat, lon = pts.coords[:, 0], pts.coords[:, 1]
+        if pts.samples is not None:
+            cols = pts.samples / 255.0
         """Project GCD points onto global space."""
         fig = plt.figure(figsize=(18, 9), dpi=150, frameon=False)
-        # m = Basemap()
         m = Basemap(projection=proj, lon_0=22.5, lat_0=40, resolution='c')
         m.fillcontinents(color='coral')
-        xpt, ypt = m(gcd_pts[..., -1], gcd_pts[..., -2])
+        xpt, ypt = m(lon, lat)
         m.scatter(xpt, ypt, c=cols, s=3, alpha=alpha)
         plt.show()
 

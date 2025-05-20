@@ -37,7 +37,7 @@ class Photo:
         if ch < 3:
             self.img[:, :, 3] = (0 if not solid else 255)
 
-    def load(self, img_file: str | list, convert: bool = True):
+    def load(self, img_file: str | list, convert: bool = False):
         if isinstance(img_file, list):
             if len(img_file) > 1 or isinstance(img_file[0], list):
                 images = []
@@ -65,9 +65,10 @@ class Photo:
         self.img = image if not convert else cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         self.height, self.width = self.img.shape[:2]
 
-    def save(self, filename):
-        img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
-        cv2.imwrite(f'{filename}.png', img)
+    def save(self, filename, convert: bool = False):
+        if convert:
+            self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(f'{filename}.png', self.img)
 
     def resize(self, sc: float):
         rev = cv2.resize(self.img, (int(sc*self.width), int(sc*self.height)), interpolation=cv2.INTER_NEAREST)

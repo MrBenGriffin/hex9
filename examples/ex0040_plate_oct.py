@@ -3,11 +3,13 @@ Part of the H9 project
 This follows ex0030_plate_glb.py (which loaded the png and displayed it as a unit sphere).
 This loads a Plate Carrée png image,
 converts it to XYZ Octagon, via latitude/longitude and sphere and displays it.
-It's SLOW because it has to manage an inverse of the AK projection.
+The inverse of the AK projection is slow, so we use a cache. cf. ex0041_cache.py
 """
+from pathlib import Path
+
 import numpy as np
 
-from hhg9 import Registrar
+from hhg9 import Registrar, Points
 from hhg9.domains import PlatePixel, SphericalGCD, SphericalCartesian, OctahedralCartesian
 from hhg9.projections import PlatePixelGCD, CartesianGCD, AKOctahedralSpherical
 from support import Photo, Display
@@ -26,7 +28,7 @@ if __name__ == '__main__':
     c_oct = OctahedralCartesian(reg)    # Cartesian Octahedron (xyz)
 
     # Projections/Transforms
-    PlatePixelGCD(reg)   # Transform (Pixel Cartesian <=> GCD)
+    ppp = PlatePixelGCD(reg)   # Transform (Pixel Cartesian <=> GCD)
     CartesianGCD(reg)
     # Initialise (spherical to octahedral) warm-up takes a couple of seconds.
     AKOctahedralSpherical(reg)
@@ -35,18 +37,22 @@ if __name__ == '__main__':
     d = Display()
     ps = Photo()
 
-    # ps.load('../preparatory/world1350x675.png')
-    ps.load('../preparatory/world360x180.png')
-    # use plate_carrée pc_px domain to adopt the ps.image (shape [675,1350,4], with RGBA)
+    # Load cached octahedral and colours from original.
+    pc_map = 'world1350x675'
+    cache = Path(f'{pc_map}.npy')
+    if not cache.exists():
+        raise ValueError('Far better to load a cache. See ex_0041')
+    ps.load(f'../preparatory/{pc_map}.png')
     pc_pix = p_plt.adopt(ps.img)
-    # project it into Cartesian spherical via GCD.
-    sp_gcd = reg.project(pc_pix, [p_plt, g_sph])
-    sp_pix = reg.project(sp_gcd, [g_sph, p_plt])
-    pc_dif = np.unique(abs(pc_pix - sp_pix), axis=0)
-
-
-    sp_xyz = reg.project(sp_gcd, [g_sph, c_sph])
-    oc_xyz = reg.project(sp_xyz, [c_sph, c_oct])
-    # oc_xyz = reg.project(pc_px, [p_plt, g_sph, c_sph, c_oct])
-    # Display it as a unit Octagon.
-    d.show_pts_3d(oc_xyz)
+    oc = np.load(cache)
+    oc_px = c_oct.adopt(oc)
+    oc_px.samples = pc_pix.samples
+    # Now loaded cached octahedral and colours from original.
+    # project it back to the plate carree.
+    # PlatePixelGCD needs to have its dimensions set - that is currently unknown.
+    # we can change the size here if we like. It's possibly the worst way of scaling anything, though...
+    # ppp.set_dim(Points(np.array([[720, 360]])))
+    ppp.set_dim(pc_pix)
+    p_px = reg.project(oc_px, [c_oct, c_sph, g_sph, p_plt])
+    d.show_pts_3d(oc_px)
+    d.show_pts_2d(p_px)

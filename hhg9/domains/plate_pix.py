@@ -26,7 +26,10 @@ class PlatePixel(Domain):
             y, x = np.meshgrid(np.arange(h)[::-1], np.arange(w), indexing='ij')
             pts = np.concatenate([img, x[..., np.newaxis], y[..., np.newaxis]], axis=-1)
             self.height, self.width, self.type = h, w, t
-            return pts.reshape(-1, c+2)
+            arr = pts.reshape(-1, c+2)  # This now has the colours, followed by the indices.
+            coords = arr[:, -2:]
+            cols = (arr[:, 0:3]).astype(img.dtype)
+            return Points(coords, self, samples=cols)
         else:
             raise ValueError(f'{img.shape} does not seem to represent a 2D image.')
 
@@ -36,18 +39,20 @@ class PlatePixel(Domain):
         """
         h = self.height if not height else int(height)
         w = self.width if not width else int(width)
-        x0 = np.min(pts[:, -2])
-        y0 = np.min(pts[:, -1])
-        y_adj = (h-1e-6)/(np.max(pts[:, -1])-y0)
-        x_adj = (w-1e-6)/(np.max(pts[:, -2])-x0)
-        yy = np.floor(y_adj*(pts[:, -1]-y0)).astype(np.uint64)
-        xx = np.floor(x_adj*(pts[:, -2]-x0)).astype(np.uint64)
+        xs, ys = pts.coords[:, 0], pts.coords[:, 1]
+        x0 = np.min(xs)
+        y0 = np.min(ys)
+        y_adj = (h-1e-6)/(np.max(ys)-y0)
+        x_adj = (w-1e-6)/(np.max(xs)-x0)
+        yy = np.floor(y_adj*(ys-y0)).astype(np.uint64)
+        xx = np.floor(x_adj*(xs-x0)).astype(np.uint64)
 
-        ch = pts[:, :-2].astype(self.type)
+        ch = pts.samples.astype(self.type)
         y = (h - 1) - yy.astype(np.uint64)  # still in cartesian (ie, 0 is bottom left).
         x = xx.astype(np.uint64)
-
-        img = np.zeros((h, w, pts.shape[1]-2), dtype=self.type)
+        channels = 1 if ch.ndim == 1 else ch.shape[1]
+        ch = ch.reshape(-1, channels)
+        img = np.zeros((h, w, channels), dtype=self.type)
         img[y, x] = ch
         return img
 

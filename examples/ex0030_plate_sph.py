@@ -29,9 +29,13 @@ if __name__ == '__main__':
     ps = Photo()
 
     ps.load('../preparatory/world1350x675.png')
-    # use plate_carrée pc_px domain to adopt the ps.image (shape [675,1350,4], with RGBA)
     pc_px = p_plt.adopt(ps.img)
-    # project it into Cartesian spherical via GCD.
     sp_xyz = reg.project(pc_px, [p_plt, g_sph, c_sph])
-    # Display it as a unit sphere.
     d.show_pts_3d(sp_xyz)
+    # test we can adopt values.
+    xyz = c_sph.adopt(sp_xyz.coords)
+    # Project back to plate carrée and display
+    sp_plt = reg.project(sp_xyz, [c_sph, g_sph, p_plt])
+    d.show_pts_2d(sp_plt)
+
+

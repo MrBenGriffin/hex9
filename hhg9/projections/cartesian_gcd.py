@@ -17,25 +17,20 @@ class CartesianGCD(Projection):
 
     def forward(self, arr: Points) -> NDArray:
         """Standard Cartesian->GCD projection."""
-        pts = np.array([arr]) if len(arr.shape) == 1 else arr
-        x, y, z = pts[..., 0], pts[..., 1], pts[..., 2]
-        lat = np.degrees(np.arctan2(z, np.sqrt(x ** 2. + y ** 2.)))
-        lon = np.degrees(np.arctan2(y, x))
+        px, py, pz = arr.coords[..., 0], arr.coords[..., 1], arr.coords[..., 2]
+        lat = np.degrees(np.arctan2(pz, np.sqrt(px ** 2. + py ** 2.)))
+        lon = np.degrees(np.arctan2(py, px))
         result = np.stack([lat, lon], axis=1)
-        return result.view(Points).set_domain(self.fwd_cs)
+        return Points(result, domain=self.fwd_cs, samples=arr.samples)
 
     def backward(self, arr: Points) -> NDArray:
         """Standard GCD->Cartesian projection."""
-        phi, theta = np.radians(arr[..., -2]), np.radians(arr[..., -1])
-        x = (np.cos(phi) * np.cos(theta)).reshape(-1, 1)
-        y = (np.cos(phi) * np.sin(theta)).reshape(-1, 1)
-        z = np.sin(phi).reshape(-1, 1)  # z is 'up'
-        if arr.shape[-1] > 2:
-            smp = np.delete(arr, [-2, -1], -1)
-            result = np.hstack([smp, x, y, z])
-        else:
-            result = np.hstack([x, y, z])
-        return result.view(Points).set_domain(self.rev_cs)
+        phi, theta = np.radians(arr.coords[..., 0]), np.radians(arr.coords[..., 1])
+        x = (np.cos(phi) * np.cos(theta)).reshape(-1,)
+        y = (np.cos(phi) * np.sin(theta)).reshape(-1,)
+        z = np.sin(phi).reshape(-1,)  # z is 'up'
+        result = np.stack([x, y, z], axis=-1)
+        return Points(result, domain=self.rev_cs, samples=arr.samples)
 
 
 if __name__ == '__main__':
@@ -50,7 +45,7 @@ if __name__ == '__main__':
     cg = CartesianGCD(reg)
 
     ps = Photo()
-    ps.load('../preparatory/world1350x675.png')
+    ps.load('../../preparatory/world1350x675.png')
     # use plate_carrée pc_px domain to adopt the ps.image (shape [675,1350,4], with RGBA)
     pc_px = p_plt.adopt(ps.img)
     sp_ll = reg.project(pc_px, [p_plt, g_sph])

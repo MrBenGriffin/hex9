@@ -1,70 +1,118 @@
 """
 Part of the H9 project
 """
-from typing import Optional
+from typing import Sequence
 import numpy as np
-from .domain import Domain
+
+# from . import ComponentDomain
+# from .domain import Domain
 
 
-class Points(np.ndarray):
+class Points:
     """
     A domain-aware collection of coordinate positions.
+    Each coordinate has a domain, and associated sample data.
     Each 'point' represents a location that may be approximate,
     depending on its Domain and formatting resolution.
-
-    Subclass of numpy.ndarray that supports a Domain context.
-    Address formats are defined by the Domain this belongs to.
     """
-    dom: Optional[Domain]
-
-    def __new__(cls, input_array, sys='wa'):
-        if input_array is None:
-            return None
-        obj = np.asarray(input_array).view(cls)
-        obj.dom = None  # Store domain sig.
-        return obj
-
-    def set_domain(self, _set: Domain):
-        """Set the domain for access to its formatters."""
-        self.dom = _set
-        return self
-
-    def domain(self):
-        """Return domain of current points."""
-        return self.dom.name if self.dom else None
-
-    def __array_finalize__(self, obj):
-        """ Used in copying, and via functions."""
-        if obj is None:
-            return
-        self.dom = getattr(obj, 'dom', None)
+    def __init__(self, coords: np.ndarray, domain=None, components=None, samples=None):
+        self.coords = coords
+        self.domain = domain  # This is the composite domain, if the
+        self.components = components
+        self.samples = samples
 
     def __getitem__(self, idx):
-        result = super().__getitem__(idx)
-        if isinstance(result, np.ndarray):
-            result = result.view(Points)
-            result.dom = self.dom
-        return result
+        if isinstance(idx, tuple):
+            raise TypeError(
+                f"2D indexing like Points[{idx}] is not supported.\n"
+                "→ Use eg `pts.coords[...]` instead if you need NumPy-style slicing."
+            )
+        coords = self.coords[idx]
+        domain = self.domain
+        components = self.components[idx] if self.components is not None and idx < len(self.components) else None
+        samples = self.samples[idx] if self.samples is not None and idx < len(self.samples) else None
+        return Points(coords, domain, components, samples)
+
+    def __len__(self):
+        return len(self.coords)
 
     def __format__(self, format_spec):
         """Allow f-string formatting."""
-        if self.dom is not None and format_spec is not None and format_spec != '':
-            main_sub = format_spec.split('.')
-            name = main_sub[0]
-            sub = main_sub[1] if len(main_sub) > 1 else ''
-            if name not in self.dom.address_formats:
-                raise ValueError(f"Unknown format '{name}' for {self.dom.name}")
-            formatter = self.dom.address_formats[name]
-            return formatter.format(self, sub)
-        return super().__format__('')
+        if self.coords is None or len(self.coords) == 0:
+            return ''
+
+        if self.domain is None:
+            return self.coords.__format__(format_spec)
+        # Identify the format and subtype or length.
+        main_sub = format_spec.split('.')
+        name = main_sub[0]
+        sub = main_sub[1] if len(main_sub) > 1 else ''
+        # Handle formatting a single row or multiple
+        is_scalar = self.coords.ndim == 1 or self.coords.shape[0] == 1
+        if is_scalar:
+            pt = self.coords[0] if self.coords.shape[0] == 1 else self.coords
+            dom = self.domain if self.components is None else self.domain.components[tuple(self.components[0])]
+            if name not in dom.address_formats:
+                return self.coords.__format__(format_spec)
+            formatter = dom.address_formats[name]
+            return formatter.format(pt, dom, sub)
+        else:
+            out = []
+            for i, coord in enumerate(self.coords):
+                dom = self.domain
+                if self.components is not None:
+                    dom = self.domain.components[tuple(self.components[i])]
+                if name not in dom.address_formats:
+                    out.append(coord.__format__(format_spec))
+                else:
+                    formatter = dom.address_formats[name]
+                    out.append(formatter.format(coord, dom, sub))
+            if len(out) == 1:
+                return out[0]
+            return '\n'.join(out)
 
     def __repr__(self):
-        base = super().__repr__()
-        domain = self.dom.name if self.dom else 'None'
-        return f"{base}, domain='{domain}'"
+        keys = ', '.join(self.samples.keys())
+        return f"Points(coords={self.coords.shape}, samples=[{keys}])"
 
-    def __bool__(self):
-        return self is not None and super().__len__() > 0
+    @classmethod
+    def concat(cls, points_list):
+        """Concatenate multiple Points instances into one."""
+        if not points_list:
+            raise ValueError('No points provided')
 
-    def __len__(self):
-        return super().__len__()
+        # Check all are Points
+        for p in points_list:
+            if not isinstance(p, cls):
+                raise TypeError(f"Expected Points, got {type(p)}")
+
+        # Check all share the same domain
+        domains = {id(p.domain) for p in points_list}
+        if len(domains) > 1:
+            raise ValueError("Cannot concatenate Points with different domains")
+
+        domain = points_list[0].domain
+
+        # Concatenate coords
+        coords = np.concatenate([p.coords for p in points_list], axis=0)
+
+        # Concatenate components if present
+        has_components = any(p.components is not None for p in points_list)
+        if has_components:
+            components = np.concatenate([
+                p.components if p.components is not None else np.zeros(len(p.coords), dtype=int)
+                for p in points_list
+            ])
+        else:
+            components = None
+
+        has_samples = any(p.samples is not None for p in points_list)
+        if has_samples:
+            samples = np.concatenate([
+                p.samples if p.samples is not None else np.zeros(len(p.coords), dtype=int)
+                for p in points_list
+            ])
+        else:
+            samples = None
+
+        return cls(coords, domain=domain, components=components, samples=samples)

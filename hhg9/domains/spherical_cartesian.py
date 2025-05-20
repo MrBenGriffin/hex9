@@ -22,5 +22,12 @@ class SphericalCartesian(Domain):
         :param pts: set of 3d Euclidean points
         :return: that the points are on the surface of the unit sphere.
         """
-        vals = np.array([pts]) if len(np.array(pts).shape) == 1 else np.array(pts)
-        return np.isclose(np.linalg.norm(vals, axis=-1, keepdims=True) - 1.0, np.zeros_like(vals))
+        return np.isclose(np.linalg.norm(pts.coords, axis=-1, keepdims=True) - 1.0, np.zeros_like(pts.coords))
+
+    def adopt(self, pts: NDArray):
+        """
+        Take an array and adopt as this domain.
+        """
+        if pts.ndim == 2 and pts.shape[1] == 3:
+            return Points(pts, self)
+        raise ValueError(f'{pts.shape} seems wrong for spherical array.')

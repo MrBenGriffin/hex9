@@ -14,78 +14,49 @@ class PlatePixelGCD(Projection):
     def __init__(self, registrar):
         super().__init__(registrar, 'pg_plt', 'p_plt', 'g_sph')
         self.e = 1e-50
+        self.p_hgt = None
+        self.p_wid = None
+        self.lon = None
+        self.lat = None
 
-    def forward(self, pix: Points) -> NDArray:
+    def set_dim(self, pts: Points):
+        """Set dimensions for plate."""
+        px, py = pts.coords[:, 0], pts.coords[:, 1]
+        self.p_hgt = np.uint32(np.max(py)+1)
+        self.p_wid = np.uint32(np.max(px)+1)
+        self.lon = np.linspace(-180+self.e, 180-self.e, self.p_wid)
+        self.lat = np.linspace(-90, 90, self.p_hgt)
+
+
+    def forward(self, pts: Points) -> NDArray:
         """
         INPUT:  Plate Carrée coordinates (origin bottom-left)
         OUTPUT: GCD
         """
-        px = pix[:, -2].astype(np.uint32)
-        py = pix[:, -1].astype(np.uint32)
-
-        # lat_min, lat_max = self.fwd_cs.lat_min, self.fwd_cs.lat_max
-        # lon_min, lon_max = self.fwd_cs.lon_min, self.fwd_cs.lon_max
-        p_hgt = self.rev_cs.height
-        p_wid = self.rev_cs.width
-
-        lon = np.linspace(-180+self.e, 180-self.e, p_wid)
-        lat = np.linspace(-90, 90, p_hgt)
-        # j = max(px)
-        lx = np.array([lon[x] for x in px])
-        ly = np.array([lat[y] for y in py])
-        # lon2d, lat2d = np.meshgrid(lon, lat)
-        # Normalize pixel coordinates
-        # lat = lat_min + (lat_max - lat_min) * (py / (p_hgt - self.e))
-        # lon = lon_min + (lon_max - lon_min) * (px / (p_wid - self.e))
-        # lon_range = (lon_max - lon_min) % 360.
-        # if lon_range == 0 and lon_max != lon_min:
-        #     lon_range = 360.
-        #
-        # lon = lon_min + lon_range * (px / (p_wid - 1))
-        # # lon = (lon + 180.) % 360. - 180.
-        ret = np.array(pix, dtype=np.float64)
-        # ret = pix.copy()
-        ret[:, -2] = ly
-        ret[:, -1] = lx
-        return ret.view(Points).set_domain(self.fwd_cs)
+        if self.lon is None:
+            self.set_dim(pts)
+        px, py = pts.coords[:, 0].astype(np.uint32), pts.coords[:, 1].astype(np.uint32)
+        lx = self.lon[px]  # longitude is <w--e>
+        ly = self.lat[py]  # latitude is <n--s>
+        ret = np.stack([ly, lx], dtype=np.float64, axis=-1)
+        return Points(ret, domain=self.fwd_cs, samples=pts.samples)
 
     def backward(self, pts: Points) -> NDArray:
         """
         Convert (lat, lon) to pixel (x, y) coordinates using plate carrée.
         Plate Carrée coordinates (origin bottom-left)
         """
-        p_hgt = self.rev_cs.height
-        p_wid = self.rev_cs.width
+        if self.lon is None:
+            raise TypeError(f"Points need to have x/y dimensions set")
 
-        lon = np.linspace(-180+self.e, 180-self.e, p_wid)
-        lat = np.linspace(-90, 90, p_hgt)
+        la = pts.coords[:, 0].astype(np.float64)
+        lo = pts.coords[:, 1].astype(np.float64)
 
-        la = pts[:, -2].astype(np.float64)
-        lo = pts[:, -1].astype(np.float64)
+        px = np.searchsorted(self.lon, lo)
+        py = np.searchsorted(self.lat, la)
 
-        px = np.searchsorted(lon, lo)
-        py = np.searchsorted(lat, la)
-
-
-        # lat_min, lat_max = self.fwd_cs.lat_min, self.fwd_cs.lat_max
-        # lon_min, lon_max = self.fwd_cs.lon_min, self.fwd_cs.lon_max
-        # p_hgt = self.rev_cs.height
-        # p_wid = self.rev_cs.width
-
-        # Handle longitude wraparound
-        # lon_range = (lon_max - lon_min) % 360.
-        # if lon_range == 0 and lon_max != lon_min:
-        #     lon_range = 360.
-        #
-        # delta_lon = lon - lon_min
-        # px = delta_lon / lon_range * (p_wid - 1)
-        # px = (lon - lon_min) / (lon_max - lon_min) * (p_wid - self.e)
-        # py = (lat - lat_min) / (lat_max - lat_min) * (p_hgt - self.e)
-
-        ret = pts.copy()
-        ret[:, -2] = px
-        ret[:, -1] = py
-        return ret.view(Points).set_domain(self.rev_cs)
+        ret = np.stack([px, py], axis=-1)
+        return Points(ret, domain=self.rev_cs, samples=pts.samples)
 
 
 if __name__ == '__main__':
@@ -107,27 +78,17 @@ if __name__ == '__main__':
     p0 = p_plt.adopt(img)  # Shape: (648, 5)
     # p0 = np.array([[i, 1799] for i in range(3600)])
 
-    # p_plt.height = 1800
-    # p_plt.width = 3600
-
-    # l0 = pg.forward(p0)
-    # p1 = pg.backward(l0)
-
     # Project to lat/lon and back
     l1 = reg.project(p0, [p_plt, g_sph])
     p1 = reg.project(l1, [g_sph, p_plt])
 
     # Compute pixel round-trip error
-    original_px = p0[:, -2:]
-    projects_px = np.array(p1[:, -2:], dtype=np.uint64)
+    original_px = np.array(p0.coords, dtype=np.uint64)
+    projects_px = np.array(p1.coords, dtype=np.uint64)
     dv = np.unique(projects_px-original_px, axis=0)
-    # p0y_count = np.unique(original_px[:, -2]).shape[0]
-    # p1y_count = np.unique(projects_px[:, -2]).shape[0]
-    # p0x_count = np.unique(original_px[:, -1]).shape[0]
-    # p1x_count = np.unique(projects_px[:, -1]).shape[0]
 
     px_error = np.linalg.norm(original_px - projects_px, axis=1)
-    p1[:, 0] = px_error
+    p1.samples = px_error
     p2 = p_plt.image(p1)
     plt.imshow(p2, origin='lower')
     plt.show()

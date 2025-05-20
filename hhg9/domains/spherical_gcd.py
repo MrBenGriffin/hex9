@@ -20,4 +20,6 @@ class SphericalGCD(Domain):
         """
         Take an array and adopt as this domain.
         """
-        return pts.view(Points).set_domain(self)
+        if pts.ndim == 2 and pts.shape[1] == 2:
+            return Points(pts, self)
+        raise ValueError(f'{pts.shape} seems wrong for latitude/longitude array.')

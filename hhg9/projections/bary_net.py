@@ -18,22 +18,25 @@ class BaryNet(Projection):
         sin_theta = np.sin(theta)
         self.matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
 
-    def forward(self, uvw: Points) -> NDArray:
+    def forward(self, arr) -> NDArray:
         """
         points from barycentric to grid.
         These should already be 2d.
         """
-        xy = uvw[..., -2:]
-        xb = xy @ self.matrix + self.offset
-        uvw[..., -2:] = xb
-        return uvw.view(Points).set_domain(self.fwd_cs)
+        xy = arr.coords if isinstance(arr, Points) else arr
+        xn = xy @ self.matrix + self.offset
+        if isinstance(arr, Points):
+            return Points(xn, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
+        else:
+            return xn
 
-    def backward(self, uvw: Points) -> NDArray:
+    def backward(self, arr: Points) -> NDArray:
         """
         points from grid to barycentric.
         """
-        xy = uvw[..., -2:]
+        xy = arr.coords if isinstance(arr, Points) else arr
         xb = (xy - self.offset) @ self.matrix.T
-        uvw[..., -2:] = xb
-        return uvw.view(Points).set_domain(self.rev_cs)
-
+        if isinstance(arr, Points):
+            return Points(xb, domain=self.rev_cs, samples=arr.samples, components=arr.components)
+        else:
+            return xb

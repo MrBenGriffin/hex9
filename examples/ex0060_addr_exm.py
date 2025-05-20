@@ -36,18 +36,19 @@ if __name__ == '__main__':
     for region, spots in locs.items():
         pos = g_sph.adopt(np.array(list(spots.values())))
         for name, ll0 in zip(spots.keys(), pos):
+            print(f'\n{name:<24} {ll0:dms}')
             sp0 = reg.project(ll0, [g_sph, c_sph])  # spherical cart
             ll1 = reg.project(sp0, [c_sph, g_sph])  # sph rt.
-            print(f'{name:<24}, ∂{np.abs(ll0-ll1):decimal} (roundtrip via c_sph)')
+            print(f'{name:<24} ∂{np.abs(ll0.coords-ll1.coords)} (roundtrip via c_sph)')
             oc0 = reg.project(ll0, [g_sph, c_sph, c_oct])  # octa.
             ll2 = reg.project(oc0, [c_oct, c_sph, g_sph])  # sph rt..
-            print(f'{name:<24}, ∂{np.abs(ll0-ll2):decimal} (roundtrip via c_oct)')
+            print(f'{name:<24} ∂{np.abs(ll0.coords-ll2.coords)} (roundtrip via c_oct)')
             bc0 = reg.project(ll0, [g_sph, c_sph, c_oct, b_oct])  # octa.
             ll3 = reg.project(bc0, [b_oct, c_oct, c_sph, g_sph])  # sph rt..
-            print(f'{name:<24}, ∂{np.abs(ll0-ll3):decimal} (roundtrip via b_oct)')
-            h9_a = f'{bc0[0]:h9}'
+            print(f'{name:<24} ∂{np.abs(ll0.coords-ll3.coords)} (roundtrip via b_oct)')
+            h9_a = f'{bc0:h9}'
             h9_r = h9.revert(h9_a)
-            h9h = f'{bc0[0]:h9.h18}'
+            h9h = f'{bc0:h9.h20}'
             ll4 = reg.project(h9_r, [b_oct, c_oct, c_sph, g_sph])  # sph rt..
-            print(f'{name:<24}, {ll0:dms}; ∂{np.abs(ll0-ll4):decimal} {h9h}; (roundtrip via {h9_a})')
+            print(f'{name:<24} {ll4:dms} via {h9_r:h9}')
 
