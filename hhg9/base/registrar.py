@@ -94,6 +94,7 @@ class Registrar:
     def _project_composites(self, pts: Points, a, a2b):
         if pts.components is None:
             pts = a.binning(pts)
+        # pts.coords = np.atleast_2d(pts.coords)
         res = np.zeros_like(pts.coords)
         uvw = (pts.components >= 0) @ (4, 2, 1)
         for sig, cmp in a.components.items():
@@ -119,6 +120,8 @@ class Registrar:
                 b_components = b.components if isinstance(b, CompositeDomain) else None
                 if not (a_components and b_components):
                     key = self._cmp_key(a, b, a_components, b_components)
+                    if key is None:
+                        raise ValueError(f'The projection for ({a} {b}) is not registered.')
                 else:
                     ab = a_components.keys() & b_components.keys()
                     if len(ab) == len(a_components):

@@ -50,8 +50,9 @@ class Points:
         # Handle formatting a single row or multiple
         is_scalar = self.coords.ndim == 1 or self.coords.shape[0] == 1
         if is_scalar:
-            pt = self.coords[0] if self.coords.shape[0] == 1 else self.coords
-            dom = self.domain if self.components is None else self.domain.components[tuple(self.components[0])]
+            pt = self.coords[0] if self.coords is not None and self.coords.shape[0] == 1 else self.coords
+            cp = self.components[0] if self.components is not None and self.components.shape[0] == 1 else self.components
+            dom = self.domain if self.components is None else self.domain.components[tuple(cp)]
             if name not in dom.address_formats:
                 return self.coords.__format__(format_spec)
             formatter = dom.address_formats[name]
@@ -74,6 +75,15 @@ class Points:
     def __repr__(self):
         keys = ', '.join(self.samples.keys())
         return f"Points(coords={self.coords.shape}, samples=[{keys}])"
+
+    def copy(self):
+        """Copy points"""
+        return Points(
+            coords=self.coords.copy(),  # Defensive deep copy
+            domain=self.domain,  # Immutable or shared as needed
+            components=self.components.copy() if self.components is not None else None,  # Safe if immutable or reference-shared
+            samples=self.samples.copy() if self.samples is not None else None
+        )
 
     @classmethod
     def concat(cls, points_list):

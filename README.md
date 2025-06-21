@@ -1,6 +1,11 @@
 A vast amount of work has been accomplished.
-I am yet to upload it all, as it's quite a mess still.
-However, here are the latest documents.
+The system in general is in place, but it needs tidying
+Documentation needs finishing - especially for geodesic.
+In May '25 I realised that the planar enumeration would not work
+so had to re-work the entire enumeration for octahedral.
+Once that worked, it occurred that I could use the grid itself
+for refining the address values.
+
 My [new documentation](enumeration.md) 
 
 

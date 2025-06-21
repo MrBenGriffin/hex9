@@ -24,6 +24,7 @@ class BaryNet(Projection):
         These should already be 2d.
         """
         xy = arr.coords if isinstance(arr, Points) else arr
+        # xn = xy + self.offset
         xn = xy @ self.matrix + self.offset
         if isinstance(arr, Points):
             return Points(xn, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
@@ -35,6 +36,7 @@ class BaryNet(Projection):
         points from grid to barycentric.
         """
         xy = arr.coords if isinstance(arr, Points) else arr
+        # xb = xy - self.offset
         xb = (xy - self.offset) @ self.matrix.T
         if isinstance(arr, Points):
             return Points(xb, domain=self.rev_cs, samples=arr.samples, components=arr.components)

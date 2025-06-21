@@ -1,54 +1,74 @@
 """
 Part of the H9 project
 This loads up a set of addresses and generates their h9 formats.
+Tested and validated against Geodetic Conversions.
+Last Tested 21 June 2025 √
 """
 import numpy as np
-from hhg9 import Registrar
-from hhg9.domains import SphericalGCD, SphericalCartesian, OctahedralCartesian, OctahedralBarycentric
-from hhg9.projections import CartesianGCD, AKOctahedralSpherical
+from hhg9 import Registrar, H9Engine
+from hhg9.domains import GeneralGCD, OctahedralCartesian, OctahedralBarycentric, EllipsoidCartesian
+from hhg9.projections import EllipsoidGCD, AKOctahedralEllipsoid
 from hhg9.formats import OctahedralH9, DMS, DecimalDegrees, DecimalCartesian
 from support import Util
+from geographiclib.geodesic import Geodesic
+
+
+def distance(p1, p2):
+    """Return difference in metres between two points"""
+    return Geodesic.WGS84.Inverse(p1[0], p1[1], p2[0], p2[1])['s12']
+
 
 if __name__ == '__main__':
     """
         Convert a set of locations into a set of h9 formats.
     """
     reg = Registrar()  # Manage Domains & Projections
-    g_sph = SphericalGCD(reg)           # GCD Spherical Domain (latitude/longitude)
-    c_sph = SphericalCartesian(reg)     # Cartesian Spherical (xyz)
+    g_gcd = GeneralGCD(reg)           # GCD Spherical Domain (latitude/longitude)
+    c_ell = EllipsoidCartesian(reg)     # Cartesian Ellipsoid (xyz)
     c_oct = OctahedralCartesian(reg)    # Cartesian Octahedron (xyz)
     b_oct = OctahedralBarycentric(reg, c_oct)  # 2d Flat for addressing.
 
     h9 = OctahedralH9()            # formatter.
-    g_sph.register_format(DMS())
-    g_sph.register_format(DecimalDegrees())
-    c_sph.register_format(DecimalCartesian())
+    h9e = H9Engine()
+    g_gcd.register_format(DMS())
+    g_gcd.register_format(DecimalDegrees())
+    c_ell.register_format(DecimalCartesian())
     b_oct.register_format(h9)
 
     # Projections/Transforms. Bary and Net are loaded by the domains.
-    CartesianGCD(reg)           # g_sph <=> c_sph
-    AKOctahedralSpherical(reg)  # c_sph <=> (c_oct <=> b_oct)
+    EllipsoidGCD(reg)             # g_sph <=> c_sph
+    ak = AKOctahedralEllipsoid(reg)   # c_sph <=> (c_oct <=> b_oct)
 
     # Support Classes
     u = Util()
-
+    ak.set_accuracy(0.000000001)  # nanometre.
     locs = u.json_load('../assets/locations.json')
+    print('Selection of famous points, projected forwards and backwards, showing deviation ∂ in nanometres.')
     for region, spots in locs.items():
-        pos = g_sph.adopt(np.array(list(spots.values())))
+        dom = b_oct.sides[region]
+        print(f'\nOctant {region} – {dom.sign}')
+        pos = g_gcd.adopt(np.array(list(spots.values())))
         for name, ll0 in zip(spots.keys(), pos):
             print(f'\n{name:<24} {ll0:dms}')
-            sp0 = reg.project(ll0, [g_sph, c_sph])  # spherical cart
-            ll1 = reg.project(sp0, [c_sph, g_sph])  # sph rt.
-            print(f'{name:<24} ∂{np.abs(ll0.coords-ll1.coords)} (roundtrip via c_sph)')
-            oc0 = reg.project(ll0, [g_sph, c_sph, c_oct])  # octa.
-            ll2 = reg.project(oc0, [c_oct, c_sph, g_sph])  # sph rt..
-            print(f'{name:<24} ∂{np.abs(ll0.coords-ll2.coords)} (roundtrip via c_oct)')
-            bc0 = reg.project(ll0, [g_sph, c_sph, c_oct, b_oct])  # octa.
-            ll3 = reg.project(bc0, [b_oct, c_oct, c_sph, g_sph])  # sph rt..
-            print(f'{name:<24} ∂{np.abs(ll0.coords-ll3.coords)} (roundtrip via b_oct)')
+            sp0 = reg.project(ll0, [g_gcd, c_ell])  # spherical cart
+            ll1 = reg.project(sp0, [c_ell, g_gcd])  # sph rt.
+            d1 = distance(ll0.coords, ll1.coords) * 1000000000.
+            print(f'{name:<24} ∂{d1:.6f}nm (roundtrip via GCD<->Ellipsoid)')
+            oc0 = reg.project(ll0, [g_gcd, c_ell, c_oct])  # octa.
+            ll2 = reg.project(oc0, [c_oct, c_ell, g_gcd])  # sph rt..
+            d2 = distance(ll0.coords, ll2.coords[0]) * 1000000000.
+            print(f'{name:<24} {ll2:dms} ∂{d2:.6f}nm (roundtrip via GCD<->Octahedral)')
+            bc0 = reg.project(ll0, [g_gcd, c_ell, c_oct, b_oct])  # octa.
+            ll3 = reg.project(bc0, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
+            d3 = distance(ll0.coords, ll3.coords[0]) * 1000000000.
+            print(f'{name:<24} {bc0} ∂{d3:.6f}nm (roundtrip via GCD<->HexGrid)')
+            cmp = tuple(bc0.components[0])
+            sdo = bc0.domain.components[cmp]  # should be same as dom
+            loc = sdo.tr
+            raw = h9e.oct_encode(bc0.coords[0], loc)
             h9_a = f'{bc0:h9}'
             h9_r = h9.revert(h9_a)
-            h9h = f'{bc0:h9.h20}'
-            ll4 = reg.project(h9_r, [b_oct, c_oct, c_sph, g_sph])  # sph rt..
-            print(f'{name:<24} {ll4:dms} via {h9_r:h9}')
+            print(f'{name:<24} {h9_a:<24} reverted: {h9_r}')
+            h9h = f'{h9_r:h9}'
+            print(f'{name:<24} {h9_a} vs revert: {h9h}')
 

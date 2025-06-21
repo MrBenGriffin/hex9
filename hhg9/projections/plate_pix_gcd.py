@@ -12,21 +12,26 @@ class PlatePixelGCD(Projection):
     """
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'pg_plt', 'p_plt', 'g_sph')
-        self.e = 1e-50
+        super().__init__(registrar, 'pg_plt', 'p_plt', 'g_gcd')
+        self.e = 1e-100
         self.p_hgt = None
         self.p_wid = None
         self.lon = None
         self.lat = None
 
-    def set_dim(self, pts: Points):
+    def set_dim(self, pts: Points, bounds=None):
         """Set dimensions for plate."""
         px, py = pts.coords[:, 0], pts.coords[:, 1]
         self.p_hgt = np.uint32(np.max(py)+1)
         self.p_wid = np.uint32(np.max(px)+1)
-        self.lon = np.linspace(-180+self.e, 180-self.e, self.p_wid)
-        self.lat = np.linspace(-90, 90, self.p_hgt)
-
+        if bounds is None:
+            self.lon = np.linspace(-180+self.e, 180-self.e, self.p_wid)
+            self.lat = np.linspace(-90, 90, self.p_hgt)
+        else:
+            # Bounds: (lon_min, lon_max, lat_min, lat_max)
+            lon_min, lon_max, lat_min, lat_max = bounds
+            self.lon = np.linspace(lon_min+self.e, lon_max-self.e, self.p_wid)
+            self.lat = np.linspace(lat_min, lat_max, self.p_hgt)
 
     def forward(self, pts: Points) -> NDArray:
         """
@@ -46,14 +51,25 @@ class PlatePixelGCD(Projection):
         Convert (lat, lon) to pixel (x, y) coordinates using plate carrée.
         Plate Carrée coordinates (origin bottom-left)
         """
-        if self.lon is None:
-            raise TypeError(f"Points need to have x/y dimensions set")
-
         la = pts.coords[:, 0].astype(np.float64)
         lo = pts.coords[:, 1].astype(np.float64)
 
-        px = np.searchsorted(self.lon, lo)
-        py = np.searchsorted(self.lat, la)
+        # if self.lon is None:
+        uo, ua = np.unique(lo, axis=0), np.unique(la, axis=0)
+        w = uo.size
+        h = ua.size
+        p_hgt = np.uint32(h + 0)
+        p_wid = np.uint32(w + 0)
+        lon = np.linspace(-180 + self.e, 180 - self.e, p_wid)
+        lat = np.linspace(-90, 90, p_hgt)
+
+        # self.p_hgt = np.uint32(h + 0)
+        # self.p_wid = np.uint32(w + 0)
+        # self.lon = np.linspace(-180 + self.e, 180 - self.e, self.p_wid)
+        # self.lat = np.linspace(-90, 90, self.p_hgt)
+
+        px = np.searchsorted(lon, lo)
+        py = np.searchsorted(lat, la)
 
         ret = np.stack([px, py], axis=-1)
         return Points(ret, domain=self.rev_cs, samples=pts.samples)
@@ -64,12 +80,12 @@ if __name__ == '__main__':
 
     from support import Photo
     from hhg9 import Registrar
-    from hhg9.domains import SphericalCartesian, SphericalGCD, PlatePixel
+    from hhg9.domains import SphericalCartesian, GeneralGCD, PlatePixel
 
     reg = Registrar()
     p_plt = PlatePixel(reg)
     c_sph = SphericalCartesian(reg)  # Cartesian Spherical (xyz)
-    g_sph = SphericalGCD(reg)  # Cartesian Spherical (xyz)
+    g_sph = GeneralGCD(reg)  # Cartesian Spherical (xyz)
     pg = PlatePixelGCD(reg)
 
     # # Create dummy image of shape (18, 36, 3)

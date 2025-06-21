@@ -7,3 +7,4 @@
 /modern/examples/*.ai
 /modern/examples/*.pdf
 /hex/examples/*.npy
+__pycache__

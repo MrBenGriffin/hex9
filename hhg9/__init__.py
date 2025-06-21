@@ -6,7 +6,7 @@ from .base import (
     Projection,
     Points,
     Registrar,
-    H9Engine,
+    H9Engine, Step,
     Grid
 )
 
@@ -15,7 +15,7 @@ __all__ = [
     "Projection",
     "Points",
     "Registrar",
-    "H9Engine",
+    "H9Engine", "Step",
     "Grid"
 ]
 

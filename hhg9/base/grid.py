@@ -81,46 +81,82 @@ class Grid:
         return gd, hp  # grid points, hex_points.
 
     @classmethod
-    def px_grid(cls, xy=(0, 0), scale: float = 1000, ud: str = 'Λ'):
-        """Return a pixel grid of points within an equilateral triangle centered at (cx, cy) in pixel space"""
-        side_length = np.sqrt(2) * scale
-        height = np.sqrt(3) / 2 * side_length
-        cx, cy = xy
-        cx *= scale
-        cy *= scale
-        # This seems... odd.
-        dy = -2 / 3 * height if ud == 'Λ' else 2 / 3 * height - height
-        oy = cy + dy
-        ox = cx - side_length / 2
+    def sq_grid(cls, scale: float = 1000, ud: str = 'Λ'):
+        """
+        Return a rectilinear grid of points within an equilateral triangle centered
+        at (cx, cy) in pixel space conforming to the barycentric projection of the side of a unit octahedron.
+        When calling this for a net, remember to use the net's ΛV not the barycentric!
+        """
+        from hhg9 import H9Engine
 
-        # Triangle vertices in real coordinates
-        if ud == 'Λ':
-            v0 = np.array([ox + side_length / 2, oy])  # apex
-            v1 = np.array([ox, oy + height])  # bottom-left
-            v2 = np.array([ox + side_length, oy + height])  # bottom-right
+        h9 = H9Engine()
+        wid = scale
+        hgt = int(scale * h9.RH)
+        # generate a covering rectangle.
+        fl, cl = (h9.ΛF, h9.ΛC) if ud == 'Λ' else (h9.VF, h9.VC)
+        yl = np.linspace(fl, cl, num=hgt)
+        xl = np.linspace(h9.TL, h9.TR, num=wid)
+        xx, yy = np.meshgrid(xl, yl)
+        rec = np.stack((xx.ravel(), yy.ravel()), axis=1)
+        # restrict by validity.
+        trx = h9.valid(rec, ud)
+        return rec[trx]
+
+    @classmethod
+    def in_quad(cls, points, quad):
+        """
+        Vectorized check if each point in `points` is inside the convex quadrilateral `quad`.
+
+        Parameters:
+            points: (n, 2) NumPy array of n points to test.
+            quad: List or array of 4 points (x, y) in clockwise or counter-clockwise order.
+
+        Returns:
+            A boolean NumPy array of length n indicating for each point whether it is inside.
+        """
+        quad = np.asarray(quad)
+        points = np.atleast_2d(points)  # Ensure shape (N, 2)
+
+        def cross2d(a, b):
+            """Compute the 2D cross product: a_x * b_y - a_y * b_x"""
+            return a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]
+
+        n = points.shape[0]
+        inside = np.ones(n, dtype=bool)
+
+        for i in range(4):
+            a = quad[i]
+            b = quad[(i + 1) % 4]
+            ab = b - a
+            ap = points - a
+            cp = cross2d(np.tile(ab, (n, 1)), ap)
+            if np.any(cp > 0) and np.any(cp < 0):
+                # Points on both sides of the edge ⇒ outside
+                inside &= (cp >= 0) if np.all(cp >= 0) else (cp <= 0)
+        return inside
+
+    @classmethod
+    def qa_grid(cls, quad, scale: float = 1000):
+        """
+        Return a rectilinear grid of points within a quadrilateral.
+        """
+        quad = np.asarray(quad)
+        minx, miny, maxx, maxy = quad[..., 0].min(), quad[..., 1].min(), quad[..., 0].max(), quad[..., 1].max()
+        # generate a covering rectangle.
+        w = maxx-minx
+        h = maxy-miny
+        if w > h:
+            hgt = scale
+            wid = np.uint32((w / h) * hgt)
+            # hgt = np.uint32(scale / h)
+            # wid = np.uint32((w/h) * hgt)
         else:
-            v0 = np.array([ox + side_length / 2, oy + height])  # apex (down)
-            v1 = np.array([ox, oy])  # top-left
-            v2 = np.array([ox + side_length, oy])  # top-right
-
-        # Bounding box in integer pixel space
-        x_min = int(np.floor(min(v0[0], v1[0], v2[0])))
-        x_max = int(np.ceil(max(v0[0], v1[0], v2[0])))
-        y_min = int(np.floor(min(v0[1], v1[1], v2[1])))
-        y_max = int(np.ceil(max(v0[1], v1[1], v2[1])))
-
-        # Precompute triangle area
-        def edge(a, b, p):
-            return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
-
-        pixels = []
-        for y in range(y_min, y_max):
-            for x in range(x_min, x_max):
-                p = np.array([x + 0.5, y + 0.5])  # pixel center
-                w0 = edge(v1, v2, p)
-                w1 = edge(v2, v0, p)
-                w2 = edge(v0, v1, p)
-                if (w0 >= 0 and w1 >= 0 and w2 >= 0) or (w0 <= 0 and w1 <= 0 and w2 <= 0):
-                    pixels.append((x, y))
-
-        return np.array(pixels) / scale
+            wid = scale  # np.uint32(scale / w)
+            hgt = np.uint32((h/w) * wid)
+        yl = np.linspace(miny, maxy, num=hgt)
+        xl = np.linspace(minx, maxx, num=wid)
+        xx, yy = np.meshgrid(xl, yl)
+        rec = np.stack((xx.ravel(), yy.ravel()), axis=1)
+        # restrict by validity.
+        trx = cls.in_quad(rec, quad)
+        return wid, hgt, rec[trx]

@@ -13,11 +13,10 @@ class OctantBary(Projection):
     def __init__(self, registrar, base, o_name, b_name):
         super().__init__(registrar, f'{base}_ob', o_name, b_name)
         self.matrix = None
-        self.ud = self.fwd_cs.ud
+        self.mode = self.fwd_cs.mode
         # 'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
         self.z_off = 1.0 / np.sqrt(3)
-        rot_z = -np.pi / 3.  # -120º; As we define NS as apex we need to orient.
-        # rot_z = rot_z if self.ud == 'Λ' else +np.pi / 3
+        rot_z = self.fwd_cs.th  # -120º As we define NS as apex we need to orient.
         ct, st = np.cos(rot_z), np.sin(rot_z)
         self.orient = np.array([[ct, -st, 0], [st, ct, 0], [0, 0, 1.]])
 

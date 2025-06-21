@@ -9,7 +9,7 @@ from .projection import Projection
 from .points import Points
 from .composite import ComponentDomain, CompositeDomain
 from .registrar import Registrar
-from .h9_engine import H9Engine
+from .h9_engine import H9Engine, Step
 from .grid import Grid
 
 
@@ -20,6 +20,6 @@ __all__ = [
     "Projection",
     "Points",
     "Registrar",
-    "H9Engine",
+    "H9Engine", "Step",
     "Grid"
 ]

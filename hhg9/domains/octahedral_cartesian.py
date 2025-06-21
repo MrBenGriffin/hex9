@@ -12,8 +12,9 @@ class OctantCartesian(ComponentDomain):
     This a 3D side of an Octahedron.
     """
 
-    def __init__(self, registrar, name: str, sign: tuple):
+    def __init__(self, registrar, dom, name: str, sign: tuple):
         super().__init__(registrar, name)
+        self.dom = dom
         self.points = None
         self._sign = sign
 
@@ -59,15 +60,11 @@ class OctahedralCartesian(CompositeDomain):
             triple = np.asarray([self.vertices[s] for s in face_arr])
             sign = tuple(np.sum(triple, axis=1).tolist())
             sig = f'{self.name}:{face}'
-            self.sides[face] = OctantCartesian(registrar, sig, sign)
+            self.sides[face] = OctantCartesian(registrar, self, sig, sign)
             self.sides[face].points = triple
             self.sides[face].sig = sign
             self.signs[sign] = face  # Store based on sum signature
             self.components[sign] = self.sides[face]
-
-        # Now set the ordered keys for fast octal identification (see binning below).
-        # self.skeys = np.array([self.signs[k] for k in sorted(self.signs.keys())])
-        # init = True
 
     @classmethod
     def valid(cls, pts: NDArray) -> NDArray:

@@ -2,14 +2,14 @@
 Part of the H9 project
 """
 import numpy as np
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from numpy.typing import NDArray
 from .domain import Domain
 from .point_format import PointFormat
 from .points import Points
 
 
-class CompositeDomain(Domain):
+class CompositeDomain(Domain, ABC):
     """
         A case where multiple domains are managed as a single group.
         For example, 8 octants for a sphere.
@@ -21,7 +21,8 @@ class CompositeDomain(Domain):
 
     def binning(self, pts: Points, sig: tuple = None):
         """Return points with domain set by composite set_domain. This can be overridden"""
-        pts.components = np.sign(pts.coords).astype(np.int8)
+        pts.coords = np.atleast_2d(pts.coords)
+        pts.components = np.atleast_2d(np.sign(pts.coords).astype(np.int8))
         return pts
 
     def register_format(self, af: PointFormat):
@@ -42,7 +43,7 @@ class CompositeDomain(Domain):
         Take an array and adopt as this domain.
         """
         good = self.where_valid(pts)
-        pts = Points(good, domain=self)
+        pts = Points(good, self)
         pts.components = np.zeros((good.shape[0], 3), dtype='b')  # signed byte.  was using <U9 but seems crazy.
         return self.binning(pts)
 
@@ -57,3 +58,13 @@ class ComponentDomain(Domain):
         """Decorator to register an AddressFormat for each component."""
         super().register_format(af)
         af.component[self.name] = self
+
+    def adopt(self, pts: NDArray):
+        """
+        Take an array and adopt as this domain.
+        """
+        good = self.where_valid(pts)
+        pts = Points(good, domain=self.dom)
+        pts.components = np.zeros((good.shape[0], 3), dtype='b')  # signed byte.  was using <U9 but seems crazy.
+        pts.components += self.sig()
+        return pts

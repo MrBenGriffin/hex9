@@ -1,5 +1,6 @@
 """
 Part of the H9 project
+# June 2025 currently failing.
 Compose pixel grids of each barycentric triangle for the octahedral net and normalise.
 Project each point of the grid onto GCD and grab sample for each.
 Use the sample on the octahedral net and save the result into a png.
@@ -26,18 +27,32 @@ if __name__ == '__main__':
     # Support Classes
     g = Grid()
     d = Display()
+    rng = np.random.default_rng()
 
-    scale = 100
-    f_org = [g.px_grid(p.offset, scale, p.rev_cs.ud) for p in n_oct.projs.values()]
-    pts = n_oct.adopt(np.vstack(f_org))  # These are our net points.
-    # project the grid onto barycentric octahedron.
-    ref = reg.project(pts, [n_oct, b_oct])  # ref. addresses on a cartesian unit sphere
-    # adr = f'{ref:h9}'
-    h9a = h9.format_arr(ref, 'i2', False)
-    pts.samples = h9.format_arr(ref, 'i2', False)
-    d.show_pts_2d(pts)
+    scale = 2700  #
+    cmap = plt.colormaps.get_cmap('terrain')
+    cols = cmap(np.linspace(0, 1, 12))
+    fig = plt.figure(figsize=(17.78, 10.17), dpi=100, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    f_org = []
+    f_org = [g.sq_grid(scale, p.fwd_cs.mode)+p.offset for p in n_oct.projs.values()]
+    values = np.vstack(f_org)
+    rng.shuffle(values)
+    pts = n_oct.adopt(values)  # These are our net points.
+    # for p in n_oct.projs.values():
+    #     mode = p.fwd_cs.mode
+    #     # mpi = p.theta % (2 * np.pi)
+    #     # if mpi < 1e-8:
+    #     #     ud = p.rev_cs.mode
+    #     # else:
+    #     #     ud = {'V': 'Λ', 'Λ': 'V'}[p.rev_cs.mode]
+    #     f_org.append([g.sq_grid(scale, mode)+p.offset])
 
-    # img = n_oct.image(ref)
-    # plt.imshow(img, interpolation='nearest')
-    # plt.show()
-    # plt.imsave(f'net_cmap2_{scale}.png', img)
+    ref = reg.project(pts, [n_oct, b_oct])  # ref. barycentric octahedron
+    layer = 4  # The layer of hexagons to colour. 0=12, 1=108 hexes.
+    addr = h9.format_arr(ref, f'x{layer}', False)
+    ai = np.array([int(a[layer]) for a in addr])
+    cph = reg.project(ref, [b_oct, c_oct])
+    pts.samples = cols[ai]
+    img = n_oct.image(pts, (6681, 4959))
+    plt.imsave(f'ex0100_net_{layer}.png', img)

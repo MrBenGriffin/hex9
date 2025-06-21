@@ -4,6 +4,7 @@ Part of the H9 project
 from abc import ABC, abstractmethod
 import numpy as np
 from numpy.typing import NDArray
+
 from .point_format import PointFormat
 
 
@@ -15,7 +16,8 @@ class Domain(ABC):
 
     def __init__(self, registrar, name: str):
         self.name = name
-        registrar.register_domain(self)
+        if registrar is not None:
+            registrar.register_domain(self)
         self.default_format = None
         self.address_formats = {}  # class static
 
@@ -57,7 +59,7 @@ class Domain(ABC):
         """
         from .points import Points
         good = self.where_valid(pts)
-        return good.view(Points).set_domain(self)
+        return Points(good, self)
 
     def __repr__(self):
         return f'{self.name}'

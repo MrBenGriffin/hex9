@@ -14,8 +14,10 @@ class OctantNet(ComponentDomain):
     This a 2D side of an Octant that belongs to a Net.
     Validity should be easy enough since we have the 3 points that define it.
     """
-    def __init__(self, registrar, name: str, sign: tuple):
+    def __init__(self, registrar, dom, name: str, sign: tuple, mode: str):
         super().__init__(registrar, name)
+        self.dom = dom
+        self.mode = mode
         self._sign = sign
 
     def sig(self) -> tuple:
@@ -46,24 +48,28 @@ class OctahedralNet(CompositeDomain):
         self.glx, self.gly = (0, self.width), (0, self.height)
         self.sides = {}
         self.projs = {}
-        # self.signs = {}
         grid = {
-            (+1, +1, +1): (+0, 3., 4.),  # NEA
-            (-1, +1, +1): (-1, 4., 5.),  # NEP
-            (+1, -1, +1): (+1, 2., 5.),  # NWA
-            (-1, -1, +1): (+2, 2., 7.),  # NWP
-            (+1, +1, -1): (+3, 3., 2.),  # SEA
-            (-1, +1, -1): (+2, 5., 4.),  # SEP
-            (+1, -1, -1): (-2, 1., 4.),  # SWA
-            (-1, -1, -1): (+3, 6., 5.)   # SWP
+            (+1, +1, +1): (3., 4., 3),  # NEA
+            (-1, +1, +1): (4., 5., 5),  # NEP
+            (+1, -1, +1): (2., 5., 1),  # NWA
+            (-1, -1, +1): (2., 7., 5),  # NWP
+            (+1, +1, -1): (3., 2., 3),  # SEA
+            (-1, +1, -1): (5., 4., 5),  # SEP
+            (+1, -1, -1): (1., 4., 1),  # SWA
+            (-1, -1, -1): (6., 5., 3)   # SWP
         }
         for sign, val in grid.items():
             side = self.o.signs[sign]
-            th, gx, gy = val
+            bary = b_oct.sides[side]
+            gx, gy, th = val
+            n_theta = (th % 6) * np.pi/3.
+            o_theta = (n_theta + bary.th) % np.pi
+            mode = {'V': 'Λ', 'Λ':'V'}[bary.mode]  # TODO Fix properly.
             n_sig = f'{self.name}:{side}'
             b_sig = f'{b_oct.name}:{side}'
-            self.sides[sign] = OctantNet(registrar, n_sig, sign)
-            self.projs[side] = BaryNet(registrar, side, b_sig, n_sig, th * self.rt, (gx * self.gw, gy * self.gh))
+
+            self.sides[sign] = OctantNet(registrar, self, n_sig, sign, mode)
+            self.projs[side] = BaryNet(registrar, side, b_sig, n_sig, n_theta, (gx * self.gw, gy * self.gh))
             self.components[sign] = self.sides[sign]
         init = True
 
@@ -136,14 +142,17 @@ class OctahedralNet(CompositeDomain):
             self.sides[side].register_format(af)
 
     @classmethod
-    def image(cls, pts: Points) -> NDArray:
+    def image(cls, pts: Points, dim=None) -> NDArray:
         """
         return the image that these points represent.
         """
         xs, ys = pts.coords[:, 0], pts.coords[:, 1]
-        ux, uy = np.unique(xs, axis=0), np.unique(ys, axis=0)
-        w = ux.size
-        h = uy.size
+        if dim is None:
+            ux, uy = np.unique(xs, axis=0), np.unique(ys, axis=0)
+            w = ux.size
+            h = uy.size
+        else:
+            w, h = dim
         x0 = np.min(xs)
         y0 = np.min(ys)
         y_adj = (h-1e-6)/(np.max(ys)-y0)

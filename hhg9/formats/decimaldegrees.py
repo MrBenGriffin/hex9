@@ -28,5 +28,5 @@ class DecimalDegrees(PointFormat):
         """
         vals = np.array([arr]) if len(arr.shape) == 1 else arr
         if len(vals.shape) == 1:
-            return ''.join([f'{p[0]:.7f}, {p[1]:.7f}' for p in vals[..., :]])
-        return '\n'.join([f'{p[0]:.7f}, {p[1]:.7f}' for p in vals[..., :]])
+            return ''.join([f'{p[0]:.12f}, {p[1]:.12f}' for p in vals[..., :]])
+        return '\n'.join([f'{p[0]:.12f}, {p[1]:.12f}' for p in vals[..., :]])

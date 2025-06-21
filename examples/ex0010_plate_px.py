@@ -1,12 +1,12 @@
 """
 Part of the H9 project
-First example :Round trip of a Plate Carrée png.
+First example roundtrip of a Plate Carrée <=> PlatePixel
 Note that it converts pixel coordinates to (x,y) cartesian coordinates.
+Last Tested 21 June 2025 √
 """
-
+from matplotlib import image, pyplot as plt
 from hhg9 import Registrar
 from hhg9.domains import PlatePixel
-from support import Photo, Display
 
 if __name__ == '__main__':
     """
@@ -14,16 +14,15 @@ if __name__ == '__main__':
     show it, then convert back and save.
     """
     reg = Registrar()  # Manage Domains & Projections
-    # Register the PlatePixel Domain
     p_plt = PlatePixel(reg)
 
-    d = Display()  # simple support display class
-    ps = Photo()   # simple support photo class
-    ps.load('../preparatory/world1350x675.png')  # RGB image
-
-    plate = p_plt.adopt(ps.img)  # ps.img shape is [675,1350,4]
-    d.show_pts_2d(plate)         # plate shape is [675*1350,6] (the final columns being the x,y)
+    img = image.imread(f'src/world1350x675.png', 'png')
+    plate = p_plt.adopt(img)     # ps.img shape is [675,1350,4]
     img = p_plt.image(plate)     # convert points back to an [675,1350,4] image.
-    ps.img = img
-    ps.save('px_map')
+
+    # Use matplotlib to display.
+    fig = plt.figure(figsize=(18, 9), dpi=100, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    plt.imshow(img)
+    plt.show()
 

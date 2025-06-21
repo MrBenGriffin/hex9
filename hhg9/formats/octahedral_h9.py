@@ -16,7 +16,7 @@ class OctahedralH9(PointFormat):
     def __init__(self):
         super().__init__('h9')
         self.engine = H9Engine()
-        self.width = 20
+        self.width = 32
         self.subs = {
             'x': Style.HEX,
             'f': Style.FULL,
@@ -38,11 +38,11 @@ class OctahedralH9(PointFormat):
         if len(address) < 3:
             raise ValueError("Invalid address")
         geo, val = address[:3], address[3:]
-        if geo not in self.composite.sides:
-            raise ValueError("Invalid Octahedral Side Region (should be e.g. 'NWP'")
-        region = self.composite.sides[geo]
-        res = self.engine.decode(val)
-        return Points(np.array([res]), self.composite, np.array([region.sign]))
+        if geo not in self.composite.h9map:
+            raise ValueError("Invalid Octahedral Side Region (should be e.g. 'NAV'")
+        hp, oc2, sign, name = self.composite.h9map[geo]
+        res = self.engine.oct_decode(f'{hp}{val}', oc2)
+        return Points(np.array([res]), self.composite, np.array([sign]))
 
     def format(self, arr: Points, dom, sub: str):
         """
@@ -58,11 +58,13 @@ class OctahedralH9(PointFormat):
                 sub = sub[1:]
             if len(sub) > 1:
                 width = int(sub)
-        ad = self.engine.encode(arr, dom.c1, width, style)
+        ad = self.engine.oct_encode(arr, dom.tr, width, style)
         if ad is None:
             return f'XXX:{arr[0]},{arr[1]}'
         if hasattr(dom, 'geo'):
-            return dom.geo + dom.m1[ad[0]]+ad[1:]
+            ofs = 2 if style == Style.FULL else 1
+            geo9 = f'{dom.geo[ad[0]]}{dom.mode}{ad[ofs:]}'
+            return geo9
         return ad
 
     def format_arr(self, pts: Points, sub: str = '', prefix=True):
@@ -85,14 +87,17 @@ class OctahedralH9(PointFormat):
         res = []
         for pt, c in zip(arr, reg):
             context = dom.components[tuple(c)]
-            m1 = context.m1
-            ge = context.geo
-            ad = self.engine.encode(pt, context.c1, width, style)
+            ad = self.engine.oct_encode(pt, context.tr, width, style)
             if ad is not None:
-                base = m1[ad[0]]+ad[1:]
                 if prefix:
-                    base = ge+base
-                res.append(base)
+                    res.append(f'{context.geo[ad[0]]}{context.mode}{ad[1:]}')
+                else:
+                    tri = context.tr.index(ad[0])
+                    if context.mode == 'V':
+                        cx = [8, 5, 0][tri]
+                    else:
+                        cx = [8, 0, 5][tri]
+                    res.append(f'{cx}{ad[1:]}')
             else:
                 res.append('0' * width)
         if style == style.NUMERIC:

@@ -7,8 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from hhg9 import Points
-from hhg9.base import CompositeDomain
-from hhg9.base import ComponentDomain
+from hhg9.base import CompositeDomain, ComponentDomain, H9Engine
 from hhg9.base.point_format import PointFormat
 from hhg9.domains import OctahedralCartesian
 from hhg9.projections import OctantBary
@@ -20,19 +19,19 @@ class OctantBarycentric(ComponentDomain):
     Validity should be easy enough since we have the 3 points that define it.
     """
 
-    def __init__(self, registrar, name: str, sign, cc: tuple):
+    def __init__(self, registrar, dom, name: str, sign, cc: tuple):
         super().__init__(registrar, name)
+        self.dom = dom
         self.sign = sign
-        self.c1 = cc[0]
-        self.ud = cc[1]  #'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
-        self.c2 = cc[2]
-        self.cm = cc[3]
-        self.m1 = {
-            self.c2[0]: self.cm[0],
-            self.c2[1]: self.cm[1],
-            self.c2[2]: self.cm[2]
-        }
-        self.geo = name[-3:]
+        self.th = (cc[0] % 6) * np.pi / 3.
+        self.tr = cc[1]
+        self.mode = cc[2]   # 'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
+        self.geo = {k: v for k, v in zip(self.tr, cc[3])}  # in c1 (orientation) order.
+
+    def _add(self, h9m):
+        for k, v in self.geo.items():
+            key = f'{v}{self.mode}'
+            h9m[key] = (k, self.tr, self.sign, self.name)
 
     def sig(self) -> tuple:
         return self.sign
@@ -40,9 +39,9 @@ class OctantBarycentric(ComponentDomain):
     def valid(self, pts: NDArray) -> NDArray:
         """
         Return an array of bools according to the validity criterion
-        :param pts: set of 3d Euclidean points
+        :param pts: set of 2d Euclidean points
         """
-        raise NotImplementedError
+        return H9Engine.in_scope(H9Engine.R3 * pts[..., 0], pts[..., 1], self.mode)
 
 
 class OctahedralBarycentric(CompositeDomain):
@@ -55,21 +54,26 @@ class OctahedralBarycentric(CompositeDomain):
         self.sides = {}
         self.projs = {}
         self.signs = {}  # o.signs  # These are used to tie the projection.
+        self.h9map = {}
+        # Theta is to ensure that each octant has a pole at its apex.
+        # The pole is C2:0
         for sign, face in o.signs.items():
-            c2 = {
-                # AP EW  NS Λ: 021 102 210 // V:201 012 120
-                (+1, +1, +1): ('120', 'V', '372', '372',),  # 'NEA': 3x1+0,3x2+1,3x0+2=372
-                (-1, +1, +1): ('102', 'Λ', '318', '318',),  # 'NEP': 3x1+0,3x0+1,3x2+2=318
-                (+1, -1, +1): ('210', 'Λ', '642', '642',),  # 'NWA': 3x2+0,3x1+1,3x0+2=642
-                (-1, -1, +1): ('120', 'V', '372', '147',),  # 'NWP': MAP 120 [372] TO 147
-                (+1, +1, -1): ('021', 'Λ', '075', '174',),  # 'SEA': MAP 021 [075] TO 174
-                (-1, +1, -1): ('012', 'Λ', '048', '048',),  # 'SEP': 3x0+0,3x1+1,3x2+2=048
-                (+1, -1, -1): ('201', 'V', '615', '615',),  # 'SWA': 3x2+0,3x0+1,3x1+2=615
-                (-1, -1, -1): ('021', 'Λ', '075', '075',)  # 'SWP': 3x0+0,3x2+1,3x1+2=075
+            props = {
+                # Octahedral Triangle Identities differ.
+                # AP EW  NS    θ  V
+                (+1, +1, +1): (2, '047', 'V', ('EA', 'NA', 'NE')),  # 'NEA' N:5, E:8, A: 0
+                (-1, +1, +1): (5, '085', 'Λ', ('EP', 'NE', 'NP')),  # 'NEP' N:4, E:7, P: 0
+                (+1, -1, +1): (5, '085', 'Λ', ('WA', 'NA', 'NW')),  # 'NWA' N:4, W:7, A: 0
+                (-1, -1, +1): (2, '047', 'V', ('WP', 'NP', 'NW')),  # 'NWP' N:5, W:8, P: 0
+                (+1, +1, -1): (5, '085', 'Λ', ('EA', 'SE', 'SA')),  # 'SEA' S:4, E:7, A: 0
+                (-1, +1, -1): (2, '047', 'V', ('EP', 'SP', 'SE')),  # 'SEP' S:5, E:8, P: 0
+                (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW')),  # 'SWA' S:5, W:8, A: 0
+                (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'))   # 'SWP' S:4, W:7, P: 0
             }
             b_sig = f'{self.name}:{face}'
             o_sig = o.sides[face].name
-            self.sides[face] = OctantBarycentric(registrar, b_sig, sign, c2[sign])
+            self.sides[face] = OctantBarycentric(registrar, self, b_sig, sign, props[sign])
+            self.sides[face]._add(self.h9map)
             self.projs[face] = OctantBary(registrar, face, o_sig, b_sig)
             self.signs[sign] = face
             self.components[sign] = self.sides[face]
@@ -84,7 +88,7 @@ class OctahedralBarycentric(CompositeDomain):
         scale_factors = np.sqrt([2, 6, 3])[:, np.newaxis]
 
         # These are set in order of rotation, starting with NEA
-        sigs = [(1, 1), (-1, 1),  (-1, -1),  (1, -1)]
+        sigs = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
         for sig in sigs:
             n_sign = tuple([*sig, 1])
             s_sign = tuple([*sig, -1])
@@ -141,6 +145,8 @@ class OctahedralBarycentric(CompositeDomain):
         :param sig face required...
         We do need to override this, because sign means something else here.
         """
+        if sig is None:
+            rx = True
         raise NotImplementedError('Barycentric Octants use the same dimension for each side.')
 
     def register_format(self, af: PointFormat):
