@@ -49,8 +49,8 @@ if __name__ == '__main__':
     #     f_org.append([g.sq_grid(scale, mode)+p.offset])
 
     ref = reg.project(pts, [n_oct, b_oct])  # ref. barycentric octahedron
-    layer = 4  # The layer of hexagons to colour. 0=12, 1=108 hexes.
-    addr = h9.format_arr(ref, f'x{layer}', False)
+    layer = 3  # The layer of hexagons to colour. 0=12, 1=108 hexes.
+    addr = h9.format_arr(ref, f'x{layer+1}', False)
     ai = np.array([int(a[layer]) for a in addr])
     cph = reg.project(ref, [b_oct, c_oct])
     pts.samples = cols[ai]
