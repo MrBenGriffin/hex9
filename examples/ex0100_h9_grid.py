@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-# June 2025 currently failing.
+# June 2025 fixed..
 Compose pixel grids of each barycentric triangle for the octahedral net and normalise.
 Project each point of the grid onto GCD and grab sample for each.
 Use the sample on the octahedral net and save the result into a png.
