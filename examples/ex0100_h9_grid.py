@@ -32,13 +32,12 @@ if __name__ == '__main__':
     scale = 2700  #
     cmap = plt.colormaps.get_cmap('terrain')
     cols = cmap(np.linspace(0, 1, 12))
-    fig = plt.figure(figsize=(17.78, 10.17), dpi=100, frameon=False)
-    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     f_org = []
     f_org = [g.sq_grid(scale, p.fwd_cs.mode)+p.offset for p in n_oct.projs.values()]
     values = np.vstack(f_org)
     rng.shuffle(values)
     pts = n_oct.adopt(values)  # These are our net points.
+    # This logic could be migrated against the TODO in n_oct.
     # for p in n_oct.projs.values():
     #     mode = p.fwd_cs.mode
     #     # mpi = p.theta % (2 * np.pi)
@@ -50,9 +49,10 @@ if __name__ == '__main__':
 
     ref = reg.project(pts, [n_oct, b_oct])  # ref. barycentric octahedron
     layer = 3  # The layer of hexagons to colour. 0=12, 1=108 hexes.
-    addr = h9.format_arr(ref, f'x{layer+1}', False)
-    ai = np.array([int(a[layer]) for a in addr])
-    cph = reg.project(ref, [b_oct, c_oct])
-    pts.samples = cols[ai]
-    img = n_oct.image(pts, (6681, 4959))
-    plt.imsave(f'ex0100_net_{layer}.png', img)
+    addr = h9.format_arr(ref, f'x11', False)
+    # cph = reg.project(ref, [b_oct, c_oct])
+    for layer in range(11):
+        ai = np.array([int(a[layer]) for a in addr])
+        pts.samples = cols[ai]
+        img = n_oct.image(pts, (6681, 4959))
+        plt.imsave(f'ex0100_net_{layer}.png', img)
