@@ -16,7 +16,7 @@ from hhg9.projections import PlatePixelGCD, AKOctahedralEllipsoid
 from support import Photo, Display, Util
 
 
-def load_cache(pc_map: str = 'world360x180'):
+def load_cache(pc_map: str = 'world1350x675'):
     """
     Load cached octahedral and colours from original.
     cf. 0041 / 0042
@@ -56,14 +56,10 @@ if __name__ == '__main__':
     ps = Photo()
     u = Util()
 
-    # None of this is the 'normal' way of projecting - it's used merely as a test to show
-    # that the points do actually map correctly.  Normally we project back from octahedral
-    # and use an image as a sample source. Here we are projecting every pixel onto the octahedral.
-    oc_px = load_cache('world360x180')  #'world1350x675' on octahedral, with samples.
+    oc_px = load_cache('world1350x675')  # 'world1350x675' on octahedral, with samples.
     on_px = reg.project(oc_px.copy(), [c_oct, b_oct, n_oct])
-    d.show_pts_2d(on_px)  # net.
-
-    img = p_plt.image(on_px, (360, 180))   # convert points back to an image.
+    d.show_pts_2d(on_px, ratio=1.34724743)  # net.
+    img = p_plt.image(on_px, (1350, 675))   # convert points back to an image.
     plt.imshow(img, origin='upper')
     plt.show()
 

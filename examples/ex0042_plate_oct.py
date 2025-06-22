@@ -38,7 +38,7 @@ if __name__ == '__main__':
     ps = Photo()
 
     # Load cached octahedral and colours from original.
-    pc_map = 'world360x180'
+    pc_map = 'world1350x675'
     cache = Path(f'src/{pc_map}.npy')
     if not cache.exists():
         raise ValueError('Far better to load a cache. See ex_0041')
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # Now loaded cached octahedral and colours from original.
     d.show_pts_3d(oc_px)
     sp_pl = reg.project(oc_px, [c_oct, c_ell, g_gen, p_plt])
-    rmg = p_plt.image(sp_pl, (360, 180))     # convert points back to an [1350,675,3] image.
+    rmg = p_plt.image(sp_pl, (1350, 675))     # convert points back to an [1350,675,3] image.
     fig = plt.figure(figsize=(18, 9), dpi=100, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     plt.imshow(rmg)
