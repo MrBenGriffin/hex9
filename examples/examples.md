@@ -234,7 +234,6 @@ now generates the relevant half-hexagon for each address, then using the
 relevant image as a sample source, generates the half-tile represented by 
 the hexagon and it's mode.
 
-
 ### ex0090_smp_grid
 This demonstrates using a plate carree image as a sample source.
 The source image is loaded and projected onto WGS84 Ellipsoid, and 
@@ -242,4 +241,16 @@ registered into a KDTree.
 The octahedral net pixels are identified then a copy is projected to 
 EllipsoidGCD, and query the KDTree for a sample value. 
 These samples may then be used to display the Octahedral Net.
+
+### ex0094_bary
+This renders the individual barycentric triangles which are the rotated 
+faces of the octahedron onto 2D space and form the basis of hexgrid 
+calculations. They serve several purposes for debugging and address 
+verification but are probably not so interesting beyond that.
+
+### ex0100_h9
+This example renders each pixel into it's hexgrid address, and then colours 
+the pixel according to a digit location, for the first 5 address points.
+It demonstrates how the grid address maps onto the octahedron.
+
 
