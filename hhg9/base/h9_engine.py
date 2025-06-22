@@ -164,33 +164,34 @@ class H9Engine:
                         self.next_oc2[(o_mo, c1, ch, cm)] = cc
 
     @classmethod
-    def poly(cls, c1=0, ud='Λ', d3=False) -> np.ndarray:
+    def poly(cls, c1=0, mode='Λ', d3=False) -> np.ndarray:
         """
         Return the half-hex coordinates of c1 for the triangle.
         In accordance with Octahedron_Net dimensions.
         Probably correct only for CHIRAL=1
         :param c1: the c1 required (0,1,2)
-        :param ud: up/down
+        :param mode: up/down
         :param d3: return 3d results.
         :return: the half-hex coordinates of c1 for the triangle
         """
         u, v = cls.U, cls.H / 3.
         pts = {
+            # Clockwise. 5th pt is half-way along the long part.
             'Λ': [
-                [(-1, -1), (0, 0), (2, 0), (3, -1)],
-                [(-1, 1), (0, 0), (-1, -1), (-3, -1)],
-                [(2, 0), (0, 0), (-1, 1), (0, 2)]
+                [(-1, -1), (0, 0), (2, 0), (3, -1), (1, -1)],
+                [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-2, -0)],
+                [(2, 0), (0, 0), (-1, 1), (0, 2), (1, 1)]
             ],
             'V': [
-                [(3, 1), (2, 0), (0, 0), (-1, 1)],
-                [(0, -2), (-1, -1), (0, 0), (2, 0)],
-                [(-3, 1), (-1, 1), (0, 0), (-1, -1)]
+                [(3, 1), (2, 0), (0, 0), (-1, 1), (1, 1)],
+                [(0, -2), (-1, -1), (0, 0), (2, 0), (1, -1)],
+                [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-2, 0)]
             ]
         }
         if not d3:
-            return np.array(pts[ud][c1]) * [u, v]
+            return np.array(pts[mode][c1]) * [u, v]
         else:
-            return np.array([[x * u, y * v, 0] for (x, y) in pts[ud][c1]])
+            return np.array([[x * u, y * v, 0] for (x, y) in pts[mode][c1]])
 
     @classmethod
     def in_scope(cls, ẋ, y, ud='Λ') -> bool:
