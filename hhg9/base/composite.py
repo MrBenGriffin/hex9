@@ -17,12 +17,13 @@ class CompositeDomain(Domain, ABC):
 
     def __init__(self, registrar, name: str):
         super().__init__(registrar, name)
+        self.no_zero = 1e-200
         self.components = {}  # class static
 
     def binning(self, pts: Points, sig: tuple = None):
         """Return points with domain set by composite set_domain. This can be overridden"""
         pts.coords = np.atleast_2d(pts.coords)
-        pts.components = np.atleast_2d(np.sign(pts.coords).astype(np.int8))
+        pts.components = np.atleast_2d(np.sign(pts.coords + self.no_zero).astype(np.int8))
         return pts
 
     def register_format(self, af: PointFormat):

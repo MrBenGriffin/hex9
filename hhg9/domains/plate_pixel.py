@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-This is Plate Carrée Projection in 2D Cartesian (X/Y)
+This is the Plate Carrée Domain in 2D Cartesian (X/Y)
 """
 import numpy as np
 from numpy.typing import NDArray

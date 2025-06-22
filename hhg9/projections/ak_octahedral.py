@@ -49,7 +49,6 @@ class AKOctahedral:
         uvw = np.asarray(uvw)
         α = self.ALPHA
         e = self._e
-        tol = self.tol
 
         t_uvw = np.tan((np.pi * uvw + e) * 0.5)
         xu, xv, xw = t_uvw[..., -3], t_uvw[..., -2], t_uvw[..., -1]
@@ -63,7 +62,7 @@ class AKOctahedral:
         return self.sp_norm_fn(pv)
 
     def _geo_distance(self, p1, p2):
-        return self.geo.Inverse(p1[0], p1[1], p2[0], p2[1])['s12']
+        return self.geo.Inverse(p1[0], p1[1], p2[0], p2[1], Geodesic.DISTANCE)['s12']
 
     def reverse(self, uvw):
         """
@@ -92,8 +91,6 @@ class AKOctahedral:
                 # Sort and prune
                 next_candidates.sort(key=lambda x: x[1])
                 candidates = next_candidates[:beam_width]
-
-                # Pick best to display at this level
 
             best = candidates[0][0]
             bary = dom.adopt(np.array([[best.x, best.y]]))
@@ -160,10 +157,10 @@ class AKOctahedralEllipsoid(Projection):
         uvw = arr.copy()
         if uvw.components is None:
             self.rev_cs.binning(uvw)
+            # bb = np.unique(uvw.components, axis=0)
         self.ak.reverse(uvw)
         uvw.domain = self.rev_cs
         return uvw
-
 
 
 class AKOctahedralSpherical(Projection):
@@ -230,74 +227,51 @@ class AKOctahedralSpherical(Projection):
 
 
 if __name__ == '__main__':
-    from support import Util, Display
+    from matplotlib import image, pyplot as plt
+    from support import Util
     from hhg9 import Registrar
-    from hhg9.domains import EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric
-    from pyproj import Transformer
-    transformer = Transformer.from_crs("EPSG:4326", "EPSG:4978", always_xy=True)
+    from hhg9.domains import EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, GeneralGCD
+    from hhg9.projections import EllipsoidGCD
 
-    lon, lat = -0.1278, 51.5074  # London
-    x, y, z = transformer.transform(lon, lat, 0.0)  # Height = 0
-    ellipsoid_point = np.array([[x, y, z]])
+
+    def distance(p1, p2):
+        """Return difference in metres between two points"""
+        return Geodesic.WGS84.Inverse(p1[0], p1[1], p2[0], p2[1], Geodesic.DISTANCE)['s12']
+
+
+    london = np.array([[51.50744520, -0.1278120321]])  # London Latitude/Longitude
 
     reg = Registrar()
+    g_gcd = GeneralGCD(reg)    # GCD Domain (latitude/longitude)
     c_ell = EllipsoidCartesian(reg)             # Cartesian Spherical (xyz)
     c_oct = OctahedralCartesian(reg)            # Cartesian Octahedron (xyz)
-    ake = AKOctahedralEllipsoid(reg)
-    test = c_ell.adopt(ellipsoid_point)
-    wgs = ake.backward(test.copy())
-    round_trip = ake.forward(wgs.copy())
-    print("Ellipsoid residual:", np.linalg.norm(test.coords - round_trip.coords))  # Should be small
-
-    reg = Registrar()
-    c_ell = EllipsoidCartesian(reg)             # Cartesian Spherical (xyz)
     b_oct = OctahedralBarycentric(reg, c_oct)   # Barycentric Octahedron (xyz)
-    ak = AKOctahedralEllipsoid(reg)
+    ake = AKOctahedralEllipsoid(reg)
+    ake.set_accuracy(0.000000001)
+    EllipsoidGCD(reg)    # (g_gcd c_ell) Project (GCD <=> Geodesic Cartesian)
+    ldn = g_gcd.adopt(london)
+    t_oct = reg.project(ldn, [g_gcd, c_ell, c_oct])
+    r_ldn = reg.project(t_oct, [c_oct, c_ell, g_gcd])
+    delta = distance(ldn.coords[0], r_ldn.coords[0]) * 1000000000.
+    print("1nm Accuracy: Ellipsoid residual in nanometres:", delta)  # Should be small
 
-    d = Display()  # 0.044711 simple support display class
+    ake.set_accuracy(1000.0)
+    t_oct = reg.project(ldn, [g_gcd, c_ell, c_oct])
+    r_ldn = reg.project(t_oct, [c_oct, c_ell, g_gcd])
+    delta = distance(ldn.coords[0], r_ldn.coords[0]) * 0.001
+    print("1km Accuracy: Ellipsoid residual in kilometres:", delta)  # Should be small
+
     u = Util()
 
-    # x = np.array([
-    #     [0.98, 0.01, 0.01],
-    #     [-0.98, 0.01, 0.01],
-    #     [0.01, 0.98, 0.01],
-    #     [0.01, 0.01, 0.98],
-    #     [-0.39269128, -0.72864642, 0.56113097],
-    #     [-0.55192923, -0.16413949, 0.81757713],
-    #     [-0.85376977, -0.39657625, 0.33734916],
-    #     [0.62657288, -0.01997740, 0.77910675],
-    #     [0.84136576, -0.26177117, 0.47284195],
-    #     [0.23109285, -0.88246783, 0.40969088],
-    #     [0.74143701, 0.44786834, 0.49968501],
-    #     [-0.61293061, 0.53795414, 0.57872395],
-    #     [0.78307239, 0.26161829, -0.56422823],
-    #     [0.34584769, 0.23629583, -0.90804937],
-    #     [0.42566755, 0.54205007, -0.72456115],
-    #     [0.77058801, 0.62823186, -0.10732586],
-    #     [0.63195672, 0.64372129, -0.43157110],
-    #     [0.22731009, 0.60741974, -0.76116449],
-    #     [-0.34232075, 0.93020867, -0.13239463],
-    #     [-0.35661942, 0.82387026, -0.44052285],
-    #     [-0.67290360, 0.13900220, -0.72655291],
-    #     [-0.84038944, 0.51935069, -0.15498534],
-    #     [-0.29382126, -0.84010879, -0.45594549],
-    #     [0.33112712, -0.52420282, -0.78458029],
-    #     [-0.34232075, -0.93020867, -0.13239463],
-    #     [-0.55192923, -0.16413949, 0.81757713]
-    # ])
-    # x = u.oct0_ce_biased(25000, 0.25)
-
-    x = u.oct_rnd(25000)
-    x = np.abs(x)
-    x = x / (np.linalg.norm(x, ord=1, axis=1, keepdims=True))
-    ox = c_oct.adopt(x)
-    fd = ak.forward(ox)
-    bk = ak.backward(fd)
+    nea = u.oct0_rnd(250)
+    ake.set_accuracy(0.000000001)  # 1nm
+    ox = c_oct.adopt(nea)
+    fd = ake.forward(ox.copy())
+    bk = ake.backward(fd)
     rt = bk.coords - ox.coords
-    zk = abs(rt) / np.linalg.norm(rt)
-    mx = np.max(rt)
-    zk *= 10000.
-    oc = c_oct.adopt(x)
-    bc = reg.project(oc, [c_oct, b_oct])
-    bc.samples = zk
-    d.show_pts_2d(bc, label=f'{mx}', clip=True)
+    fig = plt.figure(figsize=(10, 10), dpi=100, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(rt[:, 0], rt[:, 1], rt[:, 2], marker='.', s=5.0)
+    ax.set_aspect('equal', adjustable='box')
+    plt.show()

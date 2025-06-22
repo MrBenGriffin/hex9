@@ -678,7 +678,7 @@ class H9Engine:
         """Octahedral encoding of a point in a triangle"""
         path = []
         suffix = ''
-        step = Step(o_c2, pt[0], pt[1])
+        step = Step(o_c2, pt[0], pt[1], style)
         for i in range(depth):
             step, code = self.encode_step(step, last=i == depth - 1)
             path.append(code)

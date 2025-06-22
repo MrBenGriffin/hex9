@@ -1,8 +1,8 @@
 """
 Part of the H9 project
-        Compose a set of zooms into stonehenge vi cartopy and OSM.
-        This just grabs rectangles from which we sample the octahedral
-        The actual octahedral render series is found in 0076.
+Compose a set of zooms into stonehenge vi cartopy and OSM.
+This grabs rectangle boundaries from which we sample the octahedral.
+The actual octahedral render series is found in 0076.
 Last Tested 21 June 2025 √
 """
 import numpy as np
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     d = Display()
     imagery = OSM()
 
-    acc = ak.set_accuracy(1.0)
+    acc = ak.set_accuracy(0.01)
 
     locs = u.json_load('../assets/locations.json')
     region = locs['NWA']
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     plates = np.array(mmx)
 
     #         √  7  2   3  4    5  6   7   8   9   10  11  12
-    scales = [4, 6, 8, 10, 12, 14, 16, 18, 18, 18, 18, 18, 18, 18, 18, 18]
+    scales = [5, 6, 8, 10, 12, 14, 16, 18, 18, 18, 18, 18, 18, 18, 18, 18]
     for i, extent in enumerate(plates):
         lon_min, lon_max, lat_min, lat_max = extent
         w = lon_max - lon_min

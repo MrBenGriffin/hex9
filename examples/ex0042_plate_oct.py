@@ -1,8 +1,7 @@
 """
 Part of the H9 project
-This follows ex0030_plate_glb.py (which loaded the png and displayed it as a unit sphere).
-This loads a Plate Carrée png image,
-converts it to XYZ Octagon, via latitude/longitude and sphere and displays it.
+This follows ex0030_plate_glb.py (which loaded the png and displayed it as a unit ellipsoid).
+This loads a Plate Carrée png image, converts it to XYZ Octahedron, via latitude/longitude and sphere and displays it.
 The inverse of the AK projection is slow, so we use a cache. cf. ex0041_cache.py
 Last Tested 21 June 2025 √
 """
@@ -22,7 +21,7 @@ if __name__ == '__main__':
     Then display it as the unit sphere..
     """
     reg = Registrar()  # Manage Domains & Projections
-    # Domains - 2D image and GCD Spherical.
+    # Domains - 2D image and GCD Ellipsoid.
     p_plt = PlatePixel(reg)             # 2D Pixel Cartesian Domain
     g_gen = GeneralGCD(reg)             # GCD Spherical Domain (latitude/longitude)
     c_ell = EllipsoidCartesian(reg)     # Cartesian Geodesic (xyz)
@@ -40,7 +39,7 @@ if __name__ == '__main__':
 
     # Load cached octahedral and colours from original.
     pc_map = 'world360x180'
-    cache = Path(f'{pc_map}.npy')
+    cache = Path(f'src/{pc_map}.npy')
     if not cache.exists():
         raise ValueError('Far better to load a cache. See ex_0041')
     img = image.imread(f'src/{pc_map}.png', 'png')
@@ -50,8 +49,6 @@ if __name__ == '__main__':
     oc_px.samples = pc_pix.samples
     # Now loaded cached octahedral and colours from original.
     d.show_pts_3d(oc_px)
-    # d.show_pts_2d(p_px)
-    # Roundtrip back to Pixels
     sp_pl = reg.project(oc_px, [c_oct, c_ell, g_gen, p_plt])
     rmg = p_plt.image(sp_pl, (360, 180))     # convert points back to an [1350,675,3] image.
     fig = plt.figure(figsize=(18, 9), dpi=100, frameon=False)

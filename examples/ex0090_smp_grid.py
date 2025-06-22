@@ -42,8 +42,8 @@ if __name__ == '__main__':
 
     # Load in blue marble - will use 5400x2700 here.
     img = image.imread(f'src/world5400x2700.png', 'png')
-    # img = image.imread(f'../preparatory/tissot_2560x1280.png', 'png')
-    # img = image.imread(f'../preparatory/grid75.png', 'png')
+    # img = image.imread(f'src/tissot_2560x1280.png', 'png')
+    # img = image.imread(f'src/grid75.png', 'png')
     # Register it as a PlatePixel domain.
     pc_px = p_plt.adopt(img)
     # We could project this merely onto GCD. But here we will do to Cartesian Unit.
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     pts = n_oct.adopt(np.vstack(f_org))  # These are our net points.
     # project the grid onto cartesian sphere.
     ref = reg.project(pts, [n_oct, b_oct, c_oct, c_ell])  # ref. addresses on a cartesian unit sphere
-    # Use the KDTree to map the grid points onto the sample points.
+    # Use KDTree to map the grid points onto the sample points.
     _, idx = src.query(ref.coords, workers=-1)  # query KDTree and return indices of pc_sp
     pts.samples = pc_sp.samples[idx]
     img = n_oct.image(pts, (6681, 4959))

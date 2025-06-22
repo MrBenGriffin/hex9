@@ -49,26 +49,23 @@ if __name__ == '__main__':
         print(f'\nOctant {region} – {dom.sign}')
         pos = g_gcd.adopt(np.array(list(spots.values())))
         for name, ll0 in zip(spots.keys(), pos):
-            print(f'\n{name:<24} {ll0:dms}')
+            print(f'\n{name:<24}             {ll0:dms} (Reference Coordinates)')
             sp0 = reg.project(ll0, [g_gcd, c_ell])  # spherical cart
             ll1 = reg.project(sp0, [c_ell, g_gcd])  # sph rt.
             d1 = distance(ll0.coords, ll1.coords) * 1000000000.
-            print(f'{name:<24} ∂{d1:.6f}nm (roundtrip via GCD<->Ellipsoid)')
+            print(f'{name:<24} ∂{d1:.6f}nm {ll1:dms} (roundtrip via GCD<->Ellipsoid)')
             oc0 = reg.project(ll0, [g_gcd, c_ell, c_oct])  # octa.
             ll2 = reg.project(oc0, [c_oct, c_ell, g_gcd])  # sph rt..
             d2 = distance(ll0.coords, ll2.coords[0]) * 1000000000.
-            print(f'{name:<24} {ll2:dms} ∂{d2:.6f}nm (roundtrip via GCD<->Octahedral)')
+            print(f'{name:<24} ∂{d2:.6f}nm {ll2:dms} (roundtrip via GCD<->Octahedral)')
             bc0 = reg.project(ll0, [g_gcd, c_ell, c_oct, b_oct])  # octa.
             ll3 = reg.project(bc0, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
             d3 = distance(ll0.coords, ll3.coords[0]) * 1000000000.
-            print(f'{name:<24} {bc0} ∂{d3:.6f}nm (roundtrip via GCD<->HexGrid)')
-            cmp = tuple(bc0.components[0])
-            sdo = bc0.domain.components[cmp]  # should be same as dom
-            loc = sdo.tr
-            raw = h9e.oct_encode(bc0.coords[0], loc)
-            h9_a = f'{bc0:h9}'
-            h9_r = h9.revert(h9_a)
-            print(f'{name:<24} {h9_a:<24} reverted: {h9_r}')
-            h9h = f'{h9_r:h9}'
-            print(f'{name:<24} {h9_a} vs revert: {h9h}')
+            print(f'{name:<24} ∂{d3:.6f}nm {ll3:dms} (roundtrip via GCD<->Barycentric)')
+            address = f'{bc0:h9}'
+            print(f'{name:<24} {address} (Grid Address)')
+            h9_r = h9.revert(address)  # Convert from address.
+            ll4 = reg.project(h9_r, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
+            d4 = distance(ll0.coords, ll4.coords[0]) * 1000000000.
+            print(f'{name:<24} ∂{d3:.6f}nm {ll3:dms} (roundtrip via Grid Address)')
 

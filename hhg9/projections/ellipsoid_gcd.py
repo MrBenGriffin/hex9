@@ -14,7 +14,7 @@ class EllipsoidGCD(Projection):
     """
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'EP', 'c_ell', 'g_gcd')
+        super().__init__(registrar, 'ell_gcd', 'c_ell', 'g_gcd')
         # Define coordinate systems
         crs_geodetic = CRS.from_epsg(4326)  # WGS84 lat/lon
         crs_ecef = CRS.from_epsg(4978)      # WGS84 ECEF (x, y, z)

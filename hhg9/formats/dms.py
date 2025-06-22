@@ -48,7 +48,7 @@ class DMS(PointFormat):
             d = int(dd)
             m = int((dd - d) * 60)
             s = (dd - d - m / 60) * 3600
-            return f"{d}°{m}'{s:.6f}\"{hemi}"
+            return f"{d}°{m}'{s:.12f}\"{hemi}"
 
         result = []
         vals = np.array([arr]) if len(arr.shape) == 1 else arr

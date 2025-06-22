@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-First example roundtrip of a Plate Carrée <=> PlatePixel
+Roundtrip of a Plate Carrée <=> PlatePixel
 Note that it converts pixel coordinates to (x,y) cartesian coordinates.
 Last Tested 21 June 2025 √
 """

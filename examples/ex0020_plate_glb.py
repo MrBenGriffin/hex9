@@ -3,7 +3,6 @@ Part of the H9 project
 This follows ex0010_plate_px.py (which loaded a png and displayed it).
 This loads a Plate Carrée png, converts it to latitude/longitude, and displays it.
 Needless to say, in this case, we could just use Basemap - but the point is to demonstrate
-the ability to digest a Plate Carrée png and to
 Last Tested 21 June 2025 √
 """
 import numpy as np
@@ -26,7 +25,6 @@ if __name__ == '__main__':
     d = Display()
 
     img = image.imread(f'src/tissot_2560x1280.png', 'png')
-    # use plate_carrée pc_px domain to adopt the ps.image (shape [675,1350,4], with RGBA)
     pc_px = p_plt.adopt(img)     # ps.img shape is [1280,2560,3]
     # project it into GCD
     sp_ll = reg.project(pc_px, [p_plt, g_gcd])

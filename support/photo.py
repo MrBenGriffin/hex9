@@ -56,7 +56,7 @@ class Photo:
         else:
             image = None
             if not os.path.isfile(img_file):
-                image = cv2.imread(f'assets/{img_file}.png')
+                image = cv2.imread(f'{img_file}.png')
             else:
                 image = cv2.imread(img_file)
             if image is None:

@@ -138,16 +138,16 @@ class OctahedralBarycentric(CompositeDomain):
         """
         raise NotImplementedError
 
-    def binning(self, _pts: Points, sig: tuple = None):
-        """
-        Given a set of 2D points, bin them according to which side they are on.
-        :param _pts: An array of 2D Octahedron/Spherical points
-        :param sig face required...
-        We do need to override this, because sign means something else here.
-        """
-        if sig is None:
-            rx = True
-        raise NotImplementedError('Barycentric Octants use the same dimension for each side.')
+    # def binning(self, _pts: Points, sig: tuple = None):
+    #     """
+    #     Given a set of 2D points, bin them according to which side they are on.
+    #     :param _pts: An array of 2D Octahedron/Spherical points
+    #     :param sig face required...
+    #     We do need to override this, because sign means something else here.
+    #     """
+    #     if sig is None:
+    #         rx = True
+    #     raise NotImplementedError('Barycentric Octants use the same dimension for each side.')
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""

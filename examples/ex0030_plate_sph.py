@@ -1,8 +1,7 @@
 """
 Part of the H9 project
 This follows ex0020_plate_glb.py (which loaded the png and displayed it on a globe).
-This loads a Plate Carrée png image,
-converts it to cartesian XYZ sphere, via latitude/longitude, and displays it
+Converts it to Cartesian XYZ Ellipsoid, via latitude/longitude, and displays it
 Last Tested 21 June 2025 √
 """
 from matplotlib import image, pyplot as plt

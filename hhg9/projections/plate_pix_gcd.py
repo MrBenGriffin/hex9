@@ -12,7 +12,7 @@ class PlatePixelGCD(Projection):
     """
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'pg_plt', 'p_plt', 'g_gcd')
+        super().__init__(registrar, 'plt_gcd', 'p_plt', 'g_gcd')
         self.e = 1e-100
         self.p_hgt = None
         self.p_wid = None

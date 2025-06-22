@@ -32,14 +32,19 @@ class Display:
 
     @classmethod
     def show_pts_2d(cls, arr: Points, x_lim=None, y_lim=None, label=None, clip=False, extra=0.1):
-        xx, yy = arr.coords[:, 0], arr.coords[:, 1]
-        cols = None
-        if arr.samples is not None:
-            cols = cls.get_colours(arr.samples, clip)
+        if isinstance(arr, Points):
+            xx, yy = arr.coords[:, 0], arr.coords[:, 1]
+            if arr.samples is not None:
+                cols = cls.get_colours(arr.samples, clip)
+        else:
+            xx, yy = arr[:, 0], arr[:, 1]
+            cols = None
         fig = plt.figure(figsize=(10, 10), dpi=150, frameon=False)
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
         ax = fig.add_subplot(111)
         if x_lim is None:
+            # xmi, xma = xx.min(), xx.max()
+            # extra = (xma-xmi) * extra
             x_lim = (xx.min()-extra, xx.max()+extra)
         if y_lim is None:
             y_lim = (yy.min()-extra, yy.max()+extra)
@@ -50,10 +55,11 @@ class Display:
         if x_lim is not None:
             ax.set(xlim=x_lim, ylim=y_lim)
         ax.scatter(xx, yy, marker='.', s=0.5, alpha=0.5, c=cols)
-        if arr.samples is not None and arr.samples.ndim == 1:
-            _, idx = np.unique(arr.samples, return_index=True)
-            for i in idx:
-                ax.annotate(arr.samples[i], (arr.coords[i][0], arr.coords[i][1]))
+        if isinstance(arr, Points):
+            if arr.samples is not None and arr.samples.ndim == 1:
+                _, idx = np.unique(arr.samples, return_index=True)
+                for i in idx:
+                    ax.annotate(arr.samples[i], (arr.coords[i][0], arr.coords[i][1]))
         ax.set_aspect('equal', adjustable='box')
         a = plt.gca()
         plt.box(False)

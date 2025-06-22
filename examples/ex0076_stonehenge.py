@@ -3,7 +3,10 @@ Part of the H9 project
 This reads in the GCD for Stonehenge, then converts it into a set of nested half-hexagons,
 each of which represents a single Stage of the H9 Journey.
 This uses the images captured via ex0075
+There seems to be a bug in projection image 0 but otherwise looks ok.
 """
+import os
+
 import numpy as np
 from matplotlib import image, pyplot as plt
 from scipy.spatial import KDTree
@@ -11,7 +14,7 @@ from scipy.spatial import KDTree
 from hhg9 import Registrar, H9Engine, Grid
 from hhg9.domains import GeneralGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, PlatePixel
 from hhg9.projections import EllipsoidGCD, PlatePixelGCD, AKOctahedralEllipsoid
-from hhg9.formats import OctahedralH9, DMS, DecimalDegrees, DecimalCartesian
+from hhg9.formats import OctahedralH9, DecimalDegrees, DecimalCartesian
 from support import Util, Display
 
 if __name__ == '__main__':
@@ -19,23 +22,21 @@ if __name__ == '__main__':
         Compose a set of zooms into stonehenge..
     """
     reg = Registrar()  # Manage Domains & Projections
-    g_sph = GeneralGCD(reg)           # GCD Spherical Domain (latitude/longitude)
-    c_sph = EllipsoidCartesian(reg)     # Cartesian Spherical (xyz)
+    g_gen = GeneralGCD(reg)             # GCD Spherical Domain (latitude/longitude)
+    c_ell = EllipsoidCartesian(reg)     # Cartesian Geodesic (xyz)
     c_oct = OctahedralCartesian(reg)    # Cartesian Octahedron (xyz)
     b_oct = OctahedralBarycentric(reg, c_oct)  # 2d Flat for addressing.
     p_plt = PlatePixel(reg)             # 2D Pixel Cartesian Domain
-    # Projections/Transforms
 
     h9 = OctahedralH9()            # formatter.
-    g_sph.register_format(DMS())
-    g_sph.register_format(DecimalDegrees())
-    c_sph.register_format(DecimalCartesian())
+    g_gen.register_format(DecimalDegrees())
+    c_ell.register_format(DecimalCartesian())
     b_oct.register_format(h9)
 
     # Projections/Transforms. Bary and Net are loaded by the domains.
-    EllipsoidGCD(reg)           # g_sph <=> c_sph
-    AKOctahedralEllipsoid(reg)  # c_sph <=> (c_oct <=> b_oct)
-    ppg = PlatePixelGCD(reg)
+    eg = EllipsoidGCD(reg)           # [g_gen, c_ell]
+    ak = AKOctahedralEllipsoid(reg)  # [c_ell, c_oct]
+    pg = PlatePixelGCD(reg)
 
     # Support Classes
     u = Util()
@@ -43,48 +44,56 @@ if __name__ == '__main__':
     g = Grid()
     d = Display()
 
+    # acc = ak.set_accuracy(0.000000000001)
+    # acc = ak.set_accuracy(0.000000001)  # nanometre.
+    acc = ak.set_accuracy(0.01)  # nanometre.
+
     locs = u.json_load('../assets/locations.json')
     region = locs['NWA']
     spot = region['Stonehenge']
-    ll0 = g_sph.adopt(np.array([spot]))
-    sp0 = reg.project(ll0, [g_sph, c_sph])  # spherical cart
-    oc0 = reg.project(sp0, [c_sph, c_oct])
-    bc0 = reg.project(oc0, [c_oct, b_oct])
+    ll0 = g_gen.adopt(np.array([spot]))
+    bc0 = reg.project(ll0, [g_gen, c_ell, c_oct, b_oct])  # spherical cart
 
-    # Stonehenge: 'NWΛ135724754627513335560466226533Λ1' [0.29387005 0.27854425]
-    # [51.17886302 -1.82617712] -
     shb = bc0.coords[0]  # [0.29386167 0.27855944]
+    code = f'{bc0:h9.19}'   # 'NWΛ013572475462751333Λ2'
     cmp = tuple(bc0.components[0])
     sdo = bc0.domain.components[cmp]
     loc = sdo.tr
 
-    plx = h9.enmesh(shb, loc, 12)
-    flt = plx.reshape(-1, 2)
-    pls = sdo.adopt(flt)
-    ll1 = reg.project(pls, [b_oct, c_oct, c_sph, g_sph])
-    brg = ll1.coords.reshape(12, 4, 2)
+    plx = h9.enmesh(shb, loc, acc)  # This is the set of half-hexagons.
+    plp = plx.reshape([-1, 2])
+    bnd = sdo.adopt(plp)
+    gel = reg.project(bnd, [b_oct, c_oct, c_ell, g_gen])
+    mmx = []
+    gpy = gel.coords.reshape([-1, 4, 2])
+    for hh in gpy:
+        # longitude is x, latitude is y.
+        y0, y1 = np.min(hh[..., 0]), np.max(hh[..., 0])
+        x0, x1 = np.min(hh[..., 1]), np.max(hh[..., 1])
+        mmx.append([x0, x1, y0, y1])
+    plates = np.array(mmx)
 
     h9a = f'{bc0:h9.f}'
     label, h9a = h9a[:3], h9a[3:]
 
-    for i in range(12):
-        img = image.imread(f'sh/SH_{i}.png', 'png')
-        ll_poly = brg[i]
-        lon_min = np.min(ll_poly[..., 1])
-        lon_max = np.max(ll_poly[..., 1])
-        lat_min = np.min(ll_poly[..., 0])
-        lat_max = np.max(ll_poly[..., 0])
-        extent = (lon_min, lon_max, lat_min, lat_max)
+    for i, extent in enumerate(plates):
+        lon_min, lon_max, lat_min, lat_max = extent
+        w = lon_max - lon_min
+        h = lat_max - lat_min
+        img_file = f'sh/SH_{i}.png'
+        if os.path.isfile(img_file):
+            img = image.imread(img_file, 'png')
+        else:
+            break
         pc_px = p_plt.adopt(img)
-        ppg.set_dim(pc_px, extent)
-        pc_sp = reg.project(pc_px, [p_plt, g_sph, c_sph])
+        pg.set_dim(pc_px, extent)
+        pc_sp = reg.project(pc_px, [p_plt, g_gen])
         src = KDTree(pc_sp.coords)  # KDTree of plate_carrée projected onto unit sphere.
 
         poly = plx[i]
         w, h, pxl = g.qa_grid(poly, 1000)
         pts = sdo.adopt(pxl)
-        oc1 = reg.project(pts, [b_oct, c_oct])
-        sp1 = reg.project(oc1, [c_oct, c_sph])
+        sp1 = reg.project(pts.copy(), [b_oct, c_oct, c_ell, g_gen])
         _, idx = src.query(sp1.coords, workers=-1)  # query KDTree and return indices of pc_sp
         pts.samples = pc_sp.samples[idx]
         xx, yy = pts.coords[:, 0], pts.coords[:, 1]
