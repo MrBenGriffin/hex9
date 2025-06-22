@@ -51,7 +51,7 @@ if __name__ == '__main__':
     layer = 3  # The layer of hexagons to colour. 0=12, 1=108 hexes.
     addr = h9.format_arr(ref, f'x11', False)
     # cph = reg.project(ref, [b_oct, c_oct])
-    for layer in range(11):
+    for layer in range(5):
         ai = np.array([int(a[layer]) for a in addr])
         pts.samples = cols[ai]
         img = n_oct.image(pts, (6681, 4959))
