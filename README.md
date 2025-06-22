@@ -1,6 +1,7 @@
 A vast amount of work has been accomplished.
 The system in general is in place, but it needs tidying
 Documentation needs finishing - especially for geodesic.
+
 In May '25 I realised that the planar enumeration would not work
 so had to re-work the entire enumeration for octahedral.
 Once that worked, it occurred that I could use the grid itself
@@ -8,34 +9,33 @@ for refining the address values.
 
 My [new documentation](enumeration.md) 
 
+[Documentation for the examples](examples/examples.md)
 
-New hierarchic drawing getting better, and everlasting hexes is a thing.
-![hierarchy drawing](assets/docs/hierarchies.jpg)
-Hierarchic Labels are working.
+This project is centred on the idea of hierarchic hexagonal grids, with the 
+primary insight that, while one cannot tile hexagons with hexagons one can 
+tile half-hexagons with half-hexagons.  When one is looking at the 1:9 
+ratio, there are 49 such tilings of which 1 pair works particularly well for 
+hierarchic hexagonal tiling.
 
-The project is centred on the idea of hierarchic hexagonal grids, while keeping the number of polygons to a minimum.
-Also - do not be surprised if you find bugs!  This is still very much a work in progress!
+![49_tilings](images/49_tilings.png)
 
-My solution to this quandary is to use half-hexagons ('regular' trapezoids composed of three equilateral triangles) as
-the primary fundamental.  This can be used in a vertex centred / offset 'H9 aperture', where any hexagon can be subtended into 
-9 smaller hexagons, albeit with three hexagons shared directly along the half-hex line. 
-('Apertures' normally remain shape centred. Here we do not do that.)
+The use of half-hexagons ('regular' trapezoids composed of three equilateral 
+triangles) as the primary fundamental resolves many of the issues that arise 
+from hexagonal hierarchies.  
 
-My [past research](assets/docs/past.md) was based on something very similar to the H3 methods currently funded by Uber (the ride company).
-
-This is auxiliary to the work that has been done by many others, including Buckminster Fuller, and Snyder at Oregon University,
-regarding hex grids in general, as well as discrete global grids (ISEA DGGs), but my focus is more on general 2D grids, 
-rather than just global mapping - also, the grid I use here is vertex centred, whereas most research has been developed 
-on hexagon-centred hierarchic grids. H9 is “only” a left half-shifted Aperture 9 But what makes it special (to me) is that
-the overlapping hexes only share two parents, not three - the cost being steep enough: no central hex, and an extra overlapped hex.
-But the advantage is that no matter how high in the hierarchy one goes, one never splits a hexagon into anything more than a half, 
-and only hexagons '6', '7', '8' (districts 12/13, 14/15, 16/17 respectively) ever get sliced in half. 
+The work I did back in 2010 or so [past research](assets/docs/past.md) was 
+based on something very similar to the H3 methods currently funded by Uber 
+(the ride company), but I didn't like the ragged edges, and rotations 
+required at each layer - moreover at that time I did not discover an address 
+system that worked intuitively.
 
 ![h9a9.png](assets/docs/h9a9.png)
 
-
-Below is the basic unit hexagon, showing it's division into the 18 half-hexagons that compose it.  The numbering is one
-way of indexing the half-hexagons.
+Below is the basic unit hexagon, showing its division into the 18 half-hexagons that compose it.  
+The numbering is one way of indexing the half-hexagons, and is suitable for 
+planar tiling.  When tiling the octahedron, one must adopt something a 
+little more complex (only a small amount) in order to address edge 
+transitivity. 
 
 ![index_units.png](assets/docs/index_units.png)
 
@@ -47,36 +47,32 @@ then the successive lower hierarchies in green, blue and red. The hierarchy is u
 
 ![hierarchy](assets/docs/hierarchy.jpg)
 
-This method can be used on any map projection - ad it is a space partitioning mechanism rather than a projection, but
-it lends itself particularly well to the Dymaxion (and similar) icosahedral maps. Here one can see my hometown (London)
-marked out in yellow. What is stunning is that for every hexagon at a given hierarchy for Dymaxion, 
-the area is always the same.
+While independent of the display projection, the method *cannot* be used on any polyhedron projection, as the fundamental 
+shape involves chained mirror-pairs:  It can only work on polyhedra 
+which have an even number of edges attached to each vertex.
+Therefore, it does NOT lend itself well when using global addresses on  
+icosahedral maps, that have five edges from each vertex.  
+
+This is not a major issue, however - the Octahedron is highly suitable for 
+this hierarchy, and, though the octahedron itself tends towards greater 
+distortion when used as a projection, for the purposes of generating 
+hexagonal grid addresses, it works perfectly adequately.
+
+![Octahedral Projection](images/net_2700.jpg)
+
+The following shows an early version of the grid focussed on London.
 
 ![gis](assets/docs/gis.jpg)
 
-Grid referencing.
-Likewise, we can use an address system that resolves hierarchy and location extremely easily. One thing that I like is
-that we can use subtended regions rather than axis-oriented addresses. Why is that nice?  It offers a few benefits
+### Grid referencing.
+We can use an address system that resolves hierarchy and location extremely 
+easily. One thing that I like is that we can use subtended regions rather 
+than axis-oriented addresses. Why is that nice?  It offers a few benefits
 - first of all there is only one string (unlike, EG lat/long or OS grids - which still confuse those not familiar with 
 ), and where locality can be kept relevant without having to consider a remote origin.
 
 Another 'feature', is that from any given root, the length of the address tells us about the level of hierarchy. 
-Moreover, merely by shortening the address, we may derive the parent.
+Moreover, merely by shortening the address, we may derive the layer ancestry.
 
 Grid coordinates are best done, for this, using base 9, and using a signifier for the half-hex specialisation.
 One can work out the entire half-hex address from a given hex address - but it does require following some rules.
-
-![calculations](assets/docs/hierarchic.png)
-Here we see a hierarchic grid addressing system.  The 'a/b' of each half-hex could be replaced with
-symbols (I currently show the 'a' address, and leave the 'b' blank - 2 explicit characters are not necessary - and maybe the 'a' could be handled with just a '+'), but the point is that we only need to store the final half-hex place (when we have one), as 
-we can derive the ancestral half-hexagons according to the address we are given.
-
-For example, an address 318705251a, even though it only refers by hexagon address (+the final half-hex),
-can be reliably decomposed to it's full-half-hex address (3b1a8a7a0b5a2a5a1a) - which is sort of magical (to me anyhow).
-Needless to say, it also identifies the entire hierarchy, and likewise the depth of this address (9).
-In terms of spatial coordinates, such a 10-character address provides a location
-(if we are using the entire surface of the world, on an equal area projection) to a patch of earth
-consistently 658 square metres in area – a resolution of just over 80 metres. 
-(for contrast, Lat/Long require 2x 3 decimal places on top of the degrees for that, 
-and give an inconsistent areas that depend on how close one is to the equator, being non-equal area projection of course).
-
