@@ -165,34 +165,45 @@ class H9Engine:
                         self.next_oc2[(o_mo, c1, ch, cm)] = cc
 
     @classmethod
-    def poly(cls, c1=0, mode='Λ', d3=False) -> np.ndarray:
+    def poly(cls, c1=0, mode='Λ', d3=False, hexagon=False) -> np.ndarray:
         """
-        Return the half-hex coordinates of c1 for the triangle.
+        Return the half-hex/hexagon coordinates of c1 for the triangle.
         In accordance with Octahedron_Net dimensions.
-        Probably correct only for CHIRAL=1
+        Correct only for CHIRAL=1
         :param c1: the c1 required (0,1,2)
         :param mode: up/down
         :param d3: return 3d results.
+        :param hexagon: return hexagon polygon.
         :return: the half-hex coordinates of c1 for the triangle
         """
         u, v = cls.U, cls.H / 3.
         pts = {
             # Clockwise. 5th pt is half-way along the long part.
-            'Λ': [
+            (False, 'Λ'): [
                 [(-1, -1), (0, 0), (2, 0), (3, -1), (1, -1)],
                 [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-2, -0)],
                 [(2, 0), (0, 0), (-1, 1), (0, 2), (1, 1)]
             ],
-            'V': [
+            (False, 'V'): [
                 [(3, 1), (2, 0), (0, 0), (-1, 1), (1, 1)],
                 [(0, -2), (-1, -1), (0, 0), (2, 0), (1, -1)],
                 [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-2, 0)]
+            ],
+            (True, 'Λ'): [
+                [(-1, -1), (0, 0), (2, 0), (3, -1), (2, -2), (0, -2)],
+                [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0), (-3, 1)],
+                [(2, 0), (0, 0), (-1, 1), (0, 2), (2, 2), (3, 1)]
+            ],
+            (True, 'V'): [
+                [(3, 1), (2, 0), (0, 0), (-1, 1), (0, 2), (2, 2)],
+                [(0, -2), (-1, -1), (0, 0), (2, 0), (3, -1), (2, -2)],
+                [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0)]
             ]
         }
         if not d3:
-            return np.array(pts[mode][c1]) * [u, v]
+            return np.array(pts[(hexagon, mode)][c1]) * [u, v]
         else:
-            return np.array([[x * u, y * v, 0] for (x, y) in pts[mode][c1]])
+            return np.array([[x * u, y * v, 0] for (x, y) in pts[(hexagon, mode)][c1]])
 
     @classmethod
     def in_scope(cls, ẋ, y, ud='Λ') -> bool:
@@ -458,7 +469,7 @@ class H9Engine:
             result.append(f'{ud}')
         return ''.join(result)
 
-    def enmesh(self, pt, loc='021', _depth=31, single=False) -> list:
+    def enmesh(self, pt, loc='021', _depth=31, single=False, hexagon=False) -> list:
         """
         Given a 2d coordinate and a c2 triangle (one of six), return hierarchy of polygons it belongs to.
         Alternatively just the one at the depth we want.
@@ -466,6 +477,7 @@ class H9Engine:
         :param loc:
         :param _depth:
         :param single:
+        :param hexagon: return hexagon(s) rather than half-hexagon(s).
         :return:
         """
         if loc in self.o2p:
@@ -480,10 +492,9 @@ class H9Engine:
             hx, ud, pt, loc = vals
             c1 = hx % 3
             if single and d == _depth - 1:
-                return (self.poly(c1, ud) * mx) + [xo, yo]
+                return (self.poly(c1, ud, False, hexagon) * mx) + [xo, yo]
             else:
-                po = (self.poly(c1, ud) * mx) + [xo, yo]
-                # ff = cls.valid(po, mode)
+                po = (self.poly(c1, ud, False, hexagon) * mx) + [xo, yo]
                 result.append(po)
             xd, yd = self.OFS[c1, ud, loc]
             xo, yo = xo - xd * mx, yo - yd * mx
