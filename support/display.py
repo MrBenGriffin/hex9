@@ -31,7 +31,7 @@ class Display:
         return mpl.colormaps[cmap](np.linspace(0, 1, n))
 
     @classmethod
-    def show_pts_2d(cls, arr: Points, x_lim=None, y_lim=None, label=None, clip=False, extra=0.1):
+    def show_pts_2d(cls, arr: Points, x_lim=None, y_lim=None, label=None, clip=False, extra=0.1, ratio=None):
         if isinstance(arr, Points):
             xx, yy = arr.coords[:, 0], arr.coords[:, 1]
             if arr.samples is not None:
@@ -39,7 +39,12 @@ class Display:
         else:
             xx, yy = arr[:, 0], arr[:, 1]
             cols = None
-        fig = plt.figure(figsize=(10, 10), dpi=150, frameon=False)
+        if ratio is not None:
+            fig_x = 16
+            fig_y = fig_x/ratio
+            fig = plt.figure(figsize=(fig_x, fig_y), dpi=150, frameon=False)
+        else:
+            fig = plt.figure(figsize=(10, 10), dpi=150, frameon=False)
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
         ax = fig.add_subplot(111)
         if x_lim is None:

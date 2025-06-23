@@ -53,6 +53,7 @@ class Style(Enum):
     EXTENDED = 2
     HALFHEX = 3
     NUMERIC = 4
+    CFULL = 5
 
 
 @dataclass
@@ -407,7 +408,7 @@ class H9Engine:
         return hx, ud, pt_o, c2t_o  # return the values.
 
     @classmethod
-    def _code_pt(cls, style, hx, mode) -> str:
+    def _code_pt(cls, style, hx, mode, c1) -> str:
         match style:
             case Style.HEX:
                 return f'{hx}'
@@ -415,6 +416,8 @@ class H9Engine:
                 return f'{hx}'
             case Style.FULL:
                 return f'{hx}{mode}'
+            case Style.CFULL:
+                return f'{hx}{c1}{mode}'
             case Style.EXTENDED:
                 ex = {6: 'G', 7: 'T', 8: 'X'}
                 if mode == 'V' or hx < 6:
@@ -434,7 +437,7 @@ class H9Engine:
 
     def encode(self, pt, loc='021', _depth=31, style=Style.HEX):
         """
-        Planar Barycentric->H9 Encoder.
+        *Planar* Barycentric->H9 Encoder.
         Given a 2D coordinate and a c2 triangle (one of six), return its address.
         :param pt: 2d coordinate
         :param loc: 'Λ': ['021', '102', '210'], 'V': ['201', '120', '012']
@@ -450,7 +453,7 @@ class H9Engine:
             if not vals:
                 return None  # Probably a bug: outside triangle bounds.
             hx, ud, pt, loc = vals
-            result.append(self._code_pt(style, hx, ud))
+            result.append(self._code_pt(style, hx, ud, hx & 3))
         if style == Style.HEX:
             result.append(f'{ud}')
         return ''.join(result)
@@ -664,7 +667,7 @@ class H9Engine:
         rot, mode = self.uro[step.loc]  # gather rot, half-hex mode of outer hex from triangle
         c1 = self.get_c1(ẋ, step.y, mode)  # Identify inner c1 orientated half-hex of o_c2.
         hx = step.loc[c1]  # get the hex number from index c1 of o_c2.
-        result = self._code_pt(step.style, hx, mode)
+        result = self._code_pt(step.style, hx, mode, c1)
         if step.style == Style.HEX and last:
             result = f'{result}{mode}{rot}'
         c2 = self.get_c2(ẋ, step.y, c1, mode)  # Get the inner triangle (0,1,2) in c1.

@@ -20,6 +20,7 @@ class OctahedralH9(PointFormat):
         self.subs = {
             'x': Style.HEX,
             'f': Style.FULL,
+            'c': Style.CFULL,
             'e': Style.EXTENDED,
             'h': Style.HALFHEX,
             'i': Style.NUMERIC,
