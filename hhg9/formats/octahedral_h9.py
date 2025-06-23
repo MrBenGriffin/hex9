@@ -57,7 +57,7 @@ class OctahedralH9(PointFormat):
             if st in self.subs:
                 style = self.subs[st]
                 sub = sub[1:]
-            if len(sub) > 1:
+            if len(sub) > 0:
                 width = int(sub)
         ad = self.engine.oct_encode(arr, dom.tr, width, style)
         if ad is None:
