@@ -103,36 +103,35 @@ class Grid:
         return rec[trx]
 
     @classmethod
-    def in_quad(cls, points, quad):
+    def in_convex_poly(cls, points, poly):
         """
-        Vectorized check if each point in `points` is inside the convex quadrilateral `quad`.
+        Vectorized check if each point in `points` is inside the convex polygon.
 
         Parameters:
             points: (n, 2) NumPy array of n points to test.
-            quad: List or array of 4 points (x, y) in clockwise or counter-clockwise order.
+            poly: List or array of n points (x, y) in clockwise or counter-clockwise order.
 
         Returns:
             A boolean NumPy array of length n indicating for each point whether it is inside.
         """
-        quad = np.asarray(quad)
+        poly = np.asarray(poly)
         points = np.atleast_2d(points)  # Ensure shape (N, 2)
-
+        eps = 1e-200
         def cross2d(a, b):
             """Compute the 2D cross product: a_x * b_y - a_y * b_x"""
             return a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]
 
         n = points.shape[0]
+        pn = poly.shape[0]
         inside = np.ones(n, dtype=bool)
 
-        for i in range(4):
-            a = quad[i]
-            b = quad[(i + 1) % 4]
+        for i in range(pn):
+            a = poly[i]
+            b = poly[(i + 1) % pn]
             ab = b - a
             ap = points - a
             cp = cross2d(np.tile(ab, (n, 1)), ap)
-            if np.any(cp > 0) and np.any(cp < 0):
-                # Points on both sides of the edge ⇒ outside
-                inside &= (cp >= 0) if np.all(cp >= 0) else (cp <= 0)
+            inside &= (cp >= -eps) if np.all(cp >= -eps) else (cp <= eps)
         return inside
 
     @classmethod
@@ -155,5 +154,5 @@ class Grid:
         xl = np.linspace(minx, maxx, num=wid)
         xx, yy = np.meshgrid(xl, yl)
         rec = np.stack((xx.ravel(), yy.ravel()), axis=1)
-        trx = cls.in_quad(rec, quad)
+        trx = cls.in_convex_poly(rec, quad)
         return wid, hgt, rec[trx]

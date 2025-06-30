@@ -42,9 +42,9 @@ if __name__ == '__main__':
     #     mode = p.fwd_cs.mode
     #     # mpi = p.theta % (2 * np.pi)
     #     # if mpi < 1e-8:
-    #     #     ud = p.rev_cs.mode
+    #     #     mode = p.rev_cs.mode
     #     # else:
-    #     #     ud = {'V': 'Λ', 'Λ': 'V'}[p.rev_cs.mode]
+    #     #     mode = {'V': 'Λ', 'Λ': 'V'}[p.rev_cs.mode]
     #     f_org.append([g.sq_grid(scale, mode)+p.offset])
 
     ref = reg.project(pts, [n_oct, b_oct])  # ref. barycentric octahedron

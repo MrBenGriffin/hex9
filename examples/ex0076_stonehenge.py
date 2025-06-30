@@ -44,9 +44,7 @@ if __name__ == '__main__':
     g = Grid()
     d = Display()
 
-    # acc = ak.set_accuracy(0.000000000001)
-    # acc = ak.set_accuracy(0.000000001)  # nanometre.
-    acc = ak.set_accuracy(0.01)  # nanometre.
+    acc = ak.set_accuracy(0.01)  # 1cm
 
     locs = u.json_load('../assets/locations.json')
     region = locs['NWA']
@@ -65,7 +63,7 @@ if __name__ == '__main__':
     bnd = sdo.adopt(plp)
     gel = reg.project(bnd, [b_oct, c_oct, c_ell, g_gen])
     mmx = []
-    gpy = gel.coords.reshape([-1, 4, 2])
+    gpy = gel.coords.reshape([-1, 5, 2])
     for hh in gpy:
         # longitude is x, latitude is y.
         y0, y1 = np.min(hh[..., 0]), np.max(hh[..., 0])
@@ -90,7 +88,7 @@ if __name__ == '__main__':
         pc_sp = reg.project(pc_px, [p_plt, g_gen])
         src = KDTree(pc_sp.coords)  # KDTree of plate_carrée projected onto unit sphere.
 
-        poly = plx[i]
+        poly = plx[i][:4]  # don't need the fifth point here.
         w, h, pxl = g.qa_grid(poly, 1000)
         pts = sdo.adopt(pxl)
         sp1 = reg.project(pts.copy(), [b_oct, c_oct, c_ell, g_gen])

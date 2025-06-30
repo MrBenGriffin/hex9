@@ -126,3 +126,27 @@ class Points:
             samples = None
 
         return cls(coords, domain=domain, components=components, samples=samples)
+
+    def image(self, dim, flip=True):
+        """
+        return the image that these points represent.
+        """
+        xs, ys = self.coords[:, 0], self.coords[:, 1]
+        w, h = dim
+        x0 = np.min(xs)
+        y0 = np.min(ys)
+        y_adj = (h-1e-6)/(np.max(ys)-y0)
+        x_adj = (w-1e-6)/(np.max(xs)-x0)
+        yy = np.floor(y_adj*(ys-y0)).astype(np.uint64)
+        xx = np.floor(x_adj*(xs-x0)).astype(np.uint64)
+        ch = self.samples
+        if flip:
+            y = (h - 1) - yy.astype(np.uint64)  # still in cartesian (ie, 0 is bottom left).
+        else:
+            y = yy.astype(np.uint64)
+        x = xx.astype(np.uint64)
+        channels = 1 if ch.ndim == 1 else ch.shape[1]
+        ch = ch.reshape(-1, channels)
+        img = np.ones((h, w, channels), dtype=ch.dtype)
+        img[y, x] = ch
+        return img

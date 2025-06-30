@@ -41,7 +41,9 @@ if __name__ == '__main__':
 
     # Support Classes
     u = Util()
-    ak.set_accuracy(0.000000001)  # nanometre.
+    # layers = ak.set_accuracy(0.025)
+    layers = ak.set_accuracy(0.000000001)
+    # nanometre.
     locs = u.json_load('../assets/locations.json')
     print('Selection of famous points, projected forwards and backwards, showing deviation ∂ in nanometres.')
     for region, spots in locs.items():
@@ -62,10 +64,10 @@ if __name__ == '__main__':
             ll3 = reg.project(bc0, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
             d3 = distance(ll0.coords, ll3.coords[0]) * 1000000000.
             print(f'{name:<24} ∂{d3:.6f}nm {ll3:dms} (roundtrip via GCD<->Barycentric)')
-            address = f'{bc0:h9}'
+            address = f'{bc0:h9.{layers}}'
             print(f'{name:<24} {address} (Grid Address)')
             h9_r = h9.revert(address)  # Convert from address.
             ll4 = reg.project(h9_r, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
-            d4 = distance(ll0.coords, ll4.coords[0]) * 1000000000.
-            print(f'{name:<24} ∂{d3:.6f}nm {ll3:dms} (roundtrip via Grid Address)')
+            d4 = distance(ll0.coords, ll4.coords[0]) * 100
+            print(f'{name:<24} ∂{d4:.6f}cm {ll3:dms} (roundtrip via Grid Address)')
 

@@ -64,13 +64,13 @@ if __name__ == '__main__':
     bnd = sdo.adopt(plp)
     gel = reg.project(bnd, [b_oct, c_oct, c_ell, g_gen])
     mmx = []
-    gpy = gel.coords.reshape([-1, 4, 2])
+    gpy = gel.coords.reshape([-1, 5, 2])
     for hh in gpy:
         # longitude is x, latitude is y.
         y0, y1 = np.min(hh[..., 0]), np.max(hh[..., 0])
         x0, x1 = np.min(hh[..., 1]), np.max(hh[..., 1])
         mmx.append([x0, x1, y0, y1])
-    plates = np.array(mmx)
+    plates = np.array(mmx[:14])
 
     #         √  7  2   3  4    5  6   7   8   9   10  11  12
     scales = [5, 6, 8, 10, 12, 14, 16, 18, 18, 18, 18, 18, 18, 18, 18, 18]
@@ -78,12 +78,12 @@ if __name__ == '__main__':
         lon_min, lon_max, lat_min, lat_max = extent
         w = lon_max - lon_min
         h = lat_max - lat_min
-        if w > h:
-            hgt = 2000
-            wid = np.uint32((w / h) * hgt)
-        else:
-            wid = 2000  # np.uint32(scale / w)
-            hgt = np.uint32((h / w) * wid)
+        # if w > h:
+        #     hgt = 2000
+        #     wid = np.uint32((w / h) * hgt)
+        # else:
+        wid = 2000  # np.uint32(scale / w)
+        hgt = np.uint32((h / w) * wid)
         w, h, dpi = wid / 72, hgt / 72, 72
         fig = plt.figure(figsize=(w, h), dpi=dpi, frameon=False)
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
