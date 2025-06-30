@@ -8,3 +8,11 @@
 /modern/examples/*.pdf
 /hex/examples/*.npy
 __pycache__
+/examples/ex0090_net_2700.png
+/examples/ex0100k_net_3.png
+/examples/sh/LDN3_6x4.png
+/examples/sh/LDN_6_pc.png
+/examples/sh/LDN_6x4.png
+/examples/sh/LDN_8_pc.png
+/examples/sh/LDN_10_pc.png
+/examples/sh/LDN_36_pc.png
