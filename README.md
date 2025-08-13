@@ -1,5 +1,5 @@
 ## Hex9.
-Hex9 is an ongoing project that exploring (and developing) a novel 
+`Hex9` is an **ongoing project** exploring (and developing) a novel 
 *hierarchical hexagonal grid* (`HHG`) system for global projections.
 It is well-suited to population mapping, environmental modeling, heat-mapping, 
 hex-binning, and other geospatial analyses.
