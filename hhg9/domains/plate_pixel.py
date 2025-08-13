@@ -10,7 +10,7 @@ from hhg9.base import Domain, Points
 class PlatePixel(Domain):
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'p_plt')
+        super().__init__(registrar, 'p_plt', 2)
         self.height = 180
         self.width = 360
         self.type = np.uint8

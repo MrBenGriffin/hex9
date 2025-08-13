@@ -13,7 +13,7 @@ class SphericalCartesian(Domain):
     """
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'c_sph')
+        super().__init__(registrar, 'c_sph', 3)
 
     @classmethod
     def valid(cls, pts: Points) -> NDArray:

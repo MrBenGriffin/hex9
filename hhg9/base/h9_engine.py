@@ -38,6 +38,8 @@
      """
 from dataclasses import dataclass
 from enum import Enum, unique
+from functools import lru_cache
+
 import numpy as np
 
 
@@ -60,9 +62,9 @@ class Style(Enum):
 @dataclass
 class Step:
     """The full state of an encoding step"""
-    loc: str         # e.g. '850'
-    x: float         # cumulative x so far
-    y: float         # cumulative y so far
+    loc: str  # e.g. '850'
+    x: float  # cumulative x so far
+    y: float  # cumulative y so far
     style: Style = Style.HEX
     s: float = 1.0
     xa: float = 0.  # offset acc.
@@ -76,16 +78,25 @@ class H9Engine:
     """
     AKA H9 - This is a hierarchic hexagonal grid (HHG) that uses regular tetrahedrons
     """
-    R3 = np.sqrt(3)
-    W = np.sqrt(2)
+    # fundamental constants
     H = np.sqrt(6) / 2.
-    RH = R3 / 2.     # ratio of height to width. 0.8660
-    Ẇ = W * R3 / 3.  # g in grapher. w*√3/3
-    ΛC, ΛF = 2 * H / 3., -H / 3.
-    VC, VF = H / 3., -2. * H / 3.
-    TL, TR = -W/2., W/2.
+    R3 = np.sqrt(3)
+    # All other geometric constants derived from H and R3
+    # Done in order to avoid tiny floating point deviations.
+    TR = H / R3  #
+    W = 2 * TR  # This correctly derives W = sqrt(2)
+    ΛC = 2 * H / 3.
+    ΛF = -H / 3.
+    VC = H / 3.
+    VF = -2 * H / 3.
+    Ẇ = ΛC
+    TL = -TR
     U, V = W / 6., H / 9.
+    RH = R3 / 2.  # ratio of height to width. 0.8660
+
     OFS = {
+        # These are subtractive.
+        # What to remove from the coordinate, once found! So, for 2V.021 that's at the top!
         (0, 'Λ', '021'): (0, V * 2.),
         (0, 'Λ', '201'): (-U, V),
         (0, 'Λ', '102'): (-U * 2., V * 2.),
@@ -103,36 +114,45 @@ class H9Engine:
         (1, 'V', '012'): (0, V * 4.),
         (2, 'V', '120'): (U, V),
         (2, 'V', '102'): (U, -V),
-        (2, 'V', '201'): ( U * 2., -V * 2.)
+        (2, 'V', '201'): (U * 2., -V * 2.)
     }
+    POS = [
+        # The co-ordinate to the centre of each sub-triangle
+        # The order starts from '085' below the origin, and goes clockwise through the inner set, then the outer set.
+        (0, -V * 2.), (-U, -V), (-U, V),  # 0x39, 0x35, 0x25
+        (0, V * 2.), (U, V), (U, -V),     # 0x26, 0x2a, 0x3a
+        (0, -V * 4.), (-U * 2., -V * 2.), (-U * 2., V * 2.),  # 0x49, 0x34, 0x21
+        (0, V * 4.), (U * 2., V * 2.), (U * 2., -V * 2.)   # 0x16, 0x2b, 0x3e
+    ]
 
     @classmethod
-    def in_scope(cls, ẋ, y, ud='Λ') -> bool:
+    def in_scope(cls, ẋ, y, mode='Λ') -> bool:
         """
         This is a barycentric scope test, for a unit equilateral triangle.
         This expects x to already be pre-calculated as √3(x).
         :param ẋ: `ẋ := √3(x)` on x co-ordinate.
         :param y: y co-ordinate
-        :param ud: triangle pointing up/down
+        :param mode: triangle pointing up/down
         :return: boolean (in scope or not)
         """
         e = 1e-15  # for polygons and edges, best to be a tiny bit safe.
-        if ud == 'Λ':  # barycentre at 0, triangle point up.
+        if mode == 'Λ':  # barycentre at 0, triangle point up.
             return (cls.ΛF <= y) & (y <= cls.ΛC - np.abs(ẋ) + e)
         else:  # barycentre at 0, triangle point down.
             return (cls.VF + np.abs(ẋ) - e <= y) & (y <= cls.VC)
 
     @classmethod
-    def get_c1(cls, ẋ, y, ud='Λ'):
+    def get_c1(cls, ẋ, y, mode='Λ'):
         """
         Given a point in a triangle, identify it's half-hex.
         The return value will be 0, 1, 2  for flat/forward/back.
         :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
         :param y: y coordinate
-        :param ud: triangle pointing up/down
+        :param mode: triangle pointing up/down
         :return: 0,1,2 representing the c1 component of the container triangle
+        These are checked correct 30th June '25
         """
-        if ud == 'Λ':
+        if mode == 'Λ':
             if 0 >= y < ẋ:
                 return 0  # flat
             elif ẋ <= y < -ẋ:
@@ -174,22 +194,22 @@ class H9Engine:
         if ud == 'Λ':
             if c1 == 0:
                 if y <= -ẋ:  # alt y <= -ẋ
-                    return '021'  # y <= -ẋ identifies 021
+                    return '021'  # √ y <= -ẋ identifies 021
                 if y <= ẋ - cls.Ẇ:  # alt y <= ẋ - cls.Ẇ
-                    return '102'  # y <= ẋ-ẇ identifies 102
-                return '201'  # y < -ẋ and y > ẋ - ẇ identifies 201
+                    return '102'  # √ y <= ẋ-ẇ identifies 102
+                return '201'  # √ y < -ẋ and y > ẋ - ẇ identifies 201
             if c1 == 1:
                 if y >= 0:
-                    return '102'  # y >= 0 identifies 102
+                    return '102'  # √ y >= 0 identifies 102
                 if y <= -ẋ - cls.Ẇ:  #
-                    return '210'  # y ≤ -ẋ-ẇ identifies 210
-                return '120'  # y < 0 and `y > -ẋ-ẇ` identifies 120
+                    return '210'  # √ y ≤ -ẋ-ẇ identifies 210
+                return '120'  # √ y < 0 and `y > -ẋ-ẇ` identifies 120
             # c1 == 2
             if y <= ẋ:  # alt y <= ẋ
-                return '210'  # `y <= ẋ identifies 210
+                return '210'  # √ `y <= ẋ identifies 210
             if y >= cls.H / 3.:
-                return '021'  # y >= h/3 identifies 021
-            return '012'  # y > ẋ and y < h/3 identifies 012
+                return '021'  # √ y >= h/3 identifies 021
+            return '012'  # √ y > ẋ and y < h/3 identifies 012
         else:  # Now for 'V'
             # For points in 0V (flat),
             # y >= ẋ identifies 012
@@ -197,7 +217,7 @@ class H9Engine:
             # y < ẋ and y < ẇ-ẋ identifies `210`
             if c1 == 0:
                 if y >= ẋ:  # alt y >= ẋ
-                    return '012'  # y >= ẋ identifies 012
+                    return '012'  # √ y >= ẋ identifies 012
                 if y >= cls.Ẇ - ẋ:  # alt y >= cls.Ẇ - ẋ
                     return '120'  # y >= ẇ-ẋ identifies 120
                 return '210'  # y < ẋ and y < ẇ-ẋ identifies 210
@@ -223,6 +243,14 @@ class H9Engine:
 
     def __init__(self):
         # These are used to define octahedral enumerations.
+        self.ugc_num_props = 11
+        self.num_regions = 96
+        self.in_dn, self.in_up, self.mode, self.d_ci, self.u_ci, self.dc0, self.dc1, self.dc2, self.uc0, self.uc1, self.uc2 = range(
+            self.ugc_num_props)
+        self.invalid_ugc = 0x5F
+        self.ugc_lut = {}
+        self.ugc_off = {}
+        self.ugc_rev = None
         self.uro = {  # (v 0626.2) given a triangle, identify the rotation and mode.
             '085': (0, 'Λ'), '850': (1, 'Λ'), '508': (2, 'Λ'),
             '316': (0, 'Λ'), '163': (1, 'Λ'), '631': (2, 'Λ'),
@@ -255,6 +283,18 @@ class H9Engine:
         self.o2p = {}
         self.p2o = {}
         self.oc2 = {}
+        self.ard = {}
+        self.in_regions = None
+        self.in_up_regions = None
+        self.in_dn_regions = None
+        self.hmc = None
+        self.test = None
+        self.rgs = None
+        self.xnb = None  # external neighbour regions.
+        # self.neighbour_lut = None  # neighbour regions.
+        self.child_lut = None
+        self.pqc1_lut = None  # given parent, child - find c1
+        self.pch = []
         self.next_oc2 = {}
         self._define_luts()
         self.modev = {
@@ -271,12 +311,14 @@ class H9Engine:
             '021': 'Λ', '102': 'Λ', '210': 'Λ',
             '012': 'V', '120': 'V', '201': 'V',
         }
+        self.poly_hh, self.poly_hx = self._poly_luts()
 
     def _define_luts(self):
         """
         Given the class dictionary of octahedral mappings `uro`
         set the octahedral tri to planar tri table and its inverse.
         """
+        self.ugc_lut_init()
         for tri, (rot, mode) in self.uro.items():
             # octahedral is indexed by C1 orientation, merely extract the (invariant) C2 upper trit.
             planar_id = ''.join(str(int(d) // 3) for d in tri)
@@ -297,8 +339,6 @@ class H9Engine:
                     _, cm = self.uro[cc]  # got the up/down.
                     for ch in cc:
                         self.next_oc2[(o_mo, c1, ch, cm)] = cc
-        # The following could be
-        # derived - it's just hacked in for the moment.
         self.cc2_pc2 = {
             # ('085', '815', '316')
             ('0', '085'): '085',
@@ -487,77 +527,846 @@ class H9Engine:
             ('8', '623'): '158',
         }
 
-    @classmethod
-    def poly(cls, c1=0, mode='Λ', d3=False, hexagon=False) -> np.ndarray:
+    def ugc_lut_init(self):
+        """Generate the UGC Lut as a numpy array"""
+        """File 'NWA addressing 01' and grid_basis' holds the values here"""
+
+        num_regions = self.num_regions
+        # Each region holds a series of (self.ugc_num_props) properties:
+        # * in_dn tells us that this region is found in the V mode triangle. (9 regions)
+        # * in_up tells us that this region is found in the Λ mode triangle. (9 regions)
+        # * mode tells us that this region is itself either a Λ (1) or V (0)
+        # * u_ci tells which c1 this region is in (when in Λ mode). (six regions serve both modes - so we keep both)
+        # * d_ci tells which c1 this region is in (when in V mode). (six regions serve both modes - so we keep both)
+        # * uc012 gives us the three Λ c1 regions that this region serves.
+        # * dc012 gives us the three V c1 regions that this region serves
+        # up, being 1, is set after down.
+        # in_dn, in_up, mode, d_ci, u_ci, dc0, dc1, dc2, uc0, uc1, uc2 = range(self.ugc_num_props)
+        self.ugc_lut = np.full((num_regions, self.ugc_num_props), self.invalid_ugc, dtype=np.uint8)
+        self.ugc_off = np.full((num_regions, 2), 0., dtype=np.float64)
+        self.in_regions = [0x39, 0x35, 0x25, 0x26, 0x2a, 0x3a, 0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e]
+        self.ugc_off[self.in_regions] = self.POS
+        self.ugc_lut[:, self.in_dn] = 0
+        self.ugc_lut[:, self.in_up] = 0
+        self.ugc_lut[self.in_regions, self.mode] = [1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
+        self.ugc_lut[self.invalid_ugc] = 0  # set nothing for illegal!
+        self.in_up_regions = [  # 9 regions serve Λ mode
+            0x39, 0x3a, 0x3e,  # c0 ΛVΛ
+            0x25, 0x35, 0x34,  # c1 ΛVΛ
+            0x2a, 0x26, 0x16,  # c2 ΛVΛ
+        ]
+        u_cid = [0, 0, 0, 1, 1, 1, 2, 2, 2]
+        up_locs = [
+            (0, 8, 5), (8, 1, 5), (3, 1, 6),  # 0: 0x39, 0x3a, 0x3e
+            (5, 0, 8), (5, 8, 1), (6, 3, 1),  # 1: 0x25, 0x35, 0x3
+            (8, 5, 0), (1, 5, 8), (1, 6, 3),  # 2: 0x2a, 0x26, 0x16
+        ]
+        self.in_dn_regions = [
+            0x26, 0x2a, 0x2b,  # c0 VΛV
+            0x3a, 0x39, 0x49,  # c1 VΛV
+            0x35, 0x25, 0x21,  # c2 VΛV
+        ]
+        d_cid = [0, 0, 0, 1, 1, 1, 2, 2, 2]
+        dn_locs = [
+            (0, 4, 7), (7, 4, 2), (3, 6, 2),  # 0: 0x26, 0x2a, 0x2b
+            (7, 0, 4), (2, 7, 4), (2, 3, 6),  # 1: 0x3a, 0x39, 0x49
+            (4, 7, 0), (4, 2, 7), (6, 2, 3),  # 2: 0x35, 0x25, 0x21
+        ]
+        self.pch = [
+            [  # mode down V
+                [  # c0
+                    (0, 0x26), (4, 0x26), (7, 0x26),
+                    (7, 0x2a), (4, 0x2a), (2, 0x2a),
+                    (3, 0x2b), (6, 0x2b), (2, 0x2b),
+                ],
+                [  # c1
+                    (7, 0x3a), (0, 0x3a), (4, 0x3a),
+                    (2, 0x39), (7, 0x39), (4, 0x39),
+                    (2, 0x49), (3, 0x49), (6, 0x49),
+                ],
+                [  # c2
+                    (4, 0x35), (7, 0x35), (0, 0x35),
+                    (4, 0x25), (2, 0x25), (7, 0x25),
+                    (6, 0x21), (2, 0x21), (3, 0x21),
+                ]
+            ], [  # mode up Λ
+                [  # c0
+                    (0, 0x39), (8, 0x39), (5, 0x39),
+                    (8, 0x3a), (1, 0x3a), (5, 0x3a),
+                    (3, 0x3e), (1, 0x3e), (6, 0x3e),
+                ], [  # c1
+                    (5, 0x25), (0, 0x25), (8, 0x25),
+                    (5, 0x35), (8, 0x35), (1, 0x35),
+                    (6, 0x34), (3, 0x34), (1, 0x34),
+                ], [  # c2
+                    (8, 0x2a), (5, 0x2a), (0, 0x2a),
+                    (1, 0x26), (5, 0x26), (8, 0x26),
+                    (1, 0x16), (6, 0x16), (3, 0x16),
+                ]
+            ]
+        ]
+        _hmc = {  # Keys(hx,mode,c1 (Λ:=1;V:=0) (hx,mode,c1)=>ch.region
+            (0, 1, 0): 0x39, (0, 1, 1): 0x25, (0, 1, 2): 0x2a, (0, 0, 0): 0x26, (0, 0, 1): 0x3a, (0, 0, 2): 0x35,
+            (1, 1, 0): 0x16, (1, 1, 1): 0x3e, (1, 1, 2): 0x3a, (1, 0, 0): 0x26, (1, 0, 1): 0x3a, (1, 0, 2): 0x35,
+            (2, 1, 0): 0x39, (2, 1, 1): 0x25, (2, 1, 2): 0x2a, (2, 0, 0): 0x49, (2, 0, 1): 0x21, (2, 0, 2): 0x2b,
+            (3, 1, 0): 0x3e, (3, 1, 1): 0x34, (3, 1, 2): 0x16, (3, 0, 0): 0x2b, (3, 0, 1): 0x49, (3, 0, 2): 0x21,
+            (4, 1, 0): 0x25, (4, 1, 1): 0x2a, (4, 1, 2): 0x39, (4, 0, 0): 0x35, (4, 0, 1): 0x26, (4, 0, 2): 0x3a,
+            (5, 1, 0): 0x25, (5, 1, 1): 0x2a, (5, 1, 2): 0x39, (5, 0, 0): 0x35, (5, 0, 1): 0x26, (5, 0, 2): 0x3a,
+            (6, 1, 0): 0x34, (6, 1, 1): 0x16, (6, 1, 2): 0x3e, (6, 0, 0): 0x21, (6, 0, 1): 0x2b, (6, 0, 2): 0x49,
+            (7, 1, 0): 0x2a, (7, 1, 1): 0x39, (7, 1, 2): 0x25, (7, 0, 0): 0x3a, (7, 0, 1): 0x35, (7, 0, 2): 0x26,
+            (8, 1, 0): 0x2a, (8, 1, 1): 0x39, (8, 1, 2): 0x25, (8, 0, 0): 0x3a, (8, 0, 1): 0x35, (8, 0, 2): 0x26,
+        }
+        self.rgs = np.full([96], 'X', dtype='<U1')
+        rgs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M']
+        for i, rg in enumerate(self.in_regions):
+            self.rgs[rg] = rgs[i]
+            self.ard[rgs[i]] = rg
+        self.ard['X'] = self.invalid_ugc
+        self.hmc = np.zeros([9, 2, 3], dtype=np.uint8)
+        for (ih, im, ic), rg in _hmc.items():
+            self.hmc[ih, im, ic] = rg
+        # Populate legal regions
+        self.ugc_lut[self.in_up_regions, self.in_up] = 1
+        self.ugc_lut[self.in_up_regions, self.u_ci] = u_cid
+        for lc, rg in zip(up_locs, self.in_up_regions):
+            for cx, hx in zip([self.uc0, self.uc1, self.uc2], lc):  # [6,7,8] [0,8,5]
+                self.ugc_lut[rg, cx] = hx
+        self.ugc_lut[self.in_dn_regions, self.in_dn] = 1
+        self.ugc_lut[self.in_dn_regions, self.d_ci] = d_cid
+        for lc, rg in zip(dn_locs, self.in_dn_regions):
+            for cx, hx in zip([self.dc0, self.dc1, self.dc2], lc):
+                self.ugc_lut[rg, cx] = hx
+
+        self.test = {}
+        self.ugc_rev = np.full((9, 9, num_regions), self.invalid_ugc, dtype=np.uint8)
+        for p_reg in self.in_regions:
+            p_props = self.ugc_lut[p_reg]
+            mode = p_props[2]
+            c_hxt = self.pch[mode]
+            for a_mode in range(2):  # the ancestral mode value is different from current.
+                p_of = self.dc0 + a_mode * 3
+                if p_props[p_of] != self.invalid_ugc:
+                    p_hxt = p_props[[p_of, p_of + 1, p_of + 2]]  # three hex digits this parent produces
+                    for p_c1, p_hx in enumerate(p_hxt):
+                        for (c_hx, c_reg) in c_hxt[p_c1]:
+                            # self.test[(int(p_hx), c_hx, c_reg)] = p_reg
+                            self.ugc_rev[int(p_hx), c_hx, c_reg] = p_reg
+
+        # Now populate the neighbour relations for each region.
+        # self.neighbour_lut = np.full((num_regions, 2, 3), self.invalid_ugc, dtype=np.uint8)
+        # # Given a region, parent mode, c1, return the neighbour
+        # _ngh_dict = {
+        #     (0x16, 1): [0x26, 0x2B, 0x21],
+        #     (0x21, 1): [0x34, 0x25, 0x16],
+        #     (0x25, 1): [0x35, 0x3A, 0x26],
+        #     (0x26, 1): [0x16, 0x2A, 0x25],
+        #     (0x2A, 1): [0x3A, 0x26, 0x35],
+        #     (0x2B, 1): [0x3E, 0x16, 0x2A],
+        #     (0x34, 1): [0x21, 0x49, 0x35],
+        #     (0x35, 1): [0x25, 0x39, 0x34],
+        #     (0x39, 1): [0x26, 0x35, 0x3A],
+        #     (0x3A, 1): [0x2A, 0x3E, 0x39],
+        #     (0x3E, 1): [0x2B, 0x3A, 0x49],
+        #     (0x49, 1): [0x39, 0x34, 0x3E],
+        #     (0x16, 0): [0x26, 0x2B, 0x21],
+        #     (0x21, 0): [0x34, 0x25, 0x16],
+        #     (0x25, 0): [0x35, 0x21, 0x26],
+        #     (0x26, 0): [0x39, 0x2A, 0x25],
+        #     (0x2A, 0): [0x3A, 0x26, 0x2B],
+        #     (0x2B, 0): [0x3E, 0x16, 0x2A],
+        #     (0x34, 0): [0x21, 0x49, 0x35],
+        #     (0x35, 0): [0x25, 0x39, 0x2A],
+        #     (0x39, 0): [0x49, 0x35, 0x3A],
+        #     (0x3A, 0): [0x2A, 0x25, 0x39],
+        #     (0x3E, 0): [0x2B, 0x3A, 0x49],
+        #     (0x49, 0): [0x39, 0x34, 0x3E],
+        # }
+        # for key, neighbours in _ngh_dict.items():
+        #     region_id, mode = key
+        #     self.neighbour_lut[region_id, mode] = neighbours
+
+        # Given a mode and c1, find the regions that belong there.
+        _chd = {
+            (0, 0): [0x26, 0x2A, 0x2B],  # V,C1.0
+            (0, 1): [0x3A, 0x39, 0x49],  # V,C1.1
+            (0, 2): [0x35, 0x25, 0x21],  # V,C1.2
+            (1, 0): [0x39, 0x3A, 0x3E],  # Λ,C1.0
+            (1, 1): [0x25, 0x35, 0x34],  # Λ,C1.1
+            (1, 2): [0x2A, 0x26, 0x16],  # Λ,C1.2
+        }
+        self.child_lut = np.zeros((2, 3, 3), dtype=np.uint8)
+        for (mode, c1), children in _chd.items():
+            self.child_lut[mode, c1] = children
+
+        _pqc1 = {  # this returns the c1 based on parent/child. It could be automated.
+            (0x21, 0x26): 0, (0x21, 0x2a): 0, (0x21, 0x2b): 0,
+            (0x21, 0x3a): 1, (0x21, 0x39): 1, (0x21, 0x49): 1,
+            (0x21, 0x35): 2, (0x21, 0x25): 2, (0x21, 0x21): 2,
+            (0x26, 0x26): 0, (0x26, 0x2a): 0, (0x26, 0x2b): 0,
+            (0x26, 0x3a): 1, (0x26, 0x39): 1, (0x26, 0x49): 1,
+            (0x26, 0x35): 2, (0x26, 0x25): 2, (0x26, 0x21): 2,
+            (0x2b, 0x26): 0, (0x2b, 0x2a): 0, (0x2b, 0x2b): 0,
+            (0x2b, 0x3a): 1, (0x2b, 0x39): 1, (0x2b, 0x49): 1,
+            (0x2b, 0x35): 2, (0x2b, 0x25): 2, (0x2b, 0x21): 2,
+            (0x35, 0x26): 0, (0x35, 0x2a): 0, (0x35, 0x2b): 0,
+            (0x35, 0x3a): 1, (0x35, 0x39): 1, (0x35, 0x49): 1,
+            (0x35, 0x35): 2, (0x35, 0x25): 2, (0x35, 0x21): 2,
+            (0x3a, 0x26): 0, (0x3a, 0x2a): 0, (0x3a, 0x2b): 0,
+            (0x3a, 0x3a): 1, (0x3a, 0x39): 1, (0x3a, 0x49): 1,
+            (0x3a, 0x35): 2, (0x3a, 0x25): 2, (0x3a, 0x21): 2,
+            (0x49, 0x26): 0, (0x49, 0x2a): 0, (0x49, 0x2b): 0,
+            (0x49, 0x3a): 1, (0x49, 0x39): 1, (0x49, 0x49): 1,
+            (0x49, 0x35): 2, (0x49, 0x25): 2, (0x49, 0x21): 2,
+            (0x16, 0x39): 0, (0x16, 0x3a): 0, (0x16, 0x3e): 0,
+            (0x16, 0x25): 1, (0x16, 0x35): 1, (0x16, 0x34): 1,
+            (0x16, 0x2a): 2, (0x16, 0x26): 2, (0x16, 0x16): 2,
+            (0x25, 0x39): 0, (0x25, 0x3a): 0, (0x25, 0x3e): 0,
+            (0x25, 0x25): 1, (0x25, 0x35): 1, (0x25, 0x34): 1,
+            (0x25, 0x2a): 2, (0x25, 0x26): 2, (0x25, 0x16): 2,
+            (0x2a, 0x39): 0, (0x2a, 0x3a): 0, (0x2a, 0x3e): 0,
+            (0x2a, 0x25): 1, (0x2a, 0x35): 1, (0x2a, 0x34): 1,
+            (0x2a, 0x2a): 2, (0x2a, 0x26): 2, (0x2a, 0x16): 2,
+            (0x34, 0x39): 0, (0x34, 0x3a): 0, (0x34, 0x3e): 0,
+            (0x34, 0x25): 1, (0x34, 0x35): 1, (0x34, 0x34): 1,
+            (0x34, 0x2a): 2, (0x34, 0x26): 2, (0x34, 0x16): 2,
+            (0x39, 0x39): 0, (0x39, 0x3a): 0, (0x39, 0x3e): 0,
+            (0x39, 0x25): 1, (0x39, 0x35): 1, (0x39, 0x34): 1,
+            (0x39, 0x2a): 2, (0x39, 0x26): 2, (0x39, 0x16): 2,
+            (0x3e, 0x39): 0, (0x3e, 0x3a): 0, (0x3e, 0x3e): 0,
+            (0x3e, 0x25): 1, (0x3e, 0x35): 1, (0x3e, 0x34): 1,
+            (0x3e, 0x2a): 2, (0x3e, 0x26): 2, (0x3e, 0x16): 2,
+
+        }
+        self.pqc1_lut = np.zeros((num_regions, num_regions), dtype=np.uint8)
+        for (p_reg, c_reg), c1 in _pqc1.items():
+            self.pqc1_lut[p_reg, c_reg] = c1
+
+        self.xnb = np.zeros((2, 3, 2), dtype=np.uint8)
+        _data = {
+            (0, 0): [0x34, 0x3E], (0, 1): [0x25, 0x34], (0, 2): [0x2A, 0x16],
+            (1, 0): [0x26, 0x2B], (1, 1): [0x3A, 0x49], (1, 2): [0x35, 0x21]
+        }
+        for (mode, c1), children in _data.items():
+            self.xnb[mode, c1] = children
+
+    @lru_cache(maxsize=None)
+    def local_offset_lut(self):
+        """
+        Builds and caches the local/neighbouring offset LUT.
+        Give self_mode, parent_mode, c1, sibling-bool return the offset to the neighbour.
+        """
+        _lut = [
+            # self mode = 0
+            #   pm c1 sib
+            (0, 0, 0, 1, (0, 2)),      # mode 0, c1:0
+            (0, 0, 1, 1, (1, -1)),      # k
+            (0, 0, 2, 1, (-1, -1)),
+            (0, 1, 0, 1, (0, 2)),
+            (0, 1, 1, 1, (1, -1)),      # k
+            (0, 1, 2, 1, (-1, -1)),
+            (0, 0, 0, 0, (0, -2)),      # Not sure this is possible.
+            (0, 0, 1, 0, (-1, 1)),      # k
+            (0, 0, 2, 0, (-1, -1)),
+            (0, 1, 0, 0, (0, 2)),
+            (0, 1, 1, 0, (1, -1)),      # k
+            (0, 1, 2, 0, (-1, -1)),
+            # self mode = 1
+            (1, 0, 0, 1, (0, -2)),      # k
+            (1, 0, 1, 1, (-1, 1)),      # k
+            (1, 0, 2, 1, (1, 1)),       # k
+            (1, 1, 0, 1, (0, -2)),
+            (1, 1, 1, 1, (-1, 1)),
+            (1, 1, 2, 1, (1, 1)),
+            (1, 0, 0, 0, (0, -2)),
+            (1, 0, 1, 0, (-1, 1)),     # k
+            (1, 0, 2, 0, (1, 1)),      # k
+            (1, 1, 0, 0, (0, 2)),
+            (1, 1, 1, 0, (-1, 1)),
+            (1, 1, 2, 0, (1, 1)),
+        ]
+        mx = np.array([self.W/2, self.H/3])
+        local_offset_lut = np.zeros((2, 2, 3, 2, 2), dtype=np.float64)
+        for (smo, pmo, c1, sib, oxy) in _lut:
+            local_offset_lut[smo, pmo, c1, sib] = oxy * mx
+        return local_offset_lut
+
+    @lru_cache(maxsize=None)
+    def neighbour_lut(self):
+        """
+        Builds and caches a LUT of neighbours according to parent mode
+        Give region, parent-mode, parent-c1, return the neighbour.
+        """
+        # Given a region, parent mode, region-c1, return the neighbour and parent mode.
+        # If the parent mode has changed, then the region parent is a neighbour.
+        _lut = {
+            (0x16, 1): [(0x26, 1), (0x2B, 0), (0x21, 0)],
+            (0x21, 1): [(0x5F, 1), (0x5F, 1), (0x5F, 1)],
+            (0x25, 1): [(0x35, 1), (0x3A, 0), (0x26, 1)],
+            (0x26, 1): [(0x16, 1), (0x2A, 1), (0x25, 1)],
+            (0x2A, 1): [(0x3A, 1), (0x26, 1), (0x35, 0)],
+            (0x2B, 1): [(0x5F, 1), (0x5F, 1), (0x5F, 1)],
+            (0x34, 1): [(0x21, 0), (0x49, 0), (0x35, 1)],
+            (0x35, 1): [(0x25, 1), (0x39, 1), (0x34, 1)],
+            (0x39, 1): [(0x26, 0), (0x35, 1), (0x3A, 1)],
+            (0x3A, 1): [(0x2A, 1), (0x3E, 1), (0x39, 1)],
+            (0x3E, 1): [(0x2B, 0), (0x3A, 1), (0x49, 0)],
+            (0x49, 1): [(0x5F, 1), (0x5F, 1), (0x5F, 1)],
+            (0x16, 0): [(0x5F, 0), (0x5F, 0), (0x5F, 0)],
+            (0x21, 0): [(0x34, 1), (0x25, 0), (0x16, 1)],
+            (0x25, 0): [(0x35, 0), (0x21, 0), (0x26, 0)],
+            (0x26, 0): [(0x39, 1), (0x2A, 0), (0x25, 0)],
+            (0x2A, 0): [(0x3A, 0), (0x26, 0), (0x2B, 0)],
+            (0x2B, 0): [(0x3E, 1), (0x16, 1), (0x2A, 0)],
+            (0x34, 0): [(0x5F, 0), (0x5F, 0), (0x5F, 0)],
+            (0x35, 0): [(0x25, 0), (0x39, 0), (0x2A, 1)],
+            (0x39, 0): [(0x49, 0), (0x35, 0), (0x3A, 0)],
+            (0x3A, 0): [(0x2A, 0), (0x25, 1), (0x39, 0)],
+            (0x3E, 0): [(0x5F, 0), (0x5F, 0), (0x5F, 0)],
+            (0x49, 0): [(0x39, 0), (0x34, 1), (0x3E, 1)],
+        }
+        _neighbour_lut = np.full((self.num_regions, 2, 3, 2), self.invalid_ugc, dtype=np.uint8)
+        for key, neighbours in _lut.items():
+            region_id, mode = key
+            _neighbour_lut[region_id, mode] = neighbours
+        return _neighbour_lut
+
+    def c1(self, address, layer):
+        """
+        Given uri address(es) and a layer index (where 0 is the root)
+        Return the c1 of that layer via its parent.
+        """
+        if 0 < layer < address.shape[1]:
+            par = address[:, layer-1]
+            poi = address[:, layer]
+            return self.pqc1_lut[par, poi]
+        raise IndexError(f'Index must be: 0 < {layer} < {address.shape[1]}')
+
+    def terminate(self, addresses):
+        """
+        Normalise address termination.
+        """
+        last = addresses[:, -2]
+        c1 = self.pqc1_lut[last, addresses[:, -1]]
+        mode = self.ugc_lut[last, self.mode]
+        addresses[:, -1] = self.child_lut[mode, c1, 2]
+        return addresses
+
+    def neighbours(self, address):
+        """Vectorised means to return neighbouring half-hexagon addresses (as regions) via regions."""
+        count, layers = address.shape
+        neighbour = address.copy()              # The neighbour may just be a single switch.
+        cascading = np.ones(count, dtype=bool)  # Track all the addresses we are managing.
+        n_lut = self.neighbour_lut()
+        c1 = self.pqc1_lut[address[:, -2], address[:, -1]]
+        for poi in range(layers - 2, -1, -1):
+            if not np.any(cascading):
+                break
+            active = np.where(cascading)[0]
+            cur = address[:, poi][active]
+            par = address[:, poi - 1][active]
+            pmo = self.ugc_lut[par, self.mode]
+            nbm = n_lut[cur, pmo, c1[active]]
+            neighbour[:, poi][active] = nbm[:, -2]
+            cascading[active] = (nbm[:, 1] != pmo)
+        # Normalise terminal and root.
+        nmo = self.ugc_lut[neighbour[:, 0], self.mode]
+        root = np.where(nmo == 1, 0x16, 0x49)
+        neighbour[:, 0] = root
+        mode = self.ugc_lut[neighbour[:, -2], self.mode]
+        neighbour[:, -1] = self.child_lut[mode, c1, 2]
+        return neighbour
+
+    import numpy as np
+
+    def clamp(self, xx, yy, mode):
+        """
+        Given arrays of points and modes, clamps them to be within their
+        respective barycentric triangles.
+        """
+        # Create copies to store the final results
+        xx_final = xx.copy()
+        yy_final = yy.copy()
+
+        ẋ = self.R3 * xx
+        eps = 1e-14
+
+        # --- 1. Calculate the Clamped Result for UP Mode Points ---
+        up_mask = (mode == 1)
+        if np.any(up_mask):
+            # Filter to get only the points that are in UP mode
+            x_up, y_up, ẋ_up = xx[up_mask], yy[up_mask], ẋ[up_mask]
+
+            # Perform the full clamping logic for the UP case
+            y_up_clamped = np.clip(y_up, self.ΛF, self.ΛC)
+            max_abs_ẋ = self.ΛC - y_up_clamped
+            at_apex = np.isclose(y_up_clamped, self.ΛC, atol=eps)
+            max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
+
+            ẋ_clamped = np.clip(ẋ_up, -max_abs_ẋ, max_abs_ẋ)
+
+            at_base = np.isclose(y_up_clamped, self.ΛF, atol=eps)
+            xc = ẋ_clamped / self.R3
+
+            # Place the final clamped values back into the result arrays using the mask
+            ẋ[up_mask] = ẋ_clamped
+            xx_final[up_mask] = np.where(at_base, np.sign(xc) * self.TR, xc)
+            yy_final[up_mask] = np.where(at_base, self.ΛF, y_up_clamped)
+
+        # --- 2. Calculate the Clamped Result for DOWN Mode Points ---
+        down_mask = (mode == 0)
+        if np.any(down_mask):
+            # Filter to get only the points that are in DOWN mode
+            x_down, y_down, ẋ_down = xx[down_mask], yy[down_mask], ẋ[down_mask]
+
+            # Perform the full clamping logic for the DOWN case
+            y_down_clamped = np.clip(y_down, self.VF, self.VC)
+            max_abs_ẋ = y_down_clamped - self.VF
+            at_apex = np.isclose(y_down_clamped, self.VF, atol=eps)
+            max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
+
+            ẋ_clamped = np.clip(ẋ_down, -max_abs_ẋ, max_abs_ẋ)
+            at_base = np.isclose(y_down_clamped, self.VC, atol=eps)
+            xc = ẋ_clamped / self.R3
+
+            # Place the final clamped values back into the result arrays
+            xx_final[down_mask] = np.where(at_base, np.sign(xc) * self.TR, xc)
+            yy_final[down_mask] = np.where(at_base, self.VC, y_down_clamped)
+            ẋ[down_mask] = ẋ_clamped
+
+        return xx_final, yy_final, ẋ
+    # def clamp(self, xx, yy, mode):
+    #     """
+    #     Given an array of points, clamp them to be within the barycentric triangle.
+    #     This should only be necessary when preparing points for projection to barycentre.
+    #     """
+    #     ẋ = self.R3 * xx
+    #     eps = 1e-14  # A tolerance to detect if we're at a vertex
+    #
+    #     if mode == 1:  # Clamping for the UP triangle
+    #         invalid = (yy < self.ΛF) | (yy > (self.ΛC - np.abs(ẋ)))
+    #         if np.any(invalid):
+    #             yy = np.clip(yy, self.ΛF, self.ΛC)
+    #             max_abs_ẋ = self.ΛC - yy
+    #             at_apex = np.isclose(yy, self.ΛC, atol=eps)
+    #             max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
+    #             ẋ = np.clip(ẋ, -max_abs_ẋ, max_abs_ẋ)
+    #             at_base = np.isclose(yy, self.ΛF, atol=eps)
+    #             xc = ẋ / self.R3
+    #             xx = np.where(at_base, np.sign(xc) * self.TR, xc)
+    #             yy = np.where(at_base, self.ΛF, yy)
+    #     else:  # Clamping for the DOWN triangle
+    #         invalid = (yy > self.VC) | (yy < (self.VF + np.abs(ẋ)))
+    #         if np.any(invalid):
+    #             yc = np.clip(yy, self.VF, self.VC)
+    #             max_abs_ẋ = yc - self.VF
+    #             at_apex = np.isclose(yy, self.VF, atol=eps)
+    #             max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
+    #             # max_abs_ẋ = np.where(max_abs_ẋ < eps, 0.0, max_abs_ẋ)
+    #             ẋ = np.clip(ẋ, -max_abs_ẋ, max_abs_ẋ)
+    #             at_base = np.isclose(yc, self.VC, atol=eps)  # Use yc
+    #             xc = ẋ / self.R3
+    #             xx = np.where(at_base, np.sign(xc) * self.TR, xc)
+    #             yy = np.where(at_base, self.VC, yc)  # Use yc
+    #     return xx, yy, ẋ
+
+    def region_classification(self, ẋ, y):
+        """
+        # Grid Classification (Purely geometric) ---
+        :param ẋ:       np_array of √3(x)
+        :param y:       np_array of y
+        :return:        np_array of region_id
+        """
+        # ẋ, y, self.ẇ ΛC, VC, ΛF, VF are defined
+        h_conditions = [  # C0:=0; Horizontal – Flat
+            y > self.ΛC,
+            y > self.VC,
+            y > 0,
+            y > self.ΛF,
+            y >= self.VF,  # allow floor to be included.
+        ]
+        h_id = np.select(h_conditions, [0, 1, 2, 3, 4], default=5)
+        y_minus_x = y - ẋ
+        p_conditions = [  # C0:=1; Positive Slope / Forward
+            y_minus_x > self.Ẇ,
+            y_minus_x > 0,
+            y_minus_x >= -self.Ẇ,
+        ]
+        p_id = np.select(p_conditions, [0, 1, 2], default=3)
+        y_plus_x = y + ẋ
+
+        n_conditions = [  # C0:=2; Negative Slope \ Back
+            y_plus_x < -self.Ẇ,
+            y_plus_x < 0,
+            y_plus_x <= self.Ẇ,
+        ]
+        n_id = np.select(n_conditions, [0, 1, 2], default=3)
+        return h_id << 4 | p_id << 2 | n_id
+
+    def ugc_format(self, final_address, terminating_region, terminating_hex):
+        """
+            Creates a text representation for a batch of addresses.
+            Example output: "021686503081J0"
+            Returns:
+                A NumPy array of formatted string addresses.
+            """
+        final_address = np.atleast_2d(final_address)
+        terminating_region = np.atleast_1d(terminating_region)
+        terminating_hex = np.atleast_1d(terminating_hex)
+
+        # 1. Find all rows that correspond to a legal address
+        is_legal = terminating_region != self.invalid_ugc
+        if not np.any(is_legal):
+            return np.array(["Invalid Address" for _ in final_address])
+
+        legal_addresses = final_address[is_legal]
+        legal_rg = terminating_region[is_legal]
+        legal_hx = terminating_hex[is_legal]
+
+        # 2. Convert the integer digits to strings
+        # We replace the -1 padding with an empty string for clean joining
+        address_digits_str = np.where(legal_addresses == -1, '', legal_addresses.astype(str))
+
+        # 3. Join the digit strings for each address
+        # A list comprehension is the fastest Python-level way to do this
+        address_str_list = ["".join(row) for row in address_digits_str]
+
+        # 4. Format the terminating context
+        rg_char = self.rgs[legal_rg]
+        hx_char = legal_hx.astype(str)
+
+        # 5. Concatenate all parts using vectorized string operations
+        # final_str = address_str_list + mode_char + c1_char
+        final_str = np.char.add(address_str_list, rg_char)
+        final_str = np.char.add(final_str, hx_char)
+        return final_str
+
+    def unformat_addresses(self, text_addresses, mode):
+        """
+        Parses a single or a batch of text addresses into co-ordinates.
+        we need to include the root mode!
+        """
+        addr, t_reg, t_hex = self.unpack_addresses(text_addresses)
+        uris = self.ugc_inv(addr, mode, t_reg, t_hex)
+        return self.ugc_dec(uris)
+
+    def unpack_addresses(self, text_addresses):
+        """
+        Parses a single or a batch of text addresses into numerical arrays.
+
+        Args:
+            text_addresses (str or list or np.ndarray): A single address string or a
+                                                        collection of them.
+            depth (int): The expected length of the numerical digit part of the address.
+
+        Returns:
+            tuple: A tuple containing:
+                - final_address (np.ndarray): (N, depth) array of hex digits.
+                - terminating_region (np.ndarray): (N,) array of terminating region URIs.
+                - terminating_hex (np.ndarray): (N,) array of terminating hex digits.
+        """
+        # 1. Coerce the input into a 1D NumPy array to handle both single and batch cases.
+        addresses = np.atleast_1d(text_addresses)
+
+        # 2. Vectorized String Slicing
+        # Extract the numerical digit part of the strings.
+        hex_digits_str = np.array([list(s[:-2]) for s in addresses])
+
+        # Extract the two-character terminating context.
+        terminating_context_str = np.array([(s[-2:-1], s[-1:]) for s in addresses])
+
+        # 3. Vectorized Conversion to Numerical
+        # Convert the array of digit characters to integers.
+        final_address = hex_digits_str.astype(np.int8)
+
+        # Look up the region character and hex digit from the terminating context.
+        # This requires your pre-built CHAR_TO_REGION map.
+        region_char = terminating_context_str[..., 0]
+        hex_char = terminating_context_str[..., 1]
+
+        # A list comprehension is a fast way to do the character-to-int lookup.
+        terminating_region = np.array([self.ard[c] for c in region_char], dtype=np.int16)
+        terminating_hex = hex_char.astype(np.int8)
+
+        return final_address, terminating_region, terminating_hex
+
+    def ugc_dec(self, uri_address):
+        """
+        REVERSE: URI addresses back into (x,y) coordinates and its
+        initial mode.
+        Inverse of ugc_regions
+        """
+        num_points, depth = uri_address.shape
+        # Initialize x and y with the precise remainder from the encoding process.
+        x = np.zeros(num_points, dtype=np.float64)
+        y = np.zeros(num_points, dtype=np.float64)
+
+        # Loop backwards from the last layer down to the first REAL layer (index 1),
+        # skipping the placeholder root at index 0.
+        for i in range(depth - 1, 0, -1):
+            region_id = uri_address[:, i]
+            valid_mask = (region_id != self.invalid_ugc)
+
+            x /= 3.0
+            y /= 3.0
+
+            if np.any(valid_mask):
+                valid_ids = region_id[valid_mask]
+                off = self.ugc_off[valid_ids]
+                x[valid_mask] += off[:, 0]
+                y[valid_mask] += off[:, 1]
+
+        # After reconstructing the coordinates, find the initial mode from the root URI.
+        initial_mode = self.ugc_lut[uri_address[:, 0], self.mode]
+
+        # Stack all three results into a final (N, 3) array.
+        return np.stack([x, y, initial_mode], axis=-1)
+
+    def ugc_regions(self, xy, mode, depth=36):
+        """
+        Given a vector of Point coords create a set of regions
+        """
+        num_points = xy.shape[0]
+        x = np.copy(xy[:, 0])
+        y = np.copy(xy[:, 1])
+        addresses = np.full((num_points, depth + 2), self.invalid_ugc, dtype=np.uint8)
+        addresses[:, 0] = np.where(mode == 1, 0x16, 0x49)  # These values should come from the octant set.
+        for i in range(depth + 1):
+            x, y, ẋ = self.clamp(x, y, mode)
+            region = self.region_classification(ẋ, y)  # Raw classification
+            props = self.ugc_lut[region]
+            mode_up = props[:, self.in_up]
+            mode_dn = props[:, self.in_dn]
+            in_scope = np.where(mode == 1, mode_up, mode_dn)
+            region_id = np.where(in_scope, region, self.invalid_ugc)  # Validated ID
+            addresses[:, i + 1] = region_id
+            off = self.ugc_off[region_id]
+            mode = self.ugc_lut[region_id, self.mode]
+            x -= off[:, 0]
+            y -= off[:, 1]
+            x *= 3.
+            y *= 3.
+        return self.terminate(addresses)
+
+    def ugc_addr(self, xy, mode, depth=32):
+        """Given cmp a vector of Point components create a set of addresses
+            xy                  # shape (N) — barycentric coordinates (x, y)
+            mode                # shape (N) — modes for each octant.
+        """
+        num_points = xy.shape[0]
+        regions = self.ugc_regions(xy, mode, depth)
+        addresses = np.zeros((num_points, depth), dtype=np.uint8)
+        up_context_initial = np.array([0, 1, 2])  # Root context for UP mode
+        dn_context_initial = np.array([0, 1, 2])  # Root context for DOWN mode
+        context = np.where(mode[:, np.newaxis] == 1, up_context_initial, dn_context_initial)
+        for i in range(depth):
+            region_id = regions[:, i+1]
+            layer_digit, context, mode = self.ugc_hex_context(region_id, context, mode)
+            addresses[:, i] = layer_digit
+        term_digit, _, _ = self.ugc_hex_context(regions[:, -1], context, mode)
+        return addresses, regions[:, -2], term_digit
+
+    def ugc_hex_context(self, region, context, mode):
+        """
+        Given a region with parent c1 values and mode,
+        return the hex digit, updated context, and new mode
+        """
+        props = self.ugc_lut[region]
+        c1 = np.where(mode == 1, props[:, self.u_ci], props[:, self.d_ci])
+        hex_d = np.take_along_axis(context, c1[:, np.newaxis], axis=1).squeeze()
+        u_hex = props[:, [self.uc0, self.uc1, self.uc2]]
+        d_hex = props[:, [self.dc0, self.dc1, self.dc2]]
+        context = np.where(mode[:, np.newaxis] == 1, u_hex, d_hex)
+        mode = self.ugc_lut[region][:, self.mode]
+        return hex_d, context, mode
+
+    # def ugc_addr_o(self, x, y, mo, depth=32):
+    #     """Given cmp a vector of Point components create a set of addresses
+    #         x, y                  # shape (N) — barycentric coordinates (x, y)
+    #         mo                    # shape (N) — modes for each octant.
+    #     """
+    #     num_points = x.size
+    #     addresses = np.zeros((num_points, depth), dtype=np.uint8)
+    #     up_context_initial = np.array([0, 1, 2])  # Root context for UP mode
+    #     down_context_initial = np.array([0, 1, 2])  # Root context for DOWN mode
+    #     context = np.where(mo[:, np.newaxis] == 1, up_context_initial, down_context_initial)
+    #     region_id = self.invalid_ugc  # initialise.
+    #     for i in range(depth):
+    #         current_mo = mo
+    #         ẋ = self.R3 * x
+    #         # --- 1. Universal Grid Classification (Purely geometric) ---
+    #         uri = self.ugc_binning(ẋ, y)
+    #
+    #         # --- 2. Boundary Validation (Applies the mode) ---
+    #         is_inside_up = (mo == 1) & (y >= self.ΛF) & (y <= (self.ΛC - np.abs(ẋ)))
+    #         is_inside_down = (mo == 0) & (y <= self.VC) & (y >= (self.VF + np.abs(ẋ)))
+    #         is_valid = is_inside_up | is_inside_down
+    #
+    #         # --- 3. Final ID Assignment for the Current Layer ---
+    #         region_id = np.where(is_valid, uri, self.invalid_ugc)
+    #
+    #         #  --- 4. Get all properties for this layer
+    #         retrieved_props = self.ugc_lut[region_id]
+    #
+    #         # Get the trapezium ID (0, 1, or 2) for each point
+    #         u_trap_id = retrieved_props[:, self.u_ci]
+    #         d_trap_id = retrieved_props[:, self.d_ci]
+    #         hx_id = np.where(mo == 1, u_trap_id, d_trap_id)
+    #
+    #         # Use the trapezium_id to pick the correct digit from the current context
+    #         layer_digit = np.take_along_axis(context, hx_id[:, np.newaxis], axis=1).squeeze()
+    #
+    #         # Final digit for this layer, masking invalid points
+    #         addresses[:, i] = np.where(region_id != -1, layer_digit, -1)
+    #
+    #         # ---. Update State and Create the Context for the NEXT iteration ---
+    #         # Get the three potential digits for the next layer
+    #         u_digits = retrieved_props[:, [self.uc0, self.uc1, self.uc2]]
+    #         d_digits = retrieved_props[:, [self.dc0, self.dc1, self.dc2]]
+    #         context = np.where(mo[:, np.newaxis] == 1, u_digits, d_digits)
+    #
+    #         # 3. Look up offsets and next modes for all points at once
+    #         off = self.ugc_off[region_id]  # Shape: (num_points, 2)
+    #         mo = self.ugc_lut[region_id][..., 2]  # Shape: (num_points,)
+    #
+    #         x -= off[:, 0]
+    #         y -= off[:, 1]
+    #         x *= 3.
+    #         y *= 3.
+    #
+    #     # Now get the next child digit.
+    #     ẋ = self.R3 * x
+    #     uri = self.ugc_binning(ẋ, y)
+    #     is_inside_up = (mo == 1) & (y >= self.ΛF) & (y <= (self.ΛC - np.abs(ẋ)))
+    #     is_inside_down = (mo == 0) & (y <= self.VC) & (y >= (self.VF + np.abs(ẋ)))
+    #     is_valid = is_inside_up | is_inside_down
+    #     ch_region = np.where(is_valid, uri, self.invalid_ugc)
+    #     # do all this to make sure that we get invalid_ugc if it is invalid!
+    #     props = self.ugc_lut[ch_region]
+    #     hx_id = np.where(mo == 1, props[:, self.u_ci], props[:, self.d_ci])
+    #     layer_digit = np.take_along_axis(context, hx_id[:, np.newaxis], axis=1).squeeze()
+    #     return addresses, region_id, layer_digit
+
+    def ugc_inv(self, hex_digits, mode, c_reg, c_hex):
+        """
+        :param hex_digits:  an array of hex-digit arrays representing grid addresses.
+        :param mode:  a vector of modes of each octant.
+        :param c_reg:  the terminating child regions of the final digit.
+        :param c_hex:  the terminating child digits from that c_reg.
+        :return: unpacked arrays the representative regions, that can be converted back to co-ordinates.
+        """
+        num_points, depth = hex_digits.shape
+        uri_address = np.zeros((num_points, depth + 1), dtype=np.uint8)
+        uri_address[:, -1] = c_reg  # Seed the last position of the *actual* address
+        uri_address[:, 0] = np.where(mode == 1, 0x16, 0x49)
+        # c_hex = self.child_lut[mode, 1]
+        # q_modes = self.ugc_lut[neighbours[:, -2], self.mode]
+        # neighbours[:, -1] = self.child_lut[q_modes, c1, 1]
+        p_xp = self.ugc_rev[hex_digits[:, -1], c_hex, c_reg]
+        # self.ugc_rev[int(p_hx), c_hx, c_reg]
+
+        # 2. Loop backwards from the second-to-last position of the *actual* address
+        for i in range(depth - 1, 0, -1):
+            p_hex = hex_digits[:, i]
+
+            # The definitive 3-part key lookup
+            p_reg = self.ugc_rev[p_hex, c_hex, c_reg]
+
+            # The corrected storage line
+            uri_address[:, i] = p_reg
+
+            # Update the state for the next backward step
+            c_hex = p_hex
+            c_reg = p_reg
+
+        return uri_address
+
+    def addr(self, pts, depth=32, calc_prefix=True):
+        """Given a set of Points return their octant-address, hex-digits, terminal region, and hex"""
+        # from hhg9 import Points
+        dom = pts.domain
+        oc, mode = pts.cm()
+        addr, t_reg, term_hex = self.ugc_addr(pts.coords, mode, depth)
+        term_reg = self.rgs[t_reg]
+        if calc_prefix:
+            oc1 = addr[:, 0]
+            handlers = dom.handlers()  # shape (N,), dtype=object
+            selected_handlers = handlers[oc]
+            get_oc_element = np.frompyfunc(lambda obj, idx: obj.oc[idx], 2, 1)
+            pfx = np.array(get_oc_element(selected_handlers, oc1))
+            return pfx, addr[:, 1:], term_reg, term_hex
+        else:
+            return oc, addr, term_reg, term_hex
+
+    def _poly_luts(self):
         """
         Return the half-hex/hexagon coordinates of c1 for the triangle.
-        In accordance with Octahedron_Net dimensions.
-        :param c1: the c1 required (0,1,2)
-        :param mode: up/down
-        :param d3: return 3d results.
-        :param hexagon: return hexagon polygon.
         :return: the half-hex coordinates of c1 for the triangle
         """
-        u, v = cls.U, cls.H / 3.
+        u, v = self.U, self.H / 3.
         pts = {
             # Clockwise. 5th pt is half-way along the long part.
-            (False, 'Λ'): [
+            (0, 1): [
                 [(-1, -1), (0, 0), (2, 0), (3, -1), (1, -1)],
                 [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-2, -0)],
                 [(2, 0), (0, 0), (-1, 1), (0, 2), (1, 1)]
             ],
-            (False, 'V'): [
+            (0, 0): [
                 [(3, 1), (2, 0), (0, 0), (-1, 1), (1, 1)],
                 [(0, -2), (-1, -1), (0, 0), (2, 0), (1, -1)],
                 [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-2, 0)]
             ],
-            (True, 'Λ'): [
+            (1, 1): [
                 [(-1, -1), (0, 0), (2, 0), (3, -1), (2, -2), (0, -2)],
                 [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0), (-3, 1)],
                 [(2, 0), (0, 0), (-1, 1), (0, 2), (2, 2), (3, 1)]
             ],
-            (True, 'V'): [
+            (1, 0): [
                 [(3, 1), (2, 0), (0, 0), (-1, 1), (0, 2), (2, 2)],
                 [(0, -2), (-1, -1), (0, 0), (2, 0), (3, -1), (2, -2)],
                 [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0)]
             ]
         }
-        if not d3:
-            return np.array(pts[(hexagon, mode)][c1]) * [u, v]
-        else:
-            return np.array([[x * u, y * v, 0] for (x, y) in pts[(hexagon, mode)][c1]])
+        uv = np.array([u, v])
+        hh = np.zeros((2, 3, 5, 2), dtype=np.float64)
+        hx = np.zeros((2, 3, 6, 2), dtype=np.float64)
+        for (kind, mode), c1s in pts.items():
+            for c1, poly in enumerate(c1s):
+                if kind == 0:
+                    hh[mode, c1] = poly * uv
+                elif kind == 1:
+                    hx[mode, c1] = poly * uv
+        return hh, hx
 
-    def enmesh(self, pt, loc='021', _depth=31, single=False, hexagon=False) -> list:
+    def enmesh(self, addresses):
         """
-        Given a 2d coordinate and a c2 triangle (one of six), return hierarchy of polygons it belongs to.
-        Alternatively just the one at the depth we want.
-        :param pt:
-        :param loc:
-        :param _depth:
-        :param single:
-        :param hexagon: return hexagon(s) rather than half-hexagon(s).
-        :return:
+        Given a numpy array of URI regions, returns a dictionary of the unique
+        nested half-hexagon polygons.
         """
-        if loc in self.o2p:
-            loc = self.o2p[loc][0]
-        result = []
-        mx = 1.
-        xo, yo = 0., 0.
-        for d in range(_depth):
-            vals = self.xy_to_h9(pt, loc)
-            if not vals:
-                break
-            hx, mode, pt, loc = vals
-            c1 = hx % 3
-            if single and d == _depth - 1:
-                return (self.poly(c1, mode, False, hexagon) * mx) + [xo, yo]
-            else:
-                po = (self.poly(c1, mode, False, hexagon) * mx) + [xo, yo]
-                result.append(po)
-            xd, yd = self.OFS[c1, mode, loc]
-            xo, yo = xo - xd * mx, yo - yd * mx
-            mx /= 3.
-        return np.array(result)
+        # Use a dictionary to store unique polygons, keyed by their address tuple
+        unique_polygons = {}
+        polys = []
+        num_points, depth = addresses.shape
+        for i in range(num_points):
+            address_path = addresses[i]
+            parent_xy = np.array([0.0, 0.0])
+            scale = 1.0
+            for j in range(1, depth):
+                parent_uri = address_path[j - 1]
+                child_uri = address_path[j]
+                if child_uri == self.invalid_ugc:
+                    break  # Stop processing this path if it becomes invalid
+                current_path_key = tuple(address_path[:j + 1])
+                if current_path_key not in unique_polygons:
+                    parent_mode = self.ugc_lut[parent_uri, self.mode]
+                    child_c1 = self.pqc1_lut[parent_uri, child_uri]
+                    hh_shape = self.poly_hh[parent_mode, child_c1]
+                    polygon = parent_xy[np.newaxis, :] + hh_shape * scale
+                    idx = len(polys)
+                    polys.append(polygon)
+                    unique_polygons[current_path_key] = idx
+                parent_xy += self.ugc_off[child_uri] * scale
+                scale /= 3.0
+        return unique_polygons, np.array(polys)
 
     def poly_step(self, step, hex=False):
         """Return polygon for a given step, correctly scaled and positioned."""
@@ -566,14 +1375,14 @@ class H9Engine:
         return (self.poly(c1, mode, hexagon=hex) * step.s) + [step.xa, step.ya]  #
 
     @classmethod
-    def valid(cls, pts, ud='Λ'):
+    def valid(cls, pts, mode='Λ'):
         """
         syntactic sugar for in_scope()
         :param pts: ndarray of x,y co-ordinates.
-        :param ud: triangle pointing up/down
+        :param mode: triangle pointing up/down
         """
         # ẋ, y = cls.R3 * pts[..., 0], pts[..., 1]
-        return cls.in_scope(cls.R3 * pts[..., 0], pts[..., 1], ud)
+        return cls.in_scope(cls.R3 * pts[..., 0], pts[..., 1], mode)
 
     @classmethod
     def xy_to_h9(cls, pt_i, c2t_i='021'):
@@ -585,12 +1394,12 @@ class H9Engine:
         """
         ud = 'Λ' if c2t_i in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
         x, y = pt_i[0], pt_i[1]  # This is a point on the plane
-        ẋ = cls.R3 * x           # We will be using √3x for everything.
+        ẋ = cls.R3 * x  # We will be using √3x for everything.
         if not cls.in_scope(ẋ, y, ud):  # Ensure we are in the equilateral
             return None
         c1 = cls.get_c1(ẋ, y, ud)  # Identify the c1 lo trit (036 / 147 / 258)
-        c2 = int(c2t_i[c1])        # Identify the c2 hi trit (012 / 345 / 678)
-        hx = c2 * 3 + c1           # Fundamental Enumeration: c2*3+c1
+        c2 = int(c2t_i[c1])  # Identify the c2 hi trit (012 / 345 / 678)
+        hx = c2 * 3 + c1  # Fundamental Enumeration: c2*3+c1
         c2t_o = cls.get_c2(ẋ, y, c1, ud)  # c1, ẋ, y to identify the next c2t (one of three triangles)
         xo, yo = cls.OFS[c1, ud, c2t_o]  # using c1, c2t_o we can find the offset of the next triangle.
         pt_o = 3. * (x + xo), 3. * (y + yo)  # update the new coordinates by the offset.
@@ -780,7 +1589,7 @@ class H9Engine:
         for i in reversed(range(len(path_str) - 1)):
             hx = path_str[i + 1]
             c2 = self.oc2[(hx, rot, mode)]
-            rct, mode = self.ocm[c2]   # rotation/mode contexts for c2.
+            rct, mode = self.ocm[c2]  # rotation/mode contexts for c2.
             hx = int(path_str[i])  # This is the outer (contextual) hex digit.
             rot = int(rct[hx])  # The outer (contextual) rotation
             modes[i] = mode
@@ -799,7 +1608,7 @@ class H9Engine:
         cs[-1] = i_c2
         # Walk backwards through the address
         for i in reversed(range(len(path_str) - 1)):
-            o_h = path_str[i]               # eg '1'
+            o_h = path_str[i]  # eg '1'
             i_c2 = self.cc2_pc2[o_h, i_c2]
             cs[i] = i_c2
         return cs
@@ -812,22 +1621,22 @@ class H9Engine:
         ddx = []
         s, x, y = 1.0, 0.0, 0.0
         o_c2 = root
-        for i in range(len(path_str)-1):
+        for i in range(len(path_str) - 1):
             cx, i_c2 = path_str[i], cs[i]  # in
             o_c1 = i_c2.index(cx)
             opc2, o_r, o_m = self.o2p[o_c2]  # Planar equivalents of o_c2.
             ipc2, i_r, i_m = self.o2p[i_c2]  # Planar equivalents of i_c2.
             d_m = 'V' if o_m == 'Λ' else 'Λ'
             key = o_c1, d_m, ipc2
-            # return self.OFS[(i_c1, 'V' if ud == 'Λ' else 'Λ', i_c2)]
+            # return self.OFS[(i_c1, 'V' if mode == 'Λ' else 'Λ', i_c2)]
             ddx.append((cx, i_c2, (opc2, o_r, o_m), (ipc2, i_r, i_m), *key, (x, y)))
             try:
                 dx, dy = self.OFS[key]
-                x = x - s*dx
-                y = y - s*dy
+                x = x - s * dx
+                y = y - s * dy
                 s /= 3.0
             except KeyError:
-                print(f'key {key} not found in OFS')   # 2 ^ 102
+                print(f'key {key} not found in OFS')  # 2 ^ 102
             o_c2 = i_c2
         return x, y
 
@@ -838,7 +1647,7 @@ class H9Engine:
         # kyx = []
         s, x, y = 1.0, 0.0, 0.0
         oc2 = root
-        for i in range(len(path_str)-1):
+        for i in range(len(path_str) - 1):
             ro, mo = self.uro[oc2]  # '085' -> 0,Λ
             cx, cm, nx, nm = path_str[i], modes[i], path_str[i + 1], modes[i + 1]
             c1 = oc2.index(cx)  # '085'(5) = 2
@@ -846,8 +1655,8 @@ class H9Engine:
             pc2, pr, pm = self.o2p[oc2]  # Planar equivalents of current o_c2.
             key = (c1, mo, pc2)
             dx, dy = self.OFS[key]
-            x = x - s*dx
-            y = y - s*dy
+            x = x - s * dx
+            y = y - s * dy
             # kyx.append((*key, (mo, c1, nx, nm), oc2, (x, y)))
             s /= 3.0
         return x, y
@@ -906,29 +1715,82 @@ class H9Engine:
             nxt.tr = tr
         return nxt, result
 
-    def oct_encode(self, pt, o_c2='085', depth=30, style=Style.HEX):
+    def oct_encode(self, pt, mo, depth=30, style=Style.HEX):
         """Octahedral encoding of a point in a triangle"""
-        path = []
-        suffix = ''
-        step = Step(o_c2, pt[0], pt[1], style)
-        for i in range(depth):
-            step, code = self.encode_step(step, last=i == depth - 1)
-            path.append(code)
-        path.append(suffix)
-        return ''.join(path)
+        pts = np.atleast_2d(pt).copy()
+        mode = np.atleast_1d(mo)
+        addr, term_reg, term_hex = self.ugc_addr(pts, mode, depth)
+        return self.ugc_format(addr, term_reg, term_hex)
 
 
 if __name__ == '__main__':
-    # Stonehenge: 0.29243772, 0.28113778 293.017 281.458
-    h9 = H9Engine()
-    shb = 0.29243772, 0.28113778
-    sh_loc = '085'
-    shf = h9.oct_encode(shb, sh_loc)
-    shp = h9.oct_decode(shf, sh_loc)
-    print(shb, shf, shp)
+    from hhg9 import Points, Registrar
 
+    h9 = H9Engine()
+    various = np.array([
+        [0.2785587592601327, 0.29386255474543355, 0],   # Stonehenge.
+        [0.30413319554572815, 0.28972243397424297, 0],  # Greenwich Park West
+        [0.30413319554572815, -0.28972243397424297, 1],  # Greenwich Park East
+        [0.302986940221271, 0.2895875423442124, 1],
+        [0.303014288964195, 0.2896217435874474, 0],
+        [0.000000000000001, -0.8164965132120238, 0],
+        [0.292437721410212, 0.2924377012342344, 0],
+        [0.012345678901234, 0.1234567890123456, 0],
+    ])
+    xy, m = various[:, :2], various[:, 2]
+    x, y, mo = various[:, 0], various[:, 1], various[:, 2]
+    xr = h9.ugc_regions(xy, mo, 20)
+    gpw = xr[1]
+    gpe = xr[2]
+    xv = h9.neighbours(xr.copy())
+    gpw_n = xv[1]
+    gpe_n = xv[2]
+    gx = h9.ugc_dec(xv)
+
+    a, ra, ch = h9.ugc_addr(xy, mo)
+
+    # gx = h9.ugc_dec(xr)
+    dx, dy, dm = np.abs(x - gx[:, 0]), np.abs(y - gx[:, 1]), np.abs(mo - gx[:, 2])
+    ab = h9.neighbours(xr.copy())
+    pak = h9.neighbours(ab)
+    dak = (xr == pak)
+
+    ux = h9.ugc_inv(a,  mo, ra, ch)
+    ast = h9.ugc_format(a, ra, ch)
+    reg = Registrar()
+    from hhg9.domains import OctahedralCartesian, OctahedralBarycentric
+
+    # Stonehenge: 0.29243772, 0.28113778 293.017 281.458
+    c_oct = OctahedralCartesian(reg)  # Cartesian Octahedron (xyz)
+    b_oct = OctahedralBarycentric(reg, c_oct)  # 2d Flat for addressing.
+    up_hi = (0, h9.V * 4.)
+    dn_lo = (0, -h9.V * 4.)
+    ldn = Points(
+        np.array([
+            [0.303014288964195, 0.2896217435874474],
+        ]), b_oct,
+        np.array([(+1, +1, +1)])
+    )
+
+    # ldn.coords[:,0]
+    rx = h9.addr(ldn, 12)
+    done = True
+
+    # oc, mo = greenwich.cm()
+    # g_code = f'{ldn:h9.12}'
+    # club = Points(
+    #     np.array([[0.30298694022127, 0.2895875423442]]), b_oct,
+    #     np.array([(+1, -1, +1)])
+    # )
+
+    # h9 = H9Engine()
+    # shb = 0.29243772, 0.28113778
+    # sh_loc = '085'
+    # shf = h9.oct_encode(shb, sh_loc)
+    # shp = h9.oct_decode(shf, sh_loc)
+    # print(shb, shf, shp)
     # club = 0.303014288964195, 0.2896217435874474
-    # loc = '085'
+    # loc = '085' up
     # ldn_x, ldn_y = club
     # plx = h9.enmesh(club, loc, 3, False, False)  # This is the set of hexagons.
     # step = Step(loc, ldn_x, ldn_y)

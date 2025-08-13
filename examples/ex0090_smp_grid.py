@@ -8,11 +8,12 @@ The octahedral->spherical projection is relatively fast, so we can handle larger
 Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
 Last Tested 21 June 2025
+Rewrote and Tested √ 10 Aug 2025 - but the grid stuff isn't ideal. cf. the pr0005_grid instead.
 """
 import numpy as np
 from matplotlib import image, pyplot as plt
 from scipy.spatial import KDTree
-from hhg9 import Registrar, H9Engine, Grid
+from hhg9 import Registrar, H9Engine, Grid, Points
 from hhg9.domains import GeneralGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, PlatePixel, \
     OctahedralNet
 from hhg9.projections import EllipsoidGCD, PlatePixelGCD, AKOctahedralEllipsoid
@@ -53,9 +54,12 @@ if __name__ == '__main__':
     # Set up a pixel grid of the octahedral net.
     # Scale is the number of pixels used to express 90º longitude at the equator in the Plate Carrée.
     # The net map will be about 445º across and 330º high, and includes white. 5400x2700 => 6681×4959
+    # sq_grid is better managed now in the prxxx stuff.
     scale = 2700
-    f_org = [g.sq_grid(scale, p.fwd_cs.mode)+p.offset for p in n_oct.projs.values()]
-    pts = n_oct.adopt(np.vstack(f_org))  # These are our net points.
+    lut = n_oct.o.sides
+    f_org = {lut[k].sig: g.sq_grid(scale, p.fwd_cs.mode)+p.offset for k, p in n_oct.projs.items()}
+    pt_list = [Points(v, n_oct, k) for (k, v) in f_org.items()]
+    pts = Points.concat(pt_list)  # These are our net points.
     # project the grid onto cartesian sphere.
     ref = reg.project(pts, [n_oct, b_oct, c_oct, c_ell])  # ref. addresses on a cartesian unit sphere
     # Use KDTree to map the grid points onto the sample points.

@@ -12,7 +12,6 @@ from .registrar import Registrar
 from .h9_engine import H9Engine, Step
 from .grid import Grid
 
-
 __all__ = [
     "Domain",
     "ComponentDomain",
@@ -21,5 +20,5 @@ __all__ = [
     "Points",
     "Registrar",
     "H9Engine", "Step",
-    "Grid"
+    "Grid",
 ]

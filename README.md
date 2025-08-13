@@ -1,78 +1,116 @@
-A vast amount of work has been accomplished.
-The system in general is in place, but it needs tidying
-Documentation needs finishing - especially for geodesic.
+## Hex9.
+Hex9 is an ongoing project that exploring (and developing) a novel 
+*hierarchical hexagonal grid* (`HHG`) system for global projections.
+It is well-suited to population mapping, environmental modeling, heat-mapping, 
+hex-binning, and other geospatial analyses.
 
-In May '25 I realised that the planar enumeration would not work
-so had to re-work the entire enumeration for octahedral.
-Once that worked, it occurred that I could use the grid itself
-for refining the address values.
+#### Why hexagonal tiling
+* Hexagonal tiling is unique among regular tilings: all neighbors share an edge.
+* Hexagonal tiling corresponds to optimal circle packing.
+* However...
+  * Hexagons cannot be tiled with hexagons.
+  * The sphere cannot be covered by hexagonal tilings
+* So, although ideal HHG have a long history in geospatial modeling...
+  * Most global HHG are either flat or approximate, or not entirely hexagonal.
+  * Existing approaches involve trade-offs, such as
+    * Approximating the sphere with slight distortions.
+    * Limiting the number of hierarchical layers.
+    * Supporting only partial support for transitions between layers.
+    * Deriving the hexagonal grid from spherical geometry
+    * Needing precomputed databases of fixed points.
+    * Requiring additional polygon types (commonly pentagons) for closure
+* **Hex9** presents a *new* approach to the “holy grail” of HHG; It aims to 
+  reduce 
+ some of these constraints while remaining early-stage and not yet  
+  production-ready (Summer 2025).
 
-My [new documentation](enumeration.md) 
+### Why Hex9
+#### Grid-Projection Decoupling
+The Hex9 grid is *fully decoupled from the underlying global projection*. 
+The logical hex grid exists independently of any coordinate reference system and
+can be applied within any octahedral global projection.
+While Hex9 comes with a derived projection for this project, the grid itself is 
+projection-agnostic, while the derived projection relies on the Hex9 grid
+ for root-finding operations.
 
-[Documentation for the examples](examples/examples.md)
+This separation ensures:
+ * The grid can be reused across projections without loss of structure.
+ * Analyses and visualizations remain consistent, regardless of map 
+distortions in the underlying projection.
 
-This project is centred on the idea of hierarchic hexagonal grids, with the 
-primary insight that, while one cannot tile hexagons with hexagons one can 
-tile half-hexagons with half-hexagons.  When one is looking at the 1:9 
-ratio, there are 49 such tilings of which 1 pair works particularly well for 
-hierarchic hexagonal tiling.
+#### Accuracy
+Hex9 supports near-lossless forward and inverse mappings between 
+grid addresses and geodetic coordinates. 
+Accuracy is maintained even at extreme resolution: At layer 30, hexagons are 
+on the order of 1µm. Example round-trip accuracy for several landmarks:
 
-![49_tilings](images/49_tilings.png)
+**Great Pyramid**
+```
+29°58'44.985076680004"N, 31°8'3.346883880003"E (Reference Coordinates)
+EAV484520284815335765361106218588821C2 (Grid Address)
+29°58'44.985076680016"N, 31°8'3.346883879965"E (Roundtrip via Grid Address)
+∂1.028579nm delta (Geodesic.DISTANCE)
+```
 
-The use of half-hexagons ('regular' trapezoids composed of three equilateral 
-triangles) as the primary fundamental resolves many of the issues that arise 
-from hexagonal hierarchies.  
+**Stonehenge**
+```
+51°10'43.672800075871"N, 1°49'34.031280757836"W (Reference Coordinates)
+NWΛ013572475462870330106251202683087C4 (Grid Address)
+51°10'43.672800075819"N, 1°49'34.031280757874"W (Roundtrip via Grid Address)
+∂1.314516nm delta (Geodesic.DISTANCE)
+```
 
-The work I did back in 2010 or so [past research](assets/docs/past.md) was 
-based on something very similar to the H3 methods currently funded by Uber 
-(the ride company), but I didn't like the ragged edges, and rotations 
-required at each layer - moreover at that time I did not discover an address 
-system that worked intuitively.
+**Moai on Rapa Nui**    
+```
+27°7'32.827199567155"S, 109°16'36.740870832014"W (Reference Coordinates)
+SWΛ145666784771136056604063805344505A7 (Grid Address)
+27°7'32.827199567155"S, 109°16'36.740870832014"W (Roundtrip via Grid Address)
+∂0.000000nm  delta (Geodesic.DISTANCE)
+```
 
-![h9a9.png](assets/docs/h9a9.png)
+**North Pole** (edge case)
+```
+90°0'0.000000000000"N, 0°0'0.000000000000"E (Reference Coordinates)
+NAV333333333333333333333333333333324G3 (Grid Address)
+89°59'59.999999999847"N, 50°11'39.944067845317"E (Roundtrip via Grid Address)
+∂4.761801nm  delta (Geodesic.DISTANCE) 
+```
 
-Below is the basic unit hexagon, showing its division into the 18 half-hexagons that compose it.  
-The numbering is one way of indexing the half-hexagons, and is suitable for 
-planar tiling.  When tiling the octahedron, one must adopt something a 
-little more complex (only a small amount) in order to address edge 
-transitivity. 
+#### Performance
+Hex9 efficiently handles large datasets. For example, *25 million sparse 
+GCD points can be mapped in under 20 minutes* on standard desktop hardware. 
+Non-sparse datasets are processed much faster.
 
-![index_units.png](assets/docs/index_units.png)
+#### Summary
+Thanks to its decoupled, fractal-based structure, 
+Hex9 allows direct projection of spatial data onto hexagonal grids. 
+This enables visualizations where hexagons remain undistorted regardless 
+of the underlying map projection, as shown in this Guernsey population heatmap.
 
-The plane can be tiled using the following:
-![tiling.png](assets/docs/tiling.png)
+![](images/ggy_heatmap.png)(*Guernsey population heatmap*)
 
-A hexagonal grid hierarchy can be seen below, with the outer hexagon in white, 
-then the successive lower hierarchies in green, blue and red. The hierarchy is unlimited in depth.
+#### What can I find here?
+This project includes:
+ * Documentation and analysis of Hex9.
+ * A working Python implementation of the grid, precise to sub-micrometre accuracy using geodesics.
+ * Unit tests for the H9 Grid Engine.
+ * Examples and tutorials demonstrating how to use the grid for various geospatial tasks.
 
-![hierarchy](assets/docs/hierarchy.jpg)
+#### Where next?
+ * Detailed documentation explaining how the grid is structured and derived.
+   * [Introduction](introduction.md)
+   * [Enumeration](enumeration.md)
+   * [Early thoughts](assets/docs/past.md)
 
-While independent of the display projection, the method *cannot* be used on any polyhedron projection, as the fundamental 
-shape involves chained mirror-pairs:  It can only work on polyhedra 
-which have an even number of edges attached to each vertex.
-Therefore, it does NOT lend itself well when using global addresses on  
-icosahedral maps, that have five edges from each vertex.  
+ * Step-by-step guides for the included examples.
+   * [Examples](examples/examples.md)
 
-This is not a major issue, however - the Octahedron is highly suitable for 
-this hierarchy, and, though the octahedron itself tends towards greater 
-distortion when used as a projection, for the purposes of generating 
-hexagonal grid addresses, it works perfectly adequately.
+#### What can I do?
+ * Explore the grid and have fun experimenting with it.
+ * Mention this project with your buddies!
+ * Suggest improvements to enhance understanding or usability.
+ * Contribute bug fixes or enhancements via pull requests.
 
 ![Octahedral Projection](images/net_2700.jpg)
 
-The following shows an early version of the grid focussed on London.
 
-![gis](assets/docs/gis.jpg)
-
-### Grid referencing.
-We can use an address system that resolves hierarchy and location extremely 
-easily. One thing that I like is that we can use subtended regions rather 
-than axis-oriented addresses. Why is that nice?  It offers a few benefits
-- first of all there is only one string (unlike, EG lat/long or OS grids - which still confuse those not familiar with 
-), and where locality can be kept relevant without having to consider a remote origin.
-
-Another 'feature', is that from any given root, the length of the address tells us about the level of hierarchy. 
-Moreover, merely by shortening the address, we may derive the layer ancestry.
-
-Grid coordinates are best done, for this, using base 9, and using a signifier for the half-hex specialisation.
-One can work out the entire half-hex address from a given hex address - but it does require following some rules.

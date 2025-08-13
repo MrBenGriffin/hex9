@@ -21,13 +21,17 @@ class OctantBarycentric(ComponentDomain):
     """
 
     def __init__(self, registrar, dom, name: str, sign, cc: tuple):
-        super().__init__(registrar, name)
+        super().__init__(registrar, name, 2)
         self.dom = dom
         self.sign = sign
         self.th = (cc[0] % 6) * np.pi / 3.
         self.tr = cc[1]
         self.mode = cc[2]   # 'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
         self.geo = {k: v for k, v in zip(self.tr, cc[3])}  # in c1 (orientation) order.
+        self.reg = cc[4]
+        self.mo = cc[5]
+        self._oc = cc[3]
+        self.oc = np.array([cc[3][i]+self.mode for i in range(3)], dtype='U3')
 
     def h9_add(self, h9m):
         for k, v in self.geo.items():
@@ -51,11 +55,12 @@ class OctahedralBarycentric(CompositeDomain):
     """
 
     def __init__(self, registrar, o: OctahedralCartesian):
-        super().__init__(registrar, 'b_oct')
+        super().__init__(registrar, 'b_oct', 2)
         self.sides = {}
         self.projs = {}
         self.signs = {}  # o.signs  # These are used to tie the projection.
         self.h9map = {}
+        self.components = {}
         self.h9e = H9Engine()
         # self.octant_index = {
         #     (+1, +1, +1): 0, (-1, +1, +1): 1, (+1, -1, +1): 2, (-1, -1, +1): 3,
@@ -73,18 +78,19 @@ class OctahedralBarycentric(CompositeDomain):
         ], dtype=[('loc', 'U3'), ('mode', 'U1')])
         # Theta is to ensure that each octant has a pole at its apex.
         # The pole is C2:0
+        # _components = {}
         for sign, face in o.signs.items():
             props = {
-                # Octahedral Triangle Identities differ.
-                # AP EW  NS    θ  V
-                (+1, +1, +1): (2, '047', 'V', ('EA', 'NA', 'NE')),  # 'NEA' N:5, E:8, A: 0
-                (-1, +1, +1): (5, '085', 'Λ', ('EP', 'NE', 'NP')),  # 'NEP' N:4, E:7, P: 0
-                (+1, -1, +1): (5, '085', 'Λ', ('WA', 'NA', 'NW')),  # 'NWA' N:4, W:7, A: 0
-                (-1, -1, +1): (2, '047', 'V', ('WP', 'NP', 'NW')),  # 'NWP' N:5, W:8, P: 0
-                (+1, +1, -1): (5, '085', 'Λ', ('EA', 'SE', 'SA')),  # 'SEA' S:4, E:7, A: 0
-                (-1, +1, -1): (2, '047', 'V', ('EP', 'SP', 'SE')),  # 'SEP' S:5, E:8, P: 0
-                (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW')),  # 'SWA' S:5, W:8, A: 0
-                (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'))   # 'SWP' S:4, W:7, P: 0
+                # Octahedral Triangle Identities differ. 0x16, 0x49
+                # AP EW  NS    θ   loc    V   - loc is indicative only, for root hex.
+                (+1, +1, +1): (2, '047', 'V', ('EA', 'NA', 'NE'), 0x49, 0),  # 0 'NEA' N:5, E:8, A: 0
+                (-1, +1, +1): (5, '085', 'Λ', ('EP', 'NE', 'NP'), 0x16, 1),  # 1 'NEP' N:4, E:7, P: 0
+                (+1, -1, +1): (5, '085', 'Λ', ('WA', 'NA', 'NW'), 0x16, 1),  # 2 'NWA' N:4, W:7, A: 0
+                (-1, -1, +1): (2, '047', 'V', ('WP', 'NP', 'NW'), 0x49, 0),  # 3 'NWP' N:5, W:8, P: 0
+                (+1, +1, -1): (5, '085', 'Λ', ('EA', 'SE', 'SA'), 0x16, 1),  # 4 'SEA' S:4, E:7, A: 0
+                (-1, +1, -1): (2, '047', 'V', ('EP', 'SP', 'SE'), 0x49, 0),  # 5 'SEP' S:5, E:8, P: 0
+                (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW'), 0x49, 0),  # 6 'SWA' S:5, W:8, A: 0
+                (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'), 0x16, 1)   # 7 'SWP' S:4, W:7, P: 0
             }
             b_sig = f'{self.name}:{face}'
             o_sig = o.sides[face].name
@@ -216,9 +222,12 @@ if __name__ == '__main__':
     h9 = OctahedralH9()  # formatter.
     b_oct.register_format(h9)
     greenwich = Points(
-        np.array([[0.3041404, -0.28970996], [0.3041376, 0.28970996]]), b_oct,
+        np.array([
+            [0.3041404, -0.28970996], [0.3041376, 0.28970996],
+        ]), b_oct,
         np.array([(+1, +1, +1), (+1, -1, +1)])
     )
+    # oc, mo = greenwich.cm()
     g_code = f'{greenwich:h9.12}'
     club = Points(
         np.array([[0.30298694022127, 0.2895875423442]]), b_oct,

@@ -1,22 +1,17 @@
 # `H9` An hierarchic hexagonal grid
 
-These notes are not fully complete, as they do not include the octahedral 
-system. However, I will be finishing these notes soon.
-
-This is a solution to the challenge of generating a hierarchic hexagonal grid.
-While there have been many approaches to
-this challenge over the last few decades, this solution (`H9`) may have
-significant benefits over others that are more
-well known.
+These notes are founded on the initial planar system, which has now been 
+re-factored to a more intuitive and less fragile global system, but they may 
+serve as good backgrounding.
 
 # Why hierarchic hexagonal grids?
 
 The motive for doing this is covered across many papers and even standards but,
 in two sentences,
 
-* The hexagonal tiling is unique amongst regular tilings in that all neighbours
+* Hexagonal tiling is unique amongst regular tilings in that all neighbours
   are edge on.
-* The hexagonal tiling is identical to the best fit circle packing.
+* Hexagonal tiling is identical to the best fit circle packing.
 
 The underlying insight in *this (`H9`)* solution is that, while hexagons cannot
 tile hexagons, a half-hexagon can be

@@ -15,7 +15,7 @@ class OctantNet(ComponentDomain):
     Validity should be easy enough since we have the 3 points that define it.
     """
     def __init__(self, registrar, dom, name: str, sign: tuple, mode: str):
-        super().__init__(registrar, name)
+        super().__init__(registrar, name, 2)
         self.dom = dom
         self.mode = mode
         self._sign = sign
@@ -38,7 +38,7 @@ class OctahedralNet(CompositeDomain):
     """
 
     def __init__(self, registrar, octahedron, b_oct):
-        super().__init__(registrar, 'n_oct')
+        super().__init__(registrar, 'n_oct', 2)
         self.o = octahedron
         self.rt = np.pi / 3  # grid rotation in 60º
         self.gw = np.sqrt(2) / 2.  # grid unit width
@@ -64,7 +64,7 @@ class OctahedralNet(CompositeDomain):
             gx, gy, th = val
             n_theta = (th % 6) * np.pi/3.
             o_theta = (n_theta + bary.th) % np.pi
-            mode = {'V': 'Λ', 'Λ':'V'}[bary.mode]  # TODO Fix properly.
+            mode = {'V': 'Λ', 'Λ':'V'}[bary.mode]  # TODO.md Fix properly.
             n_sig = f'{self.name}:{side}'
             b_sig = f'{b_oct.name}:{side}'
 
@@ -126,15 +126,15 @@ class OctahedralNet(CompositeDomain):
                     return -1, -1, -1  # 'SWP'
         return bad
 
-    def adopt(self, pts: NDArray):
-        """
-        Take an array and adopt as this domain.
-        """
-        good = self.where_valid(pts)
-        pts = Points(good, domain=self)
-        cmp = np.apply_along_axis(self._pt_face, -1, pts.coords)
-        pts.components = np.array(cmp, dtype='b')
-        return pts
+    # def adopt(self, pts: NDArray):
+    #     """
+    #     Take an array and adopt as this domain.
+    #     """
+    #     good = self.where_valid(pts)
+    #     pts = Points(good, domain=self)
+    #     cmp = np.apply_along_axis(self._pt_face, -1, pts.coords)
+    #     pts.components = np.array(cmp, dtype='b')
+    #     return pts
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""

@@ -11,7 +11,7 @@ from hhg9.base import Domain, Points
 class OutOfScope(Domain):
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'x_oos')
+        super().__init__(registrar, 'x_oos', 0)
 
     def valid(self, pts: Points) -> NDArray:
         """

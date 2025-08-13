@@ -1,8 +1,8 @@
 """
-Part of the H9 project
+Part of the H9 project - Supporting System Test - No octahedral projection or H9
 Roundtrip of a Plate Carrée <=> PlatePixel
 Note that it converts pixel coordinates to (x,y) cartesian coordinates.
-Last Tested 21 June 2025 √
+Last Tested 10 August 2025 √
 """
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar

@@ -13,7 +13,7 @@ class OctantCartesian(ComponentDomain):
     """
 
     def __init__(self, registrar, dom, name: str, sign: tuple):
-        super().__init__(registrar, name)
+        super().__init__(registrar, name, 3)
         self.dom = dom
         self.points = None
         self._sign = sign
@@ -32,11 +32,11 @@ class OctantCartesian(ComponentDomain):
 
 class OctahedralCartesian(CompositeDomain):
     """
-    Basic octahedral properties and methods.
+    Basic octahedral properties and methods in 3D cartesian space.
     """
 
     def __init__(self, registrar: object) -> object:
-        super().__init__(registrar, 'c_oct')
+        super().__init__(registrar, 'c_oct', 3)
 
         # Define properties using symmetry
         self.sides = {}

@@ -1,24 +1,20 @@
 """
 Part of the H9 project
 """
-import os
-
 import numpy as np
-from geographiclib.geodesic import Geodesic
 from numpy.typing import NDArray
-from hhg9 import Projection, Points, H9Engine, Step
-from hhg9.formats import OctahedralH9
+from hhg9 import Projection, Points, H9Engine
+from hhg9.algorithms import find_coords, haversine
 
 
 class AKOctahedral:
     """
-        An Octahedron/(Sphere/Elliptical) Projection generated via an analytical approximation to a
+        An Octahedron/Elliptical Projection generated via an analytical approximation to a
         force-directed dataset. Approximation designer: Anders Kaseorg
     """
     ALPHA = 3.227806237143884260376580  # 𝛂 - vis. Kaseorg.
 
     def __init__(self, reg, oct_dom, sp_norm_fn):
-        self.h9 = OctahedralH9()  # formatter.
         self.h9e = H9Engine()
         self.reg = reg
         self.b_oct = reg.domain('b_oct')
@@ -26,13 +22,13 @@ class AKOctahedral:
         self.c_ell = reg.domain('c_ell')
         self.g_gcd = reg.domain('g_gcd')
         self.vertices = np.array(list(oct_dom.vertices.values()))
-        self.geo = Geodesic.WGS84
+
         self._e = 1e-200
         self.tol = 1e-40
 
         # Level 0 hex diameter ≈ 5362 km (area of Earth / 12 hexes)
-        self.diameters = 5362177 / (3 ** np.arange(32))  # in meters
-        self.accuracy = 28  # accuracy is sub mm - based on hexagon layers. over 31 hits limits.
+        self.diameters = 5362177 / (3 ** np.arange(38))  # in meters
+        self.accuracy = 34  # accuracy is sub mm - based on hexagon layers. over 31 hits limits.
         self.sp_norm_fn = sp_norm_fn
 
     def _invariants(self, v):
@@ -61,43 +57,6 @@ class AKOctahedral:
         pv = np.stack([y0p, y1p, y2p], axis=-1)
         return self.sp_norm_fn(pv)
 
-    def _geo_distance(self, p1, p2):
-        return self.geo.Inverse(p1[0], p1[1], p2[0], p2[1], Geodesic.DISTANCE)['s12']
-
-    def reverse(self, uvw):
-        """
-        Given spheroidal coordinates, return octahedral.
-        This uses branch and bound strategy via the H9 Grid.
-        """
-        # vt = self._invariants(uvw.coords)
-        """Reverse function for a given value."""
-        rll = self.reg.project(uvw, [self.c_ell, self.g_gcd])
-        for idx, (ref_ll, s) in enumerate(zip(rll.coords, uvw.components)):
-            dom = self.b_oct.components[tuple(s)]
-            steps = [Step(dom.tr, 0, 0)]
-            beam_width = 6
-            candidates = [(steps[0], np.inf)]  # tuple of (hex, score)
-            for i in range(self.accuracy):
-                next_candidates = []
-                for stp, _ in candidates:
-                    cs = self.h9e.branch_step(stp)  # Next level hexes
-                    vx = np.array([[c.x, c.y] for c in cs])
-                    bvx = dom.adopt(vx)
-                    grx = self.reg.project(bvx, [self.b_oct, self.c_oct, self.c_ell, self.g_gcd])
-                    for gdx, latlon in enumerate(grx.coords):
-                        dist = self._geo_distance(latlon, ref_ll)
-                        next_candidates.append((cs[gdx], dist))
-
-                # Sort and prune
-                next_candidates.sort(key=lambda x: x[1])
-                candidates = next_candidates[:beam_width]
-
-            best = candidates[0][0]
-            bary = dom.adopt(np.array([[best.x, best.y]]))
-            grx = self.reg.project(bary, [self.b_oct, self.c_oct])
-            uvw.coords[idx] = grx.coords
-        return uvw
-
     def forward(self, uvw):
         """given octahedral coordinates, return spheroidal."""
         aa = self._invariants(uvw)
@@ -119,6 +78,7 @@ class AKOctahedralEllipsoid(Projection):
         An Octahedron/Ellipsoid Projection generated via an analytical approximation to a
         force-directed dataset. Approximation designer: Anders Kaseorg
     """
+
     def __init__(self, registrar):
         super().__init__(registrar, 'ake', 'c_oct', 'c_ell')
         self.ab = 6378137.0, 6356752.3142
@@ -133,7 +93,7 @@ class AKOctahedralEllipsoid(Projection):
         """Normalise result to elliptical coordinates"""
         xx, yy, zz = p[..., 0], p[..., 1], p[..., 2]
         a2, b2 = self.ab2
-        n = np.sqrt((xx**2 + yy**2) / a2 + zz**2 / b2)
+        n = np.sqrt((xx ** 2 + yy ** 2) / a2 + zz ** 2 / b2)
         return np.stack([xx / n, yy / n, zz / n], axis=-1)
 
     def forward(self, arr: Points) -> NDArray:
@@ -148,82 +108,25 @@ class AKOctahedralEllipsoid(Projection):
         return Points(res, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
 
     def backward(self, arr: Points) -> NDArray:
-        """
-         Project WGS84 Ellipsoids onto the octahedron
-         This inverse function using numerical optimization
-         :param pts:  An array of Euclidean points on the surface of the WGS84 Ellipsoid.
-         :return: UVW on a unit octahedron.
-        """
+        if arr.components is None:
+            self.rev_cs.binning(arr)  # We need the octant identity for each point.
         uvw = arr.copy()
-        if uvw.components is None:
-            self.rev_cs.binning(uvw)
-            # bb = np.unique(uvw.components, axis=0)
-        self.ak.reverse(uvw)
-        uvw.domain = self.rev_cs
-        return uvw
+        cmp = uvw.components[:, np.newaxis, :]  # use this for referring to the points' octant identity.
+        rll = self.ak.reg.project(uvw, [self.ak.c_ell, self.ak.g_gcd])  # Project to give us GCD reference values.
+        ref = rll.coords  # reference addresses
+        pqr = uvw.copy()  # This is an additional copy of uvw, that is normalised (to barycentric dimensions).
+        pqr.coords = self.normalise(pqr.coords)
+        _, oct_m = uvw.cm()  # we want their modes.
 
+        def fwd(xy, octants):
+            """Project contender xy (in barycentric) to GCD"""
+            coords = Points(xy.reshape(-1, 2), self.ak.b_oct, octants.reshape(-1, 3))
+            grx = self.ak.reg.project(coords, [self.ak.b_oct, self.ak.c_oct, self.ak.c_ell, self.ak.g_gcd])
+            return grx.coords.reshape(xy.shape)
 
-class AKOctahedralSpherical(Projection):
-    """
-        An Octahedron/Sphere Projection generated via an analytical approximation to a
-        force-directed dataset. Approximation designer: Anders Kaseorg
-    """
-    def __init__(self, registrar):
-        super().__init__(registrar, 'ake', 'c_oct', 'c_sph')
-        self.ak = AKOctahedral(registrar, self.rev_cs, self.normalise)
-
-    def normalise(self, pv):
-        """Normalise result to spherical coordinates"""
-        return pv / np.linalg.norm(pv, axis=-1, keepdims=True)
-
-    # def jac(self):
-    #     a = AKApproximation.ALPHA
-    #     u, v, w = sp.symbols('u v w')  # Define symbolic variables for inputs
-    #     tan_u = sp.tan(sp.pi * u / 2)
-    #     tan_v = sp.tan(sp.pi * v / 2)
-    #     tan_w = sp.tan(sp.pi * w / 2)
-    #
-    #     u2 = tan_u ** 2
-    #     v2 = tan_v ** 2
-    #     w2 = tan_w ** 2
-    #
-    #     y0p = tan_u * (v2 + w2 + a * w2 * v2) ** 0.25
-    #     y1p = tan_v * (u2 + w2 + a * u2 * w2) ** 0.25
-    #     y2p = tan_w * (u2 + v2 + a * u2 * v2) ** 0.25
-    #
-    #     # Combine outputs into a vector
-    #     y = sp.Matrix([y0p, y1p, y2p])
-    #
-    #     # Normalize the vector (divide by its magnitude)
-    #     norm = sp.sqrt(y[0] ** 2 + y[1] ** 2 + y[2] ** 2)
-    #     y_normalized = y / norm
-    #
-    #     variables = [u, v, w]
-    #     jacobian = y_normalized.jacobian(variables)
-    #     return sp.lambdify(sp.Matrix(variables), jacobian, modules=['numpy'])
-
-    def forward(self, arr: Points) -> NDArray:
-        """
-        Convert a NDArray of octahedral points projected onto a sphere
-        Anders Kaseorg: https://math.stackexchange.com/questions/5016695/
-        :param pts:  An array of Euclidean points on the surface of a unit octahedron.
-        :return: UVW on a unit sphere.
-        """
-        xyz = arr.coords
-        uvw = xyz / (np.linalg.norm(xyz, ord=1, axis=-1, keepdims=True))
-        res = np.copysign(self.ak.forward(uvw), xyz)
-        return Points(res, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
-
-    def backward(self, arr: Points) -> NDArray:
-        """
-         Projected a spherical point onto the octahedron
-         This inverse function using numerical optimization
-         :param pts:  An array of Euclidean points on the surface of a unit sphere.
-         :return: UVW on a unit octahedron.
-        """
-        xyz = arr.coords
-        res = np.copysign(self.ak.reverse(xyz), arr.coords)
-        return Points(res, domain=self.rev_cs, samples=arr.samples, components=arr.components)
+        found, _ = find_coords(ref, oct_m, cmp, self.ak.h9e, fwd, haversine, self.ak.accuracy)
+        bpt = Points(found, self.ak.b_oct, uvw.components)
+        return self.ak.reg.project(bpt, [self.ak.b_oct, self.rev_cs])  # rev_cs = c_oct
 
 
 if __name__ == '__main__':
@@ -232,46 +135,42 @@ if __name__ == '__main__':
     from hhg9 import Registrar
     from hhg9.domains import EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, GeneralGCD
     from hhg9.projections import EllipsoidGCD
-
-
-    def distance(p1, p2):
-        """Return difference in metres between two points"""
-        return Geodesic.WGS84.Inverse(p1[0], p1[1], p2[0], p2[1], Geodesic.DISTANCE)['s12']
-
-
-    london = np.array([[51.50744520, -0.1278120321]])  # London Latitude/Longitude
+    from hhg9.algorithms import wgs84
 
     reg = Registrar()
-    g_gcd = GeneralGCD(reg)    # GCD Domain (latitude/longitude)
-    c_ell = EllipsoidCartesian(reg)             # Cartesian Spherical (xyz)
-    c_oct = OctahedralCartesian(reg)            # Cartesian Octahedron (xyz)
-    b_oct = OctahedralBarycentric(reg, c_oct)   # Barycentric Octahedron (xyz)
+    g_gcd = GeneralGCD(reg)  # GCD Domain (latitude/longitude)
+    c_ell = EllipsoidCartesian(reg)  # Cartesian Spherical (xyz)
+    c_oct = OctahedralCartesian(reg)  # Cartesian Octahedron (xyz)
+    b_oct = OctahedralBarycentric(reg, c_oct)  # Barycentric Octahedron (xyz)
     ake = AKOctahedralEllipsoid(reg)
-    ake.set_accuracy(0.000000001)
-    EllipsoidGCD(reg)    # (g_gcd c_ell) Project (GCD <=> Geodesic Cartesian)
+    ake.set_accuracy(0.000000000001)
+    EllipsoidGCD(reg)  # (g_gcd c_ell) Project (GCD <=> Geodesic Cartesian)
+
+    london = np.array([[51.50744520, -0.1278120321]])  # London Latitude/Longitude
     ldn = g_gcd.adopt(london)
     t_oct = reg.project(ldn, [g_gcd, c_ell, c_oct])
     r_ldn = reg.project(t_oct, [c_oct, c_ell, g_gcd])
-    delta = distance(ldn.coords[0], r_ldn.coords[0]) * 1000000000.
+    delta = wgs84(ldn.coords[0], r_ldn.coords[0]) * 1000000000.
     print("1nm Accuracy: Ellipsoid residual in nanometres:", delta)  # Should be small
 
     ake.set_accuracy(1000.0)
     t_oct = reg.project(ldn, [g_gcd, c_ell, c_oct])
     r_ldn = reg.project(t_oct, [c_oct, c_ell, g_gcd])
-    delta = distance(ldn.coords[0], r_ldn.coords[0]) * 0.001
+    delta = wgs84(ldn.coords[0], r_ldn.coords[0]) * 0.001
     print("1km Accuracy: Ellipsoid residual in kilometres:", delta)  # Should be small
 
     u = Util()
+    ake.set_accuracy(10000.0)
+    wgs = u.wgs84_rnd(25000)
+    sph = c_ell.adopt(wgs)
+    ocs = reg.project(sph, [c_ell, c_oct])
 
-    nea = u.oct0_rnd(250)
-    ake.set_accuracy(0.000000001)  # 1nm
-    ox = c_oct.adopt(nea)
-    fd = ake.forward(ox.copy())
-    bk = ake.backward(fd)
-    rt = bk.coords - ox.coords
+    # dv = bk.coords - ox.coords
+    # dd = np.linalg.norm(dv, axis=1)
+    px = ocs.coords
     fig = plt.figure(figsize=(10, 10), dpi=100, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(rt[:, 0], rt[:, 1], rt[:, 2], marker='.', s=5.0)
+    ax.scatter(px[:, 0], px[:, 1], px[:, 2], marker='.', s=5.0)
     ax.set_aspect('equal', adjustable='box')
     plt.show()

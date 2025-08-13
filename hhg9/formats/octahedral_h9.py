@@ -16,7 +16,7 @@ class OctahedralH9(PointFormat):
     def __init__(self):
         super().__init__('h9')
         self.engine = H9Engine()
-        self.width = 32
+        self.width = 34
         self.subs = {
             'x': Style.HEX,
             'f': Style.FULL,
@@ -36,16 +36,19 @@ class OctahedralH9(PointFormat):
         """
         :return: bary(?) address(es)
         """
-        if len(address) < 3:
-            raise ValueError("Invalid address")
+        if len(address) < 3 or address[0] == 'I':
+            raise ValueError("Invalid Address")
         geo, val = address[:3], address[3:]
         if geo not in self.composite.h9map:
             raise ValueError("Invalid Octahedral Side Region (should be e.g. 'NAV'")
         hp, oc2, sign, name = self.composite.h9map[geo]
-        res = self.engine.oct_decode(f'{hp}{val}', oc2)
-        return Points(np.array([res]), self.composite, np.array([sign]))
+        mode = 0 if geo[2] == 'V' else 1
+        c1 = oc2.index(hp)
+        res = self.engine.unformat_addresses(f'{c1}{val}', mode)
+        xy = res[:, :2]
+        return Points(xy, self.composite, np.array([sign]))
 
-    def format(self, arr: Points, dom, sub: str):
+    def format(self, arr: Points, _, sub: str):
         """
         return h9 address(es)
         :return:
@@ -59,14 +62,30 @@ class OctahedralH9(PointFormat):
                 sub = sub[1:]
             if len(sub) > 0:
                 width = int(sub)
-        ad = self.engine.oct_encode(arr, dom.tr, width, style)
-        if ad is None:
-            return f'XXX:{arr[0]},{arr[1]}'
-        if hasattr(dom, 'geo'):
-            ofs = 2 if style == Style.FULL else 1
-            geo9 = f'{dom.geo[ad[0]]}{dom.mode}{ad[ofs:]}'
-            return geo9
-        return ad
+        prf, pts, treg, thx = self.engine.addr(arr, width)
+        if width <= 21:  # can use uint64. 21 b/c we have 'lost a digit' in the root/terminator.
+            num_digits = pts.shape[1]
+            p10 = 10 ** np.arange(num_digits - 1, -1, -1)
+            numbers = (pts * p10).sum(axis=1).astype(np.uint64)
+            if style == style.NUMERIC:
+                return numbers[0]
+            big = numbers.astype(f'<U{width}')
+            body = np.char.zfill(big, width)
+        else:
+            body = np.array([''.join(row) for row in pts.astype('<U1')])
+        if style in (style.NUMERIC, style.U64):
+            return int(body[0])
+        pb = np.strings.add(prf, body)
+        pbs = np.strings.add(pb, treg)
+        ok = np.strings.add(pbs, thx.astype('<U1'))
+        return str(ok[0])
+        # HEX = 0
+        # FULL = 1
+        # EXTENDED = 2
+        # HALFHEX = 3
+        # NUMERIC = 4
+        # CFULL = 5
+        # U64 = 6
 
     def format_arr(self, pts: Points, sub: str = '', prefix=True):
         """
@@ -86,21 +105,22 @@ class OctahedralH9(PointFormat):
         reg = pts.components
         dom = pts.domain
         res = []
-        for pt, c in zip(arr, reg):
-            context = dom.components[tuple(c)]
-            ad = self.engine.oct_encode(pt, context.tr, width, style)
-            if ad is not None:
-                if prefix:
-                    res.append(f'{context.geo[ad[0]]}{context.mode}{ad[1:]}')
-                else:
-                    tri = context.tr.index(ad[0])
-                    if context.mode == 'V':
-                        cx = [8, 5, 0][tri]
-                    else:
-                        cx = [8, 0, 5][tri]
-                    res.append(f'{cx}{ad[1:]}')
-            else:
-                res.append('0' * width)
-        if style == style.NUMERIC:
-            return np.array(res, dtype=np.uint64)
-        return res
+
+        prf, pts, treg, thx = self.engine.addr(pts, width, prefix)
+        if width <= 21:  # can use uint64. 21 b/c we have 'lost a digit' in the root/terminator.
+            num_digits = pts.shape[1]
+            p10 = 10 ** np.arange(num_digits - 1, -1, -1)
+            numbers = (pts * p10).sum(axis=1).astype(np.uint64)
+            if style == style.NUMERIC:
+                return numbers
+            big = numbers.astype(f'<U{width}')
+            body = np.char.zfill(big, width)
+        else:
+            body = np.array([''.join(row) for row in pts.astype('<U1')])
+        if prefix:
+            pb = np.strings.add(prf, body)
+        else:
+            pb = body
+        pbs = np.strings.add(pb, treg)
+        ok = np.strings.add(pbs, thx.astype('<U1'))
+        return ok

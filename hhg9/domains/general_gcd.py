@@ -11,7 +11,7 @@ class GeneralGCD(Domain):
     """Latitude and Longitude GCD"""
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'g_gcd')
+        super().__init__(registrar, 'g_gcd', 2)
         self.lat_min, self.lat_max = (-90., 90.)
         self.lon_min, self.lon_max = (-180., 180.)
 

@@ -1,8 +1,9 @@
 """
-Part of the H9 project
+Part of the H9 project - Supporting System Test - No octahedral projection or H9
 This follows ex0020_plate_glb.py (which loaded the png and displayed it on a globe).
 Converts it to Cartesian XYZ Ellipsoid, via latitude/longitude, and displays it
-Last Tested 21 June 2025 √
+Last Tested 10 August 2025 √
+
 """
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar

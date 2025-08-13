@@ -1,9 +1,9 @@
 """
-Part of the H9 project
+Part of the H9 project - Supporting System Test - No octahedral projection or H9
 This follows ex0010_plate_px.py (which loaded a png and displayed it).
 This loads a Plate Carrée png, converts it to latitude/longitude, and displays it.
 Needless to say, in this case, we could just use Basemap - but the point is to demonstrate
-Last Tested 21 June 2025 √
+Last Tested 10 August 2025 √
 """
 import numpy as np
 from matplotlib import image, pyplot as plt

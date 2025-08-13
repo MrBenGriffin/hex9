@@ -19,11 +19,12 @@ class PlatePixelGCD(Projection):
         self.lon = None
         self.lat = None
 
-    def set_dim(self, pts: Points, bounds=None):
+    def set_dim(self, pts: Points = None, bounds: object = None) -> object:
         """Set dimensions for plate."""
-        px, py = pts.coords[:, 0], pts.coords[:, 1]
-        self.p_hgt = np.uint32(np.max(py)+1)
-        self.p_wid = np.uint32(np.max(px)+1)
+        if self.p_hgt is None:
+            px, py = pts.coords[:, 0], pts.coords[:, 1]
+            self.p_hgt = np.uint32(np.max(py)+1)
+            self.p_wid = np.uint32(np.max(px)+1)
         if bounds is None:
             self.lon = np.linspace(-180+self.e, 180-self.e, self.p_wid)
             self.lat = np.linspace(-90, 90, self.p_hgt)
@@ -48,29 +49,22 @@ class PlatePixelGCD(Projection):
 
     def backward(self, pts: Points) -> NDArray:
         """
-        Convert (lat, lon) to pixel (x, y) coordinates using plate carrée.
-        Plate Carrée coordinates (origin bottom-left)
+        Convert (lat, lon) to pixel (x, y) coordinates using the
+        lookup tables created by set_dim.
         """
+        if self.lon is None:
+            self.set_dim(pts)
+
+        # Coordinates are in (lat, lon) order from GCD domain
         la = pts.coords[:, 0].astype(np.float64)
         lo = pts.coords[:, 1].astype(np.float64)
 
-        # if self.lon is None:
-        uo, ua = np.unique(lo, axis=0), np.unique(la, axis=0)
-        w = uo.size
-        h = ua.size
-        p_hgt = np.uint32(h + 0)
-        p_wid = np.uint32(w + 0)
-        lon = np.linspace(-180 + self.e, 180 - self.e, p_wid)
-        lat = np.linspace(-90, 90, p_hgt)
+        # Use the pre-calculated lookup tables from set_dim.
+        # Do NOT recalculate them here. These are correctly bounded to your map.
+        px = np.searchsorted(self.lon, lo)
+        py = np.searchsorted(self.lat, la)
 
-        # self.p_hgt = np.uint32(h + 0)
-        # self.p_wid = np.uint32(w + 0)
-        # self.lon = np.linspace(-180 + self.e, 180 - self.e, self.p_wid)
-        # self.lat = np.linspace(-90, 90, self.p_hgt)
-
-        px = np.searchsorted(lon, lo)
-        py = np.searchsorted(lat, la)
-
+        # Return pixel coordinates in (x, y) order
         ret = np.stack([px, py], axis=-1)
         return Points(ret, domain=self.rev_cs, samples=pts.samples)
 

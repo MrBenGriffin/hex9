@@ -7,6 +7,7 @@ The octahedral->spherical projection is relatively fast, so we can handle larger
 Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
 Last Tested 21 June 2025
+Last Tested 03 August √ 2025
 """
 import numpy as np
 from matplotlib import image, pyplot as plt

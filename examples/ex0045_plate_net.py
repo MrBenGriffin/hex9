@@ -1,9 +1,10 @@
 """
-Part of the H9 project
+Part of the H9 project -  octahedral to octahedron net.
 This loads a Plate Carrée png image,
-converts it to Octagon NET, via latitude/longitude and sphere and displays it.
-It's SLOW because it has to manage an inverse of the AK projection.
-Last Tested 21 June 2025 √
+loads the octahedral cache and displays it as an octahedron net.
+Normally we do not project maps this way, but use sampling instead.
+It's still relevant for managing datasets captured over GCD.
+Last Tested 13 August 2025 √
 """
 from pathlib import Path
 
@@ -17,15 +18,12 @@ from support import Photo, Display, Util
 
 
 def load_cache(pc_map: str = 'world1350x675'):
-    """
-    Load cached octahedral and colours from original.
-    cf. 0041 / 0042
-    """
+    """Load cache from ex_0041"""
     cache = Path(f'src/{pc_map}.npy')
     if not cache.exists():
         raise ValueError('Far better to load a cache. See ex_0041')
-    img = image.imread(f'src/{pc_map}.png', 'png')
-    pc_pix = p_plt.adopt(img)
+    pc_img = image.imread(f'src/{pc_map}.png', 'png')
+    pc_pix = p_plt.adopt(pc_img)
     oc = np.load(cache)
     _oc_px = c_oct.adopt(oc)
     _oc_px.samples = pc_pix.samples
@@ -62,5 +60,4 @@ if __name__ == '__main__':
     img = p_plt.image(on_px, (1350, 675))   # convert points back to an image.
     plt.imshow(img, origin='upper')
     plt.show()
-
 

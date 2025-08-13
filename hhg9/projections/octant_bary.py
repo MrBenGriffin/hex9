@@ -2,7 +2,7 @@
 Part of the H9 project
 """
 import numpy as np
-from hhg9 import Projection, Points
+from hhg9 import Projection, Points, H9Engine
 
 
 class OctantBary(Projection):
@@ -14,6 +14,7 @@ class OctantBary(Projection):
         super().__init__(registrar, f'{base}_ob', o_name, b_name)
         self.matrix = None
         self.mode = self.fwd_cs.mode
+        self.h9 = H9Engine()
         # 'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
         self.z_off = 1.0 / np.sqrt(3)
         rot_z = self.fwd_cs.th  # -120º As we define NS as apex we need to orient.
@@ -29,14 +30,13 @@ class OctantBary(Projection):
         """
         xyz = arr.coords if isinstance(arr, Points) else arr
         xya = xyz @ (self.matrix.T @ self.orient)  # z should be aligned.
-        # sum_z = np.sum(xya[:, -1] - self.z_off).tolist()
-        # if abs(sum_z) > 1e-1:
-        #     raise ValueError(f'OctantBaryFwd: {self.fwd_cs.name} Points deviating from surface: {sum_z:.2f}')
         xy = np.delete(xya, 2, -1)  # These are now in barycentric 2D.
+        xx, yy, _ = self.h9.clamp(xy[:, 0], xy[:, 1], self.mode == 'Λ')
+        pts = np.stack([xx, yy], axis=-1)
         if isinstance(arr, Points):
-            return Points(xy, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
+            return Points(pts, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
         else:
-            return xy
+            return pts
 
     def backward(self, arr: Points) -> Points:
         """

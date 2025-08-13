@@ -4,14 +4,11 @@ Compose an image of central London with a grid overlay.
 """
 import numpy as np
 from pathlib import Path
-
 import cartopy.crs as ccrs
 from cartopy.io.img_tiles import OSM
-
 from matplotlib import image, pyplot as plt
 from matplotlib.collections import PolyCollection
 from scipy.spatial import KDTree
-
 from hhg9 import Registrar, H9Engine, Step, Grid
 from hhg9.domains import GeneralGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, PlatePixel
 from hhg9.projections import EllipsoidGCD, PlatePixelGCD, AKOctahedralEllipsoid
@@ -40,7 +37,7 @@ def reverse_address(addr: str):  # -> List[Tuple[int, str, int]]:
         if digit < 6:
             # Simple: flip Λ/V, flip rotation
             mode = 'Λ' if mode == 'V' else 'V'
-            rot = ROT_FLIP[rot]
+            # rot = ROT_FLIP[rot]
         else:
             # Special handling below
             pass
@@ -76,7 +73,7 @@ if __name__ == '__main__':
     acc = ak.set_accuracy(0.000000000000000001)
     spot = np.array([
         [51.50676864763299, -0.1330302972995536],       # Traveller's Club
-        # [51.508777843989016, 0.02452302507469842],  # Passport Office
+        # [51.508777843989016, 0.02452302507469842],   # Passport Office
         # [51.477270526325135,  0.00000000000000001],  # greenwich park east
         # [51.477270526325135, -0.00000000000000001],  # greenwich park west
         # [+0.0000000000000001, 22.1233123456564561],  # equator east 22.12
@@ -149,8 +146,8 @@ if __name__ == '__main__':
     i_wid = map_size  # width of hexagon is 2A
     i_hgt = int(i_wid * (3 ** 0.5 / 2.))  # height wid*0.8660254
 
-    w1, h1, pxl1 = g.qa_grid(hh1, map_size)
-    w2, h2, pxl2 = g.qa_grid(hh2, map_size)
+    w1, h1, pxl1, msk1 = g.qa_grid(hh1, map_size)
+    w2, h2, pxl2, msk2 = g.qa_grid(hh2, map_size)
     pxl = np.unique(np.vstack([pxl1, pxl2]), axis=0)
     pts = sdo.adopt(pxl)
     src = KDTree(pc_sp.coords)  # KDTree of plate_carrée projected onto unit sphere.

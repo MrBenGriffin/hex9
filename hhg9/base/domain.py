@@ -14,8 +14,9 @@ class Domain(ABC):
     This is not a CRS, because it does not include projections.
     """
 
-    def __init__(self, registrar, name: str):
+    def __init__(self, registrar, name: str, axes):
         self.name = name
+        self.axes = axes
         if registrar is not None:
             registrar.register_domain(self)
         self.default_format = None

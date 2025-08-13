@@ -36,7 +36,7 @@ class DMS(PointFormat):
         lon = dms_to_dd(*parts[1])
         return self._set([[lat, lon]])
 
-    def format(self, arr: NDArray, _, sub):
+    def format(self, pts, _, sub):
         """
         return decimal formatted address(es)
         :return:
@@ -51,6 +51,7 @@ class DMS(PointFormat):
             return f"{d}°{m}'{s:.12f}\"{hemi}"
 
         result = []
+        arr = pts.coords
         vals = np.array([arr]) if len(arr.shape) == 1 else arr
         for coords in vals:
             lat_dms = dms(coords[0], "N", "S")

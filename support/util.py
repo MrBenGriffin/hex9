@@ -57,6 +57,27 @@ class Util:
         """
         return np.allclose(np.linalg.norm(pts, axis=-1, keepdims=True) - 1.0, np.zeros_like(pts))
 
+    def wgs84_rnd(self, n_points):
+        """
+        Generates uniformly distributed random points on an ellipsoid surface.
+
+        Args:
+            n_points (int): The number of points to generate.
+            a (float): The semi-major axis (equatorial radius).
+            b (float): The semi-minor axis (polar radius).
+
+        Returns:
+            np.ndarray: An (n_points, 3) array of (x, y, z) coordinates.
+        """
+        # WGS 84 ellipsoid parameters in meters
+        a = 6378137.0
+        b = 6356752.314245
+        xyz = self.sph_rnd(n_points)
+        x = a * xyz[:, 0]
+        y = a * xyz[:, 1]
+        z = b * xyz[:, 2]
+        return np.stack([x, y, z], axis=1)
+
     def sph_rnd(self, n):
         # Generate n random spherical points
         # returned in Euclidean (x,y,z)

@@ -3,8 +3,9 @@ Part of the H9 project
 Compose a set of zooms into stonehenge vi cartopy and OSM.
 This grabs rectangle boundaries from which we sample the octahedral.
 The actual octahedral render series is found in 0076.
-Last Tested 21 June 2025 √
+Last Tested 10 August 2025 √ (rewrite)
 """
+
 import numpy as np
 import cartopy.crs as ccrs
 from cartopy.io.img_tiles import OSM
@@ -15,6 +16,7 @@ from hhg9.domains import GeneralGCD, EllipsoidCartesian, OctahedralCartesian, Oc
 from hhg9.projections import EllipsoidGCD, PlatePixelGCD, AKOctahedralEllipsoid
 from hhg9.formats import OctahedralH9, DMS, DecimalDegrees, DecimalCartesian
 from support import Util, Display
+# from matplotlib.collections import PolyCollection
 
 
 if __name__ == '__main__':
@@ -44,7 +46,6 @@ if __name__ == '__main__':
     imagery = OSM()
 
     acc = ak.set_accuracy(0.01)
-
     locs = u.json_load('../assets/locations.json')
     region = locs['NWA']
     spot = region['Stonehenge']
@@ -53,41 +54,60 @@ if __name__ == '__main__':
     oc0 = reg.project(sp0, [c_ell, c_oct])
     bc0 = reg.project(oc0, [c_oct, b_oct])
 
-    shb = bc0.coords[0]  # [0.29386167 0.27855944]
-    code = f'{bc0:h9}'
     cmp = tuple(bc0.components[0])
     sdo = bc0.domain.components[cmp]
-    loc = sdo.tr
-
-    plx = h9.enmesh(shb, loc, acc)  # This is the set of half-hexagons.
-    plp = plx.reshape([-1, 2])
+    co, mo = bc0.cm()
+    uri = h9.ugc_regions(bc0.coords, mo, acc)
+    plx = h9.enmesh(uri)
+    plv = np.array(list(plx.values()))
+    plp = plv.reshape([-1, 2])
     bnd = sdo.adopt(plp)
     gel = reg.project(bnd, [b_oct, c_oct, c_ell, g_gen])
-    mmx = []
     gpy = gel.coords.reshape([-1, 5, 2])
-    for hh in gpy:
-        # longitude is x, latitude is y.
-        y0, y1 = np.min(hh[..., 0]), np.max(hh[..., 0])
-        x0, x1 = np.min(hh[..., 1]), np.max(hh[..., 1])
-        mmx.append([x0, x1, y0, y1])
-    plates = np.array(mmx[:14])
+    detail = [4, 6, 8, 10, 12, 14, 16, 18, 18, 18, 18, 18, 18, 18, 18, 18]
+    BASE_SIZE_METERS = 10000000.0  # 10000 km (example value)
+    IMG_PIXELS = 3000
+    extents = []
+    for i, hh_vertices in enumerate(gpy):  # You need the layer_depth
+        layer_depth = i
+        # --- 3. Calculate the correct geographic size for the CURRENT layer ---
+        # Each layer is 3x smaller (more zoomed in) than the last.
+        current_size_meters = BASE_SIZE_METERS / (3 ** layer_depth)
+        center_lat, center_lon = np.mean(hh_vertices, axis=0)
+        meters_per_deg_lat = 111132.954
+        meters_per_deg_lon = 111320.0 * np.cos(np.radians(center_lat))
+        extent_height_deg = current_size_meters / meters_per_deg_lat
+        extent_width_deg = current_size_meters / meters_per_deg_lon
+        final_extent = [
+            center_lon - (extent_width_deg / 2),  # lon_min
+            center_lon + (extent_width_deg / 2),  # lon_max
+            center_lat - (extent_height_deg / 2),  # lat_min
+            center_lat + (extent_height_deg / 2)  # lat_max
+        ]
+        extents.append(final_extent)
 
-    #         √  7  2   3  4    5  6   7   8   9   10  11  12
-    scales = [5, 6, 8, 10, 12, 14, 16, 18, 18, 18, 18, 18, 18, 18, 18, 18]
-    for i, extent in enumerate(plates):
-        lon_min, lon_max, lat_min, lat_max = extent
-        w = lon_max - lon_min
-        h = lat_max - lat_min
-        # if w > h:
-        #     hgt = 2000
-        #     wid = np.uint32((w / h) * hgt)
-        # else:
-        wid = 2000  # np.uint32(scale / w)
-        hgt = np.uint32((h / w) * wid)
-        w, h, dpi = wid / 72, hgt / 72, 72
+        # --- 7. Create the plot ---
+        w, h, dpi = IMG_PIXELS / 100, IMG_PIXELS / 100, 100
         fig = plt.figure(figsize=(w, h), dpi=dpi, frameon=False)
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
-        ax = fig.add_subplot(1, 1, 1, projection=imagery.crs)
-        ax.set_extent(extent, ccrs.PlateCarree())
-        ax.add_image(imagery, scales[i])  # 5 = zoom level 18 = ring of stonehenge.
-        fig.savefig(f'sh/SH_{i}.png', format='png', bbox_inches='tight', pad_inches=0)
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+        ax.set_extent(final_extent, ccrs.PlateCarree())
+        ax.add_image(imagery, detail[layer_depth], regrid_shape=(2*IMG_PIXELS, 2*IMG_PIXELS))
+
+        # Put on a border for approximated projection testing.
+        # # Close the polygon by appending the first vertex to the end
+        # closed_poly_lon_lat = np.vstack([hh_vertices[:, ::-1], hh_vertices[0, ::-1]])
+        #
+        # # Plot the outline
+        # ax.plot(closed_poly_lon_lat[:, 0], closed_poly_lon_lat[:, 1],
+        #         color='k', linewidth=6.0, transform=ccrs.PlateCarree())
+
+        fig.savefig(f'sh/SH_{i}.png',
+                    dpi=dpi,
+                    format='png', bbox_inches='tight',
+                    pad_inches=0, transparent=True)
+        plt.close(fig)
+        if layer_depth == 13:  # not much to see beyond level 13!
+            break
+    np.save('sh/extents.npy', np.array(extents))
+

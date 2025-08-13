@@ -1,7 +1,7 @@
 import numpy as np
 
 """
-Triangular Hierarchic Grid Generation Class
+Grid Generation Class
 """
 
 
@@ -138,21 +138,17 @@ class Grid:
     def qa_grid(cls, quad, scale: float = 1000):
         """
         Return a rectilinear grid of points within a quadrilateral.
+        Also returns the mask and scales.
         """
         quad = np.asarray(quad)
         minx, miny, maxx, maxy = quad[..., 0].min(), quad[..., 1].min(), quad[..., 0].max(), quad[..., 1].max()
-        # generate a covering rectangle.
         w = maxx-minx
         h = maxy-miny
-        if w > h:
-            hgt = scale
-            wid = np.uint32((w / h) * hgt)
-        else:
-            wid = scale  # np.uint32(scale / w)
-            hgt = np.uint32((h/w) * wid)
-        yl = np.linspace(miny, maxy, num=hgt)
+        wid = scale  # np.uint32(scale / w)
+        hgt = np.uint32((h/w) * wid)
+        yl = np.linspace(maxy, miny, num=hgt)
         xl = np.linspace(minx, maxx, num=wid)
         xx, yy = np.meshgrid(xl, yl)
         rec = np.stack((xx.ravel(), yy.ravel()), axis=1)
         trx = cls.in_convex_poly(rec, quad)
-        return wid, hgt, rec[trx]
+        return wid, hgt, rec, trx, (np.array([minx, miny, maxx, maxy]), (scale-1)/(maxx-minx))

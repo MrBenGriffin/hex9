@@ -13,7 +13,7 @@ class EllipsoidCartesian(Domain):
     """
 
     def __init__(self, registrar, name='c_ell', a: float = 6378137.0, f: float = 1 / 298.257223563):
-        super().__init__(registrar, name)
+        super().__init__(registrar, name, 3)
         self.a = a                  # semi-major axis
         self.f = f                  # flattening
         self.b = a * (1 - f)        # semi-minor axis

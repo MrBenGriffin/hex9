@@ -1,11 +1,9 @@
 """
 Part of the H9 project
 """
-from typing import Sequence
-import numpy as np
+from functools import lru_cache
 
-# from . import ComponentDomain
-# from .domain import Domain
+import numpy as np
 
 
 class Points:
@@ -14,12 +12,37 @@ class Points:
     Each coordinate has a domain, and associated sample data.
     Each 'point' represents a location that may be approximate,
     depending on its Domain and formatting resolution.
+    component may be passed as a template for all the coords.
     """
     def __init__(self, coords: np.ndarray, domain=None, components=None, samples=None):
         self.coords = coords
         self.domain = domain  # This is the composite domain, if the
+        if components is not None:
+            components = np.asarray(components)
+            if components.ndim == 1 and components.shape[0] == 3:
+                # Broadcast single 3-element tuple to match coords
+                components = np.broadcast_to(components, (self.coords.shape[0], 3))
+            elif components.shape != (self.coords.shape[0], 3):
+                raise ValueError(
+                    f"Invalid component shape: expected {(self.coords.shape[0], 3)} or (3,), got {components.shape}")
         self.components = components
         self.samples = samples
+
+    @classmethod
+    def calc_octant_ids(cls, components):
+        """Definitive utility to calculate octant IDs from sign components."""
+        return ((components[:, 2] < 0) << 2) | \
+               ((components[:, 1] < 0) << 1) | \
+               ((components[:, 0] < 0) << 0)
+
+    def cm(self):
+        """Shortened variation of component with mode."""
+        if self.components is not None:
+            side = self.calc_octant_ids(self.components)
+            bits = np.bitwise_count(side)
+            mode = np.array(bits % 2, dtype=np.uint8)
+            return side, mode
+        return None, None
 
     def __getitem__(self, idx):
         if isinstance(idx, tuple):
@@ -56,7 +79,7 @@ class Points:
             if name not in dom.address_formats:
                 return self.coords.__format__(format_spec)
             formatter = dom.address_formats[name]
-            return formatter.format(pt, dom, sub)
+            return formatter.format(self, dom, sub)
         else:
             out = []
             for i, coord in enumerate(self.coords):

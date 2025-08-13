@@ -1,12 +1,11 @@
 """
-Part of the H9 project
+Part of the H9 project - Uses AK projection, so H9 indirectly
 This follows ex0030_plate_glb.py (which loaded the png and displayed it as a unit ellipsoid).
 This loads a Plate Carrée png image, converts it to XYZ Octahedron, via latitude/longitude and sphere and displays it.
-The inverse of the AK projection is slow, so we use a cache. cf. ex0041_cache.py
-Last Tested 21 June 2025 √
+As the inverse of the AK projection is slow we use the cache from ex0041_cache.py
+Last Tested 13 August 2025 √
 """
 from pathlib import Path
-
 import numpy as np
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar
