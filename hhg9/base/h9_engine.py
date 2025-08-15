@@ -29,16 +29,16 @@
     'HalfHex':  V[abc/def/ghi]; Λ[ABC/DEF/GHI]
                 V[012/345/678]; Λ[oiz/eas/gtx]
     === Octahedral ===
-    The canonical octahedral address is prefixed with a three-character octahedral root hexagon and hint.
+    The canonical octahedral addresses is prefixed with a three-character octahedral root hexagon and hint.
      (from which the side of the octahedron can be derived). This value replaces the first digit of the
-     planar address; also the terminating hexagon rotation is also stored as a part of the suffix.
-     This latter allows us to precisely recover a location from the address.
+     planar addresses; also the terminating hexagon rotation is also stored as a part of the suffix.
+     This latter allows us to precisely recover a location from the addresses.
      For example, stonehenge (uk) is approximately at NW013502061182541V2, while the statue of liberty (usa)
-     has the address NA556384535621324Λ0
+     has the addresses NA556384535621324Λ0
      """
 from dataclasses import dataclass
 from enum import Enum, unique
-from functools import lru_cache
+from functools import lru_cache, cache
 
 import numpy as np
 
@@ -62,15 +62,15 @@ class Style(Enum):
 @dataclass
 class Step:
     """The full state of an encoding step"""
-    loc: str  # e.g. '850'
+    # loc: str  # e.g. '850'
     x: float  # cumulative x so far
     y: float  # cumulative y so far
     style: Style = Style.HEX
     s: float = 1.0
-    xa: float = 0.  # offset acc.
-    ya: float = 0.  # offset acc.
+    # xa: float = 0.  # offset acc.
+    # ya: float = 0.  # offset acc.
     c1: int = None  # add this!
-    tm: int = None  # terminating mode
+    # tm: int = None  # terminating mode
     tr: int = None  # terminating rotation.
 
 
@@ -118,9 +118,9 @@ class H9Engine:
     }
     POS = [
         # The co-ordinate to the centre of each sub-triangle
-        # The order starts from '085' below the origin, and goes clockwise through the inner set, then the outer set.
-        (0, -V * 2.), (-U, -V), (-U, V),  # 0x39, 0x35, 0x25
+        # The order starts from above the origin, and goes clockwise through the inner set, then the outer set.
         (0, V * 2.), (U, V), (U, -V),     # 0x26, 0x2a, 0x3a
+        (0, -V * 2.), (-U, -V), (-U, V),  # 0x39, 0x35, 0x25
         (0, -V * 4.), (-U * 2., -V * 2.), (-U * 2., V * 2.),  # 0x49, 0x34, 0x21
         (0, V * 4.), (U * 2., V * 2.), (U * 2., -V * 2.)   # 0x16, 0x2b, 0x3e
     ]
@@ -141,108 +141,109 @@ class H9Engine:
         else:  # barycentre at 0, triangle point down.
             return (cls.VF + np.abs(ẋ) - e <= y) & (y <= cls.VC)
 
-    @classmethod
-    def get_c1(cls, ẋ, y, mode='Λ'):
-        """
-        Given a point in a triangle, identify it's half-hex.
-        The return value will be 0, 1, 2  for flat/forward/back.
-        :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
-        :param y: y coordinate
-        :param mode: triangle pointing up/down
-        :return: 0,1,2 representing the c1 component of the container triangle
-        These are checked correct 30th June '25
-        """
-        if mode == 'Λ':
-            if 0 >= y < ẋ:
-                return 0  # flat
-            elif ẋ <= y < -ẋ:
-                return 1  # forward
-            else:  # 0 <= y > -ẋ
-                return 2  # back
-        else:
-            if 0 <= y > -ẋ:
-                return 0  # flat
-            elif 0 > y <= ẋ:
-                return 1  # forward.
-            else:  # ẋ < y <= -ẋ
-                return 2  # back.
+    # @classmethod
+    # def get_c1(cls, ẋ, y, mode='Λ'):
+    #     """
+    #     Given a point in a triangle, identify it's half-hex.
+    #     The return value will be 0, 1, 2  for flat/forward/back.
+    #     :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
+    #     :param y: y coordinate
+    #     :param mode: triangle pointing up/down
+    #     :return: 0,1,2 representing the c1 component of the container triangle
+    #     These are checked correct 30th June '25
+    #     """
+    #     if mode == 'Λ':
+    #         if 0 >= y < ẋ:
+    #             return 0  # flat
+    #         elif ẋ <= y < -ẋ:
+    #             return 1  # forward
+    #         else:  # 0 <= y > -ẋ
+    #             return 2  # back
+    #     else:
+    #         if 0 <= y > -ẋ:
+    #             return 0  # flat
+    #         elif 0 > y <= ẋ:
+    #             return 1  # forward.
+    #         else:  # ẋ < y <= -ẋ
+    #             return 2  # back.
 
-    @classmethod
-    def get_c2(cls, ẋ, y, c1, ud='Λ'):
-        """
-        Given a point in a half-hex, identify its triangle
-        get_c2 works on a half-hexagon, and establishes which of 3
-        triangles a point is in, returning a 3-digit for that triangle.
-        For example, our current planar value is 0Λ. (from 021)
-        The c1 is 0, and the point we are looking
-        at will be in either 507, 165, or 813 (021, 201, 102).
-        The same calculation works for 6Λ and 3Λ.
-        For octahedral (non-planar), we may use an equivalent c1.
-        For example, in r0, the planar 7Λ is now 6Λ, but it's still c1=1 (Fwd).
-        We use oc_1 to calculate the c1, and pass it here.
-        :param c1: (0,1,2) represents the orientation: flat, forward, back.
-               In planar, hexes 0,3,6 are Flat (0), 1,4,7 are Fwd (1), 2,5,8 are Back (2).
-        :param ud: [Λ,V] tells us which side of the half-hexagon we are talking about.
-               This will be Λ for any half-hexagon with two apexes Λ and one V in the middle.
-        'Λ' and 'V' tells us which of the two half-hexes we are examining.
-        # c1, ẋ, y to identify the next c2
-        # return c2 is not determined by the input mode! It will be any one of the six available.
-        :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
-        :param y: y coordinate
-        :return: Will be one of ['201', '120', '012', '210', '021', '102']
-        """
-        if ud == 'Λ':
-            if c1 == 0:
-                if y <= -ẋ:  # alt y <= -ẋ
-                    return '021'  # √ y <= -ẋ identifies 021
-                if y <= ẋ - cls.Ẇ:  # alt y <= ẋ - cls.Ẇ
-                    return '102'  # √ y <= ẋ-ẇ identifies 102
-                return '201'  # √ y < -ẋ and y > ẋ - ẇ identifies 201
-            if c1 == 1:
-                if y >= 0:
-                    return '102'  # √ y >= 0 identifies 102
-                if y <= -ẋ - cls.Ẇ:  #
-                    return '210'  # √ y ≤ -ẋ-ẇ identifies 210
-                return '120'  # √ y < 0 and `y > -ẋ-ẇ` identifies 120
-            # c1 == 2
-            if y <= ẋ:  # alt y <= ẋ
-                return '210'  # √ `y <= ẋ identifies 210
-            if y >= cls.H / 3.:
-                return '021'  # √ y >= h/3 identifies 021
-            return '012'  # √ y > ẋ and y < h/3 identifies 012
-        else:  # Now for 'V'
-            # For points in 0V (flat),
-            # y >= ẋ identifies 012
-            # y >= ẇ-ẋ identifies 120
-            # y < ẋ and y < ẇ-ẋ identifies `210`
-            if c1 == 0:
-                if y >= ẋ:  # alt y >= ẋ
-                    return '012'  # √ y >= ẋ identifies 012
-                if y >= cls.Ẇ - ẋ:  # alt y >= cls.Ẇ - ẋ
-                    return '120'  # y >= ẇ-ẋ identifies 120
-                return '210'  # y < ẋ and y < ẇ-ẋ identifies 210
-            # For points in `1V` (forward),
-            # y >= -ẋ identifies 201
-            # y <= -h/3 identifies 012
-            # y > -h/3 and y < -ẋ identifies 021
-            if c1 == 1:
-                if y >= -ẋ:  # alt y >= -ẋ
-                    return '201'  # y >= -ẋ identifies 201
-                if y <= -cls.VC:
-                    return '012'  # y <= -h/3 identifies 012
-                return '021'  # y > -h/3 and y < -ẋ identifies 021
-            # For points in `2V` (back),
-            # y <= 0 identifies 120
-            # y >= ẇ+ẋ identifies 201
-            # y > 0 and y < ẇ+ẋ identifies 102
-            if y <= 0:
-                return '120'  # y <= 0 identifies 120
-            if y >= cls.Ẇ + ẋ:  # alt cls.Ẇ + ẋ:
-                return '201'  # y >= ẇ+ẋ identifies 201
-            return '102'  # y > 0 and y < ẇ+ẋ identifies 102
+    # @classmethod
+    # def get_c2(cls, ẋ, y, c1, ud='Λ'):
+    #     """
+    #     Given a point in a half-hex, identify its triangle
+    #     get_c2 works on a half-hexagon, and establishes which of 3
+    #     triangles a point is in, returning a 3-digit for that triangle.
+    #     For example, our current planar value is 0Λ. (from 021)
+    #     The c1 is 0, and the point we are looking
+    #     at will be in either 507, 165, or 813 (021, 201, 102).
+    #     The same calculation works for 6Λ and 3Λ.
+    #     For octahedral (non-planar), we may use an equivalent c1.
+    #     For example, in r0, the planar 7Λ is now 6Λ, but it's still c1=1 (Fwd).
+    #     We use oc_1 to calculate the c1, and pass it here.
+    #     :param c1: (0,1,2) represents the orientation: flat, forward, back.
+    #            In planar, hexes 0,3,6 are Flat (0), 1,4,7 are Fwd (1), 2,5,8 are Back (2).
+    #     :param ud: [Λ,V] tells us which side of the half-hexagon we are talking about.
+    #            This will be Λ for any half-hexagon with two apexes Λ and one V in the middle.
+    #     'Λ' and 'V' tells us which of the two half-hexes we are examining.
+    #     # c1, ẋ, y to identify the next c2
+    #     # return c2 is not determined by the input mode! It will be any one of the six available.
+    #     :param ẋ: `ẋ` is a synonym for `√3(x)` of the x coordinate.
+    #     :param y: y coordinate
+    #     :return: Will be one of ['201', '120', '012', '210', '021', '102']
+    #     """
+    #     if ud == 'Λ':
+    #         if c1 == 0:
+    #             if y <= -ẋ:  # alt y <= -ẋ
+    #                 return '021'  # √ y <= -ẋ identifies 021
+    #             if y <= ẋ - cls.Ẇ:  # alt y <= ẋ - cls.Ẇ
+    #                 return '102'  # √ y <= ẋ-ẇ identifies 102
+    #             return '201'  # √ y < -ẋ and y > ẋ - ẇ identifies 201
+    #         if c1 == 1:
+    #             if y >= 0:
+    #                 return '102'  # √ y >= 0 identifies 102
+    #             if y <= -ẋ - cls.Ẇ:  #
+    #                 return '210'  # √ y ≤ -ẋ-ẇ identifies 210
+    #             return '120'  # √ y < 0 and `y > -ẋ-ẇ` identifies 120
+    #         # c1 == 2
+    #         if y <= ẋ:  # alt y <= ẋ
+    #             return '210'  # √ `y <= ẋ identifies 210
+    #         if y >= cls.H / 3.:
+    #             return '021'  # √ y >= h/3 identifies 021
+    #         return '012'  # √ y > ẋ and y < h/3 identifies 012
+    #     else:  # Now for 'V'
+    #         # For points in 0V (flat),
+    #         # y >= ẋ identifies 012
+    #         # y >= ẇ-ẋ identifies 120
+    #         # y < ẋ and y < ẇ-ẋ identifies `210`
+    #         if c1 == 0:
+    #             if y >= ẋ:  # alt y >= ẋ
+    #                 return '012'  # √ y >= ẋ identifies 012
+    #             if y >= cls.Ẇ - ẋ:  # alt y >= cls.Ẇ - ẋ
+    #                 return '120'  # y >= ẇ-ẋ identifies 120
+    #             return '210'  # y < ẋ and y < ẇ-ẋ identifies 210
+    #         # For points in `1V` (forward),
+    #         # y >= -ẋ identifies 201
+    #         # y <= -h/3 identifies 012
+    #         # y > -h/3 and y < -ẋ identifies 021
+    #         if c1 == 1:
+    #             if y >= -ẋ:  # alt y >= -ẋ
+    #                 return '201'  # y >= -ẋ identifies 201
+    #             if y <= -cls.VC:
+    #                 return '012'  # y <= -h/3 identifies 012
+    #             return '021'  # y > -h/3 and y < -ẋ identifies 021
+    #         # For points in `2V` (back),
+    #         # y <= 0 identifies 120
+    #         # y >= ẇ+ẋ identifies 201
+    #         # y > 0 and y < ẇ+ẋ identifies 102
+    #         if y <= 0:
+    #             return '120'  # y <= 0 identifies 120
+    #         if y >= cls.Ẇ + ẋ:  # alt cls.Ẇ + ẋ:
+    #             return '201'  # y >= ẇ+ẋ identifies 201
+    #         return '102'  # y > 0 and y < ẇ+ẋ identifies 102
 
     def __init__(self):
         # These are used to define octahedral enumerations.
+        self.region_ids = None
         self.ugc_num_props = 11
         self.num_regions = 96
         self.in_dn, self.in_up, self.mode, self.d_ci, self.u_ci, self.dc0, self.dc1, self.dc2, self.uc0, self.uc1, self.uc2 = range(
@@ -259,27 +260,27 @@ class H9Engine:
             '815': (0, 'V'), '158': (1, 'V'), '581': (2, 'V'),
             '362': (0, 'V'), '623': (1, 'V'), '236': (2, 'V'),
         }
-        self.ocm = {
-            # Given a triangle, identify the rotation of the hex digit (via index) and it's mode.
-            '085': ('012012201', 'Λ'),
-            '850': ('120120012', 'Λ'),
-            '508': ('201201120', 'Λ'),
-            '316': ('012012201', 'Λ'),
-            '163': ('120120012', 'Λ'),
-            '631': ('201201120', 'Λ'),
-            '742': ('012012120', 'V'),
-            '427': ('120120201', 'V'),
-            '274': ('201201012', 'V'),
-            '047': ('012012120', 'V'),
-            '470': ('120120201', 'V'),
-            '704': ('201201012', 'V'),
-            '815': ('012012201', 'Λ'),
-            '158': ('120120012', 'Λ'),
-            '581': ('201201120', 'Λ'),
-            '362': ('012012120', 'V'),
-            '623': ('120120201', 'V'),
-            '236': ('201201012', 'V'),
-        }
+        # self.ocm = {
+        #     # Given a triangle, identify the rotation of the hex digit (via index) and it's mode.
+        #     '085': ('012012201', 'Λ'),
+        #     '850': ('120120012', 'Λ'),
+        #     '508': ('201201120', 'Λ'),
+        #     '316': ('012012201', 'Λ'),
+        #     '163': ('120120012', 'Λ'),
+        #     '631': ('201201120', 'Λ'),
+        #     '742': ('012012120', 'V'),
+        #     '427': ('120120201', 'V'),
+        #     '274': ('201201012', 'V'),
+        #     '047': ('012012120', 'V'),
+        #     '470': ('120120201', 'V'),
+        #     '704': ('201201012', 'V'),
+        #     '815': ('012012201', 'Λ'),
+        #     '158': ('120120012', 'Λ'),
+        #     '581': ('201201120', 'Λ'),
+        #     '362': ('012012120', 'V'),
+        #     '623': ('120120201', 'V'),
+        #     '236': ('201201012', 'V'),
+        # }
         self.o2p = {}
         self.p2o = {}
         self.oc2 = {}
@@ -288,7 +289,7 @@ class H9Engine:
         self.in_up_regions = None
         self.in_dn_regions = None
         self.hmc = None
-        self.test = None
+        # self.test = None
         self.rgs = None
         self.xnb = None  # external neighbour regions.
         # self.neighbour_lut = None  # neighbour regions.
@@ -297,21 +298,21 @@ class H9Engine:
         self.pch = []
         self.next_oc2 = {}
         self._define_luts()
-        self.modev = {
-            'Λ': [
-                (0, '021'), (0, '201'), (0, '102'),
-                (1, '102'), (1, '120'), (1, '210'),
-                (2, '210'), (2, '012'), (2, '021')],
-            'V': [
-                (0, '012'), (0, '210'), (0, '120'),
-                (1, '201'), (1, '021'), (1, '012'),
-                (2, '120'), (2, '102'), (2, '201')]
-        }
-        self.o2m = {
-            '021': 'Λ', '102': 'Λ', '210': 'Λ',
-            '012': 'V', '120': 'V', '201': 'V',
-        }
-        self.poly_hh, self.poly_hx = self._poly_luts()
+        # self.modev = {
+        #     'Λ': [
+        #         (0, '021'), (0, '201'), (0, '102'),
+        #         (1, '102'), (1, '120'), (1, '210'),
+        #         (2, '210'), (2, '012'), (2, '021')],
+        #     'V': [
+        #         (0, '012'), (0, '210'), (0, '120'),
+        #         (1, '201'), (1, '021'), (1, '012'),
+        #         (2, '120'), (2, '102'), (2, '201')]
+        # }
+        # self.o2m = {
+        #     '021': 'Λ', '102': 'Λ', '210': 'Λ',
+        #     '012': 'V', '120': 'V', '201': 'V',
+        # }
+        self.poly_hh, _ = self._poly_luts()
 
     def _define_luts(self):
         """
@@ -339,193 +340,193 @@ class H9Engine:
                     _, cm = self.uro[cc]  # got the up/down.
                     for ch in cc:
                         self.next_oc2[(o_mo, c1, ch, cm)] = cc
-        self.cc2_pc2 = {
-            # ('085', '815', '316')
-            ('0', '085'): '085',
-            ('1', '085'): '163',
-            ('2', '085'): '274',
-            ('3', '085'): '316',
-            ('4', '085'): '427',
-            ('5', '085'): '508',
-            ('6', '085'): '631',
-            ('7', '085'): '742',
-            ('8', '085'): '850',
-
-            ('0', '815'): '085',
-            ('1', '815'): '163',
-            ('2', '815'): '274',
-            ('3', '815'): '316',
-            ('4', '815'): '427',
-            ('5', '815'): '508',
-            ('6', '815'): '631',
-            ('7', '815'): '742',
-            ('8', '815'): '850',
-
-            ('0', '316'): '085',
-            ('1', '316'): '163',
-            ('2', '316'): '274',
-            ('3', '316'): '316',
-            ('4', '316'): '427',
-            ('5', '316'): '508',
-            ('6', '316'): '631',
-            ('7', '316'): '742',
-            ('8', '316'): '850',
-
-            # ('508', '581', '631')
-            ('0', '508'): '508',
-            ('1', '508'): '316',
-            ('2', '508'): '427',
-            ('3', '508'): '631',
-            ('4', '508'): '742',
-            ('5', '508'): '850',
-            ('6', '508'): '163',
-            ('7', '508'): '274',
-            ('8', '508'): '085',
-
-            ('0', '581'): '508',
-            ('1', '581'): '316',
-            ('2', '581'): '427',
-            ('3', '581'): '631',
-            ('4', '581'): '742',
-            ('5', '581'): '850',
-            ('6', '581'): '163',
-            ('7', '581'): '274',
-            ('8', '581'): '085',
-
-            ('0', '631'): '508',
-            ('1', '631'): '316',
-            ('2', '631'): '427',
-            ('3', '631'): '631',
-            ('4', '631'): '742',
-            ('5', '631'): '850',
-            ('6', '631'): '163',
-            ('7', '631'): '274',
-            ('8', '631'): '085',
-
-            # ('850', '158', '163')
-            ('0', '850'): '850',
-            ('1', '850'): '631',
-            ('2', '850'): '742',
-            ('3', '850'): '163',
-            ('4', '850'): '274',
-            ('5', '850'): '085',
-            ('6', '850'): '316',
-            ('7', '850'): '427',
-            ('8', '850'): '508',
-
-            ('0', '158'): '850',
-            ('1', '158'): '631',
-            ('2', '158'): '742',
-            ('3', '158'): '163',
-            ('4', '158'): '274',
-            ('5', '158'): '085',
-            ('6', '158'): '316',
-            ('7', '158'): '427',
-            ('8', '158'): '508',
-
-            ('0', '163'): '850',
-            ('1', '163'): '631',
-            ('2', '163'): '742',
-            ('3', '163'): '163',
-            ('4', '163'): '274',
-            ('5', '163'): '085',
-            ('6', '163'): '316',
-            ('7', '163'): '427',
-            ('8', '163'): '508',
-
-            # ('047', '742', '362')
-            ('0', '047'): '047',
-            ('1', '047'): '158',
-            ('2', '047'): '236',
-            ('3', '047'): '362',
-            ('4', '047'): '470',
-            ('5', '047'): '581',
-            ('6', '047'): '623',
-            ('7', '047'): '704',
-            ('8', '047'): '815',
-
-            ('0', '742'): '047',
-            ('1', '742'): '158',
-            ('2', '742'): '236',
-            ('3', '742'): '362',
-            ('4', '742'): '470',
-            ('5', '742'): '581',
-            ('6', '742'): '623',
-            ('7', '742'): '704',
-            ('8', '742'): '815',
-
-            ('0', '362'): '047',
-            ('1', '362'): '158',
-            ('2', '362'): '236',
-            ('3', '362'): '362',
-            ('4', '362'): '470',
-            ('5', '362'): '581',
-            ('6', '362'): '623',
-            ('7', '362'): '704',
-            ('8', '362'): '815',
-
-            # ('704', '274', '236')
-            ('0', '704'): '704',
-            ('1', '704'): '815',
-            ('2', '704'): '623',
-            ('3', '704'): '236',
-            ('4', '704'): '047',
-            ('5', '704'): '158',
-            ('6', '704'): '362',
-            ('7', '704'): '470',
-            ('8', '704'): '581',
-
-            ('0', '274'): '704',
-            ('1', '274'): '815',
-            ('2', '274'): '623',
-            ('3', '274'): '236',
-            ('4', '274'): '047',
-            ('5', '274'): '158',
-            ('6', '274'): '362',
-            ('7', '274'): '470',
-            ('8', '274'): '581',
-
-            ('0', '236'): '704',
-            ('1', '236'): '815',
-            ('2', '236'): '623',
-            ('3', '236'): '236',
-            ('4', '236'): '047',
-            ('5', '236'): '158',
-            ('6', '236'): '362',
-            ('7', '236'): '470',
-            ('8', '236'): '581',
-
-            # ('470', '427', '623')
-            ('0', '470'): '470',
-            ('1', '470'): '581',
-            ('2', '470'): '362',
-            ('3', '470'): '623',
-            ('4', '470'): '704',
-            ('5', '470'): '815',
-            ('6', '470'): '236',
-            ('7', '470'): '047',
-            ('8', '470'): '158',
-
-            ('0', '427'): '470',
-            ('1', '427'): '581',
-            ('2', '427'): '362',
-            ('3', '427'): '623',
-            ('4', '427'): '704',
-            ('5', '427'): '815',
-            ('6', '427'): '236',
-            ('7', '427'): '047',
-            ('8', '427'): '158',
-
-            ('0', '623'): '470',
-            ('1', '623'): '581',
-            ('2', '623'): '362',
-            ('3', '623'): '623',
-            ('4', '623'): '704',
-            ('5', '623'): '815',
-            ('6', '623'): '236',
-            ('7', '623'): '047',
-            ('8', '623'): '158',
-        }
+        # self.cc2_pc2 = {
+        #     # ('085', '815', '316')
+        #     ('0', '085'): '085',
+        #     ('1', '085'): '163',
+        #     ('2', '085'): '274',
+        #     ('3', '085'): '316',
+        #     ('4', '085'): '427',
+        #     ('5', '085'): '508',
+        #     ('6', '085'): '631',
+        #     ('7', '085'): '742',
+        #     ('8', '085'): '850',
+        #
+        #     ('0', '815'): '085',
+        #     ('1', '815'): '163',
+        #     ('2', '815'): '274',
+        #     ('3', '815'): '316',
+        #     ('4', '815'): '427',
+        #     ('5', '815'): '508',
+        #     ('6', '815'): '631',
+        #     ('7', '815'): '742',
+        #     ('8', '815'): '850',
+        #
+        #     ('0', '316'): '085',
+        #     ('1', '316'): '163',
+        #     ('2', '316'): '274',
+        #     ('3', '316'): '316',
+        #     ('4', '316'): '427',
+        #     ('5', '316'): '508',
+        #     ('6', '316'): '631',
+        #     ('7', '316'): '742',
+        #     ('8', '316'): '850',
+        #
+        #     # ('508', '581', '631')
+        #     ('0', '508'): '508',
+        #     ('1', '508'): '316',
+        #     ('2', '508'): '427',
+        #     ('3', '508'): '631',
+        #     ('4', '508'): '742',
+        #     ('5', '508'): '850',
+        #     ('6', '508'): '163',
+        #     ('7', '508'): '274',
+        #     ('8', '508'): '085',
+        #
+        #     ('0', '581'): '508',
+        #     ('1', '581'): '316',
+        #     ('2', '581'): '427',
+        #     ('3', '581'): '631',
+        #     ('4', '581'): '742',
+        #     ('5', '581'): '850',
+        #     ('6', '581'): '163',
+        #     ('7', '581'): '274',
+        #     ('8', '581'): '085',
+        #
+        #     ('0', '631'): '508',
+        #     ('1', '631'): '316',
+        #     ('2', '631'): '427',
+        #     ('3', '631'): '631',
+        #     ('4', '631'): '742',
+        #     ('5', '631'): '850',
+        #     ('6', '631'): '163',
+        #     ('7', '631'): '274',
+        #     ('8', '631'): '085',
+        #
+        #     # ('850', '158', '163')
+        #     ('0', '850'): '850',
+        #     ('1', '850'): '631',
+        #     ('2', '850'): '742',
+        #     ('3', '850'): '163',
+        #     ('4', '850'): '274',
+        #     ('5', '850'): '085',
+        #     ('6', '850'): '316',
+        #     ('7', '850'): '427',
+        #     ('8', '850'): '508',
+        #
+        #     ('0', '158'): '850',
+        #     ('1', '158'): '631',
+        #     ('2', '158'): '742',
+        #     ('3', '158'): '163',
+        #     ('4', '158'): '274',
+        #     ('5', '158'): '085',
+        #     ('6', '158'): '316',
+        #     ('7', '158'): '427',
+        #     ('8', '158'): '508',
+        #
+        #     ('0', '163'): '850',
+        #     ('1', '163'): '631',
+        #     ('2', '163'): '742',
+        #     ('3', '163'): '163',
+        #     ('4', '163'): '274',
+        #     ('5', '163'): '085',
+        #     ('6', '163'): '316',
+        #     ('7', '163'): '427',
+        #     ('8', '163'): '508',
+        #
+        #     # ('047', '742', '362')
+        #     ('0', '047'): '047',
+        #     ('1', '047'): '158',
+        #     ('2', '047'): '236',
+        #     ('3', '047'): '362',
+        #     ('4', '047'): '470',
+        #     ('5', '047'): '581',
+        #     ('6', '047'): '623',
+        #     ('7', '047'): '704',
+        #     ('8', '047'): '815',
+        #
+        #     ('0', '742'): '047',
+        #     ('1', '742'): '158',
+        #     ('2', '742'): '236',
+        #     ('3', '742'): '362',
+        #     ('4', '742'): '470',
+        #     ('5', '742'): '581',
+        #     ('6', '742'): '623',
+        #     ('7', '742'): '704',
+        #     ('8', '742'): '815',
+        #
+        #     ('0', '362'): '047',
+        #     ('1', '362'): '158',
+        #     ('2', '362'): '236',
+        #     ('3', '362'): '362',
+        #     ('4', '362'): '470',
+        #     ('5', '362'): '581',
+        #     ('6', '362'): '623',
+        #     ('7', '362'): '704',
+        #     ('8', '362'): '815',
+        #
+        #     # ('704', '274', '236')
+        #     ('0', '704'): '704',
+        #     ('1', '704'): '815',
+        #     ('2', '704'): '623',
+        #     ('3', '704'): '236',
+        #     ('4', '704'): '047',
+        #     ('5', '704'): '158',
+        #     ('6', '704'): '362',
+        #     ('7', '704'): '470',
+        #     ('8', '704'): '581',
+        #
+        #     ('0', '274'): '704',
+        #     ('1', '274'): '815',
+        #     ('2', '274'): '623',
+        #     ('3', '274'): '236',
+        #     ('4', '274'): '047',
+        #     ('5', '274'): '158',
+        #     ('6', '274'): '362',
+        #     ('7', '274'): '470',
+        #     ('8', '274'): '581',
+        #
+        #     ('0', '236'): '704',
+        #     ('1', '236'): '815',
+        #     ('2', '236'): '623',
+        #     ('3', '236'): '236',
+        #     ('4', '236'): '047',
+        #     ('5', '236'): '158',
+        #     ('6', '236'): '362',
+        #     ('7', '236'): '470',
+        #     ('8', '236'): '581',
+        #
+        #     # ('470', '427', '623')
+        #     ('0', '470'): '470',
+        #     ('1', '470'): '581',
+        #     ('2', '470'): '362',
+        #     ('3', '470'): '623',
+        #     ('4', '470'): '704',
+        #     ('5', '470'): '815',
+        #     ('6', '470'): '236',
+        #     ('7', '470'): '047',
+        #     ('8', '470'): '158',
+        #
+        #     ('0', '427'): '470',
+        #     ('1', '427'): '581',
+        #     ('2', '427'): '362',
+        #     ('3', '427'): '623',
+        #     ('4', '427'): '704',
+        #     ('5', '427'): '815',
+        #     ('6', '427'): '236',
+        #     ('7', '427'): '047',
+        #     ('8', '427'): '158',
+        #
+        #     ('0', '623'): '470',
+        #     ('1', '623'): '581',
+        #     ('2', '623'): '362',
+        #     ('3', '623'): '623',
+        #     ('4', '623'): '704',
+        #     ('5', '623'): '815',
+        #     ('6', '623'): '236',
+        #     ('7', '623'): '047',
+        #     ('8', '623'): '158',
+        # }
 
     def ugc_lut_init(self):
         """Generate the UGC Lut as a numpy array"""
@@ -544,11 +545,13 @@ class H9Engine:
         # in_dn, in_up, mode, d_ci, u_ci, dc0, dc1, dc2, uc0, uc1, uc2 = range(self.ugc_num_props)
         self.ugc_lut = np.full((num_regions, self.ugc_num_props), self.invalid_ugc, dtype=np.uint8)
         self.ugc_off = np.full((num_regions, 2), 0., dtype=np.float64)
-        self.in_regions = [0x39, 0x35, 0x25, 0x26, 0x2a, 0x3a, 0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e]
+        # self.in_regions = np.array([0x39, 0x35, 0x25, 0x26, 0x2a, 0x3a, 0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e], dtype=np.uint8)
+        self.in_regions = np.array([0x26, 0x2a, 0x3a, 0x39, 0x35, 0x25, 0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e], dtype=np.uint8)
+        self.region_ids = np.full(96, self.invalid_ugc, dtype=np.uint8)
         self.ugc_off[self.in_regions] = self.POS
         self.ugc_lut[:, self.in_dn] = 0
         self.ugc_lut[:, self.in_up] = 0
-        self.ugc_lut[self.in_regions, self.mode] = [1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
+        self.ugc_lut[self.in_regions, self.mode] = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
         self.ugc_lut[self.invalid_ugc] = 0  # set nothing for illegal!
         self.in_up_regions = [  # 9 regions serve Λ mode
             0x39, 0x3a, 0x3e,  # c0 ΛVΛ
@@ -637,7 +640,7 @@ class H9Engine:
             for cx, hx in zip([self.dc0, self.dc1, self.dc2], lc):
                 self.ugc_lut[rg, cx] = hx
 
-        self.test = {}
+        self.region_ids[self.in_regions] = np.arange(len(self.in_regions), dtype=np.int8)
         self.ugc_rev = np.full((9, 9, num_regions), self.invalid_ugc, dtype=np.uint8)
         for p_reg in self.in_regions:
             p_props = self.ugc_lut[p_reg]
@@ -749,7 +752,7 @@ class H9Engine:
         for (mode, c1), children in _data.items():
             self.xnb[mode, c1] = children
 
-    @lru_cache(maxsize=None)
+    @cache
     def local_offset_lut(self):
         """
         Builds and caches the local/neighbouring offset LUT.
@@ -790,7 +793,7 @@ class H9Engine:
             local_offset_lut[smo, pmo, c1, sib] = oxy * mx
         return local_offset_lut
 
-    @lru_cache(maxsize=None)
+    @cache
     def neighbour_lut(self):
         """
         Builds and caches a LUT of neighbours according to parent mode
@@ -832,7 +835,7 @@ class H9Engine:
 
     def c1(self, address, layer):
         """
-        Given uri address(es) and a layer index (where 0 is the root)
+        Given uri addresses(es) and a layer index (where 0 is the root)
         Return the c1 of that layer via its parent.
         """
         if 0 < layer < address.shape[1]:
@@ -843,7 +846,7 @@ class H9Engine:
 
     def terminate(self, addresses):
         """
-        Normalise address termination.
+        Normalise addresses termination.
         """
         last = addresses[:, -2]
         c1 = self.pqc1_lut[last, addresses[:, -1]]
@@ -851,32 +854,30 @@ class H9Engine:
         addresses[:, -1] = self.child_lut[mode, c1, 2]
         return addresses
 
-    def neighbours(self, address):
+    def region_neighbours(self, addresses):
         """Vectorised means to return neighbouring half-hexagon addresses (as regions) via regions."""
-        count, layers = address.shape
-        neighbour = address.copy()              # The neighbour may just be a single switch.
+        count, layers = addresses.shape
+        neighbours = addresses.copy()           # A neighbour may just be a single switch.
         cascading = np.ones(count, dtype=bool)  # Track all the addresses we are managing.
         n_lut = self.neighbour_lut()
-        c1 = self.pqc1_lut[address[:, -2], address[:, -1]]
+        c1 = self.pqc1_lut[addresses[:, -2], addresses[:, -1]]
         for poi in range(layers - 2, -1, -1):
             if not np.any(cascading):
                 break
             active = np.where(cascading)[0]
-            cur = address[:, poi][active]
-            par = address[:, poi - 1][active]
+            cur = addresses[:, poi][active]
+            par = addresses[:, poi - 1][active]
             pmo = self.ugc_lut[par, self.mode]
             nbm = n_lut[cur, pmo, c1[active]]
-            neighbour[:, poi][active] = nbm[:, -2]
+            neighbours[:, poi][active] = nbm[:, -2]
             cascading[active] = (nbm[:, 1] != pmo)
         # Normalise terminal and root.
-        nmo = self.ugc_lut[neighbour[:, 0], self.mode]
+        nmo = self.ugc_lut[neighbours[:, 0], self.mode]
         root = np.where(nmo == 1, 0x16, 0x49)
-        neighbour[:, 0] = root
-        mode = self.ugc_lut[neighbour[:, -2], self.mode]
-        neighbour[:, -1] = self.child_lut[mode, c1, 2]
-        return neighbour
-
-    import numpy as np
+        neighbours[:, 0] = root
+        mode = self.ugc_lut[neighbours[:, -2], self.mode]
+        neighbours[:, -1] = self.child_lut[mode, c1, 2]
+        return c1, neighbours
 
     def clamp(self, xx, yy, mode):
         """
@@ -894,7 +895,7 @@ class H9Engine:
         up_mask = (mode == 1)
         if np.any(up_mask):
             # Filter to get only the points that are in UP mode
-            x_up, y_up, ẋ_up = xx[up_mask], yy[up_mask], ẋ[up_mask]
+            y_up, ẋ_up = yy[up_mask], ẋ[up_mask]
 
             # Perform the full clamping logic for the UP case
             y_up_clamped = np.clip(y_up, self.ΛF, self.ΛC)
@@ -916,7 +917,7 @@ class H9Engine:
         down_mask = (mode == 0)
         if np.any(down_mask):
             # Filter to get only the points that are in DOWN mode
-            x_down, y_down, ẋ_down = xx[down_mask], yy[down_mask], ẋ[down_mask]
+            y_down, ẋ_down = yy[down_mask], ẋ[down_mask]
 
             # Perform the full clamping logic for the DOWN case
             y_down_clamped = np.clip(y_down, self.VF, self.VC)
@@ -1002,44 +1003,6 @@ class H9Engine:
         n_id = np.select(n_conditions, [0, 1, 2], default=3)
         return h_id << 4 | p_id << 2 | n_id
 
-    def ugc_format(self, final_address, terminating_region, terminating_hex):
-        """
-            Creates a text representation for a batch of addresses.
-            Example output: "021686503081J0"
-            Returns:
-                A NumPy array of formatted string addresses.
-            """
-        final_address = np.atleast_2d(final_address)
-        terminating_region = np.atleast_1d(terminating_region)
-        terminating_hex = np.atleast_1d(terminating_hex)
-
-        # 1. Find all rows that correspond to a legal address
-        is_legal = terminating_region != self.invalid_ugc
-        if not np.any(is_legal):
-            return np.array(["Invalid Address" for _ in final_address])
-
-        legal_addresses = final_address[is_legal]
-        legal_rg = terminating_region[is_legal]
-        legal_hx = terminating_hex[is_legal]
-
-        # 2. Convert the integer digits to strings
-        # We replace the -1 padding with an empty string for clean joining
-        address_digits_str = np.where(legal_addresses == -1, '', legal_addresses.astype(str))
-
-        # 3. Join the digit strings for each address
-        # A list comprehension is the fastest Python-level way to do this
-        address_str_list = ["".join(row) for row in address_digits_str]
-
-        # 4. Format the terminating context
-        rg_char = self.rgs[legal_rg]
-        hx_char = legal_hx.astype(str)
-
-        # 5. Concatenate all parts using vectorized string operations
-        # final_str = address_str_list + mode_char + c1_char
-        final_str = np.char.add(address_str_list, rg_char)
-        final_str = np.char.add(final_str, hx_char)
-        return final_str
-
     def unformat_addresses(self, text_addresses, mode):
         """
         Parses a single or a batch of text addresses into co-ordinates.
@@ -1054,9 +1017,9 @@ class H9Engine:
         Parses a single or a batch of text addresses into numerical arrays.
 
         Args:
-            text_addresses (str or list or np.ndarray): A single address string or a
+            text_addresses (str or list or np.ndarray): A single addresses string or a
                                                         collection of them.
-            depth (int): The expected length of the numerical digit part of the address.
+            depth (int): The expected length of the numerical digit part of the addresses.
 
         Returns:
             tuple: A tuple containing:
@@ -1179,73 +1142,6 @@ class H9Engine:
         mode = self.ugc_lut[region][:, self.mode]
         return hex_d, context, mode
 
-    # def ugc_addr_o(self, x, y, mo, depth=32):
-    #     """Given cmp a vector of Point components create a set of addresses
-    #         x, y                  # shape (N) — barycentric coordinates (x, y)
-    #         mo                    # shape (N) — modes for each octant.
-    #     """
-    #     num_points = x.size
-    #     addresses = np.zeros((num_points, depth), dtype=np.uint8)
-    #     up_context_initial = np.array([0, 1, 2])  # Root context for UP mode
-    #     down_context_initial = np.array([0, 1, 2])  # Root context for DOWN mode
-    #     context = np.where(mo[:, np.newaxis] == 1, up_context_initial, down_context_initial)
-    #     region_id = self.invalid_ugc  # initialise.
-    #     for i in range(depth):
-    #         current_mo = mo
-    #         ẋ = self.R3 * x
-    #         # --- 1. Universal Grid Classification (Purely geometric) ---
-    #         uri = self.ugc_binning(ẋ, y)
-    #
-    #         # --- 2. Boundary Validation (Applies the mode) ---
-    #         is_inside_up = (mo == 1) & (y >= self.ΛF) & (y <= (self.ΛC - np.abs(ẋ)))
-    #         is_inside_down = (mo == 0) & (y <= self.VC) & (y >= (self.VF + np.abs(ẋ)))
-    #         is_valid = is_inside_up | is_inside_down
-    #
-    #         # --- 3. Final ID Assignment for the Current Layer ---
-    #         region_id = np.where(is_valid, uri, self.invalid_ugc)
-    #
-    #         #  --- 4. Get all properties for this layer
-    #         retrieved_props = self.ugc_lut[region_id]
-    #
-    #         # Get the trapezium ID (0, 1, or 2) for each point
-    #         u_trap_id = retrieved_props[:, self.u_ci]
-    #         d_trap_id = retrieved_props[:, self.d_ci]
-    #         hx_id = np.where(mo == 1, u_trap_id, d_trap_id)
-    #
-    #         # Use the trapezium_id to pick the correct digit from the current context
-    #         layer_digit = np.take_along_axis(context, hx_id[:, np.newaxis], axis=1).squeeze()
-    #
-    #         # Final digit for this layer, masking invalid points
-    #         addresses[:, i] = np.where(region_id != -1, layer_digit, -1)
-    #
-    #         # ---. Update State and Create the Context for the NEXT iteration ---
-    #         # Get the three potential digits for the next layer
-    #         u_digits = retrieved_props[:, [self.uc0, self.uc1, self.uc2]]
-    #         d_digits = retrieved_props[:, [self.dc0, self.dc1, self.dc2]]
-    #         context = np.where(mo[:, np.newaxis] == 1, u_digits, d_digits)
-    #
-    #         # 3. Look up offsets and next modes for all points at once
-    #         off = self.ugc_off[region_id]  # Shape: (num_points, 2)
-    #         mo = self.ugc_lut[region_id][..., 2]  # Shape: (num_points,)
-    #
-    #         x -= off[:, 0]
-    #         y -= off[:, 1]
-    #         x *= 3.
-    #         y *= 3.
-    #
-    #     # Now get the next child digit.
-    #     ẋ = self.R3 * x
-    #     uri = self.ugc_binning(ẋ, y)
-    #     is_inside_up = (mo == 1) & (y >= self.ΛF) & (y <= (self.ΛC - np.abs(ẋ)))
-    #     is_inside_down = (mo == 0) & (y <= self.VC) & (y >= (self.VF + np.abs(ẋ)))
-    #     is_valid = is_inside_up | is_inside_down
-    #     ch_region = np.where(is_valid, uri, self.invalid_ugc)
-    #     # do all this to make sure that we get invalid_ugc if it is invalid!
-    #     props = self.ugc_lut[ch_region]
-    #     hx_id = np.where(mo == 1, props[:, self.u_ci], props[:, self.d_ci])
-    #     layer_digit = np.take_along_axis(context, hx_id[:, np.newaxis], axis=1).squeeze()
-    #     return addresses, region_id, layer_digit
-
     def ugc_inv(self, hex_digits, mode, c_reg, c_hex):
         """
         :param hex_digits:  an array of hex-digit arrays representing grid addresses.
@@ -1256,15 +1152,15 @@ class H9Engine:
         """
         num_points, depth = hex_digits.shape
         uri_address = np.zeros((num_points, depth + 1), dtype=np.uint8)
-        uri_address[:, -1] = c_reg  # Seed the last position of the *actual* address
+        uri_address[:, -1] = c_reg  # Seed the last position of the *actual* addresses
         uri_address[:, 0] = np.where(mode == 1, 0x16, 0x49)
         # c_hex = self.child_lut[mode, 1]
         # q_modes = self.ugc_lut[neighbours[:, -2], self.mode]
         # neighbours[:, -1] = self.child_lut[q_modes, c1, 1]
-        p_xp = self.ugc_rev[hex_digits[:, -1], c_hex, c_reg]
+        # p_xp = self.ugc_rev[hex_digits[:, -1], c_hex, c_reg]
         # self.ugc_rev[int(p_hx), c_hx, c_reg]
 
-        # 2. Loop backwards from the second-to-last position of the *actual* address
+        # 2. Loop backwards from the second-to-last position of the *actual* addresses
         for i in range(depth - 1, 0, -1):
             p_hex = hex_digits[:, i]
 
@@ -1281,7 +1177,7 @@ class H9Engine:
         return uri_address
 
     def addr(self, pts, depth=32, calc_prefix=True):
-        """Given a set of Points return their octant-address, hex-digits, terminal region, and hex"""
+        """Given a set of Points return their octant-addresses, hex-digits, terminal region, and hex"""
         # from hhg9 import Points
         dom = pts.domain
         oc, mode = pts.cm()
@@ -1296,6 +1192,19 @@ class H9Engine:
             return pfx, addr[:, 1:], term_reg, term_hex
         else:
             return oc, addr, term_reg, term_hex
+
+    def neighbours(self, pts, depth=32):
+        """Given a set of points, return their neighbours of a given depth as Points."""
+        from hhg9 import Points
+        dom = pts.domain
+        oc, mode = pts.cm()
+        regions = self.ugc_regions(pts.coords, mode, depth)
+        c1, reg_neighbours = self.region_neighbours(regions)
+        xym = self.ugc_dec(reg_neighbours)
+        oob = xym[:, -1] != mode
+        nbo = dom.oid_nb[oc[oob], c1[oob]]
+        oc[oob] = nbo
+        return Points(xym[:, :2], dom, oc)
 
     def _poly_luts(self):
         """
@@ -1342,7 +1251,7 @@ class H9Engine:
         Given a numpy array of URI regions, returns a dictionary of the unique
         nested half-hexagon polygons.
         """
-        # Use a dictionary to store unique polygons, keyed by their address tuple
+        # Use a dictionary to store unique polygons, keyed by their addresses tuple
         unique_polygons = {}
         polys = []
         num_points, depth = addresses.shape
@@ -1368,12 +1277,6 @@ class H9Engine:
                 scale /= 3.0
         return unique_polygons, np.array(polys)
 
-    def poly_step(self, step, hex=False):
-        """Return polygon for a given step, correctly scaled and positioned."""
-        rot, mode = self.uro[step.loc]
-        c1 = self.get_c1(self.R3 * step.x, step.y, mode)
-        return (self.poly(c1, mode, hexagon=hex) * step.s) + [step.xa, step.ya]  #
-
     @classmethod
     def valid(cls, pts, mode='Λ'):
         """
@@ -1384,79 +1287,79 @@ class H9Engine:
         # ẋ, y = cls.R3 * pts[..., 0], pts[..., 1]
         return cls.in_scope(cls.R3 * pts[..., 0], pts[..., 1], mode)
 
-    @classmethod
-    def xy_to_h9(cls, pt_i, c2t_i='021'):
-        """
-        Within the scope of a c2 triangle, 'c2t' identify the c1 and remaining components.
-        :param pt_i: 2d coordinate.
-        :param c2t_i: c2 triangle input
-        :return: the hex (0...8), the remaining point,and mode/c2 container for the remaining point.
-        """
-        ud = 'Λ' if c2t_i in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
-        x, y = pt_i[0], pt_i[1]  # This is a point on the plane
-        ẋ = cls.R3 * x  # We will be using √3x for everything.
-        if not cls.in_scope(ẋ, y, ud):  # Ensure we are in the equilateral
-            return None
-        c1 = cls.get_c1(ẋ, y, ud)  # Identify the c1 lo trit (036 / 147 / 258)
-        c2 = int(c2t_i[c1])  # Identify the c2 hi trit (012 / 345 / 678)
-        hx = c2 * 3 + c1  # Fundamental Enumeration: c2*3+c1
-        c2t_o = cls.get_c2(ẋ, y, c1, ud)  # c1, ẋ, y to identify the next c2t (one of three triangles)
-        xo, yo = cls.OFS[c1, ud, c2t_o]  # using c1, c2t_o we can find the offset of the next triangle.
-        pt_o = 3. * (x + xo), 3. * (y + yo)  # update the new coordinates by the offset.
-        return hx, ud, pt_o, c2t_o  # return the values.
+    # @classmethod
+    # def xy_to_h9(cls, pt_i, c2t_i='021'):
+    #     """
+    #     Within the scope of a c2 triangle, 'c2t' identify the c1 and remaining components.
+    #     :param pt_i: 2d coordinate.
+    #     :param c2t_i: c2 triangle input
+    #     :return: the hex (0...8), the remaining point,and mode/c2 container for the remaining point.
+    #     """
+    #     ud = 'Λ' if c2t_i in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
+    #     x, y = pt_i[0], pt_i[1]  # This is a point on the plane
+    #     ẋ = cls.R3 * x  # We will be using √3x for everything.
+    #     if not cls.in_scope(ẋ, y, ud):  # Ensure we are in the equilateral
+    #         return None
+    #     c1 = cls.get_c1(ẋ, y, ud)  # Identify the c1 lo trit (036 / 147 / 258)
+    #     c2 = int(c2t_i[c1])  # Identify the c2 hi trit (012 / 345 / 678)
+    #     hx = c2 * 3 + c1  # Fundamental Enumeration: c2*3+c1
+    #     c2t_o = cls.get_c2(ẋ, y, c1, ud)  # c1, ẋ, y to identify the next c2t (one of three triangles)
+    #     xo, yo = cls.OFS[c1, ud, c2t_o]  # using c1, c2t_o we can find the offset of the next triangle.
+    #     pt_o = 3. * (x + xo), 3. * (y + yo)  # update the new coordinates by the offset.
+    #     return hx, ud, pt_o, c2t_o  # return the values.
 
-    @classmethod
-    def _code_pt(cls, style, hx, mode, c1) -> str:
-        match style:
-            case Style.U64:
-                return hx
-            case Style.HEX:
-                return f'{hx}'
-            case Style.NUMERIC:
-                return f'{hx}'
-            case Style.FULL:
-                return f'{hx}{mode}'
-            case Style.CFULL:
-                return f'{hx}{c1}{mode}'
-            case Style.EXTENDED:
-                ex = {6: 'G', 7: 'T', 8: 'X'}
-                if mode == 'V' or hx < 6:
-                    return f'{hx}'
-                else:
-                    return f'{ex[hx]}'
-            case Style.HALFHEX:
-                fx = {
-                    0: 'o', 1: 'i', 2: 'z',
-                    3: 'e', 4: 'a', 5: 's',
-                    6: 'g', 7: 't', 8: 'x'
-                }
-                if mode == 'V':
-                    return f'{hx}'
-                else:
-                    return f'{fx[hx]}'
+    # @classmethod
+    # def _code_pt(cls, style, hx, mode, c1) -> str:
+    #     match style:
+    #         case Style.U64:
+    #             return hx
+    #         case Style.HEX:
+    #             return f'{hx}'
+    #         case Style.NUMERIC:
+    #             return f'{hx}'
+    #         case Style.FULL:
+    #             return f'{hx}{mode}'
+    #         case Style.CFULL:
+    #             return f'{hx}{c1}{mode}'
+    #         case Style.EXTENDED:
+    #             ex = {6: 'G', 7: 'T', 8: 'X'}
+    #             if mode == 'V' or hx < 6:
+    #                 return f'{hx}'
+    #             else:
+    #                 return f'{ex[hx]}'
+    #         case Style.HALFHEX:
+    #             fx = {
+    #                 0: 'o', 1: 'i', 2: 'z',
+    #                 3: 'e', 4: 'a', 5: 's',
+    #                 6: 'g', 7: 't', 8: 'x'
+    #             }
+    #             if mode == 'V':
+    #                 return f'{hx}'
+    #             else:
+    #                 return f'{fx[hx]}'
 
-    def encode(self, pt, loc='021', _depth=31, style=Style.HEX):
-        """
-        *Planar* Barycentric->H9 Encoder.
-        Given a 2D coordinate and a c2 triangle (one of six), return its address.
-        :param pt: 2d coordinate
-        :param loc: 'Λ': ['021', '102', '210'], 'V': ['201', '120', '012']
-        :param rot: rotation 0,1,2 (or None for planar).
-        :param _depth: Put a limit to the encoding
-        :param style: Style of encoding being asked for.
-        :return: The encoded coordinate.
-        """
-        result = []
-        ud = 'Λ' if loc in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
-        for d in range(_depth):
-            vals = self.xy_to_h9(pt, loc)
-            if not vals:
-                return None  # Probably a bug: outside triangle bounds.
-            hx, ud, pt, loc = vals
-            result.append(self._code_pt(style, hx, ud, hx & 3))
-        if style == Style.HEX:
-            result.append(f'{ud}')
-        return ''.join(result)
+    # def encode(self, pt, loc='021', _depth=31, style=Style.HEX):
+    #     """
+    #     *Planar* Barycentric->H9 Encoder.
+    #     Given a 2D coordinate and a c2 triangle (one of six), return its addresses.
+    #     :param pt: 2d coordinate
+    #     :param loc: 'Λ': ['021', '102', '210'], 'V': ['201', '120', '012']
+    #     :param rot: rotation 0,1,2 (or None for planar).
+    #     :param _depth: Put a limit to the encoding
+    #     :param style: Style of encoding being asked for.
+    #     :return: The encoded coordinate.
+    #     """
+    #     result = []
+    #     ud = 'Λ' if loc in {'021', '102', '210'} else 'V'  # up-triangle/down-triangle
+    #     for d in range(_depth):
+    #         vals = self.xy_to_h9(pt, loc)
+    #         if not vals:
+    #             return None  # Probably a bug: outside triangle bounds.
+    #         hx, ud, pt, loc = vals
+    #         result.append(self._code_pt(style, hx, ud, hx & 3))
+    #     if style == Style.HEX:
+    #         result.append(f'{ud}')
+    #     return ''.join(result)
 
     @classmethod
     def h9_to_xy(cls, ud, hx, ch, pt):
@@ -1483,7 +1386,7 @@ class H9Engine:
     def decode(cls, addr):
         """
         This is the H9->Barycentric projection.
-        Given an address string, return its xy coordinates.
+        Given an addresses string, return its xy coordinates.
         This is the loop part that drives h9_to_xy
         :param addr:
         :return: xy coordinate
@@ -1493,7 +1396,7 @@ class H9Engine:
         }
         _hints = cls.hint(addr)
         pt = (0.0, 0.0)  # Start from the origin
-        _addr, tail = cls.un_tail(addr)
+        _addr, _ = cls.un_tail(addr)
         ch = c2i[_hints[-1]][int(_addr[-1]) % 3]
         for hx, ud in zip(reversed(_addr), reversed(_hints)):
             ch, pt = cls.h9_to_xy(ud, int(hx), ch, pt)  # Compute the previous `(x, y)` step
@@ -1502,9 +1405,9 @@ class H9Engine:
     @classmethod
     def un_tail(cls, addr):
         """
-        split ΛV from tail of address and return both.
-        :param addr: Initial HEX format address with or without ΛV tail.
-        :return: address without tail, and ΛV tail.
+        split ΛV from tail of addresses and return both.
+        :param addr: Initial HEX format addresses with or without ΛV tail.
+        :return: addresses without tail, and ΛV tail.
         """
         if addr[-1] in {'Λ', 'V'}:
             return addr[:-1], addr[-1]
@@ -1512,33 +1415,33 @@ class H9Engine:
             # The `VΛ` convention: Assume the final region is `V` if it is undefined.
             return addr, 'V'
 
-    @classmethod
-    def print_lut(cls):
-        """
-        This generates a list of rules used to understand how,
-        given parent, child and child-UD the parent UD.
-        :return: printout.
-        """
-        fn = (lambda a, b: (a - b) % 3)
-        for n in range(9):
-            print(f'?{n}')
-            g, i = divmod(n, 3)  # g = 0/1/2 for 0..2/3..5/6..8
-            for p in range(9):
-                v = [f'{p}X{n}X', f'{p}V{n}X', f'{p}Λ{n}X', f'{p}Y{n}X']
-                idx = fn((p % 3), i) if g != 1 else fn(i, (p % 3))
-                rx = v[idx] if g != 2 else v[3] if idx == 0 else v[0]
-                vl = cls.exp(p, n, 'Λ')
-                vv = cls.exp(p, n, 'V')
-                print(f'{p}?{n}X={rx}; {p}{vl}{n}Λ; {p}{vv}{n}V')
+    # @classmethod
+    # def print_lut(cls):
+    #     """
+    #     This generates a list of rules used to understand how,
+    #     given parent, child and child-UD the parent UD.
+    #     :return: printout.
+    #     """
+    #     fn = (lambda a, b: (a - b) % 3)
+    #     for n in range(9):
+    #         print(f'?{n}')
+    #         g, i = divmod(n, 3)  # g = 0/1/2 for 0..2/3..5/6..8
+    #         for p in range(9):
+    #             v = [f'{p}X{n}X', f'{p}V{n}X', f'{p}Λ{n}X', f'{p}Y{n}X']
+    #             idx = fn((p % 3), i) if g != 1 else fn(i, (p % 3))
+    #             rx = v[idx] if g != 2 else v[3] if idx == 0 else v[0]
+    #             vl = cls.exp(p, n, 'Λ')
+    #             vv = cls.exp(p, n, 'V')
+    #             print(f'{p}?{n}X={rx}; {p}{vl}{n}Λ; {p}{vv}{n}V')
 
     @classmethod
     def exp(cls, par, chd, ud='V'):
         """
-        Given a parent & child address and child mode, return the parent mode.
+        Given a parent & child addresses and child mode, return the parent mode.
         # parental half-hex identity.
         # Eg (0,0,V) as in 00V => V as for (0V0V)
         # VΛ convention: V is default.
-        # Hex address in base 3 is [C2C1]
+        # Hex addresses in base 3 is [C2C1]
         # C2 can be seen as distance from Centre (0,1,2)
         # C1 can be seen as orientation (flat/forward/back for 0,1,2 respectively).
         :param par:
@@ -1558,7 +1461,7 @@ class H9Engine:
     @classmethod
     def hint(cls, addr, h=None):
         """
-        Given a HEX address, return hint string.
+        Given a HEX addresses, return hint string.
         :param addr: eg 520826162014320318416260730241
         :param h: the trailing triangle identity (UD) for the least significant digit.
         :return: The full hint result.
@@ -1579,223 +1482,17 @@ class H9Engine:
             result.append(h)
         return ''.join(reversed(result))
 
-    def _oct_hint(self, path_str, mode, rot):
-        """
-        From a canonical octahedral address NWV...V2
-        Recover Λ/V mode at each level from a hex path and final mode/rotation"""
-        modes = [None] * len(path_str)
-        modes[-1] = mode
-        # Walk backwards
-        for i in reversed(range(len(path_str) - 1)):
-            hx = path_str[i + 1]
-            c2 = self.oc2[(hx, rot, mode)]
-            rct, mode = self.ocm[c2]  # rotation/mode contexts for c2.
-            hx = int(path_str[i])  # This is the outer (contextual) hex digit.
-            rot = int(rct[hx])  # The outer (contextual) rotation
-            modes[i] = mode
-        return modes
-
-    def _oct_hint_n(self, path_str, root, i_mo, i_ro):
-        """
-        From a canonical octahedral address NWV...V2
-        Recover c2 at each level from: hex path and terminal mode/rotation"""
-        cs = [None] * len(path_str)
-        cs[0] = (root.index(path_str[0]), root)  # The c1, and the c2, at root.
-        # get the c2 for terminating hex.
-        i_h = path_str[-1]
-        i_c1 = [0, 2, 1][i_ro]  # I should check this, but it looks to be ok.
-        i_c2 = self.oc2[(i_h, i_c1, i_mo)]
-        cs[-1] = i_c2
-        # Walk backwards through the address
-        for i in reversed(range(len(path_str) - 1)):
-            o_h = path_str[i]  # eg '1'
-            i_c2 = self.cc2_pc2[o_h, i_c2]
-            cs[i] = i_c2
-        return cs
-
-    def oct_decode_n(self, address, root='085'):
-        """Recover (x, y) from a full hex path string and final Λ/V mode/rotation."""
-        path_str, final_mode, final_rot = address[:-2], address[-2], int(address[-1])
-        cs = self._oct_hint(path_str, root, final_mode, final_rot)
-        ox, oy, bits = self.oct_decodeo(address, root)
-        ddx = []
-        s, x, y = 1.0, 0.0, 0.0
-        o_c2 = root
-        for i in range(len(path_str) - 1):
-            cx, i_c2 = path_str[i], cs[i]  # in
-            o_c1 = i_c2.index(cx)
-            opc2, o_r, o_m = self.o2p[o_c2]  # Planar equivalents of o_c2.
-            ipc2, i_r, i_m = self.o2p[i_c2]  # Planar equivalents of i_c2.
-            d_m = 'V' if o_m == 'Λ' else 'Λ'
-            key = o_c1, d_m, ipc2
-            # return self.OFS[(i_c1, 'V' if mode == 'Λ' else 'Λ', i_c2)]
-            ddx.append((cx, i_c2, (opc2, o_r, o_m), (ipc2, i_r, i_m), *key, (x, y)))
-            try:
-                dx, dy = self.OFS[key]
-                x = x - s * dx
-                y = y - s * dy
-                s /= 3.0
-            except KeyError:
-                print(f'key {key} not found in OFS')  # 2 ^ 102
-            o_c2 = i_c2
-        return x, y
-
-    def oct_decode(self, address, root='085'):
-        """Recover (x, y) from a full hex path string and final Λ/V mode/rotation."""
-        path_str, final_mode, final_rot = address[:-2], address[-2], int(address[-1])
-        modes = self._oct_hint(path_str, final_mode, final_rot)
-        # kyx = []
-        s, x, y = 1.0, 0.0, 0.0
-        oc2 = root
-        for i in range(len(path_str) - 1):
-            ro, mo = self.uro[oc2]  # '085' -> 0,Λ
-            cx, cm, nx, nm = path_str[i], modes[i], path_str[i + 1], modes[i + 1]
-            c1 = oc2.index(cx)  # '085'(5) = 2
-            oc2 = self.next_oc2[(mo, c1, nx, nm)]
-            pc2, pr, pm = self.o2p[oc2]  # Planar equivalents of current o_c2.
-            key = (c1, mo, pc2)
-            dx, dy = self.OFS[key]
-            x = x - s * dx
-            y = y - s * dy
-            # kyx.append((*key, (mo, c1, nx, nm), oc2, (x, y)))
-            s /= 3.0
-        return x, y
-
-    def branch_step(self, step):
-        """Return full set of candidates from step"""
-        result = []
-        rot, mode = self.uro[step.loc]  # gather rot, half-hex mode of outer hex from triangle
-        nxt_scale = step.s / 3.
-        for c1, c2 in self.modev[mode]:
-            dx, dy = self.OFS[c1, mode, c2]
-            dx *= step.s
-            dy *= step.s
-            x = step.x - dx
-            y = step.y - dy
-            _rot = [0, 2, 1][c1]
-            _mode = self.o2m[c2]
-            o_c2 = self.p2o.get((c2, _rot, _mode))  # recover the new inner triangle.
-            nxt = Step(o_c2, x, y, step.style)
-            nxt.xa, nxt.ya = step.xa - dx, step.ya - dy
-            nxt.s = nxt_scale
-            result.append(nxt)
-        return result
-
-    def encode_step(self, step, last: bool = False):
-        """Encode octahedral address, based upon step"""
-        ẋ = self.R3 * step.x  # translate x.
-        rot, mode = self.uro[step.loc]  # gather rot, half-hex mode of outer hex from triangle
-        c1 = self.get_c1(ẋ, step.y, mode)  # Identify inner c1 orientated half-hex of o_c2.
-        hx = step.loc[c1]  # get the hex number from index c1 of o_c2.
-        tm, tr = None, None
-        if step.style == Style.U64:
-            result = int(hx)
-            if last:
-                tm = 1 if mode == 'V' else 0
-                tr = rot
-        else:
-            result = self._code_pt(step.style, hx, mode, c1)
-            if last:
-                match step.style:
-                    case Style.HEX:
-                        result = f'{result}{mode}{rot}'
-
-        c2 = self.get_c2(ẋ, step.y, c1, mode)  # Get the inner triangle (0,1,2) in c1.
-        dx, dy = self.OFS[c1, mode, c2]  # This gives us the offset.
-        x, y = 3. * (step.x + dx), 3. * (step.y + dy)  # Apply offset
-        rot = [0, 2, 1][c1]  # get inner rot derived from the c1
-        mode = 'Λ' if c2 in {'021', '102', '210'} else 'V'  # inner mode from the c2.
-        o_c2 = self.p2o.get((c2, rot, mode))  # recover the new inner triangle.
-        nxt = Step(o_c2, x, y, step.style)
-        nxt.xa, nxt.ya = step.xa - dx * step.s, step.ya - dy * step.s
-        nxt.s = step.s / 3.
-        nxt.c1 = c1
-        if step.style == Style.U64 and last:
-            nxt.tm = tm
-            nxt.tr = tr
-        return nxt, result
-
-    def oct_encode(self, pt, mo, depth=30, style=Style.HEX):
-        """Octahedral encoding of a point in a triangle"""
-        pts = np.atleast_2d(pt).copy()
-        mode = np.atleast_1d(mo)
-        addr, term_reg, term_hex = self.ugc_addr(pts, mode, depth)
-        return self.ugc_format(addr, term_reg, term_hex)
-
 
 if __name__ == '__main__':
     from hhg9 import Points, Registrar
-
     h9 = H9Engine()
-    various = np.array([
-        [0.2785587592601327, 0.29386255474543355, 0],   # Stonehenge.
-        [0.30413319554572815, 0.28972243397424297, 0],  # Greenwich Park West
-        [0.30413319554572815, -0.28972243397424297, 1],  # Greenwich Park East
-        [0.302986940221271, 0.2895875423442124, 1],
-        [0.303014288964195, 0.2896217435874474, 0],
-        [0.000000000000001, -0.8164965132120238, 0],
-        [0.292437721410212, 0.2924377012342344, 0],
-        [0.012345678901234, 0.1234567890123456, 0],
-    ])
-    xy, m = various[:, :2], various[:, 2]
-    x, y, mo = various[:, 0], various[:, 1], various[:, 2]
-    xr = h9.ugc_regions(xy, mo, 20)
-    gpw = xr[1]
-    gpe = xr[2]
-    xv = h9.neighbours(xr.copy())
-    gpw_n = xv[1]
-    gpe_n = xv[2]
-    gx = h9.ugc_dec(xv)
-
-    a, ra, ch = h9.ugc_addr(xy, mo)
-
-    # gx = h9.ugc_dec(xr)
-    dx, dy, dm = np.abs(x - gx[:, 0]), np.abs(y - gx[:, 1]), np.abs(mo - gx[:, 2])
-    ab = h9.neighbours(xr.copy())
-    pak = h9.neighbours(ab)
-    dak = (xr == pak)
-
-    ux = h9.ugc_inv(a,  mo, ra, ch)
-    ast = h9.ugc_format(a, ra, ch)
-    reg = Registrar()
-    from hhg9.domains import OctahedralCartesian, OctahedralBarycentric
-
-    # Stonehenge: 0.29243772, 0.28113778 293.017 281.458
-    c_oct = OctahedralCartesian(reg)  # Cartesian Octahedron (xyz)
-    b_oct = OctahedralBarycentric(reg, c_oct)  # 2d Flat for addressing.
-    up_hi = (0, h9.V * 4.)
-    dn_lo = (0, -h9.V * 4.)
-    ldn = Points(
-        np.array([
-            [0.303014288964195, 0.2896217435874474],
-        ]), b_oct,
-        np.array([(+1, +1, +1)])
-    )
-
-    # ldn.coords[:,0]
-    rx = h9.addr(ldn, 12)
-    done = True
-
-    # oc, mo = greenwich.cm()
-    # g_code = f'{ldn:h9.12}'
-    # club = Points(
-    #     np.array([[0.30298694022127, 0.2895875423442]]), b_oct,
-    #     np.array([(+1, -1, +1)])
-    # )
-
-    # h9 = H9Engine()
-    # shb = 0.29243772, 0.28113778
-    # sh_loc = '085'
-    # shf = h9.oct_encode(shb, sh_loc)
-    # shp = h9.oct_decode(shf, sh_loc)
-    # print(shb, shf, shp)
-    # club = 0.303014288964195, 0.2896217435874474
-    # loc = '085' up
-    # ldn_x, ldn_y = club
-    # plx = h9.enmesh(club, loc, 3, False, False)  # This is the set of hexagons.
-    # step = Step(loc, ldn_x, ldn_y)
-    # for j in range(3):
-    #     msh = plx[j]
-    #     poly = h9.poly_step(step, False)
-    #     print(poly - msh)
-    #     step, x = h9.encode_step(step)
+    # various = np.array([
+    #     [0.2785587592601327, 0.29386255474543355, 0],   # Stonehenge.
+    #     [0.30413319554572815, 0.28972243397424297, 0],  # Greenwich Park West
+    #     [0.30413319554572815, -0.28972243397424297, 1],  # Greenwich Park East
+    #     [0.302986940221271, 0.2895875423442124, 1],
+    #     [0.303014288964195, 0.2896217435874474, 0],
+    #     [0.000000000000001, -0.8164965132120238, 0],
+    #     [0.292437721410212, 0.2924377012342344, 0],
+    #     [0.012345678901234, 0.1234567890123456, 0],
+    # ])
