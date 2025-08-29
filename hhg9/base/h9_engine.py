@@ -35,11 +35,14 @@
      This latter allows us to precisely recover a location from the addresses.
      For example, stonehenge (uk) is approximately at NW013502061182541V2, while the statue of liberty (usa)
      has the addresses NA556384535621324Λ0
+
      """
+# TODO(SoC): Split encroach, theta, and addressing into smaller services once fixes land.
+# TODO(Points): Move Points.components to octant-id (uint8); keep backward-compat shims.
+
 from dataclasses import dataclass
 from enum import Enum, unique
-from functools import lru_cache, cache
-
+from functools import cache
 import numpy as np
 
 
@@ -59,21 +62,6 @@ class Style(Enum):
     U64 = 6
 
 
-@dataclass
-class Step:
-    """The full state of an encoding step"""
-    # loc: str  # e.g. '850'
-    x: float  # cumulative x so far
-    y: float  # cumulative y so far
-    style: Style = Style.HEX
-    s: float = 1.0
-    # xa: float = 0.  # offset acc.
-    # ya: float = 0.  # offset acc.
-    c1: int = None  # add this!
-    # tm: int = None  # terminating mode
-    tr: int = None  # terminating rotation.
-
-
 class H9Engine:
     """
     AKA H9 - This is a hierarchic hexagonal grid (HHG) that uses regular tetrahedrons
@@ -85,37 +73,38 @@ class H9Engine:
     # Done in order to avoid tiny floating point deviations.
     TR = H / R3  #
     W = 2 * TR  # This correctly derives W = sqrt(2)
-    ΛC = 2 * H / 3.
-    ΛF = -H / 3.
-    VC = H / 3.
-    VF = -2 * H / 3.
+    Ḣ = H / 3.
+    ΛC = 2 * Ḣ
+    ΛF = -Ḣ
+    VC = Ḣ
+    VF = -2 * Ḣ
     Ẇ = ΛC
     TL = -TR
     U, V = W / 6., H / 9.
     RH = R3 / 2.  # ratio of height to width. 0.8660
 
-    OFS = {
-        # These are subtractive.
-        # What to remove from the coordinate, once found! So, for 2V.021 that's at the top!
-        (0, 'Λ', '021'): (0, V * 2.),
-        (0, 'Λ', '201'): (-U, V),
-        (0, 'Λ', '102'): (-U * 2., V * 2.),
-        (1, 'Λ', '102'): (U, -V),
-        (1, 'Λ', '120'): (U, V),
-        (1, 'Λ', '210'): (U * 2., V * 2.),
-        (2, 'Λ', '210'): (-U, -V),
-        (2, 'Λ', '012'): (0, -V * 2.),
-        (2, 'Λ', '021'): (0, -V * 4.),
-        (0, 'V', '012'): (0, -V * 2.),
-        (0, 'V', '210'): (-U, -V),
-        (0, 'V', '120'): (-U * 2., -V * 2.),
-        (1, 'V', '201'): (-U, V),
-        (1, 'V', '021'): (0, V * 2.),
-        (1, 'V', '012'): (0, V * 4.),
-        (2, 'V', '120'): (U, V),
-        (2, 'V', '102'): (U, -V),
-        (2, 'V', '201'): (U * 2., -V * 2.)
-    }
+    # OFS = {
+    #     # These are subtractive.
+    #     # What to remove from the coordinate, once found! So, for 2V.021 that's at the top!
+    #     (0, 'Λ', '021'): (0, V * 2.),
+    #     (0, 'Λ', '201'): (-U, V),
+    #     (0, 'Λ', '102'): (-U * 2., V * 2.),
+    #     (1, 'Λ', '102'): (U, -V),
+    #     (1, 'Λ', '120'): (U, V),
+    #     (1, 'Λ', '210'): (U * 2., V * 2.),
+    #     (2, 'Λ', '210'): (-U, -V),
+    #     (2, 'Λ', '012'): (0, -V * 2.),
+    #     (2, 'Λ', '021'): (0, -V * 4.),
+    #     (0, 'V', '012'): (0, -V * 2.),
+    #     (0, 'V', '210'): (-U, -V),
+    #     (0, 'V', '120'): (-U * 2., -V * 2.),
+    #     (1, 'V', '201'): (-U, V),
+    #     (1, 'V', '021'): (0, V * 2.),
+    #     (1, 'V', '012'): (0, V * 4.),
+    #     (2, 'V', '120'): (U, V),
+    #     (2, 'V', '102'): (U, -V),
+    #     (2, 'V', '201'): (U * 2., -V * 2.)
+    # }
     POS = [
         # The co-ordinate to the centre of each sub-triangle
         # The order starts from above the origin, and goes clockwise through the inner set, then the outer set.
@@ -126,20 +115,21 @@ class H9Engine:
     ]
 
     @classmethod
-    def in_scope(cls, ẋ, y, mode='Λ') -> bool:
+    def in_scope(cls, ẋ, y, mode='Λ', eps=1e-15) -> bool:
         """
         This is a barycentric scope test, for a unit equilateral triangle.
         This expects x to already be pre-calculated as √3(x).
         :param ẋ: `ẋ := √3(x)` on x co-ordinate.
         :param y: y co-ordinate
         :param mode: triangle pointing up/down
+        :param eps: tolerance
         :return: boolean (in scope or not)
         """
-        e = 1e-15  # for polygons and edges, best to be a tiny bit safe.
+        # e = 1e-15  # for polygons and edges, best to be a tiny bit safe.
         if mode == 'Λ':  # barycentre at 0, triangle point up.
-            return (cls.ΛF <= y) & (y <= cls.ΛC - np.abs(ẋ) + e)
+            return (cls.ΛF <= y) & (y <= cls.ΛC - np.abs(ẋ) + eps)
         else:  # barycentre at 0, triangle point down.
-            return (cls.VF + np.abs(ẋ) - e <= y) & (y <= cls.VC)
+            return (cls.VF + np.abs(ẋ) - eps <= y) & (y <= cls.VC)
 
     # @classmethod
     # def get_c1(cls, ẋ, y, mode='Λ'):
@@ -241,8 +231,10 @@ class H9Engine:
     #             return '201'  # y >= ẇ+ẋ identifies 201
     #         return '102'  # y > 0 and y < ẇ+ẋ identifies 102
 
+    @cache
     def __init__(self):
         # These are used to define octahedral enumerations.
+        self._eps = 8.0 * np.finfo(np.float64).eps
         self.region_ids = None
         self.ugc_num_props = 11
         self.num_regions = 96
@@ -312,7 +304,7 @@ class H9Engine:
         #     '021': 'Λ', '102': 'Λ', '210': 'Λ',
         #     '012': 'V', '120': 'V', '201': 'V',
         # }
-        self.poly_hh, _ = self._poly_luts()
+        self.poly_hh, self.poly_fh, self.poly_tx = self._poly_luts()
 
     def _define_luts(self):
         """
@@ -545,12 +537,15 @@ class H9Engine:
         # in_dn, in_up, mode, d_ci, u_ci, dc0, dc1, dc2, uc0, uc1, uc2 = range(self.ugc_num_props)
         self.ugc_lut = np.full((num_regions, self.ugc_num_props), self.invalid_ugc, dtype=np.uint8)
         self.ugc_off = np.full((num_regions, 2), 0., dtype=np.float64)
+        # Order of in_regions is important!
         # self.in_regions = np.array([0x39, 0x35, 0x25, 0x26, 0x2a, 0x3a, 0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e], dtype=np.uint8)
         self.in_regions = np.array([0x26, 0x2a, 0x3a, 0x39, 0x35, 0x25, 0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e], dtype=np.uint8)
         self.region_ids = np.full(96, self.invalid_ugc, dtype=np.uint8)
         self.ugc_off[self.in_regions] = self.POS
+        self.ugc_lut[:, self.mode] = 0
         self.ugc_lut[:, self.in_dn] = 0
         self.ugc_lut[:, self.in_up] = 0
+
         self.ugc_lut[self.in_regions, self.mode] = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
         self.ugc_lut[self.invalid_ugc] = 0  # set nothing for illegal!
         self.in_up_regions = [  # 9 regions serve Λ mode
@@ -885,11 +880,13 @@ class H9Engine:
         respective barycentric triangles.
         """
         # Create copies to store the final results
+        # __import__("traceback").print_stack(file=__import__("sys").stderr)
+
         xx_final = xx.copy()
         yy_final = yy.copy()
 
         ẋ = self.R3 * xx
-        eps = 1e-14
+        eps = 1e-15
 
         # --- 1. Calculate the Clamped Result for UP Mode Points ---
         up_mask = (mode == 1)
@@ -904,7 +901,6 @@ class H9Engine:
             max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
 
             ẋ_clamped = np.clip(ẋ_up, -max_abs_ẋ, max_abs_ẋ)
-
             at_base = np.isclose(y_up_clamped, self.ΛF, atol=eps)
             xc = ẋ_clamped / self.R3
 
@@ -994,7 +990,6 @@ class H9Engine:
         ]
         p_id = np.select(p_conditions, [0, 1, 2], default=3)
         y_plus_x = y + ẋ
-
         n_conditions = [  # C0:=2; Negative Slope \ Back
             y_plus_x < -self.Ẇ,
             y_plus_x < 0,
@@ -1042,7 +1037,6 @@ class H9Engine:
         final_address = hex_digits_str.astype(np.int8)
 
         # Look up the region character and hex digit from the terminating context.
-        # This requires your pre-built CHAR_TO_REGION map.
         region_char = terminating_context_str[..., 0]
         hex_char = terminating_context_str[..., 1]
 
@@ -1052,10 +1046,37 @@ class H9Engine:
 
         return final_address, terminating_region, terminating_hex
 
+    def ugc_regions(self, xy, mode, depth=36):
+        """
+        Given a vector of Point coords create a set of regions
+        """
+        num_points = xy.shape[0]
+        x = np.copy(xy[:, 0])
+        y = np.copy(xy[:, 1])
+        addresses = np.full((num_points, depth + 2), self.invalid_ugc, dtype=np.uint8)
+        addresses[:, 0] = np.where(mode == 1, 0x16, 0x49)  # These values should come from the octant set.
+        for i in range(depth + 1):
+            ẋ = self.R3 * x
+            # x, y, ẋ = self.clamp(x, y, mode)  # This will cause a problem here.
+            region = self.region_classification(ẋ, y)  # Raw classification
+            props = self.ugc_lut[region]
+            mode_up = props[:, self.in_up]
+            mode_dn = props[:, self.in_dn]
+            in_scope = np.where(mode == 1, mode_up, mode_dn)
+            region_id = np.where(in_scope, region, self.invalid_ugc)  # Validated ID
+            addresses[:, i + 1] = region_id
+            off = self.ugc_off[region_id]
+            mode = self.ugc_lut[region_id, self.mode]
+            x -= off[:, 0]
+            y -= off[:, 1]
+            x *= 3.
+            y *= 3.
+        return addresses
+        # return self.terminate(addresses)
+
     def ugc_dec(self, uri_address):
         """
-        REVERSE: URI addresses back into (x,y) coordinates and its
-        initial mode.
+        REVERSE: URI addresses back into (x,y) coordinates and initial mode.
         Inverse of ugc_regions
         """
         num_points, depth = uri_address.shape
@@ -1084,47 +1105,23 @@ class H9Engine:
         # Stack all three results into a final (N, 3) array.
         return np.stack([x, y, initial_mode], axis=-1)
 
-    def ugc_regions(self, xy, mode, depth=36):
-        """
-        Given a vector of Point coords create a set of regions
-        """
-        num_points = xy.shape[0]
-        x = np.copy(xy[:, 0])
-        y = np.copy(xy[:, 1])
-        addresses = np.full((num_points, depth + 2), self.invalid_ugc, dtype=np.uint8)
-        addresses[:, 0] = np.where(mode == 1, 0x16, 0x49)  # These values should come from the octant set.
-        for i in range(depth + 1):
-            x, y, ẋ = self.clamp(x, y, mode)
-            region = self.region_classification(ẋ, y)  # Raw classification
-            props = self.ugc_lut[region]
-            mode_up = props[:, self.in_up]
-            mode_dn = props[:, self.in_dn]
-            in_scope = np.where(mode == 1, mode_up, mode_dn)
-            region_id = np.where(in_scope, region, self.invalid_ugc)  # Validated ID
-            addresses[:, i + 1] = region_id
-            off = self.ugc_off[region_id]
-            mode = self.ugc_lut[region_id, self.mode]
-            x -= off[:, 0]
-            y -= off[:, 1]
-            x *= 3.
-            y *= 3.
-        return self.terminate(addresses)
-
-    def ugc_addr(self, xy, mode, depth=32):
+    def ugc_addr(self, xy, mode_, depth=32):
         """Given cmp a vector of Point components create a set of addresses
             xy                  # shape (N) — barycentric coordinates (x, y)
             mode                # shape (N) — modes for each octant.
         """
+        mode = mode_.copy()
         num_points = xy.shape[0]
         regions = self.ugc_regions(xy, mode, depth)
         addresses = np.zeros((num_points, depth), dtype=np.uint8)
-        up_context_initial = np.array([0, 1, 2])  # Root context for UP mode
-        dn_context_initial = np.array([0, 1, 2])  # Root context for DOWN mode
-        context = np.where(mode[:, np.newaxis] == 1, up_context_initial, dn_context_initial)
+        context_initial = np.array([0, 1, 2])
+        context = np.where(mode[:, np.newaxis] == 1, context_initial, context_initial)
+        acc = np.zeros((num_points,), dtype=object)
         for i in range(depth):
             region_id = regions[:, i+1]
             layer_digit, context, mode = self.ugc_hex_context(region_id, context, mode)
-            addresses[:, i] = layer_digit
+            acc = acc * 10 + layer_digit.astype(object)
+        addresses = acc.reshape(-1,)
         term_digit, _, _ = self.ugc_hex_context(regions[:, -1], context, mode)
         return addresses, regions[:, -2], term_digit
 
@@ -1154,26 +1151,21 @@ class H9Engine:
         uri_address = np.zeros((num_points, depth + 1), dtype=np.uint8)
         uri_address[:, -1] = c_reg  # Seed the last position of the *actual* addresses
         uri_address[:, 0] = np.where(mode == 1, 0x16, 0x49)
-        # c_hex = self.child_lut[mode, 1]
-        # q_modes = self.ugc_lut[neighbours[:, -2], self.mode]
-        # neighbours[:, -1] = self.child_lut[q_modes, c1, 1]
-        # p_xp = self.ugc_rev[hex_digits[:, -1], c_hex, c_reg]
-        # self.ugc_rev[int(p_hx), c_hx, c_reg]
 
-        # 2. Loop backwards from the second-to-last position of the *actual* addresses
+        # Loop backwards from the second-to-last position of the *actual* addresses
         for i in range(depth - 1, 0, -1):
             p_hex = hex_digits[:, i]
 
-            # The definitive 3-part key lookup
+            # 3-part key lookup
             p_reg = self.ugc_rev[p_hex, c_hex, c_reg]
 
-            # The corrected storage line
+            # storage line
             uri_address[:, i] = p_reg
 
             # Update the state for the next backward step
             c_hex = p_hex
             c_reg = p_reg
-
+        # self.terminate(uri_address)
         return uri_address
 
     def addr(self, pts, depth=32, calc_prefix=True):
@@ -1193,58 +1185,250 @@ class H9Engine:
         else:
             return oc, addr, term_reg, term_hex
 
+    def _is_vertex(self, x, y, mode, eps=1e-15):
+        """Return mask for points on the triangle vertex.
+        Vertex := (ẋ ≈ 0) and (y ≈ ΛC for Λ) or (y ≈ VF for V).
+        """
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        mode = np.asarray(mode, dtype=np.uint8)
+        ẋ = self.R3 * x
+        up_mask = (mode == 1)
+        at_up_vertex = np.isclose(y, self.ΛC, atol=eps) & np.isclose(ẋ, 0.0, atol=eps)
+        at_dn_vertex = np.isclose(y, self.VF, atol=eps) & np.isclose(ẋ, 0.0, atol=eps)
+        return np.where(up_mask, at_up_vertex, at_dn_vertex)
+
+    def encroach_to_neighbour(self, xy, mode, c1_edge=None, preserve=None, code=None, rturns=None):
+        """
+        Vectorised seam transform in (ẋ,y).
+        Use EITHER (c1_edge,preserve) OR code.
+        Implements T(k) = R(-k) · S(code) · R(k) in the classifier plane.
+        """
+        xy = np.asarray(xy, float)
+        if xy.ndim == 1:
+            xy = xy[None, :]
+        n = xy.shape[0]
+
+        # Build classifier-plane vector v = (√3 x, y)
+        vec = np.stack([self.R3 * xy[:, 0], xy[:, 1]], axis=-1)  # (N,2)
+
+        # Determine mapping code per row: 0 (preserve), 1/2/3 (swap across C1 axes)
+        if code is None:
+            if c1_edge is None or preserve is None:
+                raise ValueError("Provide either 'code' or both 'c1_edge' and 'preserve'.")
+            c1_edge = np.asarray(c1_edge).reshape(-1)
+            preserve = np.asarray(preserve, bool).reshape(-1)
+            if c1_edge.size != n or preserve.size != n:
+                raise ValueError("c1_edge/preserve must match xy rows.")
+            code = np.where(preserve, 0, 1 + c1_edge).astype(np.uint8)
+        else:
+            code = np.asarray(code, np.uint8).reshape(-1)
+            if code.size != n:
+                raise ValueError("code must match xy rows.")
+
+        # Quarter-turn rotation helper (purely in the classifier plane)
+        # k in {0,1,2,3}; R(1) = 90° CCW
+        def rot90(v, k):
+            k = (np.asarray(k, np.int8).reshape(-1) % 4)
+            out = v.copy()
+            for kk in (1, 2, 3):
+                sel = (k == kk)
+                if not np.any(sel):
+                    continue
+                w = out[sel]
+                if kk == 1:
+                    out[sel] = np.stack([w[:, 1], -w[:, 0]], axis=-1)
+                elif kk == 2:
+                    out[sel] = -w
+                else:  # kk == 3
+                    out[sel] = np.stack([-w[:, 1], w[:, 0]], axis=-1)
+            return out
+
+        # Pre/post rotation indices
+        if rturns is None:
+            k = np.zeros(n, dtype=np.int8)
+        else:
+            k = (np.asarray(rturns, np.int8).reshape(-1) % 4)
+            if k.size != n:
+                raise ValueError("rturns must match xy rows.")
+
+        # Conjugation: v' = R(-k) · S · R(k) · v
+        v = rot90(vec, k)  # pre-rotate by +k
+
+        # Apply reflection S per code in the pre-rotated frame
+        # code: 0=identity; 1=reflect across x-axis; 2=reflect across line y=x; 3=reflect across line y=-x
+        # (these match our earlier definitions for forward/back/flat axes)
+        m1 = (code == 1)
+        if np.any(m1):
+            v[m1, 1] = -v[m1, 1]
+        m2 = (code == 2)
+        if np.any(m2):
+            vx = v[m2].copy()
+            v[m2, 0] = vx[:, 1]
+            v[m2, 1] = vx[:, 0]
+        m3 = (code == 3)
+        if np.any(m3):
+            vx = v[m3].copy()
+            v[m3, 0] = -vx[:, 1]
+            v[m3, 1] = -vx[:, 0]
+
+        v = rot90(v, (-k) % 4)  # post-rotate back by -k
+
+        # Return to (x,y)
+        return np.stack([v[:, 0] / self.R3, v[:, 1]], axis=-1)
+
     def neighbours(self, pts, depth=32):
-        """Given a set of points, return their neighbours of a given depth as Points."""
+        """Given a set of points, return their neighbours of a given depth as Points.
+        Applies a local (ẋ,y)-plane seam transform when an octant seam is crossed,
+        reflecting across the appropriate C1 axis for swap seams.
+        """
         from hhg9 import Points
         dom = pts.domain
         oc, mode = pts.cm()
-        regions = self.ugc_regions(pts.coords, mode, depth)
+
+        # 1) Find region-neighbours within the geometric class
+        regions = self.ugc_regions(pts.coords, mode)  # no depth!
         c1, reg_neighbours = self.region_neighbours(regions)
+
+        # 2) Decode neighbour addresses to (x,y,mode-inferred-from-root)
         xym = self.ugc_dec(reg_neighbours)
+
+        # Vertex short-circuit: if at apex/nadir, flip root (mode) only.
+        vmask = self._is_vertex(pts.coords[:, 0], pts.coords[:, 1], mode)
+        if np.any(vmask):
+            # Flip the root according to your convention (0x16 for Λ, 0x49 for V)
+            reg_neighbours[vmask, 0] = np.where(mode[vmask] == 1, 0x49, 0x16).astype(np.uint8)
+            # Keep coordinates; just reflect the decoded mode so we don't trigger seam logic
+            xym[vmask, -1] = 1 - mode[vmask]
+            xym[vmask, :2] = pts.coords[vmask]
+
+        # 3) Detect octant seam crossings: parent mode changed
         oob = xym[:, -1] != mode
-        nbo = dom.oid_nb[oc[oob], c1[oob]]
-        oc[oob] = nbo
+        oob = oob & ~vmask
+        if np.any(oob):
+            n_oct = dom.registrar.domain('n_oct')
+            nbo = dom.oid_nb[oc[oob], c1[oob]]
+            codes = dom.nb_c1map[oc[oob], c1[oob]]  # 0,2,3 per point
+            # NEW: per-row frame rotation using θ (in 30° units) from domain props
+            # Rotate from source frame into destination frame (use opposite sense of our r90 mapping)
+            r_th = (dom.rot90_idx[oc[oob]] - dom.rot90_idx[nbo]) % 4
+            xy_src = xym[oob, :2]
+            xy_adj, nbo = n_oct.encroach_to_neighbour(
+                xym[oob, :2],
+                src_face=oc[oob],
+                c1_edge=c1[oob],
+                clamp_func=self.clamp
+            )
+            # xy_adj = self.encroach_to_neighbour(xy_src, mode[oob], code=codes, rturns=r_th)
+            dmo = dom.oid_mo[nbo]  # dest face mode (0=V, 1=Λ) per row
+            xc, yc, _ = self.clamp(xy_adj[:, 0], xy_adj[:, 1], dmo)
+            xy_adj = np.stack([xc, yc], axis=-1)
+
+            xym[oob, :2] = xy_adj
+
+            # ---- RECLASSIFY TAIL IN NEIGHBOUR FRAME (this is the missing step) ----
+            nmo = self.ugc_lut[reg_neighbours[:, 0], self.mode]
+            root = np.where(nmo == 1, 0x16, 0x49)
+            reg_neighbours[:, 0] = root
+
+            # 1) classify the *parent* region at this terminal pixels (in neighbour face's local frame)
+            xbar = self.R3 * xy_adj[:, 0]
+            y = xy_adj[:, 1]
+            parent_reg = self.region_classification(xbar, y)  # parent_reg is in neighbour face's local frame
+
+            # 2) derive the actual terminal child from the adjusted residual:
+            #    residual := 3 * ((x',y') - off(parent_reg))
+            off = self.ugc_off[parent_reg]  # (K,2)
+            x_child = 3.0 * (xy_adj[:, 0] - off[:, 0])
+            y_child = 3.0 * (xy_adj[:, 1] - off[:, 1])
+            child_reg = self.region_classification(self.R3 * x_child, y_child)
+
+            # 3) patch the neighbour address tail
+            reg_neighbours[oob, -2] = parent_reg
+            reg_neighbours[oob, -1] = child_reg
+            oc[oob] = nbo
+
         return Points(xym[:, :2], dom, oc)
 
     def _poly_luts(self):
         """
         Return the half-hex/hexagon coordinates of c1 for the triangle.
         :return: the half-hex coordinates of c1 for the triangle
+        Lattice is integer coords scaled by (U, Ḣ); POS uses (U, V) where Ḣ = 3·V.
+        This keeps polygon edges (Ḣ) and region centers/offsets (V) consistent.
         """
-        u, v = self.U, self.H / 3.
         pts = {
-            # Clockwise. 5th pt is half-way along the long part.
-            (0, 1): [
-                [(-1, -1), (0, 0), (2, 0), (3, -1), (1, -1)],
-                [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-2, -0)],
-                [(2, 0), (0, 0), (-1, 1), (0, 2), (1, 1)]
+            # Clockwise.
+            (0, 1): [  # c1 half-hexagons mode 1
+                [(-1, -1), (0, 0), (2, 0), (3, -1)],
+                [(-1, 1), (0, 0), (-1, -1), (-3, -1)],
+                [(2, 0), (0, 0), (-1, 1), (0, 2)]
             ],
-            (0, 0): [
-                [(3, 1), (2, 0), (0, 0), (-1, 1), (1, 1)],
-                [(0, -2), (-1, -1), (0, 0), (2, 0), (1, -1)],
-                [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-2, 0)]
+            (0, 0): [ # c1 half-hexagons mode 0
+                [(3, 1), (2, 0), (0, 0), (-1, 1)],
+                [(0, -2), (-1, -1), (0, 0), (2, 0)],
+                [(-3, 1), (-1, 1), (0, 0), (-1, -1)]
             ],
-            (1, 1): [
+            (1, 1): [  # c1 hexagons mode 1
                 [(-1, -1), (0, 0), (2, 0), (3, -1), (2, -2), (0, -2)],
                 [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0), (-3, 1)],
                 [(2, 0), (0, 0), (-1, 1), (0, 2), (2, 2), (3, 1)]
             ],
-            (1, 0): [
+            (1, 0): [   # c1 hexagons mode 0
                 [(3, 1), (2, 0), (0, 0), (-1, 1), (0, 2), (2, 2)],
                 [(0, -2), (-1, -1), (0, 0), (2, 0), (3, -1), (2, -2)],
                 [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0)]
+            ],
+            (2, 1): [  # region triangles mode 1
+                [  # 0x39, 0x3a, 0x3e: c0  ΛVΛ
+                    [(0, 0), (1, -1), (-1, -1)],  # 39
+                    [(1, -1), (0, 0), (2, 0)],  # 3a
+                    [(2, 0), (3, -1), (1, -1)],  # 3e
+                ], [  # 0x25, 0x35, 0x34: c1 ΛVΛ
+                    [(-1, 1), (0, 0), (-2, 0)],  # 25
+                    [(-1, -1), (-2, 0), (0, 0)],  # 35
+                    [(-2, 0), (-1, -1), (-3, -1)],  # 34
+                ], [  # 0x2a, 0x26, 0x16: c2 ΛVΛ
+                    [(1, 1), (2, 0), (0, 0)],  # 2a
+                    [(0, 0), (-1, 1), (1, 1)],  # 26
+                    [(0, 2), (1, 1), (-1, 1)],  # 16
+                ]
+            ],
+            (2, 0): [  # region triangles mode 0
+                [  # 0x26, 0x2a, 0x2b: c0 VΛV
+                    [(0, 0), (-1, 1), (1, 1)],  # 26
+                    [(1, 1), (2, 0), (0, 0)],  # 2a
+                    [(2, 0), (1, 1), (3, 1)],  # 2b
+                ], [  # 0x3a, 0x39, 0x49:   c1 VΛV
+                    [(1, -1), (0, 0), (2, 0)],  # 3a
+                    [(0, 0), (1, -1), (-1, -1)],  # 39
+                    [(0, -2), (-1, -1), (1, -1)],  # 49
+                ], [  # 0x35, 0x25, 0x21:   c2 VΛV
+                    [(-1, -1), (-2, 0), (0, 0)],  # 35
+                    [(-1, 1), (0, 0), (-2, 0)],  # 25
+                    [(-2, 0), (-3, 1), (-1, 1)],  # 21
+                ]
             ]
         }
-        uv = np.array([u, v])
-        hh = np.zeros((2, 3, 5, 2), dtype=np.float64)
+        uv = np.array([self.U, self.Ḣ])
+        hh = np.zeros((2, 3, 4, 2), dtype=np.float64)
         hx = np.zeros((2, 3, 6, 2), dtype=np.float64)
+        tx = np.zeros((2, 3, 3, 3, 2), dtype=np.float64)
         for (kind, mode), c1s in pts.items():
             for c1, poly in enumerate(c1s):
-                if kind == 0:
-                    hh[mode, c1] = poly * uv
-                elif kind == 1:
-                    hx[mode, c1] = poly * uv
-        return hh, hx
+                arr = np.asarray(poly, dtype=np.float64) * uv
+                match kind:
+                    case 0:
+                        hh[mode, c1] = arr
+                    case 1:
+                        hx[mode, c1] = arr
+                    case 2:
+                        tx[mode, c1] = arr
+        return hh, hx, tx
+
+    def parent_grid_outline(self, mode):
+        """Return three closed half-hex polygons for the parent triangle."""
+        return [self.poly_hh[mode, c1] for c1 in (0, 1, 2)]
 
     def enmesh(self, addresses):
         """
@@ -1256,7 +1440,7 @@ class H9Engine:
         polys = []
         num_points, depth = addresses.shape
         for i in range(num_points):
-            address_path = addresses[i]
+            address_path = np.array(addresses[i], dtype=np.uint8)
             parent_xy = np.array([0.0, 0.0])
             scale = 1.0
             for j in range(1, depth):
@@ -1264,7 +1448,7 @@ class H9Engine:
                 child_uri = address_path[j]
                 if child_uri == self.invalid_ugc:
                     break  # Stop processing this path if it becomes invalid
-                current_path_key = tuple(address_path[:j + 1])
+                current_path_key = tuple([int(x) for x in address_path[:j + 1]])
                 if current_path_key not in unique_polygons:
                     parent_mode = self.ugc_lut[parent_uri, self.mode]
                     child_c1 = self.pqc1_lut[parent_uri, child_uri]
@@ -1329,7 +1513,7 @@ class H9Engine:
     #                 return f'{ex[hx]}'
     #         case Style.HALFHEX:
     #             fx = {
-    #                 0: 'o', 1: 'i', 2: 'z',
+    #                 0: 'c_oct', 1: 'i', 2: 'z',
     #                 3: 'e', 4: 'a', 5: 's',
     #                 6: 'g', 7: 't', 8: 'x'
     #             }
@@ -1361,46 +1545,46 @@ class H9Engine:
     #         result.append(f'{ud}')
     #     return ''.join(result)
 
-    @classmethod
-    def h9_to_xy(cls, ud, hx, ch, pt):
-        """
-        :param ud: ΛV of current environment.
-        :param hx: current hex digit
-        :param ch: c2 of current triangle.
-        :param pt: existing 2d coordinate.
-        :return: new c2, and revised 2d coordinate
-        """
-        x2, y2 = pt  # Extract x2, y2 from pt
-        x2 /= 3.
-        y2 /= 3.
-        c1 = hx % 3
-        c2 = {  # Determine c2 from hx
-            #        0,     1,     2,     3,     4,     5,     6,     7,     8
-            'Λ': ['021', '102', '210', '102', '210', '021', '210', '021', '102'],
-            'V': ['012', '201', '120', '120', '012', '201', '201', '120', '012']
-        }[ud][hx]
-        xo, yo = cls.OFS[c1, ud, ch]  # Retrieve the offsets
-        return c2, (x2 - xo, y2 - yo)
+    # @classmethod
+    # def h9_to_xy(cls, ud, hx, ch, pt):
+    #     """
+    #     :param ud: ΛV of current environment.
+    #     :param hx: current hex digit
+    #     :param ch: c2 of current triangle.
+    #     :param pt: existing 2d coordinate.
+    #     :return: new c2, and revised 2d coordinate
+    #     """
+    #     x2, y2 = pt  # Extract x2, y2 from pt
+    #     x2 /= 3.
+    #     y2 /= 3.
+    #     c1 = hx % 3
+    #     c2 = {  # Determine c2 from hx
+    #         #        0,     1,     2,     3,     4,     5,     6,     7,     8
+    #         'Λ': ['021', '102', '210', '102', '210', '021', '210', '021', '102'],
+    #         'V': ['012', '201', '120', '120', '012', '201', '201', '120', '012']
+    #     }[ud][hx]
+    #     xo, yo = cls.OFS[c1, ud, ch]  # Retrieve the offsets
+    #     return c2, (x2 - xo, y2 - yo)
 
-    @classmethod
-    def decode(cls, addr):
-        """
-        This is the H9->Barycentric projection.
-        Given an addresses string, return its xy coordinates.
-        This is the loop part that drives h9_to_xy
-        :param addr:
-        :return: xy coordinate
-        """
-        c2i = {  # Determine c2 from hx
-            'Λ': ['201', '120', '012'], 'V': ['210', '021', '102']
-        }
-        _hints = cls.hint(addr)
-        pt = (0.0, 0.0)  # Start from the origin
-        _addr, _ = cls.un_tail(addr)
-        ch = c2i[_hints[-1]][int(_addr[-1]) % 3]
-        for hx, ud in zip(reversed(_addr), reversed(_hints)):
-            ch, pt = cls.h9_to_xy(ud, int(hx), ch, pt)  # Compute the previous `(x, y)` step
-        return pt
+    # @classmethod
+    # def decode(cls, addr):
+    #     """
+    #     This is the H9->Barycentric projection.
+    #     Given an addresses string, return its xy coordinates.
+    #     This is the loop part that drives h9_to_xy
+    #     :param addr:
+    #     :return: xy coordinate
+    #     """
+    #     c2i = {  # Determine c2 from hx
+    #         'Λ': ['201', '120', '012'], 'V': ['210', '021', '102']
+    #     }
+    #     _hints = cls.hint(addr)
+    #     pt = (0.0, 0.0)  # Start from the origin
+    #     _addr, _ = cls.un_tail(addr)
+    #     ch = c2i[_hints[-1]][int(_addr[-1]) % 3]
+    #     for hx, ud in zip(reversed(_addr), reversed(_hints)):
+    #         ch, pt = cls.h9_to_xy(ud, int(hx), ch, pt)  # Compute the previous `(x, y)` step
+    #     return pt
 
     @classmethod
     def un_tail(cls, addr):
