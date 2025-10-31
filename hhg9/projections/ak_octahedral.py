@@ -1,10 +1,13 @@
 """
 Part of the H9 project
 """
+from functools import cache
 import numpy as np
 from numpy.typing import NDArray
-from hhg9 import Projection, Points, H9Engine
-from hhg9.algorithms import find_coords, haversine
+from hhg9 import Projection, Points
+from hhg9.algorithms import find_coords, haversine_rad
+from pyproj import CRS
+from hhg9.h9 import H9C
 
 
 class AKOctahedral:
@@ -15,7 +18,6 @@ class AKOctahedral:
     ALPHA = 3.227806237143884260376580  # 𝛂 - vis. Kaseorg.
 
     def __init__(self, reg, oct_dom, sp_norm_fn):
-        self.h9e = H9Engine()
         self.reg = reg
         self.b_oct = reg.domain('b_oct')
         self.c_oct = reg.domain('c_oct')
@@ -58,10 +60,15 @@ class AKOctahedral:
         return self.sp_norm_fn(pv)
 
     def forward(self, uvw):
-        """given octahedral coordinates, return spheroidal."""
+        """
+          given octahedral coordinates, return spheroidal.
+          Returns a new array; does not modify the input `uvw` in-place.
+        """
+        uvw = np.asarray(uvw, dtype=float).copy()  # avoid mutating caller
         aa = self._invariants(uvw)
-        trx = self._core(uvw[~aa])
-        uvw[~aa] = trx
+        if np.any(~aa):
+            trx = self._core(uvw[~aa])
+            uvw[~aa] = trx
         return uvw
 
     def set_accuracy(self, meters):
@@ -79,9 +86,31 @@ class AKOctahedralEllipsoid(Projection):
         force-directed dataset. Approximation designer: Anders Kaseorg
     """
 
+    @cache
+    def rad_gcd(self):
+        """Return the radians GCD domain, registering it (and its deg⟷rad projection) on first use.
+        This is lazy and idempotent: repeated calls reuse the same registrar entries.
+        """
+        # Imports kept local to avoid import cycles at module import time
+        from hhg9.domains import RadiansGCD
+        from hhg9.projections import RGCD_GCD
+
+        reg = self.ak.reg
+        try:
+            return reg.domain('r_gcd')
+        except Exception:
+            # not yet registered; fall through to create & wire projections
+            pass
+
+        r_gcd = RadiansGCD(reg)   # registers the domain
+        RGCD_GCD(reg)             # registers deg↔rad projections (idempotent if already present)
+        return r_gcd
+
     def __init__(self, registrar):
-        super().__init__(registrar, 'ake', 'c_oct', 'c_ell')
-        self.ab = 6378137.0, 6356752.3142
+        super().__init__(registrar, 'oct_ell', 'c_oct', 'c_ell')
+        crs_ecef = CRS.from_epsg(4978)  # WGS84 ECEF (x, y, z)
+        ecef_e = crs_ecef.ellipsoid
+        self.ab = ecef_e.semi_major_metre, ecef_e.semi_minor_metre
         self.ab2 = 1., (self.ab[1] / self.ab[0]) ** 2
         self.ak = AKOctahedral(registrar, self.rev_cs, self.normalise)
 
@@ -104,38 +133,46 @@ class AKOctahedralEllipsoid(Projection):
         :return: UVW on WGS84 Ellipsoid
         """
         xyz = arr.coords
-        res = self.ab[0] * np.copysign(self.ak.forward(xyz), xyz)
+        # res = self.ab[0] * np.copysign(self.ak.forward(xyz), xyz)
+        # Snapshot octant signs *before* forward (and keep sticky zeros)
+        sgn = np.sign(xyz)
+        # Run core forward on a copy so we don't lose the original signs
+        core = self.ak.forward(xyz)  # safe: now returns a new array
+        core_abs = np.abs(core)
+        # Apply signs: components with sign==0 remain exactly 0
+        res = self.ab[0] * (core_abs * sgn)
         return Points(res, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
 
     def backward(self, arr: Points) -> NDArray:
+        r_gcd = self.rad_gcd()
         if arr.components is None:
             self.rev_cs.binning(arr)  # We need the octant identity for each point.
         uvw = arr.copy()
-        cmp = uvw.components[:, np.newaxis, :]  # use this for referring to the points' octant identity.
-        rll = self.ak.reg.project(uvw, [self.ak.c_ell, self.ak.g_gcd])  # Project to give us GCD reference values.
+        cmp = uvw.components
+        # cmp = uvw.components[:, np.newaxis, :]  # use this for referring to the points' octant identity.
+        rll = self.ak.reg.project(uvw, [self.ak.c_ell, self.ak.g_gcd,  r_gcd])  # Project to give us GCD reference values.
         ref = rll.coords  # reference addresses
-        pqr = uvw.copy()  # This is an additional copy of uvw, that is normalised (to barycentric dimensions).
-        pqr.coords = self.normalise(pqr.coords)
         _, oct_m = uvw.cm()  # we want their modes.
 
         def fwd(xy, octants):
             """Project contender xy (in barycentric) to GCD"""
             coords = Points(xy.reshape(-1, 2), self.ak.b_oct, octants.reshape(-1, 3))
-            grx = self.ak.reg.project(coords, [self.ak.b_oct, self.ak.c_oct, self.ak.c_ell, self.ak.g_gcd])
+            grx = self.ak.reg.project(coords, [self.ak.b_oct, self.ak.c_oct, self.ak.c_ell, self.ak.g_gcd, r_gcd])
             return grx.coords.reshape(xy.shape)
 
-        found, _ = find_coords(ref, oct_m, cmp, self.ak.h9e, fwd, haversine, self.ak.accuracy)
+        found, _ = find_coords(ref, oct_m, cmp, H9C, fwd, haversine_rad, self.ak.accuracy, beam_width=6)
         bpt = Points(found, self.ak.b_oct, uvw.components)
         return self.ak.reg.project(bpt, [self.ak.b_oct, self.rev_cs])  # rev_cs = c_oct
 
 
 if __name__ == '__main__':
     from matplotlib import image, pyplot as plt
-    from support import Util
+    # from support import Util
     from hhg9 import Registrar
-    from hhg9.domains import EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, GeneralGCD
-    from hhg9.projections import EllipsoidGCD
+    from hhg9.domains import RadiansGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric, GeneralGCD
+    from hhg9.projections import EllipsoidGCD, RGCD_GCD
     from hhg9.algorithms import wgs84
+    from hhg9.algorithms.pickers import gcd_rnd
 
     reg = Registrar()
     g_gcd = GeneralGCD(reg)  # GCD Domain (latitude/longitude)
@@ -150,7 +187,7 @@ if __name__ == '__main__':
     ldn = g_gcd.adopt(london)
     t_oct = reg.project(ldn, [g_gcd, c_ell, c_oct])
     r_ldn = reg.project(t_oct, [c_oct, c_ell, g_gcd])
-    delta = wgs84(ldn.coords[0], r_ldn.coords[0]) * 1000000000.
+    delta = wgs84(ldn.coords[0], r_ldn.coords[0]) * 1e+9
     print("1nm Accuracy: Ellipsoid residual in nanometres:", delta)  # Should be small
 
     ake.set_accuracy(1000.0)
@@ -159,15 +196,23 @@ if __name__ == '__main__':
     delta = wgs84(ldn.coords[0], r_ldn.coords[0]) * 0.001
     print("1km Accuracy: Ellipsoid residual in kilometres:", delta)  # Should be small
 
-    u = Util()
     ake.set_accuracy(10000.0)
-    wgs = u.wgs84_rnd(25000)
-    sph = c_ell.adopt(wgs)
-    ocs = reg.project(sph, [c_ell, c_oct])
+    wgs = gcd_rnd(25000)
+    w_pts = Points(wgs, domain=g_gcd)
+    ocs = reg.project(w_pts, [g_gcd, c_ell, c_oct])
 
     # dv = bk.coords - ox.coords
     # dd = np.linalg.norm(dv, axis=1)
     px = ocs.coords
+    fig = plt.figure(figsize=(10, 10), dpi=100, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(px[:, 0], px[:, 1], px[:, 2], marker='.', s=5.0)
+    ax.set_aspect('equal', adjustable='box')
+    plt.show()
+
+    bak = reg.project(ocs, [c_oct, c_ell])
+    px = bak.coords
     fig = plt.figure(figsize=(10, 10), dpi=100, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_subplot(111, projection='3d')
