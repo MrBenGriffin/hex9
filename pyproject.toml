@@ -36,6 +36,3 @@ dev = [
   "pytest"
 ]
 
-[tool.setuptools.packages.find]
-where = ["hhg9"]
-package-dir = {"" = "hhg9"}
