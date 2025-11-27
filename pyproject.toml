@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "hhg9"
 version = "0.1.0a0"
 description = "Hierarchical hexagonal grid on an octahedral earth projection"
-readme = "README"
+readme = { file = "README", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
@@ -36,3 +36,6 @@ dev = [
   "pytest"
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hhg9*"]
