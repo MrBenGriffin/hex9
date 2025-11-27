@@ -1,0 +1,15 @@
+# bounds: [min latitude, min longitude, max latitude, max longitude]
+jpn:
+  net:  [mortar, -60]
+  kyushu:
+      bounds: [30.5, 129.0, 34.9, 132.5]
+  hokkaido:
+      bounds: [41.0, 139.0, 45.8, 146.0]
+
+btn:
+  net:  [mortar, -30]
+  west:
+      bounds: [26.0, 88.0, 28.3, 92.9]
+
+gbr:
+  net: [mortar, 30]

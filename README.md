@@ -75,6 +75,41 @@ NAV333333333333333333333333333333324G3 (Grid Address)
 89°59'59.999999999847"N, 50°11'39.944067845317"E (Roundtrip via Grid Address)
 ∂4.761801nm  delta (Geodesic.DISTANCE) 
 ```
+#### Intuitive uint64 Addresses
+While mixed text addresses are used above, Hex9 supports various `uint64` 
+addresses in a directly intuitive manner.  
+
+The fastest is region (triangle-grid) based, with each digit representing the
+sub-region of its parent region. This provides a global accuracy of 0.30m².
+
+For example, one of the Nazca Spirals - at `14.679806S, 75.101925W` has the 
+uint64 address `0xE8254A1913954600` (in hexadecimal).
+The first bit is set to 1, and identifies this as a global address.
+The next 3 bits indicate the octant.  E:1110 indicates octant id 6 (SWA).
+
+```
+0xE8254...
+  ↑↑↑↑↑
+  ||||└─── Layer 4, region 4
+  |||└──── Layer 3, region 5
+  ||└───── Layer 2, region 2
+  |└────── Layer 1, region 8
+  └─────── 0x80 | octant (6)
+```
+When the uint64 address is depicted in hexadecimal, the global address is 
+revealed and may be readily eye-balled with a crib - see the following image 
+that traces the first 5 regions 8,2,5,4,A - each one covering 1/9th the area of 
+the preceding layer. 
+
+![](images/crib_hum.png)(*Region uint64 crib example*)
+
+
+
+
+When working with greater accuracy, a subfix format (with upper nybble of 
+0x0) uses a current (provided) address as a prefix - augmenting the 
+accuracy of the address to sub-micron levels.
+
 
 #### Performance
 Hex9 efficiently handles large datasets. For example, *25 million sparse 

@@ -3,7 +3,8 @@ Part of the H9 project
 """
 import numpy as np
 from numpy.typing import NDArray
-from hhg9 import Projection, Points
+from hhg9 import Points
+from hhg9.base.projection import Projection
 
 
 class PlatePixelGCD(Projection):
@@ -12,7 +13,7 @@ class PlatePixelGCD(Projection):
     """
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'plt_gcd', 'p_plt', 'g_gcd')
+        super().__init__(registrar, 'pix_gcd', 'p_pix', 'g_gcd')
         self.e = 1e-100
         self.p_hgt = None
         self.p_wid = None
@@ -21,7 +22,7 @@ class PlatePixelGCD(Projection):
 
     def set_dim(self, pts: Points = None, bounds: object = None) -> object:
         """Set dimensions for plate."""
-        if self.p_hgt is None:
+        if self.p_hgt is None or pts is not None:
             px, py = pts.coords[:, 0], pts.coords[:, 1]
             self.p_hgt = np.uint32(np.max(py)+1)
             self.p_wid = np.uint32(np.max(px)+1)
@@ -72,34 +73,32 @@ class PlatePixelGCD(Projection):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    from support import Photo
     from hhg9 import Registrar
-    from hhg9.domains import SphericalCartesian, GeneralGCD, PlatePixel
+    from hhg9.domains import EllipsoidCartesian, GeneralGCD, PlatePixel
 
     reg = Registrar()
-    p_plt = PlatePixel(reg)
-    c_sph = SphericalCartesian(reg)  # Cartesian Spherical (xyz)
+    p_pix = PlatePixel(reg)
+    c_sph = EllipsoidCartesian(reg)  # Cartesian Spherical (xyz)
     g_sph = GeneralGCD(reg)  # Cartesian Spherical (xyz)
     pg = PlatePixelGCD(reg)
 
     # # Create dummy image of shape (18, 36, 3)
     h, w = 1800, 3600
     img = np.zeros((h, w, 1))
-    p0 = p_plt.adopt(img)  # Shape: (648, 5)
+    p0 = p_pix.adopt(img)  # Shape: (648, 5)
     # p0 = np.array([[i, 1799] for i in range(3600)])
 
     # Project to lat/lon and back
-    l1 = reg.project(p0, [p_plt, g_sph])
-    p1 = reg.project(l1, [g_sph, p_plt])
+    l1 = reg.project(p0, [p_pix, g_sph])
+    p1 = reg.project(l1, [g_sph, p_pix])
 
     # Compute pixel round-trip error
     original_px = np.array(p0.coords, dtype=np.uint64)
     projects_px = np.array(p1.coords, dtype=np.uint64)
-    dv = np.unique(projects_px-original_px, axis=0)
 
     px_error = np.linalg.norm(original_px - projects_px, axis=1)
     p1.samples = px_error
-    p2 = p_plt.image(p1)
+    p2 = p_pix.image(p1)
     plt.imshow(p2, origin='lower')
     plt.show()
 
@@ -108,10 +107,7 @@ if __name__ == '__main__':
     plt.title("Round-trip pixel error (Plate Carrée)")
     plt.show()
 
-    # Analyze errors
     error_img = px_error.reshape(h, w)
-    # import matplotlib.pyplot as plt
-    #
     plt.imshow(error_img, cmap='hot', origin='lower')
     plt.colorbar(label="Pixel error (L2 norm)")
     plt.title("Round-trip pixel error (Plate Carrée)")

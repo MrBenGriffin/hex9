@@ -1,9 +1,15 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+'c_sph' xyz unit sphere
 """
+
 import numpy as np
 from numpy.typing import NDArray
-from hhg9.base import Domain, Points
+from hhg9.base import Points
+from hhg9.base.domain import Domain
 
 
 class SphericalCartesian(Domain):
@@ -18,7 +24,7 @@ class SphericalCartesian(Domain):
     @classmethod
     def valid(cls, pts: Points) -> NDArray:
         """
-        Test that √(u^2+v^2+w^2)=1 (surface of the unit sphere)
+        Test that √(util^2+v^2+w^2)=1 (surface of the unit sphere)
         :param pts: set of 3d Euclidean points
         :return: that the points are on the surface of the unit sphere.
         """

@@ -9,8 +9,8 @@ from hhg9.base.point_format import PointFormat
 
 class DMS(PointFormat):
     """Degrees/Minutes/Seconds"""
-    def __init__(self):
-        super().__init__('dms')
+    def __init__(self, registrar):
+        super().__init__(registrar, 'dms')
 
     def is_valid(self, address: str) -> bool:
         """Check if the format is valid."""
@@ -19,7 +19,7 @@ class DMS(PointFormat):
 
     def revert(self, address: str):
         """
-        take a string (or representation) and return the address according to it's CoordinateSet
+        take a string (or representation) and return the addresses according to it's CoordinateSet
         :return:
         """
         dms_pattern = r"(\d+)°(\d+)'([\d.]+)\"([NEWS])"
@@ -38,7 +38,7 @@ class DMS(PointFormat):
 
     def format(self, pts, _, sub):
         """
-        return decimal formatted address(es)
+        return decimal formatted addresses(es)
         :return:
         """
 

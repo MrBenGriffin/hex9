@@ -2,8 +2,8 @@
 Part of the H9 project
 """
 import numpy as np
-from numpy.typing import NDArray
-from hhg9 import Projection, Points
+from hhg9 import Points
+from hhg9.base.projection import Projection
 
 
 class OctahedralOctants(Projection):

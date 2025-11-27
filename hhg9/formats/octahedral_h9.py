@@ -2,125 +2,156 @@
 Part of the H9 project
 """
 import numpy as np
+from hhg9 import Registrar
 from hhg9.base.point_format import PointFormat
-from hhg9.base.h9_engine import H9Engine, Style
-from .. import Points
+from hhg9.base.points import Points
+import hhg9.h9.addressing as adr
+from hhg9.algorithms.packing import u64_pack
 
 
 class OctahedralH9(PointFormat):
     """
-    Addressing of a half-hexagonal grid over
-    OctahedralBarycentric.
-    This handles the eight face names NEA, etc.
+    Addressing of a half-hexagonal grid over OctahedralBarycentric.
+    Handles the eight face names (NEA, …). Implements the PointFormat contract:
+      - __init__(name)
+      - format(points, composite, sub)
+      - revert(address: str|list[str]) → Points
     """
-    def __init__(self):
-        super().__init__('h9')
-        self.engine = H9Engine()
-        self.width = 34
+    def __init__(self, registrar: Registrar) -> None:
+        super().__init__(registrar, 'h9')
+        self.scheme = adr.H9_RA
+        self.width = 34  # default printed width
         self.subs = {
-            'x': Style.HEX,
-            'f': Style.FULL,
-            'c': Style.CFULL,
-            'e': Style.EXTENDED,
-            'h': Style.HALFHEX,
-            'i': Style.NUMERIC,
+            'x': adr.Style.HEX,
+            'i': adr.Style.NUMERIC,
+            'u': adr.Style.UH64,
+            'r': adr.Style.UR64,
         }
 
     def is_valid(self, address: str) -> bool:
-        """
-        :return: true if address is valid, false otherwise
-        """
-        pass
+        """Required by PointFormat; not implemented yet."""
+        return True  # placeholder until a validator is added
 
-    def revert(self, address: str):
+    def revert(self, address, style=adr.Style.HEX):
         """
-        :return: bary(?) address(es)
+        :return: bary addresses(es) as Points.
         """
-        if len(address) < 3 or address[0] == 'I':
-            raise ValueError("Invalid Address")
-        geo, val = address[:3], address[3:]
-        if geo not in self.composite.h9map:
-            raise ValueError("Invalid Octahedral Side Region (should be e.g. 'NAV'")
-        hp, oc2, sign, name = self.composite.h9map[geo]
-        mode = 0 if geo[2] == 'V' else 1
-        c1 = oc2.index(hp)
-        res = self.engine.unformat_addresses(f'{c1}{val}', mode)
-        xy = res[:, :2]
-        return Points(xy, self.composite, np.array([sign]))
+        result = None
+
+        if isinstance(address, str):
+            if '\n' in address:
+                arr = address.splitlines()
+            else:
+                arr = [address]
+            if style != adr.Style.HEX:
+                dgt = [([int(a, 16) for a in adx]) for adx in arr]
+                arr = u64_pack(np.array(dgt))
+            else:
+                arr = np.array(arr)
+        match style:
+            case adr.Style.HEX:
+                result = adr.hex_str_decode(arr, self.registrar, self.scheme)
+            case adr.Style.UH64:
+                result = adr.hex_unpack(arr, self.registrar, self.scheme)
+            case adr.Style.NUMERIC:
+                result = adr.hex_unpack(arr, self.registrar, self.scheme)
+            case adr.Style.UR64:
+                result = adr.reg_unpack(arr, self.registrar, self.scheme)
+        return result
+
+    def _select_style(self, sub: str = None):
+        """Given a string, determine format style"""
+        width = self.width
+        style = adr.Style.HEX
+        # Parse sub: optional style letter(s) + optional integer width
+        if sub:
+            # long token 'u' takes precedence; otherwise first char
+            if sub.startswith('u'):
+                width = 12
+                style = self.subs['u']
+                sub = sub[1:]
+            elif sub.startswith('r'):
+                width = 14
+                style = self.subs['r']
+                sub = sub[1:]
+            elif sub[0] in self.subs:
+                style = self.subs[sub[0]]
+                sub = sub[1:]
+            # numeric tail → width
+            if sub:
+                try:
+                    width = int(sub)
+                except Exception:
+                    raise ValueError(f"h9f format: invalid width '{sub}' — expected integer (e.g. :h9f.33)")
+        return style, width
 
     def format(self, arr: Points, _, sub: str):
         """
-        return h9 address(es)
-        :return:
+        Return H9 label(s) for the given Points.
+        The `sub` string (from Points.__format__) may contain an optional style prefix
+        and/or a decimal width, e.g. 'x33', 'i21', '33'. Default: hex body, width=self.width.
         """
-        width = self.width
-        style = Style.HEX
-        if sub != '':
-            st = sub[0]
-            if st in self.subs:
-                style = self.subs[st]
-                sub = sub[1:]
-            if len(sub) > 0:
-                width = int(sub)
-        prf, pts, treg, thx = self.engine.addr(arr, width)
-        if width <= 21:  # can use uint64. 21 b/c we have 'lost a digit' in the root/terminator.
-            num_digits = pts.shape[1]
-            p10 = 10 ** np.arange(num_digits - 1, -1, -1)
-            numbers = (pts * p10).sum(axis=1).astype(np.uint64)
-            if style == style.NUMERIC:
-                return numbers[0]
-            big = numbers.astype(f'<U{width}')
-            body = np.char.zfill(big, width)
+        # if self.engine is None:
+        #     self.engine = arr.domain.engine
+        if not isinstance(arr, Points):
+            pts = arr
         else:
-            body = np.array([''.join(row) for row in pts.astype('<U1')])
-        if style in (style.NUMERIC, style.U64):
-            return int(body[0])
-        pb = np.strings.add(prf, body)
-        pbs = np.strings.add(pb, treg)
-        ok = np.strings.add(pbs, thx.astype('<U1'))
-        return str(ok[0])
-        # HEX = 0
-        # FULL = 1
-        # EXTENDED = 2
-        # HALFHEX = 3
-        # NUMERIC = 4
-        # CFULL = 5
-        # U64 = 6
+            pts = arr
+        count = len(pts)
+        style, width = self._select_style(sub)
 
-    def format_arr(self, pts: Points, sub: str = '', prefix=True):
-        """
-        return h9 address(es)
-        :return:
-        """
-        width = self.width
-        style = Style.HEX
-        if sub != '':
-            st = sub[0]
-            if st in self.subs:
-                style = self.subs[st]
-                sub = sub[1:]
-            if len(sub) > 0:
-                width = int(sub)
-        arr = pts.coords
-        reg = pts.components
-        dom = pts.domain
-        res = []
+        if style == adr.Style.UH64:
+            u64 = adr.hex_pack(pts, width, self.registrar, self.scheme)  # 3 metres - not great!
+            strs = [''.join([f'{u:0x}' for u in v])[:width+4] for v in u64]
+            if count < 2:
+                return strs[0]
+            return '\n'.join(strs)
 
-        prf, pts, treg, thx = self.engine.addr(pts, width, prefix)
-        if width <= 21:  # can use uint64. 21 b/c we have 'lost a digit' in the root/terminator.
-            num_digits = pts.shape[1]
-            p10 = 10 ** np.arange(num_digits - 1, -1, -1)
-            numbers = (pts * p10).sum(axis=1).astype(np.uint64)
-            if style == style.NUMERIC:
-                return numbers
-            big = numbers.astype(f'<U{width}')
-            body = np.char.zfill(big, width)
-        else:
-            body = np.array([''.join(row) for row in pts.astype('<U1')])
-        if prefix:
-            pb = np.strings.add(prf, body)
-        else:
-            pb = body
-        pbs = np.strings.add(pb, treg)
-        ok = np.strings.add(pbs, thx.astype('<U1'))
-        return ok
+        if style == adr.Style.UR64:
+            u64 = adr.reg_pack(pts, width, self.registrar, self.scheme)  # 0.5 metres - ok!
+            strs = [''.join([f'{u:016x}' for u in v])[:width+2] for v in u64]
+            if count < 2:
+                return strs[0]
+            return '\n'.join(strs)
+
+        if style == adr.Style.NUMERIC:
+            u64 = adr.hex_pack(pts, width, self.registrar, self.scheme)
+            strs = [''.join(f"{n:0x}" for n in row) for row in u64]
+            if count < 2:
+                return str(strs[0])
+            return '\n'.join(n for n in strs)
+
+        h9h = adr.hex_str_encode(pts, width, self.registrar, self.scheme)
+        if count < 2:
+            return str(h9h[0])
+        return '\n'.join(n for n in h9h)
+
+
+def _poc_formatting():
+    from hhg9 import Registrar
+    reg = Registrar()
+    b_oct = reg.domain('b_oct')
+    oc = [
+        [-1, 1, 1],
+        [-1, 1, -1],
+        [-1, 1, -1],
+        [-1, -1, 1],
+    ]
+    bb = [
+        [0.20407821, 0.04104211],
+        [-0.14744331, 0.36579659],
+        [0.12172821, -0.44399597],
+        [0.65980116, 0.36563993],
+    ]
+    dx = Points(np.array(bb), components=np.array(oc), domain=b_oct)
+    nx = OctahedralH9()
+    xx = nx.format(dx, None, 'x34')
+    ad = xx.splitlines()
+    print(ad)
+    ss = nx.revert(xx)
+    yy = nx.format(dx, None, 'r34')
+    st = nx.revert(yy, adr.Style.UR64)
+
+
+# if __name__ == '__main__':
+#     _poc_formatting()

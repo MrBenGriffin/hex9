@@ -31,7 +31,7 @@ Roundtrip Load/Save of a Plate Carrée Image. Display via matplotlib.
 
 | √ | Domain                | Sig   | Octant Domain     |
 |--:|:----------------------|-------|-------------------|
-| √ | Plate Carrée          | p_plt | -                 |
+| √ | Plate Carrée          | p_pix | -                 |
 | X | GeneralGCD            | g_gcd | -                 |
 | X | EllipsoidCartesian    | c_ell | -                 |
 | X | OctahedralCartesian   | c_oct | OctantCartesian   |
@@ -40,7 +40,7 @@ Roundtrip Load/Save of a Plate Carrée Image. Display via matplotlib.
 
 | Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
-| PlatePixelGCD         | plt_gcd | p_plt |  X  | g_gcd |  X  |
+| PlatePixelGCD         | pix_gcd | p_pix |  X  | g_gcd |  X  |
 | EllipsoidGCD          | ell_gcd | c_ell |  X  | g_gcd |  X  |
 | AKOctahedralEllipsoid | oct_ell | c_oct |  X  | c_ell |  X  |
 
@@ -51,7 +51,7 @@ Display via matplotlib Basemap and 2D.
 
 | √ | Domain                | Sig   | Octant Domain     |
 |--:|:----------------------|-------|-------------------|
-| √ | Plate Carrée          | p_plt | -                 |
+| √ | Plate Carrée          | p_pix | -                 |
 | √ | GeneralGCD            | g_gcd | -                 |
 | X | EllipsoidCartesian    | c_ell | -                 |
 | X | OctahedralCartesian   | c_oct | OctantCartesian   |
@@ -60,7 +60,7 @@ Display via matplotlib Basemap and 2D.
 
 | Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
-| PlatePixelGCD         | plt_gcd | p_plt |  √  | g_gcd |  √  |
+| PlatePixelGCD         | pix_gcd | p_pix |  √  | g_gcd |  √  |
 | EllipsoidGCD          | ell_gcd | c_ell |  X  | g_gcd |  X  |
 | AKOctahedralEllipsoid | oct_ell | c_oct |  X  | c_ell |  X  |
 
@@ -70,7 +70,7 @@ Display via matplotlib 2D and 3D.
 
 | √ | Domain                | Sig   | Octant Domain     |
 |--:|:----------------------|-------|-------------------|
-| √ | Plate Carrée          | p_plt | -                 |
+| √ | Plate Carrée          | p_pix | -                 |
 | √ | GeneralGCD            | g_gcd | -                 |
 | √ | EllipsoidCartesian    | c_ell | -                 |
 | X | OctahedralCartesian   | c_oct | OctantCartesian   |
@@ -80,7 +80,7 @@ Display via matplotlib 2D and 3D.
 
 | Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
-| PlatePixelGCD         | plt_gcd | p_plt |  √  | g_gcd |  √  |
+| PlatePixelGCD         | pix_gcd | p_pix |  √  | g_gcd |  √  |
 | EllipsoidGCD          | ell_gcd | c_ell |  √  | g_gcd |  √  |
 | AKOctahedralEllipsoid | oct_ell | c_oct |  X  | c_ell |  X  |
 
@@ -123,7 +123,7 @@ This is what this example does.  *(OctahedralBarycentric is implicitly used
 
 | √ | Domain                 | Sig   | Octant Domain     |
 |--:|:-----------------------|-------|-------------------|
-| √ | Plate Carrée           | p_plt | -                 |
+| √ | Plate Carrée           | p_pix | -                 |
 | √ | GeneralGCD             | g_gcd | -                 |
 | √ | EllipsoidCartesian     | c_ell | -                 |
 | √ | OctahedralCartesian    | c_oct | OctantCartesian   |
@@ -133,7 +133,7 @@ This is what this example does.  *(OctahedralBarycentric is implicitly used
 
 | Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
-| PlatePixelGCD         | plt_gcd | p_plt |  √  | g_gcd |  √  |
+| PlatePixelGCD         | pix_gcd | p_pix |  √  | g_gcd |  √  |
 | EllipsoidGCD          | ell_gcd | c_ell |  √  | g_gcd |  √  |
 | AKOctahedralEllipsoid | oct_ell | c_oct |  X  | c_ell |  √  |
 
@@ -148,7 +148,7 @@ Carree, and displayed once more.
 
 | √ | Domain                 | Sig   | Octant Domain     |
 |--:|:-----------------------|-------|-------------------|
-| √ | Plate Carrée           | p_plt | -                 |
+| √ | Plate Carrée           | p_pix | -                 |
 | * | GeneralGCD             | g_gcd | -                 |
 | * | EllipsoidCartesian     | c_ell | -                 |
 | √ | OctahedralCartesian    | c_oct | OctantCartesian   |
@@ -158,7 +158,7 @@ Carree, and displayed once more.
 
 | Domain Projections    |   Sig   |  Fwd  | √ |  Rev  | √ | 
 |-----------------------|:-------:|:-----:|:-:|:-----:|:-:|
-| PlatePixelGCD         | plt_gcd | p_plt | X | g_gcd | X |
+| PlatePixelGCD         | pix_gcd | p_pix | X | g_gcd | X |
 | EllipsoidGCD          | ell_gcd | c_ell | X | g_gcd | X |
 | AKOctahedralEllipsoid | oct_ell | c_oct | √ | c_ell | X |
 
@@ -172,7 +172,7 @@ back-projection and sampling technique from the destination field.
 
 | √ | Domain                 | Sig   | Octant Domain     |
 |--:|:-----------------------|-------|-------------------|
-| √ | Plate Carrée           | p_plt | -                 |
+| √ | Plate Carrée           | p_pix | -                 |
 | * | GeneralGCD             | g_gcd | -                 |
 | * | EllipsoidCartesian     | c_ell | -                 |
 | * | OctahedralCartesian    | c_oct | OctantCartesian   |
@@ -182,12 +182,26 @@ back-projection and sampling technique from the destination field.
 
 | Domain Projections    |   Sig   |  Fwd  | √ |  Rev  | √ | 
 |-----------------------|:-------:|:-----:|:-:|:-----:|:-:|
-| PlatePixelGCD         | plt_gcd | p_plt | X | g_gcd | X |
+| PlatePixelGCD         | pix_gcd | p_pix | X | g_gcd | X |
 | EllipsoidGCD          | ell_gcd | c_ell | X | g_gcd | X |
 | AKOctahedralEllipsoid | oct_ell | c_oct | √ | c_ell | X |
 
+### ex0051_subregions
+This is a visual demonstrator showing how an address is repeatedly
+broken down into one of 9 sub-regions at each layer.
 
-### ex0060_addr_exm
+### ex0060_addresses
+This is a non-graphical example which chooses a seeded random collection of
+100,000 GCD addresses across the globe, projects them to barycentric octahedral 
+(hex 9), and back-projects them to GCD. It then measures the round-trip 
+distance via GeographicLib, and stores the result in a CSV file.  
+Typically results are under 7 nanometres.  It also converts to the 
+hex-variation address format (e.g. `NWV3522B`), reverts that, and then 
+back-projects that value also - which typically might add about 1 nanometre
+noise.  If one's purpose is to measure global positions accurately to less than 
+1µm, I would strongly recommend using 96 or 128-bit maths.
+
+### ex0061_more_addr
 This is a non-graphical example which chooses a selection of landmarks 
 (categorised by Octant) across the globe, for which there are 
 well-known co-ordinates, and which can be found easily via online mapping services.  
@@ -210,8 +224,6 @@ Stonehenge  NWΛ01357247546287033010625120268308D7 (Grid Address)
 Stonehenge  ∂1.918622nm 51°10'43.672800075819"N, 1°49'34.031280757874"W (roundtrip via Grid Address)
 ```
 
-Maximum errors tend to be found at the octahedral vertices and edges - with a 
-deviation of around 6nm at the North Pole, for example. 
 Needless to say, nobody will be seriously expecting to use this toolchain to 
 geolocate distances as small as a few nanometres, but it provides an 
 idea of where noise can be found creeping in.

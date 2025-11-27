@@ -2,7 +2,8 @@
 Part of the H9 project
 """
 import numpy as np
-from hhg9 import Projection, Points, H9Engine
+from hhg9 import Points
+from hhg9.base.projection import Projection
 
 
 class OctantBary(Projection):
@@ -13,8 +14,8 @@ class OctantBary(Projection):
     def __init__(self, registrar, base, o_name, b_name):
         super().__init__(registrar, f'{base}_ob', o_name, b_name)
         self.matrix = None
-        self.mode = self.fwd_cs.mode
-        self.h9 = H9Engine()
+        # self.mode = self.fwd_cs.mode
+        # self.h9 = H9Engine()
         # 'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
         self.z_off = 1.0 / np.sqrt(3)
         rot_z = self.fwd_cs.th  # -120º As we define NS as apex we need to orient.
@@ -27,13 +28,13 @@ class OctantBary(Projection):
         3D points are flattened on the Z-Plane.
         Currently, the domain is merely oct_c.
         This would best be set to the octant.
+        Never clamp here - let clamping take place later.
         """
         xyz = arr.coords if isinstance(arr, Points) else arr
         xya = xyz @ (self.matrix.T @ self.orient)  # z should be aligned.
-        xy = np.delete(xya, 2, -1)  # These are now in barycentric 2D.
-        xx, yy, _ = self.h9.clamp(xy[:, 0], xy[:, 1], self.mode == 'Λ')
-        pts = np.stack([xx, yy], axis=-1)
+        pts = np.delete(xya, 2, -1)  # These are now in barycentric 2D.
         if isinstance(arr, Points):
+            #
             return Points(pts, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
         else:
             return pts

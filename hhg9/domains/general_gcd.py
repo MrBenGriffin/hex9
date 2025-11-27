@@ -1,10 +1,15 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
-GCD is recognised as [latitude,longitude]
+GeneralGCD is recognised as [latitude,longitude]
 """
-from numpy.typing import NDArray
-from hhg9.base import Domain, Points
+
 import numpy as np
+from hhg9.base import Points
+from hhg9.base.domain import Domain
+from numpy.typing import NDArray
 
 
 class GeneralGCD(Domain):

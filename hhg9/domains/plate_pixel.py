@@ -1,16 +1,21 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
 This is the Plate Carrée Domain in 2D Cartesian (X/Y)
 """
+
 import numpy as np
+from hhg9.base import Points
+from hhg9.base.domain import Domain
 from numpy.typing import NDArray
-from hhg9.base import Domain, Points
 
 
 class PlatePixel(Domain):
 
     def __init__(self, registrar):
-        super().__init__(registrar, 'p_plt', 2)
+        super().__init__(registrar, 'p_pix', 2)
         self.height = 180
         self.width = 360
         self.type = np.uint8

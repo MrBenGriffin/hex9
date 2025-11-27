@@ -1,22 +1,29 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+EllipsoidCartesian is Hex9 ECEF domain.
 """
 import numpy as np
-from hhg9.base import Domain, Points
+from hhg9.base import Points
+from hhg9.base.domain import Domain
 from numpy.typing import NDArray
+from pyproj import CRS
 
 
 class EllipsoidCartesian(Domain):
     """
     A Domain representing the surface of an ellipsoid in Cartesian (ECEF) coordinates.
-    Defaults to WGS84 ellipsoid: a = 6378137.0 m, f = 1/298.257223563.
+    Defaults to epsg=4978
     """
 
-    def __init__(self, registrar, name='c_ell', a: float = 6378137.0, f: float = 1 / 298.257223563):
+    def __init__(self, registrar, name='c_ell', epsg=4978):
         super().__init__(registrar, name, 3)
-        self.a = a                  # semi-major axis
-        self.f = f                  # flattening
-        self.b = a * (1 - f)        # semi-minor axis
+        self.crs = CRS.from_epsg(epsg)
+        self.a = self.crs.ellipsoid.semi_major_metre # semi-major axis
+        self.b = self.crs.ellipsoid.semi_minor_metre
+        self.f = 1. / self.crs.ellipsoid.inverse_flattening
 
     def valid(self, pts: Points) -> NDArray:
         """

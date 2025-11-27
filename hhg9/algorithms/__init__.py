@@ -1,5 +1,10 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+This is the algorithms package. It is far more intuitive to import the algorithm files to be used directly.
 """
 from .root_finding import find_coords
-from .distance import haversine, wgs84
+
+__all__ = ["find_coords"]

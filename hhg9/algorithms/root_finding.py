@@ -1,79 +1,84 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+find_coords is a general root finding algorithm for finding coordinates
+on the ellipsoidal surface of an equilateral polyhedron projection.
 """
 import numpy as np
+from hhg9.h9.protocols import H9CellLike
 
 
-def find_coords(target_rll, initial_mode, target_octants, h9_engine,
-                projector_func, distance_func, depth=34, beam_width=6):
+def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
+                projector_func, distance_func, depth=34, beam_width=5):
     """
-    Finds the grid address for geographic points using a generic, vectorised beam search.
-    This is a root-finding operation for projections that have an existing equilateral->ellipsoid projection
-    but must depend upon root-finding for the inverse (ellipsoid->equilateral).
-
-    Args:
-        target_rll (np.ndarray): (N, 2) array of target [lat, lon] coordinates.
-        initial_mode (np.ndarray): (N,) array of the starting mode for each point.
-        target_octants (np.ndarray): (N, 3) array of the starting mode for each point.
-        h9_engine: An h9_engine (or similar) instance providing the LUTs (ugc_lut, ugc_off) and constants.
-        projector_func: A function that projects barycentric (x,y) to the target space (e.g., lat/lon).
-        distance_func: A function that calculates the distance between two sets of target space coords.
-        beam_width (int): The number of best candidates to keep at each layer.
-        depth (int): The maximum depth of the address to generate.
-        Beam Width:
-            Accuracy vs. Speed: Increasing the beam width makes the search more robust and less likely to miss
-            the correct path, especially for difficult edge cases.
-            The trade-off is that a wider beam requires more computation at each layer, making the search slower.
-            Number of Iterations: The beam width has no effect on the number of iterations.
-
-    Returns:
-        np.ndarray: (N, depth) array of the best URI address path found for each point.
+    Vectorised beam search in barycentric xy space.
+    target_rll: (N,2) lat/lon (or whatever the projector uses)
+    initial_mode: (N,) int {0,1}
+    target_octants: (N,3) face-signs for projection
+    h9c: H9Cell instance providing mode, offsets, and child region info
+    projector_func: (XY,(...))->(M,2) projects bary XY to target space
+    distance_func: ((M,2),(M,2))->(M,) distances in target space
+    offset_kind: which offset flavour to use ("xy", "xbar_y"/"ẋy"/"xby", or "uv")
     """
-    # --- Initialisation ---
-    # Start the search from the origin (0,0) with a beam width of 1.
-    num_points = target_rll.shape[0]
-    best_coords = np.zeros((num_points, 1, 2))
-    root_uris = np.where(initial_mode == 1, 0x16, 0x49)
-    best_paths = root_uris[:, np.newaxis, np.newaxis]
+    num_pts = target_rll.shape[0]  # N
+    off = h9c.off_xy
 
-    # The loop variable `i` represents the current depth level (0, 1, 2...)
+    # child region id lists per supercell mode (shape (9,))
+    up_children = h9c.ups
+    down_children = h9c.downs
+    mode_lut = h9c.mode
+
+    # Roots by mode: up→0x16, down→0x49
+    root_uris = np.where(initial_mode == 1, 0x16, 0x49).astype(np.uint8)
+
+    # Beam state
+    best_paths = root_uris[:, None, None]  # (N,1,1)
+    best_xy = np.zeros((num_pts, 1, 2), dtype=np.float64)  # (N,1,2)
+
     for i in range(depth):
-        current_beam_width = best_paths.shape[1]
+        k = best_paths.shape[1]  # current beam width
+        last = best_paths[:, :, -1]  # (N,k)
+        par_mode = mode_lut[last]  # (N,k)
 
-        # --- a. Branch: Generate Candidates ---
-        last_uris = best_paths[:, :, -1]
-        parent_mode = h9_engine.ugc_lut[last_uris, h9_engine.mode]
+        # Select children per parent mode
+        children = np.where(par_mode[..., None] == 1, up_children, down_children)  # (N,k,9)
 
-        up_children = np.array(h9_engine.in_up_regions)
-        down_children = np.array(h9_engine.in_dn_regions)
-        next_gen_children_uris = np.where(parent_mode[..., np.newaxis] == 1, up_children, down_children)
-        num_new_candidates = current_beam_width * 9
-        next_gen_uris = next_gen_children_uris.reshape(num_points, num_new_candidates)  # Shape: (N, k * 9)
+        # Expand candidate URIs and coords
+        cand_uris = children.reshape(num_pts, k * 9)  # (N,k*9)
+        scale = (1.0 / 3.0) ** i
+        par_xy = np.repeat(best_xy, 9, axis=1)  # (N,k*9,2)
+        offs = off[cand_uris]  # (N,k*9,2)
+        cand_xy = par_xy + offs * scale  # (N,k*9,2)
 
-        # --- b. Evaluate: Incrementally Calculate Coordinates & Distances ---
-        scale = (1 / 3) ** i
-        parent_coords = np.repeat(best_coords, 9, axis=1)
-        child_offsets = h9_engine.ugc_off[next_gen_uris]
-        next_gen_coords_xy = parent_coords + child_offsets * scale
+        # Project once: flatten → project → reshape
+        nk9 = num_pts * (k * 9)
+        flat_xy = cand_xy.reshape(nk9, 2)
+        flat_oct = np.repeat(target_octants, k * 9, axis=0)  # (nk9,3)
+        proj = projector_func(flat_xy, flat_oct).reshape(num_pts, k * 9, 2)
 
-        # Project all candidates to lat/lon using the injected function
-        num_candidates = next_gen_coords_xy.shape[1]
-        tiled_components = np.repeat(target_octants[:, np.newaxis, :], num_candidates, axis=1)
-        projected_rll = projector_func(next_gen_coords_xy, tiled_components)
+        # Distances to targets
+        d = distance_func(proj, target_rll[:, None, :])  # (N,k*9)
 
-        distances = distance_func(projected_rll, target_rll[:, np.newaxis, :])
+        # Top-k via arg-partition, then stable tie-break by URI
+        idx_k = np.argpartition(d, beam_width - 1, axis=1)[:, :beam_width]  # (N,k)
+        # Gather those distances/uris for stable sort
+        d_k = np.take_along_axis(d, idx_k, axis=1)  # (N,k)
+        u_k = np.take_along_axis(cand_uris, idx_k, axis=1)  # (N,k)
+        # Stable rank on (distance, uri)
+        order = np.lexsort((u_k, d_k))  # (N,k)
+        top_idx = np.take_along_axis(idx_k, order, axis=1)  # (N,k)
 
-        # --- c. Select: Prune to the Top `beam_width` Candidates ---
-        best_indices = np.argsort(distances, axis=1)[:, :beam_width]
+        # Keep winners
+        win_uris = np.take_along_axis(cand_uris, top_idx, axis=1)  # (N,k)
+        win_xy = np.take_along_axis(cand_xy, top_idx[..., None], axis=1)  # (N,k,2)
 
-        # Update state for the next iteration
-        best_uris = np.take_along_axis(next_gen_uris, best_indices, axis=1)
-        best_coords = np.take_along_axis(next_gen_coords_xy, best_indices[:, :, np.newaxis], axis=1)
+        # Extend paths: pick corresponding parent slices
+        parent_sel = top_idx // 9  # (N,k)
+        parent_paths = np.take_along_axis(best_paths, parent_sel[..., None], axis=1)  # (N,k,depth_so_far)
+        best_paths = np.concatenate([parent_paths, win_uris[..., None]], axis=2)  # (N,k,depth_so_far+1)
+        best_xy = win_xy
 
-        # Reconstruct the winning paths
-        parent_indices = best_indices // 9
-        parent_paths = np.take_along_axis(best_paths, parent_indices[:, :, np.newaxis], axis=1)
-        best_paths = np.concatenate([parent_paths, best_uris[:, :, np.newaxis]], axis=2)
-
-    # The best address is the first candidate in the final set
-    return best_coords[:, 0, :], best_paths[:, 0, :]
+    # Take the first beam entry as the result
+    return best_xy[:, 0, :], best_paths[:, 0, :]

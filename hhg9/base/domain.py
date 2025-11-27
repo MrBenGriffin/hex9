@@ -1,5 +1,28 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+A Domain is a numerical coordinate space used inside Hex9.
+
+It defines:
+  • The coordinate axes (their order, units, and interpretation),
+  • The region of that space that is considered valid (via `valid`),
+  • The default point / address formats for representing those coordinates.
+
+A Domain is **not** a CRS: it has no datum, no ellipsoid choice, and no external
+projection baked in. Instead, Domains are stitched together by separate
+Projection objects (e.g. g_gcd ↔ c_oct ↔ b_oct), which map between Domains
+and thus between Hex9 spaces and real-world geodetic coordinates.
+
+If we have some latitude/longitude coordinates in a numpy array, we use the 'g_gcd' Domain from Registrar,
+and then use that to instantiate the coordinates into a Projection-ready Points classs.
+
+reg=Registrar()
+gcd_pts=Points(my_coords, reg.domain('g_gcd'))    # <-- domain tells Points what my_coords represent.
+ell_pts=reg.project(gcd_pts, ['c_ell'])           # can now project lat-lon to ECEF xyz.
+
+ellipsoidal surface of the WGS84 ellipsoid using a GCD projection.
 """
 from abc import ABC, abstractmethod
 import numpy as np

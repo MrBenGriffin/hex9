@@ -811,7 +811,7 @@ when `0` is `0V`)
 def unravel(par, curr, t_id):
     # C2 can be seen as distance from Centre (0,1,2)
     # C1 can be seen as orientation (–,/,\ for 0,1,2 respectively).
-    # Given a parent/child address (with child half-hex VΛ) we calculate the
+    # Given a parent/child addresses (with child half-hex VΛ) we calculate the
     # parental half-hex identity. EG, for par=3, curr=5, t_id='V', return 'Λ'
     lut = [t_id, 'V', 'Λ', 'Λ' if t_id == 'V' else 'V']
     c2, c1 = divmod(curr, 3)  # unpack base 3 values.
@@ -1316,7 +1316,7 @@ when `0` is `0V`)
 def unravel(par, curr, t_id):
     # C2 can be seen as distance from Centre (0,1,2)
     # C1 can be seen as orientation (–,/,\ for 0,1,2 respectively).
-    # Given a parent/child address (with child half-hex VΛ) we calculate the
+    # Given a parent/child addresses (with child half-hex VΛ) we calculate the
     # parental half-hex identity. EG, for par=3, curr=5, t_id='V', return 'Λ'
     lut = [t_id, 'V', 'Λ', 'Λ' if t_id == 'V' else 'V']
     c2, c1 = divmod(curr, 3)  # unpack base 3 values.

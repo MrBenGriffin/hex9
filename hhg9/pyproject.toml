@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hhg9"
+version = "0.1.0a0"
+description = "Hierarchical hexagonal grid on an octahedral Earth projection"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Ben Griffin" }
+]
+
+dependencies = [
+  "numpy>=1.24.0",
+  "scipy>=1.11.0",
+  "pyproj>=3.0.0",
+  "geographiclib>=2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest"
+]
+docs = [
+  "mkdocs-material",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

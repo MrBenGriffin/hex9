@@ -1,12 +1,19 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+This is 'n_oct' flattened octahedron net xy
 """
+
 import numpy as np
 from numpy.typing import NDArray
-from hhg9 import Points
-from hhg9.base import CompositeDomain, ComponentDomain
+from hhg9.base.composite import CompositeDomain, ComponentDomain
 from hhg9.base.point_format import PointFormat
 from hhg9.projections import BaryNet
+from hhg9.domains.nets import net_layouts
+from hhg9.h9 import H9K, H9P
+from hhg9.algorithms.geometry import inside_triangle_cw
 
 
 class OctantNet(ComponentDomain):
@@ -14,14 +21,8 @@ class OctantNet(ComponentDomain):
     This a 2D side of an Octant that belongs to a Net.
     Validity should be easy enough since we have the 3 points that define it.
     """
-    def __init__(self, registrar, dom, name: str, sign: tuple, mode: str):
-        super().__init__(registrar, name, 2)
-        self.dom = dom
-        self.mode = mode
-        self._sign = sign
-
-    def sig(self) -> tuple:
-        return self._sign
+    def __init__(self, registrar, dom, name: str, sign: tuple, mode: int):
+        super().__init__(registrar, name, dom, mode, sign, 2)
 
     def valid(self, pts: NDArray) -> NDArray:
         """
@@ -36,134 +37,149 @@ class OctahedralNet(CompositeDomain):
     This is a 2d net correlate of the Octahedron.
     Triangles have edge length √2 in a unit octahedron
     """
+    from hhg9 import Points
 
-    def __init__(self, registrar, octahedron, b_oct):
-        super().__init__(registrar, 'n_oct', 2)
-        self.o = octahedron
-        self.rt = np.pi / 3  # grid rotation in 60º
-        self.gw = np.sqrt(2) / 2.  # grid unit width
-        self.r3 = np.sqrt(3)
-        self.gh = np.sqrt(6) / 6.  # grid unit height OctahedralNet
-        self.width, self.height = np.sqrt(2) * 3.5, self.gh * 9
-        self.glx, self.gly = (0, self.width), (0, self.height)
+    R3 = H9K.R3
+    GW = H9K.lattice.U * 3  # grid unit width U = H9GC.U H9GC.W/6
+    GH = H9K.lattice.V * 3  # grid unit height
+    RT = np.pi / 3.      # grid rotation in 60º
+
+    def __init__(self, registrar, *, layout='mortar'):
+        c_oct = registrar.domain('c_oct')
+        b_oct = registrar.domain('b_oct')
+        if layout not in net_layouts:
+            layout = 'mortar'
+        super().__init__(registrar, f'n_oct:{layout}', 2)
+        tp = H9P.sv  # mode vertices
         self.sides = {}
         self.projs = {}
-        grid = {
-            (+1, +1, +1): (3., 4., 3),  # NEA
-            (-1, +1, +1): (4., 5., 5),  # NEP
-            (+1, -1, +1): (2., 5., 1),  # NWA
-            (-1, -1, +1): (2., 7., 5),  # NWP
-            (+1, +1, -1): (3., 2., 3),  # SEA
-            (-1, +1, -1): (5., 4., 5),  # SEP
-            (+1, -1, -1): (1., 4., 1),  # SWA
-            (-1, -1, -1): (6., 5., 3)   # SWP
-        }
-        for sign, val in grid.items():
-            side = self.o.signs[sign]
+        self.face_tris = {}
+        self.sign_to_side = {}
+        self.c_oct = c_oct
+        self.b_oct = b_oct
+        self.layout = net_layouts[layout]
+        grid_xy = np.array(list(self.layout['grid'].values()))[:, :2]
+        gx_min, gx_max = grid_xy[:, 0].min(), grid_xy[:, 0].max()
+        gy_min, gy_max = grid_xy[:, 1].min(), grid_xy[:, 1].max()
+
+        # Each placed face contributes [x_off, x_off + 2*GW] and [y_off, y_off + 3*GH]
+        # So total width/height is span of gx,gy plus the single-face width/height
+        self.wi = (gx_max - gx_min + 2) * self.GW
+        self.he = (gy_max - gy_min + 3) * self.GH
+
+        self.oid_mo = np.zeros((8,), dtype=np.uint8)
+        for sign, val in self.layout['grid'].items():
+            side = self.c_oct.signs[sign]
+            oid = self.c_oct.face_id[side]
             bary = b_oct.sides[side]
             gx, gy, th = val
-            n_theta = (th % 6) * np.pi/3.
-            o_theta = (n_theta + bary.th) % np.pi
-            mode = {'V': 'Λ', 'Λ':'V'}[bary.mode]  # TODO.md Fix properly.
+            x_off = gx * self.GW
+            y_off = gy * self.GH
+            n_theta = (th % 6) * self.RT
+            flipped = th % 2
+            mode = {0: 1, 1: 0}[bary.mode] if flipped else bary.mode
             n_sig = f'{self.name}:{side}'
             b_sig = f'{b_oct.name}:{side}'
-
+            self.oid_mo[oid] = mode
             self.sides[sign] = OctantNet(registrar, self, n_sig, sign, mode)
-            self.projs[side] = BaryNet(registrar, side, b_sig, n_sig, n_theta, (gx * self.gw, gy * self.gh))
+            face = BaryNet(registrar, side, b_sig, n_sig, n_theta, (x_off, y_off))
+            self.projs[side] = face
+            tri = H9P.sv[bary.mode]  # triangle from H9P. Use bary.mo b/c will transform!
+            tri_rt = tri @ face.matrix + face.offset  # bary->net
+            # Map sign→triangle and sign→side for fast lookup
+            self.face_tris[sign] = tri_rt
+            self.sign_to_side[sign] = side
+            if 'c2' in self.layout:
+                c2f = self.layout['c2'][sign]
+                c2x = [(x * self.GW, y * self.GH, (t % 6) * self.RT) for (x, y, t) in c2f]
+                face.c2trans = c2x
             self.components[sign] = self.sides[sign]
-        init = True
+
 
     def ratio(self):
         """Return width/height ratio"""
-        return self.glx[1]/self.gly[1]
+        return self.wi/self.he
 
-    def valid(self, _pts: NDArray) -> NDArray:
+    def img_adj(self):
+        """
+        :return: w,h adjustment to pixels (subtracted when outputting to image)
+        """
+        return self.layout['width'] + 0.51, self.layout['height'] + 0.51
+
+    def image_dims(self, pixels: int):
+        """Given the side of a triangle in pixels, return the image dimensions."""
+        tri_w = pixels
+        tri_h = pixels * self.R3 * 0.5
+        l_width = self.layout['width']
+        l_height = self.layout['height']
+        w_a, h_a = self.img_adj()
+        img_w = l_width * tri_w - w_a
+        img_h = l_height * tri_h - h_a
+        pix_w = int(img_w)
+        pix_h = int(img_h)
+        return pix_w, pix_h
+
+    def dim_from_image(self, pix_w: int, pix_h: int):
+        """given the image dimensions, return the side of a triangle in pixels"""
+        img_w = float(pix_w)
+        img_h = float(pix_h)
+        tri_h = self.R3 * 0.5
+        tri_w = 1.0
+        l_width = self.layout['width']
+        l_height = self.layout['height']
+        w_a, h_a = self.img_adj()
+        img_w += w_a
+        img_h += h_a
+        img_w /= l_width * tri_w
+        img_h /= l_height * tri_h
+        return np.rint((img_w + img_h) / 2.0)
+
+    def valid(self, pts: NDArray) -> NDArray:
         """
         Test that points are valid
         """
-        if _pts.shape[-1] < 2:
+        if pts.shape[-1] < 2:
             raise ValueError('Points must have 2 dimensions')
-        gh3 = self.gh * 3
-        x, y, g = _pts[..., -2] * self.r3, _pts[..., -1], _pts[..., -1] // self.gh
-        return (
-                ((y - gh3) <= x) & (x <= (y + 5 * gh3)) &  # We are in legal space...
-                (
-                    ((x <= (y + gh3)) & ((5 * gh3 - x) > y) & (g > 2)) |  # left 3 triangles.
-                    (((g <= 5) & (y >= (3 * gh3 - x))) & ((x <= (y + 3 * gh3)) | (g >= 3)))
-                )
-        )
+        signs = self.pt_face(pts)
+        return np.any(signs != 0, axis=1)
 
-    def _pt_face(self, pt: NDArray) -> tuple | None:
+    def pt_face(self, pts: NDArray) -> NDArray:
+        """Vectorised: identify octant sign for each point in net coordinates.
+        Returns (N,3) int8 array of signs (±1), or (0,0,0) for invalid.
         """
-        Identify which side is being addressed by a flat coordinate.
-        This depends upon the current 2d projection.
-        Most of this is managed following 60º lines.
-        """
-        bad = 0, 0, 0
-        ax, ay = pt
-        gh3 = self.gh * 3
-        gy = ay // self.gh
-        dẋ = self.r3 * ax
-        if ay - gh3 <= dẋ <= ay + 5 * gh3:  # We are in legal space...
-            if dẋ <= ay + gh3:  # We are in left-3 triangles
-                if 5 * gh3 - dẋ > ay and gy > 2:
-                    if 3 * gh3 - dẋ < ay:
-                        if gy >= 6:
-                            return -1, -1, 1  # 'NWP'
-                        return 1, -1, 1  # 'NWA'
-                    return 1, -1, -1  # 'SWA'
-                return bad
-            if gy <= 5 and ay >= 3 * gh3 - dẋ:  # inside remaining 5
-                if dẋ <= ay + 3 * gh3:  # We are in mid-3 triangles
-                    if gy <= 2:
-                        return 1, 1, -1  # 'SEA'
-                    if 5 * gh3 - dẋ > ay:
-                        return 1, 1, 1  # 'NEA'
-                    return -1, 1, 1  # 'NEP'
-                if gy >= 3:
-                    if 7 * gh3 - dẋ > ay:
-                        return -1, 1, -1  # 'SEP'  # final 2 triangles
-                    return -1, -1, -1  # 'SWP'
-        return bad
+        num_points = pts.shape[0]
+        out = np.zeros((num_points, 3), dtype=np.int8)
+        for sign, tri in self.face_tris.items():
+            mask = inside_triangle_cw(pts, tri)
+            if not np.any(mask):
+                continue
+            out[mask] = np.array(sign, dtype=np.int8)
+        return out
 
-    # def adopt(self, pts: NDArray):
-    #     """
-    #     Take an array and adopt as this domain.
-    #     """
-    #     good = self.where_valid(pts)
-    #     pts = Points(good, domain=self)
-    #     cmp = np.apply_along_axis(self._pt_face, -1, pts.coords)
-    #     pts.components = np.array(cmp, dtype='b')
-    #     return pts
+    def px_pt(self, x, y, pix):
+        """
+        Given a pixel coordinate and the side of a
+        triangle in pixels return the pt in this domain
+        tri_w = pixels
+        tri_h = pixels * self.R3 * 0.5
+        """
+        l_width = self.layout['width']
+        l_height = self.layout['height']
+        tri_w = pix
+        tri_h = pix * H9K.derived.RH
+        img_w = l_width * tri_w - (l_width + 0.51)
+        img_h = l_height * tri_h - (l_height + 0.51)
+        ux = self.wi * x/img_w
+        uy = self.he * y/img_h
+        oc = self.pt_face(np.array([ux, uy]))
+        return oc, ux, uy
+
+    def binning(self, pts: Points, sig: tuple = None):
+        """Identify the components of the points"""
+        cmp = self.pt_face(pts.coords)
+        pts.components = np.array(cmp)
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
         for side in self.sides:
             self.sides[side].register_format(af)
-
-    @classmethod
-    def image(cls, pts: Points, dim=None) -> NDArray:
-        """
-        return the image that these points represent.
-        """
-        xs, ys = pts.coords[:, 0], pts.coords[:, 1]
-        if dim is None:
-            ux, uy = np.unique(xs, axis=0), np.unique(ys, axis=0)
-            w = ux.size
-            h = uy.size
-        else:
-            w, h = dim
-        x0 = np.min(xs)
-        y0 = np.min(ys)
-        y_adj = (h-1e-6)/(np.max(ys)-y0)
-        x_adj = (w-1e-6)/(np.max(xs)-x0)
-        yy = np.floor(y_adj*(ys-y0)).astype(np.uint64)
-        xx = np.floor(x_adj*(xs-x0)).astype(np.uint64)
-        ch = pts.samples
-        y = (h - 1) - yy.astype(np.uint64)  # still in cartesian (ie, 0 is bottom left).
-        x = xx.astype(np.uint64)
-        channels = 1 if ch.ndim == 1 else ch.shape[1]
-        ch = ch.reshape(-1, channels)
-        img = np.ones((h, w, channels), dtype=ch.dtype)
-        img[y, x] = ch
-        return img

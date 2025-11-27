@@ -1,26 +1,20 @@
-"""
-Part of the H9 project
-"""
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 from .base import (
-    Domain,
-    Projection,
     Points,
     Registrar,
-    H9Engine, Step,
-    Grid
 )
 
 __all__ = [
-    "Domain",
-    "Projection",
     "Points",
     "Registrar",
-    "H9Engine", "Step",
-    "Grid"
+
 ]
 
-__version__ = "2025.05.05"
+__version__ = "0.1.0a0"
 __author__ = "Ben Griffin"
-__license__ = "https://www.gnu.org/licenses/gpl-3.0.html"
 __copyright__ = "Copyright ©2025, Ben Griffin"
+__license__ = "https://www.apache.org/licenses/LICENSE-2.0"
 __maintainer__ = "https://github.com/MrBenGriffin/hex9"

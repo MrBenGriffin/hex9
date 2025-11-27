@@ -1,70 +1,129 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
 Part of the H9 project - uses H9 addresses and round-trips them.
-This loads up a set of addresses and generates their h9 formats.
-Tested and validated against Geodetic Conversions.
-Last Tested 13 August 2025 √ Though Zero Eq currently failing.
+This:
+(a) Generates a Reference set of GCD random (seeded) addresses
+(b) Projects them onto Octahedral Barycentric coordinates.
+(c.1) Projects them back to GCD for roundtrip testing
+(c.2.a) Renders them as H9 Hex labels
+(c.2.b) Reverts the labels back to Octahedral Barycentric.
+(c.2.c) Projects the reverted back to GCD for roundtrip testing.
+(d) Measures, via GeographicLib Inverse, the ∂ distance from Reference
+(e) Logs the results into a CSV file.
+# ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
+Last Tested 25 November 2025 √
 """
+import csv
+import time
 import numpy as np
-from hhg9 import Registrar, H9Engine
-from hhg9.domains import GeneralGCD, OctahedralCartesian, OctahedralBarycentric, EllipsoidCartesian
-from hhg9.projections import EllipsoidGCD, AKOctahedralEllipsoid
-from hhg9.formats import OctahedralH9, DMS, DecimalDegrees, DecimalCartesian
-from hhg9.algorithms import wgs84
-from support import Util
+from pathlib import Path
+from hhg9 import Registrar, Points
+from hhg9.formats import OctahedralH9
+from hhg9.algorithms.distance import wgs84
+from hhg9.algorithms.pickers import gcd_rnd
+
+
+class CSVLogger:
+    """Append rows to a CSV with a fixed header; creates parent dirs as needed."""
+    HEADER = [
+        "lat_in", "lon_in", "oct_in", "bry_x", "bry_y", "gcd_err_val", "grid_addr", "grid_err_val",
+    ]
+
+    def __init__(self, path, header=None):
+        self.path = Path(path) if path else None
+        self.header = self.HEADER
+        self._fh = None
+        self._w = None
+        if self.path:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._fh = self.path.open("w", newline="", encoding="utf-8")
+            self._w = csv.writer(self._fh)
+            self._w.writerow(self.header)
+
+    def write(self, row_dict):
+        """Write a row"""
+        if not self._w:
+            return
+        row = [row_dict.get(k, "") for k in self.header]
+        self._w.writerow(row)
+
+    def close(self):
+        """Close logging"""
+        if self._fh:
+            self._fh.close()
+            self._fh = None
+            self._w = None
+
+
+def run(reg, logger, refs, layers=36):
+    h9f = OctahedralH9(reg)
+    lat = refs.coords[:, 0]
+    lon = refs.coords[:, 1]
+    # Resolve Ambiguity flags (vectorised)
+    ε = 1e-15
+    ambiguous = (
+        (np.isclose(np.abs(lat), 90.0, atol=ε)) |
+        (np.isclose(lat, 0.0, atol=ε) & (np.isclose(np.abs(lon), 180.0, atol=ε) | np.isclose(lon, 0.0, atol=ε)))
+    ).astype(np.uint8)
+    # 'ambiguous' marks any points which are on vertices.
+    # such points might have multiple addresses.
+    # project the GCD reference points onto barycentric octahedral.
+    b_rys = reg.project(refs, ['g_gcd', 'b_oct'])  # components filled
+    # Get the domain managing the barycentric, and register the h9f grid format.
+    b_rys.domain.register_format(h9f)
+    # project barycentric octahedral back to GCD
+    b_rtp = reg.project(b_rys, ['b_oct', 'g_gcd'])
+    # Get the octant id and mode of each point (discarding mode here).
+    oc, _ = b_rys.cm()
+    # Now generate the set of h9f labels for each point, and convert to np.array
+    labels = f'{b_rys:h9.{layers}}'
+    label_vec = np.array(labels.splitlines())
+    # the h9f formatter h9f is used to revert this array back to barycentric.
+    h9_r = h9f.revert(labels)  # Convert from addresses.
+    # we now take these and project them back to GCD.
+    l_rtp = reg.project(h9_r, ['b_oct', 'g_gcd'])
+    # We will use the GeographicLib Inverse to find ∂-distances (metres)
+    # and multiply the values by 1e+9 such that our ∂-distances are in nanometres.
+    b_deltas = wgs84(refs.coords, b_rtp.coords) * 1e+9
+    l_deltas = wgs84(refs.coords, l_rtp.coords) * 1e+9
+    for i in range(refs.coords.shape[0]):
+        # Now write to the logger.
+        logger.write({
+            "lat_in": f"{refs.coords[i][0]:.16f}", "lon_in": f"{refs.coords[i][1]:.16f}",
+            "bry_x": f"{b_rys.coords[i][0]:.16f}", "bry_y": f"{b_rys.coords[i][1]:.16f}",
+            "oct_in": int(oc[i]),
+            "ambiguous": ambiguous[i],
+            "lat_rt_gb": f"{b_rtp.coords[i][0]:.16f}", "lon_rt_gb": f"{b_rtp.coords[i][1]:.16f}",
+            "gcd_err": f'{b_deltas[i]:.6f}nm',
+            "gcd_err_val": f'{b_deltas[i]:.6f}',
+            "grid_addr": label_vec[i],
+            "lat_rt_ga": f"{l_rtp.coords[i][0]:.16f}", "lon_rt_ga": f"{l_rtp.coords[i][1]:.16f}",
+            "grid_err": f'{l_deltas[i]:.6f}nm',
+            "grid_err_val": f'{l_deltas[i]:.6f}',
+        })
 
 
 if __name__ == '__main__':
-    """
-        Convert a set of locations into a set of h9 formats.
-    """
+    accuracy = 1e-9  # in meters
     reg = Registrar()  # Manage Domains & Projections
-    g_gcd = GeneralGCD(reg)           # GCD Spherical Domain (latitude/longitude)
-    c_ell = EllipsoidCartesian(reg)     # Cartesian Ellipsoid (xyz)
-    c_oct = OctahedralCartesian(reg)    # Cartesian Octahedron (xyz)
-    b_oct = OctahedralBarycentric(reg, c_oct)  # 2d Flat for addressing.
+    seed = 1234512
+    samples = 100_000  # _000
+    layers = 36  # 36 reaches mathematical limits on 64-bit floats.
+    np.random.seed(seed)
+    base = Path(__file__).parent
 
-    h9 = OctahedralH9()            # formatter.
-    h9e = H9Engine()
-    g_gcd.register_format(DMS())
-    g_gcd.register_format(DecimalDegrees())
-    c_ell.register_format(DecimalCartesian())
-    b_oct.register_format(h9)
+    log_file = base.joinpath(f'logs/L{layers}_{samples}_{seed}.csv')
+    main_logger = CSVLogger(log_file)
+    start_time = time.perf_counter()
 
-    # Projections/Transforms. Bary and Net are loaded by the domains.
-    EllipsoidGCD(reg)             # g_sph <=> c_sph
-    ak = AKOctahedralEllipsoid(reg)   # c_sph <=> (c_oct <=> b_oct)
-
-    # Support Classes
-    u = Util()
-    layers = ak.set_accuracy(0.000000001)
-    locs = u.json_load('../assets/locations.json')
-    print('Selection of famous points, projected forwards and backwards, showing deviation ∂ in nanometres.')
-    for region, spots in locs.items():
-        if region in b_oct.sides:
-            dom = b_oct.sides[region]
-            print(f'\nOctant {region} – {dom.sign}')
-        else:
-            print(f'\n{region}')
-        pos = g_gcd.adopt(np.array(list(spots.values())))
-        for name, ll0 in zip(spots.keys(), pos):
-            print(f'\n{name:<24}             {ll0:dms} (Reference Coordinates)')
-            sp0 = reg.project(ll0, [g_gcd, c_ell])  # spherical cart
-            ll1 = reg.project(sp0, [c_ell, g_gcd])  # sph rt.
-            d1 = wgs84(ll0.coords, ll1.coords) * 1000000000.
-            print(f'{name:<24} ∂{d1:.6f}nm {ll1:dms} (roundtrip via GCD<->Ellipsoid)')
-            oc0 = reg.project(ll0, [g_gcd, c_ell, c_oct])  # octa.
-            ll2 = reg.project(oc0, [c_oct, c_ell, g_gcd])  # sph rt..
-            d2 = wgs84(ll0.coords, ll2.coords[0]) * 1000000000.
-            print(f'{name:<24} ∂{d2:.6f}nm {ll2:dms} (roundtrip via GCD<->Octahedral)')
-            bc0 = reg.project(ll0, [g_gcd, c_ell, c_oct, b_oct])  # octa.
-            ll3 = reg.project(bc0, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
-            d3 = wgs84(ll0.coords, ll3.coords[0]) * 1000000000.
-            print(f'{name:<24} ∂{d3:.6f}nm {ll3:dms} (roundtrip via GCD<->Barycentric)')
-            address = f'{bc0:h9.{layers}}'
-            print(f'{name:<24} {address} (Grid Address)')
-            h9_r = h9.revert(address)  # Convert from address.
-            ll4 = reg.project(h9_r, [b_oct, c_oct, c_ell, g_gcd])  # sph rt..
-            d4 = wgs84(ll0.coords, ll4.coords[0]) * 1000000000
-            print(f'{name:<24} ∂{d4:.6f}nm {ll3:dms} (roundtrip via Grid Address)')
-            if d4 > 12:
-                print('Surprisingly High!')
+    locr = gcd_rnd(samples)
+    gpts = Points(locr, 'g_gcd')
+    run(reg, main_logger, gpts, layers=layers)
+    main_logger.close()
+    elapsed = time.perf_counter() - start_time
+    print(f'Results written to {log_file.relative_to(base)}\n'
+          f'Completed {len(gpts)} points in {elapsed:.3f} seconds'
+          f' ({elapsed / len(gpts):.6f} sec/pt)')

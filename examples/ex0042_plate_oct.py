@@ -1,58 +1,70 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project - Uses AK projection, so H9 indirectly
+Uses AK projection, so H9 indirectly
 This follows ex0030_plate_glb.py (which loaded the png and displayed it as a unit ellipsoid).
-This loads a Plate Carrée png image, converts it to XYZ Octahedron, via latitude/longitude and sphere and displays it.
+This loads a Plate Carrée png image, converts it to Unit Octahedron, via latitude/longitude and sphere and displays it.
 As the inverse of the AK projection is slow we use the cache from ex0041_cache.py
-Last Tested 13 August 2025 √
+Added chain registration example.
+Last Tested 25 November 2025 √
 """
 from pathlib import Path
 import numpy as np
 from matplotlib import image, pyplot as plt
-from hhg9 import Registrar
-from hhg9.domains import PlatePixel, GeneralGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric
-from hhg9.projections import PlatePixelGCD, EllipsoidGCD, AKOctahedralEllipsoid
-from support import Photo, Display
+from hhg9 import Registrar, Points
 
 
-if __name__ == '__main__':
+def show_octahedron(arr: Points, x_lim=None, y_lim=None, z_lim=None, label=None, clip=False):
+    """Display a 3D point cloud using matplotlib"""
+    xx, yy, zz = arr.coords[:, 0], arr.coords[:, 1], arr.coords[:, 2]
+    cols = arr.samples
+    fig = plt.figure(figsize=(10, 10), dpi=200, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_proj_type('ortho')  # FOV = 0 deg
+    ax.set_xlim(-0.52, 0.52)  # fill the area with the map.
+    ax.set_ylim(-0.52, 0.52)
+    ax.set_zlim(-0.52, 0.52)
+    ax.scatter(xx, yy, zz, marker=',', ec='none', s=2.5, c=cols)
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_axis_off()
+    plt.show()
+
+
+def run():
     """
-    Load a photo, adopt into PlatePixel points, transform to XYZ via GCD.
-    Then display it as the unit sphere..
+        Load a Plate Carrée png image, project onto Unit Octahedron, and display.
     """
     reg = Registrar()  # Manage Domains & Projections
-    # Domains - 2D image and GCD Ellipsoid.
-    p_plt = PlatePixel(reg)             # 2D Pixel Cartesian Domain
-    g_gen = GeneralGCD(reg)             # GCD Spherical Domain (latitude/longitude)
-    c_ell = EllipsoidCartesian(reg)     # Cartesian Geodesic (xyz)
-    c_oct = OctahedralCartesian(reg)    # Cartesian Octahedron (xyz)
-    b_oct = OctahedralBarycentric(reg, c_oct)  # Barycentric Octahedron (xy)
-
-    # Projections/Transforms
-    ppp = PlatePixelGCD(reg)    # [p_plt, g_gen] Project (Pixel Cartesian <=> GCD)
-    EllipsoidGCD(reg)           # [p_plt, c_ell]
-    AKOctahedralEllipsoid(reg)  # [c_ell, c_oct]
-
-    # Support Classes
-    d = Display()
-    ps = Photo()
+    p_pix = reg.domain('p_pix')           # Pixel Plate Carrée
+    c_oct = reg.domain('c_oct')
 
     # Load cached octahedral and colours from original.
     pc_map = 'world1350x675'
     cache = Path(f'src/{pc_map}.npy')
     if not cache.exists():
         raise ValueError('Far better to load a cache. See ex_0041')
+
     img = image.imread(f'src/{pc_map}.png', 'png')
-    pc_pix = p_plt.adopt(img)
     oc = np.load(cache)
-    oc_px = c_oct.adopt(oc)
-    oc_px.samples = pc_pix.samples
-    # Now loaded cached octahedral and colours from original.
-    d.show_pts_3d(oc_px)
-    sp_pl = reg.project(oc_px, [c_oct, c_ell, g_gen, p_plt])
-    rmg = p_plt.image(sp_pl, (1350, 675))     # convert points back to an [1350,675,3] image.
+    c_pix = Points(oc, c_oct, samples=img.reshape(-1, 4))
+    show_octahedron(c_pix)
+
+    # Example Registration of a specific chain.
+    # We don't need to do this, we can be explicit in the projection.
+    # But it allows us to short-cut end-points.
+    reg.register_projection('chain', ['c_oct', 'c_ell', 'g_gcd', 'p_pix'])
+
+    # Now project back to Plate Carrée and display.
+    sp_pl = reg.project(c_pix, [c_oct, p_pix])  # can use endpoints from chain.
+    rmg = p_pix.image(sp_pl, (1350, 675))     # convert points back to an [1350,675,3] image.
     fig = plt.figure(figsize=(18, 9), dpi=100, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     plt.imshow(rmg)
     plt.show()
 
 
+if __name__ == '__main__':
+    run()

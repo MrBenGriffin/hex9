@@ -1,24 +1,14 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
-e.g. Domain-specific, but widely reusable put it in domains/
-Core infrastructure (used across points, formats, projections, etc.) → put it in base/
+The two general management classes for hex9 are Points and the Registrar.
 """
-# from .point_format import PointFormat
-from .domain import Domain
-from .projection import Projection
 from .points import Points
-from .composite import ComponentDomain, CompositeDomain
 from .registrar import Registrar
-from .h9_engine import H9Engine, Step
-from .grid import Grid
 
 __all__ = [
-    "Domain",
-    "ComponentDomain",
-    "CompositeDomain",
-    "Projection",
     "Points",
-    "Registrar",
-    "H9Engine", "Step",
-    "Grid",
+    "Registrar"
 ]

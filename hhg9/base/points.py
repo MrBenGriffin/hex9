@@ -1,8 +1,17 @@
-"""
-Part of the H9 project
-"""
-from functools import lru_cache
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
 
+"""
+Points are used as a generalised means of handling coordinates in a projection chain.
+They are domain-associated. For example, while GCD (latitude/longitude) and Simplex(uv) coordinates
+both are identical in the sense that they are both 2D, they are different in the sense that
+GCD coordinates are associated with WGS84, whereas Simplex coordinates are associated
+with a domain that is a triangle.
+They have a `component` array which indicates which octant each point is in, for those domains that use them.
+The components are passed as metadata for those domains that don't need them - but can be then used by later projections
+as a reliable octant indicator.
+"""
 import numpy as np
 
 
@@ -19,29 +28,74 @@ class Points:
         self.domain = domain  # This is the composite domain, if the
         if components is not None:
             components = np.asarray(components)
-            if components.ndim == 1 and components.shape[0] == 3:
+            if components.ndim == 1:
+                if components.shape[0] != 3:
+                    components = self.invert_octant_ids(components)
                 # Broadcast single 3-element tuple to match coords
-                components = np.broadcast_to(components, (self.coords.shape[0], 3))
+                else:
+                    components = np.broadcast_to(components, (self.coords.shape[0], 3))
             elif components.shape != (self.coords.shape[0], 3):
                 raise ValueError(
                     f"Invalid component shape: expected {(self.coords.shape[0], 3)} or (3,), got {components.shape}")
         self.components = components
+        if self.components is None and self.coords.shape[1] == 3:
+            self.binning()
         self.samples = samples
+
+    def binning(self, sig: tuple = None):
+        """Return points with domain set by composite set_domain"""
+        # caller('Points: binning')
+        if self.components is None:
+            c = self.coords.copy()  # don't mess with the coords.
+            c[c == 0] = np.finfo(self.coords.dtype).tiny
+            self.components = np.atleast_2d(np.sign(c).astype(np.int8))
+        return self
 
     @classmethod
     def calc_octant_ids(cls, components):
         """Definitive utility to calculate octant IDs from sign components."""
         return ((components[:, 2] < 0) << 2) | \
                ((components[:, 1] < 0) << 1) | \
-               ((components[:, 0] < 0) << 0)
+               ((components[:, 0] < 0) << 0).astype(np.uint8)
+
+    @classmethod
+    def invert_octant_ids(cls, octants_):
+        """
+        Given octant IDs (0..7), return array of components
+        """
+        octants = np.asarray(octants_, dtype=np.uint8)
+        return 1 - 2 * np.stack([
+            (octants >> 0) & 1,  # X
+            (octants >> 1) & 1,  # Y
+            (octants >> 2) & 1   # Z
+        ], axis=-1).astype(np.int8)
+        # return signs.astype(np.int8)  # Extract bits and map {0,1} → {1,-1} using 1 - 2*b
+
+    # @classmethod
+    # def mode(self, cmp):
+    #     """
+    #     :param cmp:
+    #     :return mode based on component.
+    #     """
+    #     side = self.calc_octant_ids(cmp).astype(np.uint8)
+    #     bits = np.bitwise_count(side)
+    #     return np.array(bits % 2, dtype=np.uint8)
+    @classmethod
+    def class_mode(cls, cmp):
+        """Given array of components, return octant IDs and mode."""
+        cmp = np.atleast_2d(cmp)
+        side = cls.calc_octant_ids(cmp).astype(np.uint8)
+        bits = np.bitwise_count(side)
+        mode = np.ascontiguousarray(bits % 2, dtype=np.uint8)
+        side = np.ascontiguousarray(side, dtype=np.uint8)
+        return side, mode
 
     def cm(self):
-        """Shortened variation of component with mode."""
+        """
+            Shortened variation of component with mode.
+        """
         if self.components is not None:
-            side = self.calc_octant_ids(self.components)
-            bits = np.bitwise_count(side)
-            mode = np.array(bits % 2, dtype=np.uint8)
-            return side, mode
+            return self.class_mode(self.components)
         return None, None
 
     def __getitem__(self, idx):
@@ -50,54 +104,49 @@ class Points:
                 f"2D indexing like Points[{idx}] is not supported.\n"
                 "→ Use eg `pts.coords[...]` instead if you need NumPy-style slicing."
             )
-        coords = self.coords[idx]
+        coords = np.array([self.coords[idx]])
         domain = self.domain
-        components = self.components[idx] if self.components is not None and idx < len(self.components) else None
-        samples = self.samples[idx] if self.samples is not None and idx < len(self.samples) else None
+        components = np.array([self.components[idx]]) if self.components is not None and idx < len(self.components) else None
+        samples = np.array([self.samples[idx]]) if self.samples is not None and idx < len(self.samples) else None
         return Points(coords, domain, components, samples)
 
     def __len__(self):
         return len(self.coords)
 
+    # def _scalar(self, name, format_spec, idx=0):
+    #     pt = np.atleast_2d(self.coords)[idx]
+    #     cp = np.atleast_2d(self.components)[idx]
+    #     dom = self.domain
+    #     composite = dom.components[tuple(cp)] if dom is not None and cp is not None else None
+    #     if name not in dom.address_formats:
+    #         return self.coords.__format__(format_spec)
+    #     formatter = dom.address_formats[name]
+    #     return formatter.format(pt, composite, format_spec)
+
     def __format__(self, format_spec):
         """Allow f-string formatting."""
         if self.coords is None or len(self.coords) == 0:
             return ''
-
         if self.domain is None:
             return self.coords.__format__(format_spec)
         # Identify the format and subtype or length.
         main_sub = format_spec.split('.')
         name = main_sub[0]
         sub = main_sub[1] if len(main_sub) > 1 else ''
-        # Handle formatting a single row or multiple
-        is_scalar = self.coords.ndim == 1 or self.coords.shape[0] == 1
-        if is_scalar:
-            pt = self.coords[0] if self.coords is not None and self.coords.shape[0] == 1 else self.coords
-            cp = self.components[0] if self.components is not None and self.components.shape[0] == 1 else self.components
-            dom = self.domain if self.components is None else self.domain.components[tuple(cp)]
-            if name not in dom.address_formats:
-                return self.coords.__format__(format_spec)
-            formatter = dom.address_formats[name]
-            return formatter.format(self, dom, sub)
-        else:
-            out = []
-            for i, coord in enumerate(self.coords):
-                dom = self.domain
-                if self.components is not None:
-                    dom = self.domain.components[tuple(self.components[i])]
-                if name not in dom.address_formats:
-                    out.append(coord.__format__(format_spec))
-                else:
-                    formatter = dom.address_formats[name]
-                    out.append(formatter.format(coord, dom, sub))
-            if len(out) == 1:
-                return out[0]
-            return '\n'.join(out)
+        if name not in self.domain.address_formats:
+            formatter = self.domain.__getattribute__(name)
+            if formatter is None:
+                return self.coords[0].__format__(format_spec)
+            else:
+                return formatter.format(self, None, sub)
+        formatter = self.domain.address_formats[name]
+        return formatter.format(self, None, sub)
 
     def __repr__(self):
-        keys = ', '.join(self.samples.keys())
-        return f"Points(coords={self.coords.shape}, samples=[{keys}])"
+        cmp_str = f'{self.components.shape}' if self.components is not None else 'None'
+        smp_str = f'{self.samples.shape}' if self.samples is not None else 'None'
+        pts_str = f'{self.coords.shape}' if self.coords is not None else 'None'
+        return f"Points(coords={pts_str}, domain={self.domain}, components={cmp_str}, samples={smp_str})"
 
     def copy(self):
         """Copy points"""

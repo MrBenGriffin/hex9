@@ -1,8 +1,15 @@
-"""
-Part of the H9 project
-"""
-from functools import lru_cache
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
 
+"""
+Composite Domains are a case where multiple domains are managed as a single group.
+In this case we can have 8 octant-domains for the unit octahedron.
+
+Component Domains are domains that belong to a composite domain.
+"""
+
+from functools import cache
 import numpy as np
 from abc import abstractmethod, ABC
 from numpy.typing import NDArray
@@ -19,16 +26,15 @@ class CompositeDomain(Domain, ABC):
 
     def __init__(self, registrar, name: str, axes):
         super().__init__(registrar, name, axes)
-        self.no_zero = 1e-200
+        self.eps = 1e-22
         self.components = {}  # class static
 
-    def binning(self, pts: Points, sig: tuple = None):
-        """Return points with domain set by composite set_domain. This can be overridden"""
-        pts.coords = np.atleast_2d(pts.coords)
-        pts.components = np.atleast_2d(np.sign(pts.coords + self.no_zero).astype(np.int8))
-        return pts
+    @classmethod
+    def binning(cls, pts: Points, sig: tuple = None):
+        """Identify the components of the points"""
+        return pts.binning(sig)
 
-    @lru_cache(maxsize=None)
+    @cache
     def handlers(self):
         """
         Return the composite handlers in 'cm' order (see Points)
@@ -40,14 +46,19 @@ class CompositeDomain(Domain, ABC):
             octant_id = Points.calc_octant_ids(components_arr)[0]
             _handlers[octant_id] = handler_instance
         return _handlers
-        # keys = list(self.components.keys())
-        # pts = Points(coords=np.zeros([8, self.axes]), domain=self, components=np.array(keys))
-        # order, _ = pts.cm()
-        # h = [r for r in range(len(order))]
-        # for i, o in enumerate(order):
-        #     h[o] = self.components[keys[i]]
-        # _handlers = np.array(h)
-        # return _handlers
+
+    @cache
+    def oc_c2(self):
+        """
+        Return array of c2 values in 'c2' order (see Points)
+        """
+        data = np.empty((8, 3), dtype='<U3')
+        for sign_tuple, handler_instance in self.components.items():
+            components_arr = np.array([sign_tuple])
+            octant_id = Points.calc_octant_ids(components_arr)[0]
+            data[octant_id] = handler_instance.oc
+        return data
+
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
@@ -73,10 +84,21 @@ class CompositeDomain(Domain, ABC):
 
 
 class ComponentDomain(Domain):
-    @abstractmethod
-    def sig(self, ) -> tuple:
-        """Return the composite signature that this component handles."""
-        ...
+
+    def __init__(self, registrar, name: str, dom, mode, sign: tuple, axes):
+        super().__init__(registrar, name, axes)
+        if mode is None:
+            _, mode_a = Points.class_mode([sign])
+            mode = mode_a[0]
+        elif isinstance(mode, str):
+            mode = 0 if mode == 'V' else 1
+        self.dom = dom
+        self.mode = mode
+        self.mode_str = 'V' if mode == 0 else 'Λ'
+        self._sign = sign
+
+    def sig(self) -> tuple:
+        return self._sign
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
@@ -86,6 +108,8 @@ class ComponentDomain(Domain):
     def adopt(self, pta: NDArray, only_valid=True):
         """
         Take an array and adopt as this domain.
+        This is almost always not the right method to use.
+        Far better to bin and then instantiate Points correctly.
         """
         if only_valid:
             good = self.where_valid(pta)

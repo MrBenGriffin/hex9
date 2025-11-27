@@ -1,5 +1,10 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+Projection is abstract base class for managing Points conversions.
+For general use, this is not publicly referred to - as projections are normally managed by the Registrar.
 """
 from abc import ABC
 from numpy.typing import NDArray

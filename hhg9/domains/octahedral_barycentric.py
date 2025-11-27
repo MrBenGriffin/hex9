@@ -1,17 +1,17 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+This is 'b_oct' barycentric xy equilateral.
 """
-from copy import copy
 
 import numpy as np
 from numpy.typing import NDArray
-
-from hhg9 import Step
-from hhg9.base import CompositeDomain, ComponentDomain, H9Engine
-from hhg9.base.h9_engine import Style
+from hhg9.base.composite import CompositeDomain, ComponentDomain
 from hhg9.base.point_format import PointFormat
-from hhg9.domains import OctahedralCartesian
 from hhg9.projections import OctantBary
+from hhg9.h9 import H9K, in_scope
 
 
 class OctantBarycentric(ComponentDomain):
@@ -21,32 +21,36 @@ class OctantBarycentric(ComponentDomain):
     """
 
     def __init__(self, registrar, dom, name: str, sign, cc: tuple):
-        super().__init__(registrar, name, 2)
-        self.dom = dom
-        self.sign = sign
+        super().__init__(registrar, name, dom,  cc[2], sign, 2)
         self.th = (cc[0] % 6) * np.pi / 3.
         self.tr = cc[1]
-        self.mode = cc[2]   # 'V' if sum(np.array(self.sign)+1)/2 % 2 == 1 else 'Λ'
         self.geo = {k: v for k, v in zip(self.tr, cc[3])}  # in c1 (orientation) order.
         self.reg = cc[4]
-        self.mo = cc[5]
+        # self.mo = cc[5]
         self._oc = cc[3]
-        self.oc = np.array([cc[3][i]+self.mode for i in range(3)], dtype='U3')
+        self.oc = np.array([cc[3][i]+self.mode_str for i in range(3)], dtype='U3')
 
     def h9_add(self, h9m):
+        """compose addresses"""
         for k, v in self.geo.items():
-            key = f'{v}{self.mode}'
-            h9m[key] = (k, self.tr, self.sign, self.name)
-
-    def sig(self) -> tuple:
-        return self.sign
+            key = f'{v}{self.mode_str}'
+            c2 = np.where(self.oc == key)[0][0]
+            h9m[key] = {
+                'mode': self.mode,
+                'mode_str': self.mode_str,
+                'name': self.name,
+                'tr': self.tr,
+                'component': self._sign,
+                'id': self.dom.sign_to_id[self._sign],
+                'c2': int(c2)
+            }
 
     def valid(self, pts: NDArray) -> NDArray:
         """
         Return an array of bools according to the validity criterion
         :param pts: set of 2d Euclidean points
         """
-        return H9Engine.in_scope(H9Engine.R3 * pts[..., 0], pts[..., 1], self.mode)
+        return in_scope(H9K.radical.R3 * pts[..., 0], pts[..., 1], self.mode)
 
 
 class OctahedralBarycentric(CompositeDomain):
@@ -54,18 +58,16 @@ class OctahedralBarycentric(CompositeDomain):
     Basic octahedral-2d properties and methods.
     """
 
-    def __init__(self, registrar, o: OctahedralCartesian):
+    def __init__(self, registrar):
+        o = registrar.domain('c_oct')  # OctahedralCartesian
         super().__init__(registrar, 'b_oct', 2)
         self.sides = {}
         self.projs = {}
-        self.signs = {}  # o.signs  # These are used to tie the projection.
+        self.signs = {}  # c_oct.signs  # These are used to tie the projection.
         self.h9map = {}
         self.components = {}
-        self.h9e = H9Engine()
-        # self.octant_index = {
-        #     (+1, +1, +1): 0, (-1, +1, +1): 1, (+1, -1, +1): 2, (-1, -1, +1): 3,
-        #     (+1, +1, -1): 4, (-1, +1, -1): 5, (+1, -1, -1): 6, (-1, -1, -1): 7
-        # }
+        self.h9 = registrar.format('h9')
+        self.h9.composite = self
         self.octant_props = np.array([
             ('047', 'V'),  # index 0
             ('085', 'Λ'),  # index 1
@@ -79,19 +81,35 @@ class OctahedralBarycentric(CompositeDomain):
         # Theta is to ensure that each octant has a pole at its apex.
         # The pole is C2:0
         # _components = {}
+        props = {
+            # Octahedral Triangle Identities differ. 0x16, 0x49
+            # AP EW  NS    θ   loc    V   c2 hexagon region  region mo o_id, c2 ngh  hex_id
+            (+1, +1, +1): (2, '047', 'V', ('EA', 'NA', 'NE'), 0x49, 0, 0, (4, 2, 1), (0, 4, 5)),     # 0 'NEA' N:5, E:8, A: 0
+            (-1, +1, +1): (5, '085', 'Λ', ('EP', 'NE', 'NP'), 0x16, 1, 1, (5, 0, 3), (1, 5, 7)),     # 1 'NEP' N:4, E:7, P: 0
+            (+1, -1, +1): (5, '085', 'Λ', ('WA', 'NW', 'NA'), 0x16, 1, 2, (6, 3, 0), (2, 6, 4)),     # 2 'NWA'
+            (-1, -1, +1): (2, '047', 'V', ('WP', 'NP', 'NW'), 0x49, 0, 3, (7, 1, 2), (3, 7, 6)),     # 3 'NWP' N:5, W:8, P: 0
+            (+1, +1, -1): (5, '085', 'Λ', ('EA', 'SE', 'SA'), 0x16, 1, 4, (0, 5, 6), (0, 8, 10)),    # 4 'SEA' S:4, E:7, A: 0
+            (-1, +1, -1): (2, '047', 'V', ('EP', 'SP', 'SE'), 0x49, 0, 5, (1, 7, 4), (1, 9, 8)),     # 5 'SEP' S:5, E:8, P: 0
+            (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW'), 0x49, 0, 6, (2, 4, 7), (2, 10, 11)),    # 6 'SWA' S:5, W:8, A: 0
+            (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'), 0x16, 1, 7, (3, 6, 5), (3, 11, 9))      # 7 'SWP' S:4, W:7, P: 0
+        }
+        self.props = props
+        self.sign_to_id = {sign: row[6] for sign, row in props.items()}
+        # --- Derived lookups by face-id (avoid mixing region codes like 0x49 with face ids) ---
+
+        self.props_by_id = {}
+        self.edges_by_id = np.empty((8, 3), dtype='<U2')
+        self.l0hex_by_id = np.empty((8, 3), dtype=np.uint8)
+        self.signs_by_id = {}
+
+        for sign, row in props.items():
+            face_id = row[6]
+            self.props_by_id[face_id] = (sign, row)
+            self.edges_by_id[face_id] = np.array(row[3], dtype='<U2')
+            self.signs_by_id[face_id] = sign
+            self.l0hex_by_id[face_id] = np.array(row[8], dtype=np.uint8)
+
         for sign, face in o.signs.items():
-            props = {
-                # Octahedral Triangle Identities differ. 0x16, 0x49
-                # AP EW  NS    θ   loc    V   - loc is indicative only, for root hex.
-                (+1, +1, +1): (2, '047', 'V', ('EA', 'NA', 'NE'), 0x49, 0),  # 0 'NEA' N:5, E:8, A: 0
-                (-1, +1, +1): (5, '085', 'Λ', ('EP', 'NE', 'NP'), 0x16, 1),  # 1 'NEP' N:4, E:7, P: 0
-                (+1, -1, +1): (5, '085', 'Λ', ('WA', 'NA', 'NW'), 0x16, 1),  # 2 'NWA' N:4, W:7, A: 0
-                (-1, -1, +1): (2, '047', 'V', ('WP', 'NP', 'NW'), 0x49, 0),  # 3 'NWP' N:5, W:8, P: 0
-                (+1, +1, -1): (5, '085', 'Λ', ('EA', 'SE', 'SA'), 0x16, 1),  # 4 'SEA' S:4, E:7, A: 0
-                (-1, +1, -1): (2, '047', 'V', ('EP', 'SP', 'SE'), 0x49, 0),  # 5 'SEP' S:5, E:8, P: 0
-                (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW'), 0x49, 0),  # 6 'SWA' S:5, W:8, A: 0
-                (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'), 0x16, 1)   # 7 'SWP' S:4, W:7, P: 0
-            }
             b_sig = f'{self.name}:{face}'
             o_sig = o.sides[face].name
             self.sides[face] = OctantBarycentric(registrar, self, b_sig, sign, props[sign])
@@ -100,16 +118,71 @@ class OctahedralBarycentric(CompositeDomain):
             self.signs[sign] = face
             self.components[sign] = self.sides[face]
 
+        self.prop_by_id = np.zeros((8,), dtype=np.uint8)
+
+        self.oid_mo = np.zeros((8,), dtype=np.uint8)
+        for t in props.values():  # given an octant id, return the mode.
+            mode_, idx = t[5], t[6]
+            self.oid_mo[idx] = mode_
+
+        self.oid_cp = np.zeros((8, 3), dtype=np.int8)
+        for octant, t in props.items():  # given an octant id, return the mode.
+            idx = t[6]
+            self.oid_cp[idx] = list(octant)
+
+        self.oid_nb = np.zeros((8, 3), dtype=np.int8)
+        for t in props.values():  # given an octant id, and c1 return the neigbour.
+            idx, c2s = t[6], np.array(list(t[7]))
+            self.oid_nb[idx] = c2s
+
+        # --- Edge-level preserve/swap and per-(face,c1) mapping codes ---
+        # Preserve edges by LABEL (not by slot)
+        preserve_edges = {'EA', 'EP', 'NA', 'WA', 'WP', 'SA'}  # axial edges preserve; diagonals swap
+
+        # Boolean preserve matrix: True where the edge label is in preserve_edges
+        self.nb_c2p = np.zeros((8, 3), dtype=bool)
+        for f in range(8):
+            for i, e in enumerate(self.edges_by_id[f]):
+                self.nb_c2p[f, i] = (e in preserve_edges)
+
+        # Mapping code per (face,c1): 0=id for PRESERVE; for SWAP use 1+ci to pick the reflect axis
+        # codes: 0=id, 1=reflect across C1=0 axis (horizontal), 2=reflect across C1=1 axis (y=ẋ), 3=reflect across C1=2 axis (y=-ẋ)
+        self.nb_c2map = np.zeros((8, 3), dtype=np.uint8)
+        swap_code = {
+            # reflect across C1=1 axis (y = ẋ)
+            'NP': 2, 'SE': 2, 'SP': 2,
+            # reflect across C1=2 axis (y = −ẋ)
+            'NE': 3, 'NW': 3, 'SW': 3,
+        }
+        for f in range(8):
+            for ci, e in enumerate(self.edges_by_id[f]):
+                if self.nb_c2p[f, ci]:
+                    self.nb_c2map[f, ci] = 0
+                else:
+                    try:
+                        self.nb_c2map[f, ci] = swap_code[e]
+                    except KeyError as ke:
+                        raise KeyError(f"Unknown swap edge label '{e}'. Ensure it is in swap_code or preserve_edges.") from ke
+
+        # sanity: all 12 octahedral edge labels must be covered
+        # edge_array = self.edges_by_id.reshape(-1)
+        all_edge_labels = set(self.edges_by_id.reshape(-1))
+        covered = preserve_edges.union(swap_code.keys())
+        missing = all_edge_labels - covered
+        assert not missing, f"Edge labels missing mapping: {sorted(missing)}"
+
         # Define base barycentric transformation matrices
         trans = np.array([[-1, 0], [1, -2], [1, 1]])  # Prototype [1,1,1]: Proj Z using √2, √6, √3 resp.
         r90 = np.array([(0, 1), (-1, 0)])  # 90-degree rotation matrix
-        mirror_y_neg_x = np.array([(0, 1), (1, 0)])  # Mirror along y = -x
+        mirror_y_neg_x = np.array([(0, 1), (1, 0)])  # Mirror along y = x
+
         # Compute rotation matrices
         north, south = trans, trans @ mirror_y_neg_x  # South is the mirror of North
         # Loop in 90º rotation order and compute projection matrices for N and S.
         scale_factors = np.sqrt([2, 6, 3])[:, np.newaxis]
-
+        self.rot90_idx = np.zeros(8, dtype=np.uint8)
         # These are set in order of rotation, starting with NEA
+        rot = 0
         sigs = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
         for sig in sigs:
             n_sign = tuple([*sig, 1])
@@ -118,15 +191,17 @@ class OctahedralBarycentric(CompositeDomain):
             s_face = self.signs[s_sign]
             self.projs[n_face].matrix = np.column_stack([north, np.ones(3)]) / scale_factors
             self.projs[s_face].matrix = np.column_stack([south, -np.ones(3)]) / scale_factors
+            n_id = self.sign_to_id[n_sign]
+            s_id = self.sign_to_id[s_sign]
+            self.rot90_idx[n_id] = rot
+            self.rot90_idx[s_id] = rot
             north = north @ r90
             south = south @ r90
-        # self._validate_matrices()
+            rot = (rot + 1) % 4
 
     def decode(self, addr):
         """Decode octahedral coordinates into a point"""
-        if addr[:3] in self.h9map.keys():
-            rec = self.h9map[addr[:3]]
-            return self.h9e.oct_decode(f'{rec[0]}{addr[3:]}', rec[1])
+        return self.h9.revert(addr)
 
     def _validate_matrices(self):
         valid = True
@@ -163,89 +238,16 @@ class OctahedralBarycentric(CompositeDomain):
         Return an array of bools according to the validity criterion
         :param pts: set of 2d Euclidean points
         """
-        raise NotImplementedError
+        from hhg9 import Points
+        if isinstance(pts, Points):
+            _, mode = pts.cm()
+            x, y = pts.coords[:, 0], pts.coords[:, 1]
+            return in_scope(H9K.radical.R3 * x, y, mode)
+        else:
+            raise TypeError('pts must be a Points object')
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
         super().register_format(af)
         for side in self.sides:
             self.sides[side].register_format(af)
-
-    # def canonical(self, address):
-    #     """
-    #     Convert a potentially non-canonical hex address into its canonical form,
-    #     by reconstructing coordinates and re-encoding from the top down.
-    #     """
-    #     # Reconstruct (x, y), signs from address
-    #     pt = self.decode(address)  # -> Point object, with coords + signs
-    #     rec = self.h9map[address[:3]][1]
-    #     result = self.h9e.oct_encode(pt, rec)
-    #     return result
-
-    def uint64(self, pts, depth=13):
-        """
-        Convert Point object to uint64 hierarchical address.
-        """
-        bits = ((- (pts.components - 1)) >> 1).astype(np.uint8)
-        oct_n = (bits[:, 0] << 2) | (bits[:, 1] << 1) | bits[:, 2]
-        loc_s = self.octant_props[oct_n]
-        count = len(pts.coords)
-        result = np.zeros(count, dtype=np.uint64)
-        for i, ((px, py), oi, (loc, mode)) in enumerate(zip(pts.coords, oct_n, loc_s)):
-            step = Step(loc, px, py, Style.U64)
-            step, _ = self.h9e.encode_step(step)
-            enc = (oi << 4 | step.c1) << 56  # First step is extracted solely to fetch c1 and init position.
-            bits = 52
-            d_acc = depth - 1
-            while bits >= 4 and d_acc > 0:
-                last = (d_acc == 1 or bits == 4)
-                step, addr = self.h9e.encode_step(step, last)
-                enc |= addr << bits
-                bits -= 4
-                d_acc -= 1
-            enc |= ((step.tm << 3) | step.tr) << bits
-            bits -= 4
-            while bits >= 0:
-                enc |= 15 << bits
-                bits -= 4
-            result[i] = enc
-        return result
-
-
-if __name__ == '__main__':
-    from hhg9 import Registrar, H9Engine, Step, Points
-    from hhg9.domains import OctahedralCartesian, OctahedralBarycentric
-    from hhg9.formats import OctahedralH9
-    reg = Registrar()  # Manage Domains & Projections
-    c_oct = OctahedralCartesian(reg)  # Cartesian Octahedron (xyz)
-    b_oct = OctahedralBarycentric(reg, c_oct)  # 2d Flat for addressing.
-    h9 = OctahedralH9()  # formatter.
-    b_oct.register_format(h9)
-    greenwich = Points(
-        np.array([
-            [0.3041404, -0.28970996], [0.3041376, 0.28970996],
-        ]), b_oct,
-        np.array([(+1, +1, +1), (+1, -1, +1)])
-    )
-    # oc, mo = greenwich.cm()
-    g_code = f'{greenwich:h9.12}'
-    club = Points(
-        np.array([[0.30298694022127, 0.2895875423442]]), b_oct,
-        np.array([(+1, -1, +1)])
-    )
-
-    c_club = f'{club:h9}'
-    e_code = b_oct.decode(c_club)
-    print(club)
-    # First is NAV02676076333V2 -> 'NAV02676076333Λ2'
-    # dw = b_oct.canonical('NAV02676076333Λ2')
-    # de = b_oct.canonical('NWΛ01686086336V1')
-    # print(g_code)
-    # print(dw, de)
-
-    club = Points(np.array([[0.30298694, 0.28958754]]), b_oct, np.array([(+1, -1, +1)]))
-
-    for depth in range(2, 16):
-        u644 = b_oct.uint64(club, depth)
-        hx = f'{u644[0]:016X}'
-        print(depth, hx)
