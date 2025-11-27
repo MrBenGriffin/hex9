@@ -26,5 +26,5 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
-package-dir = {"" = "."}
+where = ["hhg9"]
+package-dir = {"" = "hhg9"}
