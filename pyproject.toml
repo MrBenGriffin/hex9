@@ -25,11 +25,18 @@ classifiers = [
 ]
 
 dependencies = [
-  "numpy>=1.24.0",
+  "numpy>=2.0.0",
   "scipy>=1.11.0",
   "pyproj>=3.0.0",
   "geographiclib>=2.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/MrBenGriffin/hex9"
+Documentation = "https://github.com/MrBenGriffin/hex9/blob/main/README.md"
+Repository = "https://github.com/MrBenGriffin/hex9"
+Issues = "https://github.com/MrBenGriffin/hex9/issues"
+Changelog = "https://github.com/MrBenGriffin/hex9/releases"
 
 [project.optional-dependencies]
 dev = [
