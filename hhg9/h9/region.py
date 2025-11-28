@@ -544,57 +544,6 @@ def regions_xy(uri_address, ctx: H9Context = None) -> NDArray[np.float64]:
     return np.stack([x, y, initial_mode], axis=-1)
 
 
-def region_neighbours_v0(addresses, ctx: H9Context = None):
-    """
-    Given a region list/hierarchy,
-    the 'P' -3 ante-penultimate region is the operating mode
-    the 'I' -2 penultimate region as the point of interest, (it's mode and...)
-    the 'C' -1 terminal region is the C2 determinate.
-
-    For example [0x16 0x2A 0x26]
-                   P    I    C
-    The neighbour will be of I:42 (Not 38!)
-    P: 0x16 will provide the supercell mode for the POI. (1)
-    I: 0x2A is the POI - we will want it's neighbour.
-    I.m = 0x2A mode is used with C to determine C2.     (1)
-    C: mcc2[I.m, C] determines the C2 of the POI.       (2)
-    => 0x2B (same parent): it's C2 is the new terminal.
-    """
-    ctx = ctx or default_ctx()
-    h9k, h9cl, h9c, h9r = ctx.k, ctx.cl, ctx.c, ctx.r
-
-    count, layers = addresses.shape
-    nb_array = addresses.copy()             # A neighbour may just be a single switch.
-    # cascading = np.ones(count, dtype=bool)  # Track all the addresses we are managing.
-    pmo = h9c.mode[addresses[:, -3]]        # This is the P mode value
-    cur = addresses[:, -2]                  # This is I - point of interest.
-    imo = h9c.mode[cur]                     # This is I.m for MCC2
-    c2 = h9r.mcc2[imo, addresses[:, -1]]    # C2 determined by terminal.
-    nb_m = h9r.cmc2n[cur, pmo, c2]           # nbm are active neighbours of poi and their parent_mode
-    nbr = nb_m[:, 0]
-    pmn = nb_m[:, 1]
-    nbm = h9c.mode[nbr]
-    trm = h9r.child[nbm, c2, 2]
-    nb_array[:, -1] = trm   # New terminating region (determines related c2 of neighbour)
-    nb_array[:, -2] = nbr   # New neighbour
-    cascading = (pmn != pmo)  # test to see if we still need to climb this tree.
-    for poi in range(layers - 3, -1, -1):   # We have done -2 (and fixed terminal).
-        if not np.any(cascading):           # Stop if there's nothing left to do.
-            break
-        active = np.where(cascading)[0]     # indices (in a tuple so rx)
-        c2a = c2[active]                    # want the active c2
-        cur = addresses[active, poi]        # want the active addresses
-        par = addresses[active, poi - 1]    # and the active parent.
-        pmo = h9c.mode[par]                 # pmo is mode of active parents.
-        nbm = h9r.cmc2n[cur, pmo, c2a]      # nbm are active neighbours of poi and their parent_mode
-        nb_array[active, poi] = nbm[:, 0]   # update the neighbours.
-        cascading[active] = (nbm[:, 1] != pmo)    # update this lot.
-    # Normalise root.
-    nmo = h9c.mode[nb_array[:, 0]]
-    nb_array[:, 0] = h9r.proto[nmo]
-    return nb_array, c2
-
-
 def rn_diagnostic(cur, pmo, c2, nbr, pmn):
     """Diagnostic to check the region neighbours algorithm."""
     same_parent = (pmn == pmo)
@@ -626,93 +575,75 @@ def region_neighbours(addresses, ctx: H9Context = None):
     the 'P' -3 ante-penultimate region is the operating mode
     the 'I' -2 penultimate region as the point of interest, (it's mode and...)
     the 'C' -1 terminal region is the C2 determinate.
-
-    For example [0x16 0x2A 0x26]
-                   P    I    C
-    The neighbour will be of I:42 (Not 38!)
-    P: 0x16 will provide the supercell mode for the POI. (1)
-    I: 0x2A is the POI - we will want it's neighbour.
-    I.m = 0x2A mode is used with C to determine C2.     (1)
-    C: mcc2[I.m, C] determines the C2 of the POI.       (2)
-    => 0x2B (same parent): it's C2 is the new terminal.
-    """
-    ctx = ctx or default_ctx()
-    h9k, h9cl, h9c, h9r = ctx.k, ctx.cl, ctx.c, ctx.r
-
-    count, layers = addresses.shape
-    nb_array = addresses.copy()             # A neighbour may just be a single switch.
-    # cascading = np.ones(count, dtype=bool)  # Track all the addresses we are managing.
-    xl = addresses.shape[1]
-    pmo = h9c.mode[addresses[:, -3 if xl > 2 else -2]]        # This is the P mode value
-    cur = addresses[:, -2]                  # This is I - point of interest.
-    imo = h9c.mode[cur]                     # This is I.m for MCC2
-    c2 = h9r.mcc2[imo, addresses[:, -1]]    # C2 determined by terminal.
-    nb_m = h9r.cmc2n[cur, pmo, c2]          # nbm are active neighbours of poi and their parent_mode
-    nbr = nb_m[:, 0]
-    pmn = nb_m[:, 1]
-    nbm = h9c.mode[nbr]
-    trm = h9r.child[nbm, c2, 2]
-    nb_array[:, -1] = trm   # New terminating region (determines related c2 of neighbour)
-    nb_array[:, -2] = nbr   # New neighbour
-    cascading = (pmn != pmo)  # test to see if we still need to climb this tree.
-    for poi in range(layers - 3, -1, -1):   # We have done -2 (and fixed terminal).
-        if not np.any(cascading):           # Stop if there's nothing left to do.
-            break
-        active = np.where(cascading)[0]     # indices (in a tuple so rx)
-        c2a = c2[active]                    # want the active c2
-        cur = addresses[active, poi]        # want the active addresses
-        par = addresses[active, poi - 1]    # and the active parent.
-        pmo = h9c.mode[par]                 # pmo is mode of active parents.
-        nb_region, nb_parent_mode = h9r.cmc2n[cur, pmo, c2a].T
-        nb_array[active, poi] = nb_region    # update the neighbours.
-        hop = nb_parent_mode != pmo          # update this lot.
-        cascading[active] = hop
-    # Normalise root.
-    nmo = h9c.mode[nb_array[:, 0]]
-    nb_array[:, 0] = h9r.proto[nmo]
-    return nb_array, c2
-
-
-def region_neighbours_v1(addresses, ctx: H9Context = None):
-    """
-    Given a region list/hierarchy,
-    the 'P' -3 ante-penultimate region is the operating mode
-    the 'I' -2 penultimate region as the point of interest, (it's mode and...)
-    the 'C' -1 terminal region is the C2 determinate.
     """
     ctx = ctx or default_ctx()
     h9k, h9cl, h9c, h9r = ctx.k, ctx.cl, ctx.c, ctx.r
 
     count, layers = addresses.shape
     nb_array = addresses.copy()
-    pmo = h9c.mode[addresses[:, -3]]
-    cur = addresses[:, -2]
-    imo = h9c.mode[cur]
-    c2 = h9r.mcc2[imo, addresses[:, -1]]
-    nb_m = h9r.cmc2n[cur, pmo, c2]
+    xl = layers
+
+    # Identify P, I and their modes
+    par_index = -3 if xl > 2 else -2
+    p_region = addresses[:, par_index]      # P
+    cur = addresses[:, -2]                  # I
+    imo = h9c.mode[cur]                     # I.m
+
+    # Base C2 lookup from terminal C
+    term = addresses[:, -1]                 # C
+    c2 = h9r.mcc2[imo, term]                # may be invalid_region
+    bad_val = h9r.invalid_region
+    bad = (c2 == bad_val)
+
+    if np.any(bad):
+        # Geometric fallback for rows where C isn't a recognised C2 child:
+        # choose the C2 group whose member cells are closest (in xy) to C.
+        off_xy = h9c.off_xy                 # (cell_count, 2)
+        for i in np.flatnonzero(bad):
+            mode_i = imo[i]
+            t = term[i]
+            # If even C is the global invalid marker, just give it some default
+            if t == bad_val:
+                c2[i] = 0
+                continue
+            xy_t = off_xy[t]                # (2,)
+            cells_mode = h9c.c2[mode_i]     # shape (3, 3): cell ids per C2 group
+            cand_ids = cells_mode.reshape(-1)
+            d2 = np.sum((off_xy[cand_ids] - xy_t) ** 2, axis=1)
+            best_flat = int(np.argmin(d2))
+            k = cells_mode.shape[1]         # usually 3
+            best_c2 = best_flat // k        # 0,1,2
+            c2[i] = np.uint8(best_c2)
+
+    # Now c2 ∈ {0,1,2} for all rows
+    pmo = h9c.mode[p_region]
+    nb_m = h9r.cmc2n[cur, pmo, c2]          # neighbour + its parent_mode
     nbr = nb_m[:, 0]
     pmn = nb_m[:, 1]
+
     nbm = h9c.mode[nbr]
     trm = h9r.child[nbm, c2, 2]
+
+    # Update terminal and I
     nb_array[:, -1] = trm
     nb_array[:, -2] = nbr
+
+    # Cascade up the hierarchy where parent mode changes
     cascading = (pmn != pmo)
     for poi in range(layers - 3, -1, -1):
         if not np.any(cascading):
             break
         active = np.where(cascading)[0]
         c2a = c2[active]
-        # --- use evolving nb_array, not original addresses ---
-        cur = nb_array[active, poi]
-        par = nb_array[active, poi - 1]
+        cur = addresses[active, poi]
+        par = addresses[active, poi - 1]
         pmo = h9c.mode[par]
         nb_region, nb_parent_mode = h9r.cmc2n[cur, pmo, c2a].T
-        # rn_diagnostic(cur.copy(), pmo.copy(), c2a.copy(), nb_region.copy(), nb_parent_mode.copy())
         nb_array[active, poi] = nb_region
         hop = nb_parent_mode != pmo
         cascading[active] = hop
 
-    # Normalise root.
+    # Normalise root proto
     nmo = h9c.mode[nb_array[:, 0]]
     nb_array[:, 0] = h9r.proto[nmo]
     return nb_array, c2

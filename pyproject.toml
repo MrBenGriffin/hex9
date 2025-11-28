@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hhg9"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Hierarchical hexagonal grid on an octahedral earth projection"
 readme = { file = "README", content-type = "text/markdown" }
 requires-python = ">=3.10"

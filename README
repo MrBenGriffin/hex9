@@ -4,6 +4,13 @@ This is `Hex9` is an **ongoing project** exploring (and developing) a novel
 It is well-suited to population mapping, environmental modeling, heat-mapping,
 hex-binning, and other geospatial analyses.
 
+#### Changelog
+```
+0.1.0a0 Initial Package
+0.1.0a1 Modifying Numpy minimum - bitwise_count dependency.
+        Removed redundant methods in neighbours.
+        hex_layer is stil unreliable
+```
 #### Why hexagonal tiling
 * Hexagonal tiling is unique among regular tilings: all neighbors share an edge.
 * Hexagonal tiling corresponds to optimal circle packing.
