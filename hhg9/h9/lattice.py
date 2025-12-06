@@ -1,126 +1,131 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
-Author: Ben
-base/h9/lattice.py
-`lattice.py` constructs the UV rectilinear lattice **once** in float64 and freezes.
-lattice.py defines the [h,p,d,m] <-> [u,v] luts.
-This module depends upon the H9K constants and the H9CL classifier to generate
-a set of cell barycentres that can be used to fix each of the 42 geometric cells
-of the barycentric domain with an integer (u,v) co-ordinate.
-These may then be collapsed into 12 legal layer **regions**, the 9 cells that belong to
-the up-supercell, the 9 that belong to the down-supercell, and the c2 memberships from
-which we determine the half-hexagons that are central to H9, and from which the hexagons emerge.
+H9 Lattice Construction.
+
+This module constructs the UV rectilinear lattice **once** in float64 and freezes it.
+It acts as the bridge between the mathematical classifier and the discrete grid structure.
+
+**Key Responsibilities:**
+
+1.  **Lattice Generation:** Generates a set of cell barycentres using the H9K constants.
+2.  **Cell Identification:** Fixes each of the 42 geometric cells of the barycentric domain
+    with an integer (u, v) coordinate.
+3.  **Region Collapse:** Collapses these into 12 legal layer **regions**:
+    * 9 cells belonging to the **Up** supercell.
+    * 9 cells belonging to the **Down** supercell.
+    * Shared cells are handled via C2 membership logic.
+4.  **Hexagon Emergence:** Determines the half-hexagons from which the full hexagons emerge.
+
+**The Lattice Map:**
+
+.. code-block:: text
+
+       \\     \\     \\    /     /     /
+     00 \\  01 \\  02 \\03/ 07  / 0b  / 0f
+    _____\\_____\\ ____\\/____ /____ /______
+          \\     \\    /\\    /     /
+        10 \\  11 \\12/16\\17/ 1b  / 1f
+    ________\\_____\\/____\\/____ /_________
+             \\    /\\    /\\    /
+           20 \\21/25\\26/2a\\2b/ 2f
+    ___________\\/____\\/____\\/____________
+               /\\    /\\    /\\
+           30 /34\\35/39\\3a/3e\\ 3f
+    _________/____\\/____\\/____\\__________
+            /     /\\    /\\     \\
+        40 /  44 /48\\49/4d\\ 4e  \\ 4f
+    ______/____ /____\\/____\\ ____\\________
+         /     /     /\\     \\     \\
+     50 / 54  / 58  /5c\\  5d \\  5e \\ 5f
+
+**Coordinate Systems:**
+
+* **(N, P, H, M):** An affine cube-like system (Negative slope, Positive slope, Horizontal, Mode).
+    Constraint: :math:`n - p + h + m = 3` for every valid lattice point.
+* **(U, V):** A rectangular lattice over the plane.
+    * U interval: 1/2 triangle width.
+    * V interval: 1/3 triangle height.
+    * Every barycentre maps to an integer (u, v).
 """
+
 from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
+from typing import Optional
 from .protocols import H9ConstLike, H9ClassifierLike
-
-
-# Define the Cell/Supercell constants, modes, and membership LUTs
-# Decode has several non-geometric cells (04,05,06, etc.) which we need to mask.
-# (1) identify the 42 valid geometric ids.
-# (2) to determine the mode of each geometric cell
-# Because the H-layer is downward, rather than traditional
-# upward, we invert the parity of each address accordingly.
-# (3) identify the Lattice-related U,V indices of each
-# of the 42 geometrically valid cell that determine their triangle-centroids.
-# and generate luts for cell<->uv
-# (3) identify supercell membership for each supercell mode -
-# (this may be done via the _in_up / _in_dn methods) for each geometric cell.
-# (4) identify the in_scope membership - the logical OR of (3) across both modes.
-# (5) Maybe to identify the 3 groups of 3 C2 memberships for each supercell mode.
-#    \     \     \    /     /     /
-#  00 \  01 \  02 \03/ 07  / 0b  / 0f
-# _____\_____\ ____\/____ /____ /______
-#       \     \    /\    /     /
-#     10 \  11 \12/16\17/ 1b  / 1f
-# ________\_____\/____\/____ /_________
-#          \    /\    /\    /
-#        20 \21/25\26/2a\2b/ 2f
-# ___________\/____\/____\/____________
-#            /\    /\    /\
-#        30 /34\35/39\3a/3e\ 3f
-# _________/____\/____\/____\__________
-#         /     /\    /\     \
-#     40 /  44 /48\49/4d\ 4e  \ 4f
-# ______/____ /____\/____\ ____\________
-#      /     /     /\     \     \
-#  50 / 54  / 58  /5c\  5d \  5e \ 5f
-
-# First, define (N,P,H,M) as an affine cube-like coordinate system with one linear constraint over the planar triangular lattice
-# where N is the -ve slope, P the +ve slope, H the horizontal slope thresholds, and M the triangle mode.
-# We can fix (N0,P0,H0,M0)=(1,2,3,1); such that n-p+h+m:=3 for every (n,p,h,m) on the lattice.
-# This N,P,H,M bears strong relation to the compose_luts encode/decode structure and lends itself heavily to the
-# relations derived from the bands of the inequalities as depicted above.
-# A U,V lattice is a rectangular lattice over the same plane, such that the U interval is 1/2 (triangle width),
-# and V is 1/3 the triangle height. This will place every barycentre onto an integer u,v.
-# The purpose here is to identify and place those cells in encode/decode that are valid geometric cells.
-# cell_size = len(decode)
-# u_scp = n_count + p_count
-
-
-# @dataclass(frozen=True, slots=True)
-# class H9Lattice:
-#     """Cell-Lattice Properties"""
-#     # ids: np.ndarray  # cell ids
-#     count: int         # count of cells in classifier.
-#     mode: np.ndarray  # cell mode (0=down, 1=up)
-#     uv: np.array       # uv offset
-#     offsets: np.ndarray  # cell offsets from origin
-#     in_scopes: np.ndarray  # array of in-scope cell ids
-#     is_dn: np.ndarray  # bools indicating if cell is in the down supercell
-#     is_up: np.ndarray  # bools indicating if cell is in the up supercell
-#     downs: np.ndarray  # array of cells in down supercell
-#     ups: np.ndarray  # array of cells in up supercell
 
 
 @dataclass(frozen=True, slots=True)
 class H9Cell:
-    """Cell Properties (derived via H9Lattice)"""
-    count: int  # count of cells in classifier.
-    mode: NDArray[np.uint8]  # cell mode (0=down, 1=up)
-    off_uv: NDArray[np.int8]  # uv co-ordinate. uv ∈ [-9..9]
-    off_xy: NDArray[np.float64]  # metric barycentric co-ordinate (x, y)
-    off_ẋy: NDArray[np.float64]  # metric √3x co-ordinate (ẋ, y)
-    in_scope: NDArray[np.uint8]  # array of in-scope cell ids
+    """
+    Cell Properties (derived via H9Lattice).
+
+    This frozen dataclass holds the pre-computed properties for all cells in the lattice.
+
+    Attributes:
+        count (int): Count of cells in the classifier.
+        mode (NDArray[np.uint8]): Cell mode (0=down, 1=up).
+        off_uv (NDArray[np.int8]): UV coordinates, where :math:`uv \\in [-9..9]`.
+        off_xy (NDArray[np.float64]): Metric barycentric coordinates (x, y).
+        off_ẋy (NDArray[np.float64]): Metric coordinates scaled by :math:`\\sqrt{3}` in x (:math:`\\dot{x}, y`).
+        in_scope (NDArray[np.uint8]): Array of in-scope cell IDs.
+        in_mode (NDArray[bool]): Boolean array indicating mode membership.
+        in_dn (NDArray[bool]): Boolean mask for cells in the **Down** supercell.
+        in_up (NDArray[bool]): Boolean mask for cells in the **Up** supercell.
+        downs (NDArray[np.uint8]): Array of valid cell IDs in the Down supercell.
+        ups (NDArray[np.uint8]): Array of valid cell IDs in the Up supercell.
+        c2 (NDArray[np.uint8]): C2 cluster membership [2, 3, 3] for each mode.
+    """
+    count: int
+    mode: NDArray[np.uint8]
+    off_uv: NDArray[np.int8]
+    off_xy: NDArray[np.float64]
+    off_ẋy: NDArray[np.float64]
+    in_scope: NDArray[np.uint8]
     in_mode: NDArray[bool]
-    in_dn: NDArray[bool]  # (count) bools indicating if cell is in the down supercell
-    in_up: NDArray[bool]  # (count) bools indicating if cell is in the up supercell
-    downs: NDArray[np.uint8]  # array of cells in down supercell
-    ups: NDArray[np.uint8]  # array of cells in up supercell
-    c2: NDArray[np.uint8]  # [2, 3, 3] cells for each mode/c2 cluster
+    in_dn: NDArray[bool]
+    in_up: NDArray[bool]
+    downs: NDArray[np.uint8]
+    ups: NDArray[np.uint8]
+    c2: NDArray[np.uint8]
 
 
-def _c2_groups(cell_ids, offsets, supercell_mode):
+def _c2_groups(cell_ids: NDArray[np.uint8], offsets: NDArray[np.float64], supercell_mode: int) -> NDArray[np.uint8]:
     """
     Split the 9 cells of one supercell into 3 C2 wedges (size 3) by angular sectors.
-    Returns (N,2): [c2 in {0,1,2}, cell_id]
+
+    Args:
+        cell_ids: The list of cell IDs to group.
+        offsets: The offset array to determine positions.
+        supercell_mode: 0 for Down, 1 for Up.
+
+    Returns:
+        NDArray[np.uint8]: Shape (3, 3) containing [c2_index, cell_id].
     """
+    # Hardcoded groups derived from angular sectors for stability
     c2x = [
-        [[0x26, 0x2a, 0x2b], [0x3a, 0x39, 0x49], [0x35, 0x25, 0x21]],  # mode 0
-        [[0x39, 0x3a, 0x3e], [0x25, 0x35, 0x34], [0x2a, 0x26, 0x16]]   # mode 1
+        [[0x26, 0x2a, 0x2b], [0x3a, 0x39, 0x49], [0x35, 0x25, 0x21]],  # mode 0 (Down)
+        [[0x39, 0x3a, 0x3e], [0x25, 0x35, 0x34], [0x2a, 0x26, 0x16]]  # mode 1 (Up)
     ]
     return np.array(c2x[supercell_mode]).astype(np.uint8)
-    # nudge pushes non-collinear cells to align with favoured group.
-    # base aligns labels so C2=0 matches canon: Λ→base=0, V→base=2
-    # nudge, base = (1, 0) if supercell_mode else (-1, 2)
-    # pts = offsets[cell_ids].astype(np.float64)  # (N,2)
-    # theta6 = np.arctan2(pts[:, 1], pts[:, 0]) / (np.pi / 3)  # 60° units, (half-integer)
-    # sector = np.rint(6.5 + theta6).astype(np.int32) % 6  # 30° shift; 6.5 + half-integer -> 0...5
-    # counts = np.bincount(sector, minlength=6)  # find singletons
-    # singleton_mask = counts[sector] == 1  # gather singleton mask
-    # sector[singleton_mask] += nudge  # merge singletons (will % 6 next)
-    # c2 = (((base - sector) % 6) >> 1).astype(np.int8)  # align to C2 canon, %6 and 0..2
-    # vals = np.column_stack((c2, cell_ids.astype(np.int16)))
-    # order = np.lexsort((vals[:, 1], vals[:, 0]))
-    # return vals[order][:, 1].reshape(3, 3)
 
 
-def h9_cell_lattice(h9k: H9ConstLike = None, h9cl: H9ClassifierLike = None) -> H9Cell:
+def h9_cell_lattice(h9k: Optional[H9ConstLike] = None, h9cl: Optional[H9ClassifierLike] = None) -> H9Cell:
     """
-    H9GConst factory method.
-    :return: H9GConst
+    Factory method to construct the H9Cell singleton.
+
+    This function performs the heavy lifting of generating the lattice grid,
+    filtering for valid barycentres, and identifying supercell memberships.
+
+    Args:
+        h9k: Constants bundle (defaults to global H9K).
+        h9cl: Classifier bundle (defaults to global H9CL).
+
+    Returns:
+        H9Cell: The populated and frozen cell lattice object.
     """
     import hhg9.h9.classifier as clf
     if h9k is None:
@@ -161,6 +166,7 @@ def h9_cell_lattice(h9k: H9ConstLike = None, h9cl: H9ClassifierLike = None) -> H
     uvx *= (h9k.Ü, h9k.V)
 
     rx = clf.classify_cell(uvx[:, 0], uvx[:, 1], h9cl)
+
     # Now we need to select a reference barycentre for those regions which have more than 1.
     # Choose a per‑cell reference barycentre: closest to origin
     # Compute squared Euclidean distance in metric space (uvf) to avoid sqrt.
@@ -171,11 +177,11 @@ def h9_cell_lattice(h9k: H9ConstLike = None, h9cl: H9ClassifierLike = None) -> H
     ref_cells = rx[ref_rows]
 
     # These 42 ref_cells are all correctly placed on the grid.
-    # It follows, via, classification that the hex9 cell plane is carved into 42 distinct regions.
+    # It follows, via classification, that the hex9 cell plane is carved into 42 distinct regions.
     # This is the *actual* meaning of life, the universe, and everything. Don't tell the mice.
     ref_uv = uv[ref_rows]
 
-    ref_xy = uvf[ref_rows]  # still in order?
+    ref_xy = uvf[ref_rows]
     ref_ẋy = uvx[ref_rows]
     in_up_bools = clf.in_up(ref_ẋy[:, 0], ref_xy[:, 1], h9cl)
     in_dn_bools = clf.in_down(ref_ẋy[:, 0], ref_xy[:, 1], h9cl)
@@ -220,10 +226,9 @@ def h9_cell_lattice(h9k: H9ConstLike = None, h9cl: H9ClassifierLike = None) -> H
     return H9Cell(cell_size, mode, uv_idx, offs_xy, bary_xy, in_scope, in_mode, in_dns, in_ups, dns, ups, c2)
 
 
-H9C = h9_cell_lattice()
+H9C: H9Cell = h9_cell_lattice()
 
-
-# sanity checks.
+# --- Sanity Checks ---
 # uv indices should be integers in range
 assert np.allclose(H9C.off_uv, H9C.off_uv.astype(int))
 
