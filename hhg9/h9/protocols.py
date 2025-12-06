@@ -1,88 +1,100 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
-Author: Ben
-hhg9/h9/protocols.py
-This defines the contracts of the core objects being defined in h9 files.
+H9 Protocol Definitions.
+
+This module defines the structural contracts (Interfaces) for core objects in the H9 system using Python's `Protocol` mechanism.
+These protocols allow for static type checking and runtime verification via `isinstance`, ensuring that
+different parts of the system (constants, classifiers, addressers) adhere to the expected structure
+without requiring strict inheritance.
+
+**Key Protocols:**
+    * **FundamentalsLike:** Basic math constants.
+    * **H9ConstLike:** The aggregate constants container.
+    * **H9ClassifierLike:** The look-up tables for cell classification.
+    * **H9CellLike & H9RegionLike:** Contracts for grid cell and region properties.
 """
+
 from __future__ import annotations  # PEP 563 (here to support python 3.8–3.10)
 
 from enum import unique, IntEnum
-from typing import Protocol, runtime_checkable  # (runtime_checkable allows isinstance)
+from typing import Protocol, runtime_checkable
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Any
 from numpy.typing import NDArray
 
 
 @unique
 class BaryLoc(IntEnum):
     """
-    Marks various locations of barycentric coordinates.
+    Enumeration for locations of barycentric coordinates relative to a supercell.
     """
-    UDF = 0  # undefined
-    EXT = 1
-    INT = 2
-    EDG = 3
-    VTX = 4
+    UDF = 0  #: Undefined location.
+    EXT = 1  #: External (outside the supercell).
+    INT = 2  #: Internal (strictly inside the supercell).
+    EDG = 3  #: Edge (on the boundary, but not a vertex).
+    VTX = 4  #: Vertex (at a corner of the supercell).
 
 
 @runtime_checkable
 class FundamentalsLike(Protocol):
     """
-    Canonical is found in constants.py
-    Two base radicals: √3, and √2
+    Protocol for fundamental radical constants.
+
+    Canonical implementation found in ``constants.py``.
     """
-    R3: float  # √3
-    W: float   # √2 (W: 'width' of a unit octahedron face)
+    R3: float  #: The square root of 3 (:math:`\sqrt{3}`).
+    W: float  #: The square root of 2 (:math:`\sqrt{2}`), width of a unit octahedron face.
 
 
 @runtime_checkable
 class DerivedLike(Protocol):
     """
-    Canonical is found in constants.py
-    Values derived once from Fundamentals; used across inequalities and transforms."""
-    W: float  # Edge length of the *full* barycentric triangle: √2 (mirrors Fundamentals.W for convenience)
-    H: float  # Height of the supercell triangle: H = W * √3 / 2
-    Ḣ: float  # 1 * Height of child cells: Ḣ = H / 3; used in inequality tests
-    Ẇ: float  # 2 * Height of child cells: Ẇ = 2 * Ḣ; used in inequality tests; alias of ΛC
-    RH: float  # Convenience: √3 / 2 (useful for symmetric transforms)
+    Protocol for derived geometric constants.
+
+    Canonical implementation found in ``constants.py``.
+    """
+    W: float  #: Edge length of the full barycentric triangle (:math:`\sqrt{2}`).
+    H: float  #: Height of the supercell triangle (:math:`H = W \frac{\sqrt{3}}{2}`).
+    Ḣ: float  #: Height of a single child cell (:math:`\dot{H} = H / 3`).
+    Ẇ: float  #: Width parameter for child cells (:math:`\dot{W} = 2\dot{H}`).
+    RH: float  #: Ratio of height to width (:math:`\frac{\sqrt{3}}{2}`).
 
 
 @runtime_checkable
 class LimitsLike(Protocol):
     """
-    Canonical is found in constants.py
-    Horizontal (TR, TL) and Vertical bounds for Λ and V triangles
+    Protocol for supercell boundary limits.
+
+    Canonical implementation found in ``constants.py``.
     """
-    TR: float  # +ve right-hand x-limit in classifier plane:  TR = H / √3 = √2/2 = W/2
-    TL: float  # -ve left-hand  x-limit in classifier plane:  TL = -TR = -√2/2  = -W/2
-    # the following are in barycentric-y order
-    ΛC: float  # mode 1 supercell barycentric ceiling (not apex)! y:  +2·Ḣ
-    VC: float  # mode 0 supercell barycentric ceiling (not apex)! y:  +1·Ḣ
-    # The origin, y=0, is here.                                   y:   0·Ḣ
-    ΛF: float  # mode 1 supercell barycentric floor (not base)!   y:  -1·Ḣ
-    VF: float  # mode 0 supercell barycentric floor (not base)    y:  -2·Ḣ
+    TR: float  #: Positive right-hand x-limit (:math:`+W/2`).
+    TL: float  #: Negative left-hand x-limit (:math:`-W/2`).
+    ΛC: float  #: Mode 1 (Up) ceiling (:math:`y = +2\dot{H}`).
+    VC: float  #: Mode 0 (Down) ceiling (:math:`y = +1\dot{H}`).
+    ΛF: float  #: Mode 1 (Up) floor (:math:`y = -1\dot{H}`).
+    VF: float  #: Mode 0 (Down) floor (:math:`y = -2\dot{H}`).
 
 
 @runtime_checkable
 class LatticeLike(Protocol):
     """
-    Canonical is found in constants.py
-    Rectilinear lattice constants, use multiples of (U,V)
-    as unit multipliers to calculate cell offsets.
-    The barycentre of every equilateral triangle (cell) tiling
-    the plane may then be identified using integer co-ordinates(x,y)
-    such that it's cartesian position is at (x*U,y*V).
-    Not every u,v will be a barycentre, but every barycentre is integer.
+    Protocol for rectilinear lattice steps.
+
+    Canonical implementation found in ``constants.py``.
     """
-    U: float  # horizontal unit: W / 6
-    V: float  # vertical   unit: H / 9
+    U: float  #: Horizontal unit step (:math:`W / 6`).
+    V: float  #: Vertical unit step (:math:`H / 9`).
 
 
 @runtime_checkable
 class H9ConstLike(Protocol):
     """
-    Canonical is found in constants.py
-    H9 Constants
+    Aggregate protocol for all H9 constants.
+
+    Canonical implementation found in ``constants.py``.
     """
     radical: FundamentalsLike
     derived: DerivedLike
@@ -93,97 +105,107 @@ class H9ConstLike(Protocol):
 @runtime_checkable
 class H9ClassifierLike(Protocol):
     """
-    Canonical is found in classifier.py
-    Packed thresholds used by cell classification; precomputed to avoid drift/rebuilds.
+    Protocol for the Barycentric Classifier LUTs.
+
+    Canonical implementation found in ``classifier.py``.
     """
-    h_levels: NDArray[np.float64]  # h_levels: horizontal tiers (y vs constants): [ΛC, VC, 0, ΛF, VF]
-    p_levels: NDArray[np.float64]  # p_levels: positive slope (y - ẋ) vs [+Ẇ, 0, -Ẇ]
-    n_levels: NDArray[np.float64]  # n_levels: negative slope (y + ẋ) vs [-Ẇ, 0, +Ẇ]
-    mode_0_lim: Tuple[float, float]  # (VF barycentric floor, VC barycentric ceiling)
-    mode_1_lim: Tuple[float, float]  # (ΛF barycentric floor, ΛC barycentric ceiling)
-    encode: NDArray[np.uint8]        # shape (6,4,4)
-    decode: NDArray[np.uint8]        # shape (96,3)
-    eps: np.floating
+    h_levels: NDArray[np.float64]  #: Horizontal tiers [ΛC, VC, 0, ΛF, VF].
+    p_levels: NDArray[np.float64]  #: Positive slope tiers [+Ẇ, 0, -Ẇ].
+    n_levels: NDArray[np.float64]  #: Negative slope tiers [-Ẇ, 0, +Ẇ].
+    mode_0_lim: Tuple[float, float]  #: (Floor, Ceiling) for Mode 0.
+    mode_1_lim: Tuple[float, float]  #: (Floor, Ceiling) for Mode 1.
+    encode: NDArray[np.uint8]  #: Encoding LUT shape (6, 4, 4).
+    decode: NDArray[np.uint8]  #: Decoding LUT shape (96, 3).
+    eps: np.floating  #: Machine epsilon for float64.
 
 
 @runtime_checkable
 class H9CellLike(Protocol):
     """
-    Cell properties
-    concerned with the structure of the lattice for barycentric addressing
-    """
-    def __init__(self):
-        self.off_ẋy = None
+    Protocol for Cell Properties within the Lattice.
 
+    Canonical implementation found in ``lattice.py``.
     """
-    Canonical is found in lattice.py
-    Cell Properties
-    """
-    count: int                    # count of cells in classifier.
-    mode: NDArray[np.uint8]       # cell mode (0=down, 1=up)
-    off_uv: NDArray[np.int8]      # uv co-ordinate. uv ∈ [-9..9]
-    off_xy: NDArray[np.float64]   # metric barycentric co-ordinate (x, y)
-    off_ẋy: NDArray[np.float64]   # metric √3x co-ordinate (ẋ, y)
-    in_scope: NDArray[np.uint8]   # array of in-scope cell ids
-    in_mode: NDArray[bool]        # (count) bools indicating if cell is in the mode.
-    in_dn: NDArray[bool]          # (count) bools indicating if cell is in the down supercell
-    in_up: NDArray[bool]          # (count) bools indicating if cell is in the up supercell
-    downs: NDArray[np.uint8]      # array of cells in down supercell
-    ups: NDArray[np.uint8]        # array of cells in up supercell
-    c2: NDArray[np.uint8]         # [2, 3, 3] cells for each mode/c2 cluster
+    off_ẋy: NDArray[np.float64]  #: Metric scaled coordinates (:math:`\dot{x}, y`).
+    count: int  #: Count of cells in classifier.
+    mode: NDArray[np.uint8]  #: Cell mode (0=down, 1=up).
+    off_uv: NDArray[np.int8]  #: Lattice (u, v) coordinates.
+    off_xy: NDArray[np.float64]  #: Metric barycentric coordinates (x, y).
+    in_scope: NDArray[np.uint8]  #: Array of in-scope cell IDs.
+    in_mode: NDArray[bool]  #: Boolean mask: is cell in the specified mode?
+    in_dn: NDArray[bool]  #: Boolean mask: is cell in the Down supercell?
+    in_up: NDArray[bool]  #: Boolean mask: is cell in the Up supercell?
+    downs: NDArray[np.uint8]  #: Array of cells belonging to Down supercell.
+    ups: NDArray[np.uint8]  #: Array of cells belonging to Up supercell.
+    c2: NDArray[np.uint8]  #: C2 cluster ID [2, 3, 3] for each mode.
 
 
 @runtime_checkable
 class H9RegionLike(Protocol):
     """
-    Canonical is found in region.py
-    Region Constants
+    Protocol for Region Constants and transitions.
+
+    Canonical implementation found in ``region.py``.
     """
-    invalid_region: int         # 0x5f might eventually become 0x0f
-    proto: NDArray[np.uint8]    # up/dn as a mode-ordered array. 0/1
-    proto_up: int               # virtual up (0x16 to new proto)
-    proto_dn: int               # virtual dn (0x49 to new proto)
-    ids: NDArray[np.uint8]      # region_ids
-    is_in: NDArray[bool]        # ids length indicating in_scope
-    downs: NDArray[np.uint8]    # array of cells in down supercell
-    ups: NDArray[np.uint8]      # array of cells in up supercell
-    child: NDArray[np.uint8]    # (12,3)  uint8  (child transitions)
-    mcc2: NDArray[np.uint8]     # [super_cell_mode,cell]->c2
-    cmc2n: NDArray[np.uint8]    # [cell,super_cell_mode,c2]->neighbour_cell
-    loc_offs: NDArray[np.uint8]
+    invalid_region: int  #: Marker for invalid regions (e.g., 0x5F).
+    proto: NDArray[np.uint8]  #: Up/Down as a mode-ordered array (0/1).
+    proto_up: int  #: Virtual Up protocol ID.
+    proto_dn: int  #: Virtual Down protocol ID.
+    ids: NDArray[np.uint8]  #: Array of region IDs.
+    is_in: NDArray[bool]  #: Boolean array indicating in-scope status.
+    downs: NDArray[np.uint8]  #: Array of cells in Down supercell.
+    ups: NDArray[np.uint8]  #: Array of cells in Up supercell.
+    child: NDArray[np.uint8]  #: Child transitions (12, 3).
+    mcc2: NDArray[np.uint8]  #: [super_cell_mode, cell] -> c2 mapping.
+    cmc2n: NDArray[np.uint8]  #: [cell, super_cell_mode, c2] -> neighbour_cell mapping.
+    loc_offs: NDArray[np.uint8]  #: Location offsets.
 
 
 @runtime_checkable
 class RegionAddressLike(Protocol):
-    """Convert region-cells to region-ids"""
-    rid2cell: NDArray[np.uint8]    # (R,)
-    cell2rid: NDArray[np.int16]    # (<=256,), -1 means unmapped
-    modes: NDArray[np.uint8]
-    proto: NDArray[np.uint8]
-    r_size: int                     # number of region ids
+    """
+    Protocol for converting between region-cells and region-IDs.
+    """
+    rid2cell: NDArray[np.uint8]  #: Map Region ID -> Cell ID.
+    cell2rid: NDArray[np.int16]  #: Map Cell ID -> Region ID (-1 if unmapped).
+    modes: NDArray[np.uint8]  #: Mode of the regions.
+    proto: NDArray[np.uint8]  #: Protocol array.
+    r_size: int  #: Total number of region IDs.
 
 
 @runtime_checkable
 class AddressPackerLike(Protocol):
-    """Convert region lists to packed addresses"""
-    def encode(self, reg_ids: NDArray[np.uint8], **kwargs) -> NDArray[np.uint64]: ...
-    def decode(self, words: NDArray[np.uint64], **kwargs) -> NDArray[np.uint8]: ...
+    """
+    Protocol for packing/unpacking addresses.
+    """
+
+    def encode(self, reg_ids: NDArray[np.uint8], **kwargs: Any) -> NDArray[np.uint64]:
+        """Encode region IDs into packed 64-bit integers."""
+        ...
+
+    def decode(self, words: NDArray[np.uint64], **kwargs: Any) -> NDArray[np.uint8]:
+        """Decode packed 64-bit integers back into region IDs."""
+        ...
 
 
 @runtime_checkable
 class HexLUTLike(Protocol):
-    """hex/region lookup tables"""
-    hex_oob: int                  # 0x0F (hex out-of-bounds)
-    hex_reg: NDArray[np.uint8]    # (R, R); 0..8 or 0xF for invalid
-    reg_hex: NDArray[np.uint8]    # (R, R); 0..8 or 0xF for invalid
+    """
+    Protocol for Hex/Region lookup tables.
+    """
+    hex_oob: int  #: Out-of-bounds marker (e.g., 0x0F).
+    hex_reg: NDArray[np.uint8]  #: Hex -> Region LUT (size R, R).
+    reg_hex: NDArray[np.uint8]  #: Region -> Hex LUT (size R, R).
 
 
 @runtime_checkable
 class H9PolygonLike(Protocol):
-    """Polygons under Lattice"""
-    hh: NDArray[np.float64]  # half-hex (mode, c2) 4 pts (x,y)
-    hx: NDArray[np.float64]  # hex (mode, c2) 6 pts (x,y)
-    tx: NDArray[np.float64]  # cell (mode, c2, ord) 3 pts (x,y)
-    se: NDArray[np.float64]  # supercell edges (mode) 9 pts (x,y)
-    sv: NDArray[np.float64]  # supercell vertices (mode) 3 pts (x,y)
-    gd: NDArray[np.float64]  # unshared points of a cell excluding (0,0).
+    """
+    Protocol for Polygon shapes defined under the Lattice.
+    """
+    hh: NDArray[np.float64]  #: Half-hex (mode, c2) 4 pts (x, y).
+    hx: NDArray[np.float64]  #: Hexagon (mode, c2) 6 pts (x, y).
+    tx: NDArray[np.float64]  #: Cell triangle (mode, c2, ord) 3 pts (x, y).
+    se: NDArray[np.float64]  #: Supercell edges (mode) 9 pts (x, y).
+    sv: NDArray[np.float64]  #: Supercell vertices (mode) 3 pts (x, y).
+    gd: NDArray[np.float64]  #: Unshared points of a cell excluding (0, 0).
