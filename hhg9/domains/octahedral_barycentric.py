@@ -90,8 +90,8 @@ class OctahedralBarycentric(CompositeDomain):
             (-1, -1, +1): (2, '047', 'V', ('WP', 'NP', 'NW'), 0x49, 0, 3, (7, 1, 2), (3, 7, 6)),     # 3 'NWP' N:5, W:8, P: 0
             (+1, +1, -1): (5, '085', 'Λ', ('EA', 'SE', 'SA'), 0x16, 1, 4, (0, 5, 6), (0, 8, 10)),    # 4 'SEA' S:4, E:7, A: 0
             (-1, +1, -1): (2, '047', 'V', ('EP', 'SP', 'SE'), 0x49, 0, 5, (1, 7, 4), (1, 9, 8)),     # 5 'SEP' S:5, E:8, P: 0
-            (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW'), 0x49, 0, 6, (2, 4, 7), (2, 10, 11)),    # 6 'SWA' S:5, W:8, A: 0
-            (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'), 0x16, 1, 7, (3, 6, 5), (3, 11, 9))      # 7 'SWP' S:4, W:7, P: 0
+            (+1, -1, -1): (2, '047', 'V', ('WA', 'SA', 'SW'), 0x49, 0, 6, (2, 4, 7), (2, 10, 11)),   # 6 'SWA' S:5, W:8, A: 0
+            (-1, -1, -1): (5, '085', 'Λ', ('WP', 'SW', 'SP'), 0x16, 1, 7, (3, 6, 5), (3, 11, 9))     # 7 'SWP' S:4, W:7, P: 0
         }
         self.props = props
         self.sign_to_id = {sign: row[6] for sign, row in props.items()}
@@ -100,14 +100,29 @@ class OctahedralBarycentric(CompositeDomain):
         self.props_by_id = {}
         self.edges_by_id = np.empty((8, 3), dtype='<U2')
         self.l0hex_by_id = np.empty((8, 3), dtype=np.uint8)
+        self.l0hex_back = np.full((12, 2, 2), 0x0F, dtype=np.uint8)
         self.signs_by_id = {}
 
         for sign, row in props.items():
             face_id = row[6]
+            face_mode = row[5]
             self.props_by_id[face_id] = (sign, row)
             self.edges_by_id[face_id] = np.array(row[3], dtype='<U2')
             self.signs_by_id[face_id] = sign
-            self.l0hex_by_id[face_id] = np.array(row[8], dtype=np.uint8)
+            l0_hex = np.array(row[8], dtype=np.uint8)
+            self.l0hex_by_id[face_id] = l0_hex
+            for c2, hx in enumerate(l0_hex):
+                # prev_face, prev_c2 = self.l0hex_back[hx, face_mode]
+                # if prev_face != 0xF:
+                #     print(f'{hx} overwriting values ({prev_face}, {prev_c2}) with ({face_id}, {c2}) in lut is a key error')
+                self.l0hex_back[hx, face_mode] = [face_id, c2]
+
+        for sign, row in props.items():
+            o_id = row[6]
+            o_mode = row[5]
+            l0_hex = np.array(row[8], dtype=np.uint8)
+            for c2, hx in enumerate(l0_hex):
+                self.l0hex_back[hx, o_mode] = [o_id, c2]
 
         for sign, face in o.signs.items():
             b_sig = f'{self.name}:{face}'
