@@ -2,6 +2,8 @@
 Part of the H9 project
 e.g. Domain-specific, but widely reusable put it in domains/
 Core infrastructure (used across points, formats, projections, etc.) → put it in base/
+H9 Subpackage Initialization.
+Order matters here to avoid circular imports.
 """
 
 from .constants import H9Const, H9K
