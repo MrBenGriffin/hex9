@@ -6,10 +6,11 @@ hex-binning, and other geospatial analyses.
 
 #### Changelog
 ```
-0.1.0a0 Initial Package
+0.1.0a2 Improved some documentation; added more licence declr.
 0.1.0a1 Modifying Numpy minimum - bitwise_count dependency.
         Removed redundant methods in neighbours.
-        hex_layer is stil unreliable
+        hex_layer is still unreliable
+0.1.0a0 Initial Package
 ```
 #### Why hexagonal tiling
 * Hexagonal tiling is unique among regular tilings: all neighbors share an edge.
