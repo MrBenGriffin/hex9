@@ -20,9 +20,8 @@ hex-binning, and other geospatial analyses.
     * Needing precomputed databases of fixed points.
     * Requiring additional polygon types (commonly pentagons) for closure
 * **Hex9** presents a *new* approach to the “holy grail” of HHG; It aims to 
-  reduce 
- some of these constraints while remaining early-stage and not yet  
-  production-ready (Summer 2025).
+  reduce  some of these constraints while remaining early-stage and not yet  
+  production-ready (Winter 2025).
 
 ### Why Hex9
 #### Grid-Projection Decoupling
@@ -44,71 +43,106 @@ grid addresses and geodetic coordinates.
 Accuracy is maintained even at extreme resolution: At layer 30, hexagons are 
 on the order of 1µm. Example round-trip accuracy for several landmarks:
 
+#### Addressing
+*Current* Grid address semantics are as follows.
+The Great Pyramid at Giza is identified at 29°58'45.817792004858"N, 31°8'3.457294813097"E
+This can be projected to a (reversible) hex-grid address at any given layer.
+Here it is at layer 36: `0070143470686461861005464283175018506`
+Broken down...
+`0-0701434706864618610054642831750185-06`
+The first digit is the root hexagon at layer 0.  
+This is one of 12 hexagons that cover the earth's surface, so the range of 
+values are 0...B (where A,B = hexagons 10,11 respectively).
+The main body, `07...185` is the sub-hexagons at each respective 
+layer; so as there are 35 of those, along with
+the root hexagon, we know this address is at layer 36.
+`06` - these act as 'metadata tail', and provide the minimum amount of metadata to convert the address back to
+its longitude/latitude. (The calculations for this are found in h9/addressing.py).
+
+There is also a 'key' version of the address.  
+A key is used for identifying which points are within a specific hexagon
+when hex-binning (a main purpose for this sort of grid). In this case, the 'metadata tail' is reduced.
+In this case, the great pyramid is:
+`0070143470686461861005464283175018500`
+Importantly, and despite best efforts,
+the hexagon key of a higher layer cannot be solely derived by chopping the string.
+The c2 identity is an important aspect for decoding ids 6,7,8
+Likewise the octant face mode is very useful.
+For the first 11 layers, the pyramid address key is as follows.
+0:00
+1:002
+2:0072
+3:00704
+4:007012
+5:0070140
+6:00701430
+7:007014344
+8:0070143474
+9:00701434700
+10:007014347064
+
+#### Round-trip errors of <7 nanometres (globally)
+
 **Great Pyramid**
 ```
-29°58'44.985076680004"N, 31°8'3.346883880003"E (Reference Coordinates)
-EAV484520284815335765361106218588821C2 (Grid Address)
-29°58'44.985076680016"N, 31°8'3.346883879965"E (Roundtrip via Grid Address)
-∂1.028579nm delta (Geodesic.DISTANCE)
+29°58'45.817792004858"N, 31°8'3.457294813097"E (Reference Coordinates)
+29°58'45.817792004871"N, 31°8'3.457294813071"E (Roundtrip Coordinates)
+0070143470686461861005464283175018506 (L35 Grid Address)
+∂0.984436nm (roundtrip via GCD<->Hex9 Label) in Geodesic distance (nanometres)
 ```
 
 **Stonehenge**
 ```
-51°10'43.672800075871"N, 1°49'34.031280757836"W (Reference Coordinates)
-NWΛ013572475462870330106251202683087C4 (Grid Address)
-51°10'43.672800075819"N, 1°49'34.031280757874"W (Roundtrip via Grid Address)
+51°10'43.672800075871"N, 1°49'34.283450385600"W (Reference Coordinates)
+51°10'43.672800075845"N, 1°49'34.283450385640"W (Roundtrip via Grid Address)
+4352164061084274326815104253457062812 (L35 Grid Address)
 ∂1.314516nm delta (Geodesic.DISTANCE)
 ```
 
-**Moai on Rapa Nui**    
+**Moai on Rapa Nui**
 ```
 27°7'32.827199567155"S, 109°16'36.740870832014"W (Reference Coordinates)
-SWΛ145666784771136056604063805344505A7 (Grid Address)
-27°7'32.827199567155"S, 109°16'36.740870832014"W (Roundtrip via Grid Address)
-∂0.000000nm  delta (Geodesic.DISTANCE)
+27°7'32.827199567142"S, 109°16'36.740870832014"W (Roundtrip via Grid Address)
+b501888670665528318830382731266380195 (L35 Grid Address)  
+0.352774nm  delta (Geodesic.DISTANCE)
 ```
 
 **North Pole** (edge case)
 ```
 90°0'0.000000000000"N, 0°0'0.000000000000"E (Reference Coordinates)
-NAV333333333333333333333333333333324G3 (Grid Address)
-89°59'59.999999999847"N, 50°11'39.944067845317"E (Roundtrip via Grid Address)
-∂4.761801nm  delta (Geodesic.DISTANCE) 
+89°59'59.999999999898"N, 12°16'35.957736079345"E (Roundtrip via Grid Address)
+422222222222222222222222222222224832a (Grid Address)
+∂3.174534nm  delta (Geodesic.DISTANCE)
 ```
+
 #### Intuitive uint64 Addresses
-While mixed text addresses are used above, Hex9 supports various `uint64` 
-addresses in a directly intuitive manner.  
+Hex9 supports various `uint64` addresses in a directly intuitive manner.
 
-The fastest is region (triangle-grid) based, with each digit representing the
-sub-region of its parent region. This provides a global accuracy of 0.30m².
-
-For example, one of the Nazca Spirals - at `14.679806S, 75.101925W` has the 
-uint64 address `0xE8254A1913954600` (in hexadecimal).
-The first bit is set to 1, and identifies this as a global address.
-The next 3 bits indicate the octant.  E:1110 indicates octant id 6 (SWA).
+For example, one of the Nazca Spirals - at `14.679806S, 75.101925W` has the
+uint64 address `0xb404124850835306` (in hexadecimal).
+'b' here represents hexagon 11
+This is (by default) a 'Layer 13' Address; The hexagons are in bytes 0..13
+The final 2 bytes are the meta, used to convert the address back to another location.
+To convert the address to an identifying hex key, this can be done by masking the final
+byte with 0x70 (or using a far more reliable internal method).
 
 ```
-0xE8254...
+0x40412...
   ↑↑↑↑↑
-  ||||└─── Layer 4, region 4
-  |||└──── Layer 3, region 5
-  ||└───── Layer 2, region 2
-  |└────── Layer 1, region 8
-  └─────── 0x80 | octant (6)
+  ||||└─── Layer 4, hexagon 1
+  |||└──── Layer 3, hexagon 4
+  ||└───── Layer 2, hexagon 0
+  |└────── Layer 1, hexagon 4
+  └─────── Hexagon 'B'
 ```
-When the uint64 address is depicted in hexadecimal, the global address is 
-revealed and may be readily eye-balled with a crib - see the following image 
-that traces the first 5 regions 8,2,5,4,A - each one covering 1/9th the area of 
-the preceding layer. 
+When the uint64 address is depicted in hexadecimal, the global address is
+revealed and may be readily eye-balled with a crib - see the following image
+that traces the first 5 regions 8,2,5,4,A - each one covering 1/9th the area of
+the preceding layer.
 
-![](images/crib_hum.png)(*Region uint64 crib example*)
-
-
-
-
-When working with greater accuracy, a subfix format (with upper nybble of 
-0x0) uses a current (provided) address as a prefix - augmenting the 
-accuracy of the address to sub-micron levels.
+When working with greater accuracy, a subfix format can be used augments the 
+accuracy of the address to sub-micron levels.  This is equivalent to the 
+addresses at layer 35 (as shown above).
 
 
 #### Performance
@@ -120,9 +154,10 @@ Non-sparse datasets are processed much faster.
 Thanks to its decoupled, fractal-based structure, 
 Hex9 allows direct projection of spatial data onto hexagonal grids. 
 This enables visualizations where hexagons remain undistorted regardless 
-of the underlying map projection, as shown in this Guernsey population heatmap.
+of the underlying map projection, as shown in this Tokyo population heatmap 
+at Layer 8 (approx 1km²)
 
-![](images/ggy_heatmap.png)(*Guernsey population heatmap*)
+![](images/tokyo_l8.jpg)(*1km² Tokyo population heatmap*)
 
 #### What can I find here?
 This project includes:
@@ -133,18 +168,32 @@ This project includes:
 
 #### Where next?
  * Detailed documentation explaining how the grid is structured and derived.
-   * [Introduction](introduction.md)
-   * [Enumeration](enumeration.md)
-   * [Early thoughts](assets/docs/past.md)
+   * [Introduction](introduction.md) (way out of date!)
+   * [Enumeration](enumeration.md) (way out of date!)
+   * [Early thoughts](assets/docs/past.md) (even more out of date!)
 
  * Step-by-step guides for the included examples.
-   * [Examples](examples/examples.md)
+   * [Examples](examples/examples.md) The documentation is up to date 
+     - the examples have been tested on 0.1.0a3
+     - heatmap examples have not (!).
 
 #### What can I do?
  * Explore the grid and have fun experimenting with it.
  * Mention this project with your buddies!
  * Suggest improvements to enhance understanding or usability.
  * Contribute bug fixes or enhancements via pull requests.
+
+### Why NOT H9?
+  Needless to say, Hex9 is a self-funded solo project which is written as a 
+  proof-of-concept and demonstrator, to show that there are still many new 
+  approaches to the HHG question.
+  The current Hex9 octahedral projection (AK) is not amazingly
+  equal-area, especially across a global level.  However, it's hexagons are (for the main part)
+  pretty round, and the area is pretty stable (±7% or so, globally), however local variation is
+  far more stable.  For example, when examining nations,
+  the variation is not so strong  (maybe not so much Russia, or Canada).
+  The authalicity example reveals global variation very clearly.
+
 
 ![Octahedral Projection](images/net_2700.jpg)
 

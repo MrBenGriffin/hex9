@@ -1,3 +1,7 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 import numpy as np
 from numpy.typing import NDArray
 from hhg9 import Points
@@ -23,8 +27,3 @@ class RGCD_GCD(Projection):
         """G_GCD → R_GCD"""
         radians = np.radians(arr.coords)
         return Points(radians, domain=self.rev_cs, samples=arr.samples)
-
-
-# if __name__ == '__main__':
-#     from hhg9 import Registrar
-#     reg = Registrar()

@@ -7,7 +7,8 @@ uses hand-selected set of addresses and
 round-trips them, reporting on a series of measures and metrics,
 reporting to console.
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed; after rewriting formatter)
+25 November 2025 (passed)
 """
 import json
 import numpy as np
@@ -213,14 +214,14 @@ if __name__ == '__main__':
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r36')
     ub1 = h9f.revert(hxx, Style.UR64)
-    h9a = hxx.splitlines()
+    # hxk = f'{bry:h9.k}'
+    # h9a = hxx.splitlines()
+    # h9k = hxk.splitlines()
     rrp = reg.project(uvr, [b_oct, g_gcd])
     ltp = reg.project(ub1, [b_oct, g_gcd])
     ltp.domain = g_gcd
     rif = wgs84(pos.coords, rrp.coords) * 1e+9
     lif = wgs84(pos.coords, ltp.coords) * 1e+9
-    dom = bry.domain
-    dom.register_format(h9f)
 
     for i, name in enumerate(names):
         if lif[i] > 0:
@@ -230,14 +231,19 @@ if __name__ == '__main__':
             print(f'{name:<24} {ci}, mode:{mode}')
             print(f'Regions {cxx[i]}')
             print(f'{nm} {pos[i]:dms} (Reference Coordinates)')
+            print(f'{nm} {ltp[i]:dms} (Label RT Coordinates)')
             print(f'{nm} {ltp[i]:dms} (Label GCD Coordinates)')
+
             print(f'∂{dif[i]:.6f}nm (roundtrip via GCD<->Barycentric)')
             print(f'∂{rif[i]:.6f}nm (roundtrip via GCD<->Bary Regions)')
             print(f'∂{lif[i]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
-            print(f'H9:{h9a[i]}')
-            print(h9f.format(bry[i], None, 'x36'))
-            # print(f'H9:{bry[i]:x}')
-            # print(f'Rg:{rga[i]}')
+            print(f'H9.adr:{bry[i]:h9}')
+            print(f'H9.key:{bry[i]:h9.k}')
+            print(f'H9.adr.13:{bry[i]:h9.13}')
+            print(f'H9.u64.13:{bry[i]:h9.u13}')
+            if name == 'NEA: Great Pyramid':
+                for layer in range(35):
+                    print(f'H9.key; layer {layer}:{bry[i]:h9.k{layer}}')
             print(f'Reference BRY: {bry.coords[i][0]:.18f},{bry.coords[i][1]:.18f}')
             print(f'Label RT  BRY: {uvr.coords[i][0]:.18f},{uvr.coords[i][1]:.18f}')
             print()

@@ -1,9 +1,14 @@
-"""
-Part of the H9 project -
-Various geometric/coordinates tests
-"""
-import numpy as np
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
 
+"""
+Various geometric/coordinates tests
+This reports nothing if everything is working!
+16 December 2025 0.1.0a3 (passed)
+"""
+
+import numpy as np
 
 def _in_up(ẋ, y, λf, λc):
     """Return true where ẋ, y is in up supercell"""

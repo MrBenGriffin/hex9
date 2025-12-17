@@ -6,7 +6,8 @@
 This reads in the GCD for Stonehenge, then converts it into a set of nested half-hexagons,
 each of which represents a single Stage of the H9 Journey.
 This is a much earlier proof of concept, but still gives a good idea of layers 0-12 of the H9 grid.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 import os
 import json
@@ -57,8 +58,8 @@ if __name__ == '__main__':
     bnd = Points(verts, b_oct, components=cmp)
     gel = reg.project(bnd, [b_oct, g_gcd])
     gpy = gel.coords.reshape([-1, 4, 2])
-
-    extents = np.load('sh/extents.npy')
+    # This depends upon ex0075 outputs!
+    extents = np.load('output/ex0075_extents.npy')
     for i, extent in enumerate(extents[0]):
         ratio = wgs84_angular_ratio(extent)
         b_poly = polys[i]
@@ -66,7 +67,7 @@ if __name__ == '__main__':
         lon_min, lon_max, lat_min, lat_max = extent
         lw = lon_max - lon_min
         lh = lat_max - lat_min
-        img_file = f'sh/SH_{i}.png'
+        img_file = f'output/ex0075_{i:02}.png'
         if os.path.isfile(img_file):
             img = image.imread(img_file, 'png')
         else:
@@ -104,4 +105,4 @@ if __name__ == '__main__':
         valid = (vx >= 0) & (vx <= gw) & (vy >= 0) & (vy <= gh)
         out[vy[valid], vx[valid]] = rgba[valid]
         image_uint8 = (out * 255).astype(np.uint8)
-        Image.fromarray(image_uint8).save(f'output/sh{i:02}.png')
+        Image.fromarray(image_uint8).save(f'output/ex0076_sh{i:02}.png')

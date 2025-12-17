@@ -9,8 +9,8 @@ loads the octahedral cache and
 displays it as an octahedron net, under different layouts.
 Normally I do not project maps this way, but use grid sampling instead.
 It's still relevant for managing datasets captured over GCD.
-Last Tested 25 November 2025 √
-
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 from pathlib import Path
 import numpy as np
@@ -48,7 +48,7 @@ def show_pts_2d(arr: Points, ratio=None, name='base'):
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
     plt.box(False)
-    fig.savefig(f'output/{name}_45.png',
+    fig.savefig(f'output/ex0045_{name}.png',
                 dpi=300, format='png', bbox_inches='tight',
                 pad_inches=0, transparent=True)
     plt.close(fig)

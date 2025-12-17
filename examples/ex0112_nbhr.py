@@ -1,6 +1,11 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project - Test Reference Neighbours.
-Last Tested 12 October 2025 √
+Test Reference Neighbours.
+Last Tested 16 December 2025 0.1.0a3 (passed - but of questionable value)
+Last Tested 12 October 2025 (passed)
 """
 import numpy as np
 from hhg9 import Registrar

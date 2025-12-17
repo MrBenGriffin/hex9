@@ -1,9 +1,14 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project - Visualisation of neighbouring Half-hexagons.
+Visualisation of neighbouring Half-hexagons.
 This serves to depict the calculations used to identify neighbours.
 It also shows how we can tell if the neighbour is outside the region's
-own parent region (as a supercell).
-Last Tested 20 October 2025 √
+own parent region (as a supercell). Values are shown as cell-ids (hex)
+Last Tested 16 December 2025 0.1.0a3 (passed)
+Last Tested 20 October 2025 (passed)
 """
 import json
 import numpy as np
@@ -94,7 +99,8 @@ def run():
             xy = n_offs[smo, pmo, c2, 1]  # rgn.H9R.loc_offs provides offsets for neighbours (visualisation only).
             ax.add_patch(Polygon((nhp+xy+pxy), linewidth=0.5, facecolor=fc))
             ax.set_title(f"{level}; C2:{c2}; R:{c2i:02x}; N:{nme:02x}")
-    plt.show()
+    fig.savefig(f"output/ex0110.jpg", dpi=400)
+    print(f'fig saved at output/ex0110.jpg')
 
 
 if __name__ == '__main__':

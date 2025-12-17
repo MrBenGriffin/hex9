@@ -1,7 +1,12 @@
 # Part of the Hex9 (H9) Project
 # Copyright ©2025, Ben Griffin
 # Licensed under the Apache License, Version 2.0
-"""Proof of concepts taken from AKOctahedral"""
+
+"""
+Proof of concepts taken from AKOctahedral, demonstrating jacobian
+Last Tested 16 December 2025 0.1.0a3 (passed - with rewrite)
+"""
+
 import numpy as np
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar, Points
@@ -17,8 +22,6 @@ if __name__ == '__main__':
     b_oct = reg.domain('b_oct')
     s_oct = reg.domain('s_oct')
     ake = reg.projection('oct_ell')
-    # warp = make_warp(f'prewarp_ls_L5_n16.npz')
-    # ake.set_accuracy(0.000000000001)
 
     london = np.array([[51.50744520, -0.1278120321]])  # London Latitude/Longitude
     ldn = g_gcd.adopt(london)
@@ -47,8 +50,10 @@ if __name__ == '__main__':
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(px[:, 0], px[:, 1], px[:, 2], marker='.', s=5.0)
     ax.set_aspect('equal', adjustable='box')
-    plt.show()
-
+    f_name = f'output/ex4001_octagon.png'
+    fig.savefig(f_name, dpi=100)
+    plt.close(fig)
+    print(f'fig saved at f_name')
 
     def err_stats(j_a, j_b):
         diff = np.abs(j_a - j_b)
@@ -88,4 +93,7 @@ if __name__ == '__main__':
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(px[:, 0], px[:, 1], px[:, 2], marker='.', s=5.0)
     ax.set_aspect('equal', adjustable='box')
-    plt.show()
+    f_name = f'output/ex4001_ell.png'
+    fig.savefig(f_name, dpi=100)
+    plt.close(fig)
+    print(f'fig saved at f_name')

@@ -1,6 +1,10 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
-This is proof-of-concept for uint64 packing.
+Part of the H9 project - This is proof-of-concept for uint64 packing.
+Last Tested 16 December 2025 0.1.0a3 (passed - with rewrite)
 """
 import numpy as np
 import hhg9.algorithms.packing as pk

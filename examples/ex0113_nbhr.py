@@ -1,12 +1,19 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
 Part of the H9 project - using locations.json,
-Test and report the neighbour result
-Last Tested 12 October 2025 √
+Test and report the neighbours, showing deviation from original.
+There is normally a least-layer accuracy error
+Last Tested 16 December 2025 0.1.0a3 (passed - but of questionable value)
+Last Tested 12 October 2025 (passed)
+
 """
 import json
 import numpy as np
 from hhg9 import Registrar, Points
-from hhg9.algorithms import wgs84
+from hhg9.algorithms.distance import wgs84
 from hhg9.formats import DecimalDegrees
 from hhg9.h9.region import region_neighbours, xy_regions, regions_xy
 from hhg9.h9.addressing import neighbours
@@ -24,14 +31,13 @@ if __name__ == '__main__':
     np.set_printoptions(formatter={'int': lambda x: f'{x:02x}'})
     reg = Registrar()  # Manage Domains & Projections
     locs = json_load('../assets/locations.json')
-    decimal = DecimalDegrees()
+    decimal = DecimalDegrees(reg)
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
     g_gcd.register_format(decimal)
 
-    accuracy = 30
+    accuracy = 36
     loc_names = list(locs.keys())
-    # loc_names = ['SEAMS']
     for name in loc_names:
         print(name)
         region = locs[name]
@@ -57,5 +63,5 @@ if __name__ == '__main__':
                   f'Original :{p0}; {a}\n'
                   f'Roundtrip:{p2}; {b}\n'
                   f'Neighbour:{p1}; {c}\n'
-                  f'∂x: {d};\nNB: {nl:decimal}\nOG: {og:decimal}\n')
+                  f'∂x: {d};\nNB: {nl:deg}\nOG: {og:deg}\n')
         done = True

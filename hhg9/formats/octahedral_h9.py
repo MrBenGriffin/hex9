@@ -1,3 +1,7 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
 Part of the H9 project
 """
@@ -22,6 +26,7 @@ class OctahedralH9(PointFormat):
         self.scheme = adr.H9_RA
         self.width = 34  # default printed width
         self.subs = {
+            'k': adr.TailStyle.key,
             'x': adr.Style.HEX,
             'i': adr.Style.NUMERIC,
             'u': adr.Style.UH64,
@@ -60,14 +65,17 @@ class OctahedralH9(PointFormat):
         return result
 
     def _select_style(self, sub: str = None):
-        """Given a string, determine format style"""
+        """
+        Given a string, determine format style
+        eg h9.f33, h9.u18, h9.24
+        """
         width = self.width
         style = adr.Style.HEX
         # Parse sub: optional style letter(s) + optional integer width
         if sub:
             # long token 'u' takes precedence; otherwise first char
             if sub.startswith('u'):
-                width = 12
+                width = 13
                 style = self.subs['u']
                 sub = sub[1:]
             elif sub.startswith('r'):
@@ -97,11 +105,14 @@ class OctahedralH9(PointFormat):
             pts = arr
         else:
             pts = arr
+        tail_style = adr.TailStyle.reversible
         count = len(pts)
         style, width = self._select_style(sub)
+        if style == adr.TailStyle.key:
+            tail_style = adr.TailStyle.key
 
         if style == adr.Style.UH64:
-            u64 = adr.hex_pack(pts, width, self.registrar, self.scheme)  # 3 metres - not great!
+            u64 = adr.hex_pack(pts, width, self.scheme)  # 3 metres - not great!
             strs = [''.join([f'{u:0x}' for u in v])[:width+4] for v in u64]
             if count < 2:
                 return strs[0]
@@ -115,43 +126,13 @@ class OctahedralH9(PointFormat):
             return '\n'.join(strs)
 
         if style == adr.Style.NUMERIC:
-            u64 = adr.hex_pack(pts, width, self.registrar, self.scheme)
+            u64 = adr.hex_pack(pts, width, self.scheme)
             strs = [''.join(f"{n:0x}" for n in row) for row in u64]
             if count < 2:
                 return str(strs[0])
             return '\n'.join(n for n in strs)
 
-        h9h = adr.hex_str_encode(pts, width, self.registrar, self.scheme)
+        h9h = adr.hex_str_encode(pts, width, tail_style, self.scheme)
         if count < 2:
             return str(h9h[0])
         return '\n'.join(n for n in h9h)
-
-
-def _poc_formatting():
-    from hhg9 import Registrar
-    reg = Registrar()
-    b_oct = reg.domain('b_oct')
-    oc = [
-        [-1, 1, 1],
-        [-1, 1, -1],
-        [-1, 1, -1],
-        [-1, -1, 1],
-    ]
-    bb = [
-        [0.20407821, 0.04104211],
-        [-0.14744331, 0.36579659],
-        [0.12172821, -0.44399597],
-        [0.65980116, 0.36563993],
-    ]
-    dx = Points(np.array(bb), components=np.array(oc), domain=b_oct)
-    nx = OctahedralH9()
-    xx = nx.format(dx, None, 'x34')
-    ad = xx.splitlines()
-    print(ad)
-    ss = nx.revert(xx)
-    yy = nx.format(dx, None, 'r34')
-    st = nx.revert(yy, adr.Style.UR64)
-
-
-# if __name__ == '__main__':
-#     _poc_formatting()

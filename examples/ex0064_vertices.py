@@ -9,10 +9,13 @@ points at each vertex, round-trips them, and then draws a heatmap
 demonstrating variation across the entire vertex.
 Vertices are, like seams, special edge cases.
 Looks at radii of 3,000km, 10,000km, and 5m.
-Last Tested 25 November 2025 √ (live plot scaling isn't right though).
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import re
+
 
 from hhg9 import Registrar, Points
 from hhg9.algorithms.geometry import ellipsoid_f_grad, ortho_basis_from_normal
@@ -23,7 +26,14 @@ import cartopy.crs as ccrs
 from scipy.stats import gaussian_kde, binned_statistic_2d
 
 WGS84 = Geodesic.WGS84  # or custom ellipsoid
-BIG = 6.0  # nm threshold from prior work
+
+
+def slug(s: str) -> str:
+    """Quick conversion of string to file_slug."""
+    s = s.strip().lower().replace(" ", "_")
+    s = re.sub(r"[^a-z0-9_-]+", "_", s)    # optional: keep only safe chars
+    s = re.sub(r"_+", "_", s).strip("_")   # optional: collapse underscores
+    return s
 
 
 def _compute_nw_grid(u_coords, v_coords, values, *,
@@ -127,7 +137,7 @@ def plot_cartesian_kde(u_coords, v_coords, values, *,
                        grid_resolution=200j, bw_method=None,
                        title="Heatmap", cmap='viridis',
                        clip_percentile=100.0, den_floor_rel=1e-15,
-                       mask_edge=True
+                       mask_edge=True, name='base'
                        ):
     """
     Plots a 2D heatmap directly from Cartesian coordinates
@@ -148,7 +158,10 @@ def plot_cartesian_kde(u_coords, v_coords, values, *,
     ax.set_title(title)
     ax.set_xlabel("Tangent U-axis (m)")
     ax.set_ylabel("Tangent V-axis (m)")
-    plt.show()
+    f_name = slug(name)
+    plt.savefig(f"output/ex0064_{f_name}_kde.png", dpi=400)
+    plt.close(fig)
+    print(f'file saved at output/ex0064_{f_name}_kde.png')
 
 
 def plot_cartesian_kde_diagnostics(u_coords, v_coords, values, **kwargs):
@@ -158,6 +171,7 @@ def plot_cartesian_kde_diagnostics(u_coords, v_coords, values, **kwargs):
     nw, num, den, ess = res['nw'], res['num'], res['den'], res['ess_rel']
     Hm = res['binned_mean']
     ue, ve = res['u_edges'], res['v_edges']
+    f_name = slug(kwargs['name'])
 
     fig, axs = plt.subplots(2, 2, figsize=(14, 12), constrained_layout=True)
 
@@ -199,10 +213,12 @@ def plot_cartesian_kde_diagnostics(u_coords, v_coords, values, **kwargs):
     ax2.set_xlabel('Angle (deg)'); ax2.set_ylabel('NW median (outer ring, nm)')
     ax2.set_title('Edge ring angular profile — check for "glow" directions')
     ax2.grid(True, alpha=0.3)
-    plt.show()
+    plt.savefig(f"output/ex0064_{f_name}_kde_diag.png", dpi=400)
+    plt.close(fig)
+    print(f'file saved at output/ex0064_{f_name}_kde_diag.png')
 
 
-def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title):
+def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title, name):
     """
     Plots error data on a globe using an Orthographic projection.
     Good for large radii.
@@ -221,7 +237,10 @@ def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title):
     cbar = plt.colorbar(scatter, ax=ax, orientation='vertical', pad=0.05, shrink=0.7)
     cbar.set_label('Round-trip Error (nm)')
     ax.set_title(f'LAEA: {title}')
-    plt.show()
+    f_name = slug(name)
+    plt.savefig(f"output/ex0064_{f_name}_laea.png", dpi=400)
+    plt.close(fig)
+    print(f'file saved at output/ex0064_{f_name}_laea.png')
 
 
 def run():
@@ -233,12 +252,11 @@ def run():
     c_ell = reg.domain('c_ell')   # Cartesian Ellipsoid (xyz) ECEF
     c_oct = reg.domain('c_oct')   # Cartesian Octahedron (xyz)
     b_oct = reg.domain('b_oct')   # Octahedron Barycentric-origin xy
-    s_oct = reg.domain('s_oct')   # Octahedron Barycentric uv
 
     # Projections/Transforms. Bary and Net are loaded by the domains.
     # EllipsoidGCD(reg)  # g_sph <=> c_sph
     ak = AKOctahedralEllipsoid(reg)  # c_sph <=> (c_oct <=> b_oct)
-    ak.set_accuracy(1e-9)
+    ak.set_accuracy(1e-9)  # 1nm area
     # GCDBary(reg)
 
     vertices = {
@@ -273,8 +291,10 @@ def run():
                 lo_s = lo[sort_indices]
                 la_s = la[sort_indices]
                 errs = nm_pt[sort_indices]
+                f_name = f'{name}_{radius/1000}km'
                 plot_global_error_map(
-                    lo_s, la_s, errs, center_lon=lon, center_lat=lat, title=f"c_ell/b_oct Projection ∂nm at '{name}'; over radius {radius}"
+                    lo_s, la_s, errs, center_lon=lon, center_lat=lat,
+                    title=f"c_ell/b_oct Projection ∂nm at '{name}'; over radius {radius}", name=f_name
                 )
             else:
                 # do small.
@@ -287,11 +307,12 @@ def run():
                 coords_2d_u = xyz_relative @ u_hat
                 coords_2d_v = xyz_relative @ v_hat
                 # plot_cartesian_kde_diagnostics(coords_2d_u, coords_2d_v, nm_pt)
+                f_name = f'{name}_{radius}m'
                 plot_cartesian_kde(
                     coords_2d_u,
                     coords_2d_v,
                     nm_pt,
-                    title=f"c_ell/b_oct Projection ∂nm at '{name}'; over radius {radius}"
+                    title=f"c_ell/b_oct Projection ∂nm at '{name}'; over radius {radius}", name=f_name
                 )
 
 

@@ -1,3 +1,12 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
+"""
+Checks cells, c2 via angular sectors.
+This is possibly not used - but does demonstrate the geometric relations.
+16 December 2025 0.1.0a3 (passed)
+"""
 import numpy as np
 from hhg9.h9 import H9C
 

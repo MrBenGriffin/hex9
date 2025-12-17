@@ -171,7 +171,6 @@ def stage(file: str,
     bryc_f     = src_dir / f"{base}_bry_border_cmp.npy"
     bryc_old   = src_dir / f"{base}_bounds_bry_cmp.npy"
     pop_f      = src_dir / f"{base}_pop_data.npy"
-
     out_png    = dst_dir / f"{base}_{layer_tag}_heatmap.png"
 
     if debug:
@@ -214,7 +213,7 @@ def stage(file: str,
     c_oct = OctahedralCartesian(reg)
     b_oct = OctahedralBarycentric(reg, c_oct)
     EllipsoidGCD(reg)
-    AKOctahedralEllipsoid(reg).set_accuracy(0.01)
+    AKOctahedralEllipsoid(reg).set_accuracy(0.01) # 1cm per-hex area.
 
     # --- Population‑driven classification/enmesh ---
     # Use rotated border only for plotting extent

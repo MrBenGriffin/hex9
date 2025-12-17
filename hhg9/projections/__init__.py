@@ -1,6 +1,7 @@
-"""
-Part of the H9 project
-"""
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 from .octant_bary import OctantBary
 from .bary_net import BaryNet
 from .octahedral_octants import OctahedralOctants

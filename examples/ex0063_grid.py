@@ -4,10 +4,12 @@
 
 """
 This is a warp testing render - which is currently a closed line of research.
-It saves a colouring of the authalic score (deviation from mean) of an octanct of the hex9 grid after
+It saves a colouring of the authalic score (deviation from mean) of an octant of the hex9 grid after
 it has been projected onto WGS84.
-I have kept it for the purpose of ensuring that some systems are still available if needs be.
-Last Tested 25 November 2025 √
+All renders follow the triangular sub-grid.
+Another way of calculating this has been used with hexagons in ex0080_authalics
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 from pathlib import Path
 
@@ -139,8 +141,9 @@ def snow_globe(arr: Points, poly_len: int = 6, pop=None):
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
     plt.tight_layout()
-    plt.savefig(f"src/o{octant}_l{depth}.png", dpi=400)
-    print(f'file saved at src/o{octant}_l{depth}.png')
+    plt.savefig(f"output/ex0063_o{octant}_l{depth}.png", dpi=400)
+    plt.close(fig)
+    print(f'file saved at output/ex0063_o{octant}_l{depth}.png')
 
 
 def get_data(reg: Registrar, layer=3, octant_id=None):

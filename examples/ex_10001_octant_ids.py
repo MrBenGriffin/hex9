@@ -1,8 +1,13 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project - uses H9 addresses and round-trips them.
+uses H9 addresses and round-trips them.
 This tests that octant ids are recorded the same everywhere.
 The definitive calculation is in Points.
-Last Tested 06 October 2025 √
+16 December 2025 0.1.0a3 (passed)
+06 October 2025 √
 """
 import numpy as np
 from hhg9 import Points, Registrar

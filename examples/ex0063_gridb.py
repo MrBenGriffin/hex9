@@ -3,9 +3,12 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-For a given layer, generate the canonical triangle grid
-and display on the globe.
-Last Tested 25 November 2025 √
+Further breakdown for warp analysis (currently experimental/and put to one side).
+All renders follow the triangular sub-grid.
+Another way of calculating this has been used with hexagons in ex0080_authalics
+
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt, colors
@@ -87,8 +90,9 @@ def snow_globe(arr: Points, poly_len: int = 6, pop=None, name='grid'):
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
     plt.tight_layout()
-    plt.savefig(f"src/{name}_l{depth}.png", dpi=400)
-    print(f'file saved at src/{name}_l{depth}.png')
+    plt.savefig(f"output/ex0063b_{name}_l{depth}.png", dpi=400)
+    plt.close(fig)
+    print(f'file saved at output/ex0063b_{name}_l{depth}.png')
 
 
 def get_data(reg: Registrar, layer=3, octant_id=None):
@@ -179,15 +183,15 @@ if __name__ == '__main__':
         t_sum = np.sum(c_areas)
         t_avg = t_sum / t_num
         c_score = (c_areas / t_avg) - 1  # fractional deviation
-        snow_globe(c_pts, 3, c_score, name=f'c_score')
+        snow_globe(c_pts, 3, c_score, name=f'c_score_{depth}')
 
         # np.save(cache, data_areas)
         t_num = len(g_areas)
         t_sum = np.sum(g_areas)
         t_avg = t_sum / t_num
         g_score = (g_areas / t_avg) - 1  # fractional deviation
-        snow_globe(c_pts, 3, g_score, name=f'g_score')
+        snow_globe(c_pts, 3, g_score, name=f'g_score_{depth}')
 
         # residual.
         score = np.abs(g_score - c_score)  # fractional deviation
-        snow_globe(c_pts, 3, score, name=f'residual')
+        snow_globe(c_pts, 3, score, name=f'residual_{depth}')

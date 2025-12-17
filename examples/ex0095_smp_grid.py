@@ -1,14 +1,18 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
 Compose pixel grids of each barycentric triangle for the octahedral net and normalise.
 Load a Plate Carrée colour map for sampling, project onto Cartesian Unit Sphere and assign KDTree for sample queries.
 Project each point of the grid onto Cartesian Unit Sphere and sample them.
-Apply the samples to the octahedral net and save the result into a png.
+Apply the samples to various octahedral net flavours and save the result into a png.
 The octahedral->spherical projection is relatively fast (about 40x spherical->octahedral),
 so we can handle larger images this way.
 Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
-Last Tested 12 October 2025 √
+Last Tested 16 December 2025 0.1.0a3 (?passed)
+Last Tested 12 October 2025 (passed)
 """
 import numpy as np
 from matplotlib import image
@@ -16,6 +20,7 @@ from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.algorithms.grid import sq_grid, fit
 from PIL import Image  # image saving
+
 
 def run(*, flavours=None, file='src/world360x180.png', scale=1350):
     """Runner"""
@@ -61,9 +66,9 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
         )
         out = np.zeros((img_h, img_w, 4), dtype=float)
         out[py, px] = rgba
-        Image.fromarray((out * 255).astype(np.uint8)).save(f'output/{flavour}_x0095.png')
+        Image.fromarray((out * 255).astype(np.uint8)).save(f'output/ex0095_{flavour}.png')
 
 
 if __name__ == '__main__':
-    flavours = ['mortar']
-    run(flavours=flavours, scale=600, file='../experimental/tissot_2560x1280.png')
+    flavours = ['mortar', 'butterfly', 'c_butterfly', 'windmill', 'turbine']
+    run(flavours=flavours, scale=600, file='src/tissot_2560x1280.png')

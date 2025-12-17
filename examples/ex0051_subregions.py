@@ -7,7 +7,8 @@ Part of the H9 project
 Use an address to resolve the region list and show the
 region identity for each of the first 36 layers.
 This helps to identify if/where any issues may arise.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt
@@ -64,8 +65,10 @@ def run():
                 tx = txo[eg]
                 ax.add_patch(Polygon(tx, linewidth=0.5, edgecolor='red', facecolor='pink', alpha=0.95))
             ax.set_title(f"Layer {layer+1}: 0x{region:02x}")
-    plt.show()
-    # print(irg)
+    fig.savefig(f'output/ex0046.png',
+                dpi=300, format='png', bbox_inches='tight',
+                pad_inches=0, transparent=True)
+    plt.close(fig)
 
 
 if __name__ == '__main__':

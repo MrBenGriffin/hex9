@@ -1,10 +1,12 @@
-"""
-Part of the H9 project
-Author: Ben
-base/h9/uregion.py
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
 
+"""
+Experimental
 uregion.py differs from region.py by method - using lattice+residual methods.
-This is currently unsupported as it lacks the additional controls offered by xy_regions, etc.
+This is currently unsupported as it lacks the additional controls
+offered by xy_regions, etc.
 """
 from dataclasses import dataclass
 from typing import Literal

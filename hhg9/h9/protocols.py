@@ -167,8 +167,9 @@ class RegionAddressLike(Protocol):
     Protocol for converting between region-cells and region-IDs.
     """
     rid2cell: NDArray[np.uint8]  #: Map Region ID -> Cell ID.
-    cell2rid: NDArray[np.int16]  #: Map Cell ID -> Region ID (-1 if unmapped).
+    cell2rid: NDArray[np.uint8]  #: Map Cell ID -> Region ID (-1 if unmapped).
     modes: NDArray[np.uint8]  #: Mode of the regions.
+    props: NDArray[np.uint8]
     proto: NDArray[np.uint8]  #: Protocol array.
     r_size: int  #: Total number of region IDs.
 

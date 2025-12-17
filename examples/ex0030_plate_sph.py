@@ -6,7 +6,8 @@
 Supporting System Test - No octahedral projection or H9
 This follows ex0020_plate_glb.py (which loaded the png and displayed it on a globe).
 Converts PlateCarree to ECEF via GCD and displays it
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar, Points
@@ -26,7 +27,8 @@ def show_globe(arr: Points, x_lim=None, y_lim=None, z_lim=None, label=None, clip
     ax.scatter(xx, yy, zz, marker=',', ec='none', s=2.5, c=cols)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    plt.show()
+    fig.savefig(f"output/ex0030_global.png", dpi=100)
+    print(f'fig saved at output/ex0030_global.png')
 
 
 def run():
@@ -48,7 +50,8 @@ def run():
     fig = plt.figure(figsize=(18, 9), dpi=100, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     plt.imshow(rmg)
-    plt.show()
+    fig.savefig(f"output/ex0030_flat.png", dpi=100)
+    print(f'fig saved at output/ex0030_flat.png')
 
 
 if __name__ == '__main__':

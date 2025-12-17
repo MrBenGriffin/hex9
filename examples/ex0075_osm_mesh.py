@@ -6,7 +6,8 @@
 Compose a set of zooms into stonehenge vi cartopy and OSM.
 This grabs rectangle boundaries from which we sample the octahedral.
 The actual octahedral render series is found in 0076.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 import json
 import numpy as np
@@ -79,13 +80,13 @@ if __name__ == '__main__':
         fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         ax.set_extent(final_extent, ccrs.PlateCarree())
-        print(f'sh/SH_{i}.png {layer_depth}, detail:{detail[layer_depth]}')
+        print(f'Layer {layer_depth}, detail:{detail[layer_depth]}')
         ax.add_image(imagery, detail[layer_depth], regrid_shape=(2*IMG_PIXELS, 2*IMG_PIXELS))
-
-        fig.savefig(f'sh/SH_{i}.png',
+        print(f'file saved at output/ex0075_{i:02}.png')
+        fig.savefig(f'output/ex0075_{i:02}.png',
                     dpi=dpi,
                     format='png', bbox_inches='tight',
                     pad_inches=0, transparent=True)
         plt.close(fig)
-
-    np.save('sh/extents.npy', np.array([extents]))
+    print(f'extents file saved at output/ex0075_extents.npy')
+    np.save('output/ex0075_extents.npy', np.array([extents]))

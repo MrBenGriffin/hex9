@@ -8,7 +8,8 @@ This follows ex0030_plate_glb.py (which loaded the png and displayed it as a uni
 This loads a Plate Carrée png image, converts it to Unit Octahedron, via latitude/longitude and sphere and displays it.
 As the inverse of the AK projection is slow we use the cache from ex0041_cache.py
 Added chain registration example.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 from pathlib import Path
 import numpy as np
@@ -30,7 +31,8 @@ def show_octahedron(arr: Points, x_lim=None, y_lim=None, z_lim=None, label=None,
     ax.scatter(xx, yy, zz, marker=',', ec='none', s=2.5, c=cols)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    plt.show()
+    fig.savefig(f"output/ex0042_octahedron.png", dpi=200)
+    print(f'fig saved at output/ex0042_octahedron.png')
 
 
 def run():
@@ -63,7 +65,9 @@ def run():
     fig = plt.figure(figsize=(18, 9), dpi=100, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     plt.imshow(rmg)
-    plt.show()
+    fig.savefig(f"output/ex0042_recovered.png", dpi=100)
+    plt.close(fig)
+    print(f'fig saved at output/ex0042_recovered.png')
 
 
 if __name__ == '__main__':

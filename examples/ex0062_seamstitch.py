@@ -8,7 +8,8 @@ This is a processor intensive analysis of all edge-cases, measuring behaviour
 on each seam, and alongside it. These are then depicted as graphs and summarised
 in console messages. Seams are important edge cases (literally!)
 This is a bit of a dogs dinner, thanks to AI assistance.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES. These values represent SUB-MILLIMETRE projection fidelity checks.
 """
 import matplotlib.pyplot as plt
@@ -457,7 +458,9 @@ def run():
                         diag['t_clean'], diag['nmL_clean'], diag['nmR_clean'],
                         diag['nb_clean'], diag['beta_clean'], diag['lat0_clean'],
                         n_bad=diag['filtered'])
-        fig.show()
+        fig.savefig(f"output/ex0062_{k}.png", dpi=100)
+        plt.close(fig)
+        print(f'fig saved at output/ex0062_{k}.png')
 
 
 if __name__ == '__main__':

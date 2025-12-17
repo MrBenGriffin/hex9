@@ -196,7 +196,7 @@ This is a non-graphical example which chooses a seeded random collection of
 (hex 9), and back-projects them to GCD. It then measures the round-trip 
 distance via GeographicLib, and stores the result in a CSV file.  
 Typically results are under 7 nanometres.  It also converts to the 
-hex-variation address format (e.g. `NWV3522B`), reverts that, and then 
+hex-variation address format, reverts that, and then 
 back-projects that value also - which typically might add about 1 nanometre
 noise.  If one's purpose is to measure global positions accurately to less than 
 1µm, I would strongly recommend using 96 or 128-bit maths.
@@ -214,30 +214,40 @@ Projection differences are reported along the projection chain, and the
 geographic difference is then reported in nanometres, via 
 geographiclib's `Geodesic.WGS84` inverse.
 
-An example landmark is Stonehenge:
+An example landmark is Greenwich Park East:
 ```
-Stonehenge              51°10'43.672800075871"N, 1°49'34.031280757836"W (Reference Coordinates)
-Stonehenge  ∂0.000000nm 51°10'43.672800075871"N, 1°49'34.031280757836"W (roundtrip via GCD<->Ellipsoid)
-Stonehenge  ∂1.074432nm 51°10'43.672800075845"N, 1°49'34.031280757844"W (roundtrip via GCD<->Octahedral)
-Stonehenge  ∂1.918622nm 51°10'43.672800075819"N, 1°49'34.031280757874"W (roundtrip via GCD<->Barycentric)
-Stonehenge  NWΛ01357247546287033010625120268308D7 (Grid Address)
-Stonehenge  ∂1.918622nm 51°10'43.672800075819"N, 1°49'34.031280757874"W (roundtrip via Grid Address)
+Greenwich Park East (1, 1, 1), mode:0
+Regions [73 58 73 43 58 43 58 58 58 43 43 58 58 43 73 58 73 58 43 58 73 43 58 73
+ 73 73 73 42 57 57 58 38 42 42 52 62 58 53]
+NEA 51°28'40.188392445132"N, 0°0'0.000000036000"E (Reference Coordinates)
+NEA 51°28'40.188392445132"N, 0°0'0.000000035968"E (Label GCD Coordinates)
+∂0.627073nm (roundtrip via GCD<->Barycentric)
+∂0.627073nm (roundtrip via GCD<->Bary Regions)
+∂0.627073nm (roundtrip via GCD<->Hex9 Label)
+H9 (from array):0a02a2aaa22aa20a0a2a02a0000977a69935a8
+H9.adr:4348683362836823268348322246337341885
+H9.key:4348683362836823268348322246337341800
+Reference BRY: 0.304133195545653323,-0.289722433974214599
+Label RT  BRY: 0.304133195545653323,-0.289722433974214599
+
 ```
 
 Needless to say, nobody will be seriously expecting to use this toolchain to 
 geolocate distances as small as a few nanometres, but it provides an 
 idea of where noise can be found creeping in.
 
-### ex0061_neighbours
-While not very friendly to the eyes, this shows displays the native region 
-list for the example addresses above, then calculates the **neighbouring 
-half-hexagon** for the significant leaf-node, round-trips the result, and 
-reports on any errors.  Neighbour-finding is a little more complex than one would 
-expect, in that the neighbour's parent might belong to a different parent 
-(and that's something which can easily cascade). 
-(categorised by Octant) across the globe, for which there are 
-well-known co-ordinates, and which can be found easily via online mapping services.  
+### ex0062_seamstitch
+Various metrics and investigations to ensure that borders, seams, and poles
+behave well under stress.
 
+### ex0063_grid
+Examining local authalicity (equal-area) constraints on a single octant.
+This uses the underlying triangular grid.  For the hexgrid variant, check
+out ex0080
+
+### ex0064_vertices
+Various metrics and visualisations to map address roundtrip deviation.
+There are tools for analysis that may be useful here.
 
 ### ex0075_osm_mesh
 The osm mesh example relies upon OpenStreetMap and cartopy to retrieve and 
@@ -251,6 +261,8 @@ we can later use as sample sources to depict the relevant half-hexagon.
 While Stonehenge has been used as a reference, any geographic location may 
 be similarly used.
 
+This was all managed via half-hexagons and is now less ... interesting.
+
 ### ex0076_stonehenge.
 Using the series of plate carree images retrieved in ex0075, this example 
 now generates the relevant half-hexagon for each address, then using the 
@@ -258,38 +270,51 @@ relevant image as a sample source, generates the half-tile represented by
 the hexagon and it's mode. This could be authored better, but is reasonably 
 straightforward to understand.
 
+This was all managed via half-hexagons and is now less ... interesting.
 The population examples (pr000) are probably more useful now.
 
-### ex0080_london
-This should do something! 
+### ex0080_authalics
+This draws a hexagonal grid across the sphere, demonstrating the variation 
+in area (from ideal) that any given hexagon has.  It's easily notable that 
+there is far more variety at each of the six poles - but it's also very 
+predictable. Tools have been developed for identifying degree of deviation.
 
+### ex0081_areas
+This uses two separate means to identify points on the sphere which ideally 
+authalic. Finding acceptable authalic reference points is useful only for 
+referencing at a given layer. This is ongoing work - but is reliable up to 
+around layer 18 (small).
 
-### ex0090_smp_grid
+### ex0094_smp_bary
+Compose pixel grids of a selection of octahedral faces.
+Load a Plate Carrée colour map for sampling, project onto Cartesian Unit Sphere 
+and assign KDTree for sample queries.
+Project each point of the grid onto Cartesian Unit Sphere and sample them.
+The octahedral→spherical projection is relatively fast, so we can handle larger images this way.
+Using a pixel grid provides us the ability to map colours to the pixels we need.
+Notable feature is that, once adopted, points maintain their position.
+
+### ex0094A_smp_bary
+This is functionally no different from 0094, as we are currently not implementing warps.
+Though it *does* do a roundtrip to simplex.
+
+### ex0095_smp_grid
 This demonstrates using a plate carree image as a sample source.
 The source image is loaded and projected onto WGS84 Ellipsoid, and 
 registered into a KDTree.
 The octahedral net pixels are identified then a copy is projected to 
 EllipsoidGCD, and query the KDTree for a sample value. 
 These samples may then be used to display the Octahedral Net.
+This is useful for authoring new nets.
+There is another version of this in pr0005.
 
-Again, while this works - there is a 'better' version of 
-this in pr0005, which uses a rotation component to improve the use of the 
-sample space.
-
-### ex0094_bary
-This renders the individual barycentric triangles which are the rotated 
-faces of the octahedron onto 2D space and form the basis of hexgrid 
-calculations. They serve several purposes for debugging and address 
-verification but are probably not so interesting beyond that. Normally one 
-prefers to see them stitched into a net.
-
-### ex0100_h9
+### ex0101_h9
 This example renders each pixel into it's hexgrid address, and then colours 
-the pixel according to a digit location, for the first 5 address points.
-It demonstrates how the grid address maps onto the octahedron.
+the pixel according to a digit location, for the first 5 hexagon layers, for 
+various nets. It demonstrates how the grid address maps onto the octahedron.
 
-### ex0110_poly
-Here we take the reference location of Stonehenge, convert it to it's region 
+### ex0110_poly_neighbours
+Here we take the reference location of Stonehenge, convert it to its region 
 list format, and then test each layer for it's neighbour, generating the 
 neighbour in a subplot.
 
@@ -304,9 +329,49 @@ calculation for roundtrip errors.
 ### ex0113_nbhr
 We test our reference addresses and test the neighbour 
 calculation for roundtrip errors, with a different printout.
+(Neighbour finding was a bit complex at first)
 
-# The following scripts belong to a pipeline for generating heatmaps.
-### pr0001_csv
+### ex0200_heatmap
+Generate the tokyo heatmap as found on the readme.
+This depends upon running the hh_heatmaps scripts beforehand!
+(see the hh_heatmaps set below).
+
+## ex4***
+These are poc, quick tests extracted from __main__ in the code.
+
+### ex4000_alg_packing
+Some checks for the packing algorithm.
+
+### ex4001_prj_akoctahedral
+These are some sanity checks for AKOctahedral projection
+
+### ex4002_h9_addressing
+These are some sanity checks for h9/addressing
+
+### ex4002_h9_addressing
+These are some sanity checks for h9/addressing
+
+## ex10***
+Typically short, validation scenarios.
+
+### ex_10001_octant_ids
+Check the octant ids are aligned.
+
+### ex_10003_region_rt
+Roundtrip region addresses
+
+### ex_10005_grid
+Validate various features and settings of the region/cell grid.
+
+### ex_10006_c2
+Validate various features and settings of the c2 tables.
+
+### ex_10007_hex_grid
+hex address roundtrip feature validation.
+
+
+##  hh_heatmaps
+### hh_heatmaps/pr0001_csv
 This converts a CSV into a np file.
 The CSV may be downloaded from https://data.humdata.org/organization/meta
 and consists of 3 values: longitude/latitude/populaton.
@@ -316,7 +381,7 @@ They represent sparse grid values at 30m.
 * Output 
    * src/{file}_lon_lat_pop.npy
 
-### pr0002_prj
+### hh_heatmaps/pr0002_prj
 Here we take the file and forward project the GCD addresses,
 converting them to barycentric octahedral co-ordinates, which are
 x,y and octant (in cmp).
@@ -327,8 +392,9 @@ This uses root-finding, and is batch-processed across multiple cores.
     * src/{file}_bry.npy
     * src/{file}_bry_cmp.npy
 
-### pr0002b_prj
-Take the same data as before, extract the population data, 
+### hh_heatmaps/pr0003_prj
+(1) Load the population numpy data file
+(2) Derive or resolve a boundary and project it onto the Barycentric Octahedral Net.
 find the boundaries of the gcd, project and store, both as gcd and as 
 barycentric, having added padding of 2.5% border.
 
@@ -340,16 +406,18 @@ barycentric, having added padding of 2.5% border.
     * src/{file}_bounds_bry.npy
     * src/{file}__bounds_bry_cmp.npy
 
-### pr0003_gcd_img
-Using gcd_bounds saved at pr0002; retrieve the background 
-map from OSM via Cartopy for the area and store it as a png.
-* Input
-    * src/{file}_lat_lon_bounds.npy
-* Output
-    * src/{file}_gcd.png
+### hh_heatmaps/pr0004_gcd_img
+Using gcd_bounds saved at pr0003;  retrieve an image from OpenStreetMap.
+Then store it.
 
-### pr0004_theta
-Using gcd_bounds saved at pr0002; project the bounds onto barycentric, 
+
+### hh_heatmaps/pr0005_align
+Load the GCD quadrilateral, project onto Barycentric Net Coordinates.
+Display it, and store it as a single value, along with
+the octahedral rectangle coordinates.
+
+### hh_heatmaps/pr0005_theta
+Using gcd_bounds saved at pr0003; project the bounds onto barycentric, 
 calculate the optimal rotation angle and centroid of the grid to represent 
 the area. Draw (for visualisation) the barycentric area before and after 
 rotation.
@@ -361,7 +429,7 @@ rotation.
     * src/{file}_bry_border.npy
     * src/{file}_rot_bry_border.npy
 
-### pr0005_grid
+### hh_heatmaps/pr0006_grid or hh_heatmaps/pr0006_grid_alt
 Now convert the gcd image into its barycentric equivalent.
 Store the final grid, and it's extent for placing as a backdrop for a heatmap.
 * Input
@@ -376,8 +444,9 @@ Store the final grid, and it's extent for placing as a backdrop for a heatmap.
    * src/{file}_bg_extent.npy
    * src/{file}_grid.png
 
-### pr0007_hh_heatmap
+### hh_heatmaps/pr0007_hh_heatmap
 Finally, we can generate the heatmap over the top of the grid image.
+This may need fixing!
 * Input      
    * src/{file}_theta.npy
    * src/{file}_centroid.npy

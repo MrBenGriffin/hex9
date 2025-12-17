@@ -1,5 +1,9 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
+AK Octahedral Projection 'oct_ell'
 """
 from functools import cache
 import numpy as np
@@ -9,7 +13,7 @@ from hhg9.base.projection import Projection
 from hhg9.algorithms.distance import haversine_rad
 from hhg9.algorithms import find_coords
 from pyproj import CRS
-from hhg9.h9 import H9C
+from hhg9.h9 import H9C, H9K
 
 
 class AKOctahedralEllipsoid(Projection):
@@ -35,8 +39,19 @@ class AKOctahedralEllipsoid(Projection):
         self._e = 1e-200
         self.tol = 1e-15
 
-        # Level 0 hex diameter ≈ 5362 km (area of Earth / 12 hexes)
-        self.diameters = 5362177 / (3 ** np.arange(38))  # in meters
+        # Level 0 area ≈ 5362 km (area of Earth / 12 hexes)
+        earth = 510_065_621_724_154.6
+        self.hex_0 = earth / 12
+        self.tri_0 = earth / 8
+        l_hex = self.hex_0
+        l_tri = self.tri_0
+        self.h_areas = np.zeros((64,), dtype=np.float64)
+        self.t_areas = np.zeros((64,), dtype=np.float64)
+        for i in range(64):
+            self.h_areas[i] = l_hex
+            self.t_areas[i] = l_tri
+            l_hex /= 9
+            l_tri /= 9
         self.accuracy = 34  # accuracy is nanometres.
 
     @cache
@@ -90,12 +105,26 @@ class AKOctahedralEllipsoid(Projection):
         pv = self._core_raw(uvw)
         return self.normalise(pv)
 
-    def set_accuracy(self, meters):
+    def get_accuracy(self, layer):
         """
-        Set the level such that the hex diameter is ≤ desired accuracy in meters.
+        Get accuracy in m2 from a given level.
         """
-        idx = np.searchsorted(self.diameters[::-1], meters, side='right')
-        self.accuracy = len(self.diameters) - idx
+        if layer < 0:
+            raise ValueError("get_accuracy: layer must be >= 0")
+        h_area = self.h_areas[-1]
+        t_area = self.t_areas[-1]
+        if layer < len(self.h_areas):
+            h_area = self.h_areas[layer]
+            t_area = self.t_areas[layer]
+        # side = np.sqrt((2*area)/(3*H9K.R3))
+        return h_area, t_area
+
+    def set_accuracy(self, m2):
+        """
+        Set the level such that the hex area is ≤ desired accuracy in m2.
+        """
+        idx = np.searchsorted(self.h_areas[::-1], m2, side='right')
+        self.accuracy = len(self.h_areas) - idx
         return self.accuracy
 
     def normalise(self, p):
@@ -149,7 +178,7 @@ class AKOctahedralEllipsoid(Projection):
             grx = self.reg.project(coords, [self.b_oct, self.c_oct, self.c_ell, self.g_gcd, r_gcd])
             return grx.coords.reshape(xy.shape)
 
-        found, _ = find_coords(ref, oct_m, cmp, H9C, fwd, haversine_rad, self.accuracy, beam_width=6)
+        found, _ = find_coords(ref, oct_m, cmp, H9C, fwd, haversine_rad, self.accuracy+2, beam_width=6)
         bpt = Points(found, self.b_oct, uvw.components)
         return self.reg.project(bpt, [self.b_oct, self.rev_cs])  # rev_cs = c_oct
 

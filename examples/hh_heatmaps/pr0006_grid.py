@@ -130,7 +130,7 @@ def stage(file: str,
     c_oct = OctahedralCartesian(reg)
     b_oct = OctahedralBarycentric(reg, c_oct)
     EllipsoidGCD(reg)
-    AKOctahedralEllipsoid(reg).set_accuracy(1e-10)
+    AKOctahedralEllipsoid(reg).set_accuracy(1e-10)  # tiny per-hex area?!
 
     # Load inputs: use the *rotated* border so the grid is tight in its own extent
     rot_border = np.load(rot_bry)  # polygon corners in rotated b_oct (shape (4,2))

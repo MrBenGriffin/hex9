@@ -1,12 +1,18 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project
 Compose pixel grids of each barycentric triangle.
 Load a Plate Carrée colour map for sampling, project onto Cartesian Unit Sphere and assign KDTree for sample queries.
 Project each point of the grid onto Cartesian Unit Sphere and sample them.
 The octahedral->spherical projection is relatively fast, so we can handle larger images this way.
 Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
-Last Tested 08 October 2025 √
+This is functionally no different from 0094, as we are currently not implementing warps.
+Though it -does- do a roundtrip to simplex.
+Last Tested 16 December 2025 0.1.0a3 (?passed)
+Last Tested 08 October 2025 (passed)
 """
 import numpy as np
 from matplotlib import image
@@ -24,10 +30,10 @@ def run(scale=2003):
     p_pix = reg.domain('p_pix')
     b_oct = reg.domain('b_oct')
     s_oct = reg.domain('s_oct')
-    warper = Warper()
+    # warper = Warper()
 
     # Load in plate carrée - will use 2700x1350 Blue Marble here.
-    img = image.imread(f'experiments/world5400x2700.png', 'png')
+    img = image.imread(f'src/world5400x2700.png', 'png')
     pc_px = p_pix.adopt(img)
     pc_el = reg.project(pc_px, [p_pix, 'g_gcd', 'c_ell'])
     src = KDTree(pc_el.coords)  # KDTree of plate_carrée projected onto unit sphere.
@@ -39,18 +45,18 @@ def run(scale=2003):
 
     for side in ["NWA", "NEA"]:
         octant = b_oct.sides[side]
-        if octant.mode == "Λ":
+        if octant.mode == 1:
             wid, hgt, rec, msk, _, _ = grid_bits_u
         else:
             wid, hgt, rec, msk, _, _ = grid_bits_d
 
         rec_in = rec[msk]  # (M,2)
 
-        pts = Points(rec_in, b_oct, components=octant.sign)
+        pts = Points(rec_in, b_oct, components=octant.sig())
         spt = reg.project(pts, [b_oct, s_oct])
-        wpt = warper.warp(spt)
-        s_oct.clamp(wpt)
-        wrp = reg.project(wpt, [s_oct, b_oct])
+        # wpt = warper.warp(spt)
+        # s_oct.clamp(wpt)
+        wrp = reg.project(spt, [s_oct, b_oct])
         px, py = fit(pts, wid, hgt)
         ref = reg.project(wrp, [b_oct, 'c_oct', 'c_ell'])
 
@@ -62,7 +68,7 @@ def run(scale=2003):
 
         out = np.zeros((hgt, wid, 4), dtype=float)
         out[py, px] = rgba
-        Image.fromarray((out * 255).astype(np.uint8)).save(f"../output/barya_{side}.png")
+        Image.fromarray((out * 255).astype(np.uint8)).save(f"output/ex0094A_{side}.png")
 
 
 if __name__ == '__main__':

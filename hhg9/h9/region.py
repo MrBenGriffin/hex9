@@ -442,6 +442,7 @@ def _recover(cid: np.ndarray,
     strategies = [
         (lambda ẋ_s, y_s, **_: (ẋ_s, ulp_nudge(y_s, lat_v))),  # 1. Nudge y
         (lambda ẋ_s, y_s, **_: (ulp_nudge(ẋ_s, lat_ü), y_s)),  # 2. Nudge ẋ
+        (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 0.5, h9k)),  # Clamp 0.5
         (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 1.0, h9k)),  # Clamp 1.0
         (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 2.0, h9k)),  # Clamp 2.0
         (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 4.0, h9k)),  # Clamp 4.0
@@ -524,7 +525,7 @@ def xy_regions(xy: NDArray[np.float64], mode: NDArray[int] = None, depth: int = 
     Args:
         xy: Array of (x, y) coordinates.
         mode: Array of initial modes (0 or 1).
-        depth: Recursion depth.
+        depth: Recursion depth. This is probably out; hex depth is 2 when this is 1 (But returns 3 values).  Which isn't correct.
 
     Returns:
         NDArray[np.uint8]: Array of region IDs for each layer.

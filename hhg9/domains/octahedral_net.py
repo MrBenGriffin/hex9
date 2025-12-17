@@ -59,13 +59,15 @@ class OctahedralNet(CompositeDomain):
         self.b_oct = b_oct
         self.layout = net_layouts[layout]
         grid_xy = np.array(list(self.layout['grid'].values()))[:, :2]
-        gx_min, gx_max = grid_xy[:, 0].min(), grid_xy[:, 0].max()
-        gy_min, gy_max = grid_xy[:, 1].min(), grid_xy[:, 1].max()
+        # gx_min, gx_max = grid_xy[:, 0].min(), grid_xy[:, 0].max()
+        # gy_min, gy_max = grid_xy[:, 1].min(), grid_xy[:, 1].max()
 
         # Each placed face contributes [x_off, x_off + 2*GW] and [y_off, y_off + 3*GH]
         # So total width/height is span of gx,gy plus the single-face width/height
-        self.wi = (gx_max - gx_min + 2) * self.GW
-        self.he = (gy_max - gy_min + 3) * self.GH
+        # self.wi = (gx_max - gx_min + 2) * self.GW
+        # self.he = (gy_max - gy_min + 3) * self.GH
+        self.wi = self.layout['width'] * H9K.derived.W
+        self.he = self.layout['height'] * H9K.derived.H
 
         self.oid_mo = np.zeros((8,), dtype=np.uint8)
         for sign, val in self.layout['grid'].items():

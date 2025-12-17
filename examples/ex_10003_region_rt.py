@@ -1,7 +1,13 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
 """
-Part of the H9 project -
 This round-trips region encode/decode
 and shows the maximum difference after 50 cycles
+The near zero ulps will be quite large in x.
+This is designed to hit some soft_clamp tests.
+16 December 2025 0.1.0a3 (passed)
 """
 import numpy as np
 from hhg9 import Points, Registrar
@@ -9,11 +15,24 @@ from hhg9.h9.region import xy_regions, regions_xy
 
 
 def ulps(a, b):
-    ai = a.view(np.int64)
-    bi = b.view(np.int64)
-    ai ^= (ai >> 63) & 0x7fffffffffffffff
-    bi ^= (bi >> 63) & 0x7fffffffffffffff
-    return np.abs(ai - bi)
+    """Return the ULP distance between float64 arrays `a` and `b`.
+
+    Note: we must NOT mutate the input arrays (views would corrupt the floats).
+    """
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+
+    # Work in uint64 bit-pattern space and copy to avoid mutating the original floats.
+    ai = a.view(np.uint64).copy()
+    bi = b.view(np.uint64).copy()
+
+    # Map IEEE-754 float ordering to monotonically increasing unsigned integers.
+    sign_mask = np.uint64(1) << np.uint64(63)
+    ai = np.where(ai & sign_mask, sign_mask - ai, ai)
+    bi = np.where(bi & sign_mask, sign_mask - bi, bi)
+
+    # Unsigned absolute difference.
+    return np.where(ai >= bi, ai - bi, bi - ai)
 
 
 if __name__ == '__main__':
@@ -27,12 +46,13 @@ if __name__ == '__main__':
     b_oct = reg.domain('b_oct')
 
     samples = np.array([
-        [0.707106781029412823, -0.408248290463863128],
-        [0.707106781029412712, -0.408248290463863128],
-        [-0.707106781029412934, 0.408248290463863073],
-        [0.000000000007909877, -0.816496580914025771]
-        ])
-    cmp = np.array([(1, -1, 1), (-1, 1, 1), (1, 1, 1), (1, 1, 1)])
+        [0.707106781029412934, -0.4082482904638631],
+        [0.707106781029412934, -0.4082482904638631],
+        [-0.707106781029412934, 0.4082482904638631],
+        [0.000000000007909877, -0.816496580914025771],
+        [0.000000000007909877,  0.816496580914025771],
+    ])
+    cmp = np.array([(1, -1, 1), (-1, 1, 1), (1, 1, 1), (1, 1, 1), (1, -1, 1)])
     bpts = Points(samples, b_oct, components=cmp)
     _, mode = bpts.cm()
     xy = bpts.coords.copy()

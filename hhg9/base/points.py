@@ -222,3 +222,11 @@ class Points:
         img = np.ones((h, w, channels), dtype=ch.dtype)
         img[y, x] = ch
         return img
+
+    def select(self, good: np.ndarray):
+        """Return only those for which good is true"""
+        if len(self.coords) != len(good):
+            raise ValueError('Number of coordinates does not match boolean array')
+        sel_c = self.components[good] if self.components is not None else None
+        smp_c = self.samples[good] if self.samples is not None else None
+        return Points(self.coords[good], domain=self.domain, components=sel_c, samples=smp_c)

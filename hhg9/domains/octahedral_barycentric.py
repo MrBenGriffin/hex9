@@ -83,7 +83,9 @@ class OctahedralBarycentric(CompositeDomain):
         # _components = {}
         props = {
             # Octahedral Triangle Identities differ. 0x16, 0x49
-            # AP EW  NS    θ   loc    V   c2 hexagon region  region mo o_id, c2 ngh  hex_id
+            # Note that OID do not share the id % 2 == mode logic(!)
+            # Also, 'c2' is always equator=0; with nb.c2=1 == self.c2 = 2
+            # AP EW  NS    θ   loc    V   c2 hexagon region  region mo o_id, c2* ngh  hex_id
             (+1, +1, +1): (2, '047', 'V', ('EA', 'NA', 'NE'), 0x49, 0, 0, (4, 2, 1), (0, 4, 5)),     # 0 'NEA' N:5, E:8, A: 0
             (-1, +1, +1): (5, '085', 'Λ', ('EP', 'NE', 'NP'), 0x16, 1, 1, (5, 0, 3), (1, 5, 7)),     # 1 'NEP' N:4, E:7, P: 0
             (+1, -1, +1): (5, '085', 'Λ', ('WA', 'NW', 'NA'), 0x16, 1, 2, (6, 3, 0), (2, 6, 4)),     # 2 'NWA'

@@ -14,7 +14,8 @@ This:
 (d) Measures, via GeographicLib Inverse, the ∂ distance from Reference
 (e) Logs the results into a CSV file.
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
-Last Tested 25 November 2025 √
+16 December 2025 0.1.0a3 (passed; after rewriting formatter)
+25 November 2025 (passed)
 """
 import csv
 import time
@@ -24,6 +25,8 @@ from hhg9 import Registrar, Points
 from hhg9.formats import OctahedralH9
 from hhg9.algorithms.distance import wgs84
 from hhg9.algorithms.pickers import gcd_rnd
+from hhg9.h9.addressing import reg_hex_digits, TailStyle
+from hhg9.h9.region import xy_regions
 
 
 class CSVLogger:
@@ -77,9 +80,19 @@ def run(reg, logger, refs, layers=36):
     # project barycentric octahedral back to GCD
     b_rtp = reg.project(b_rys, ['b_oct', 'g_gcd'])
     # Get the octant id and mode of each point (discarding mode here).
-    oc, _ = b_rys.cm()
+    oc, _mo = b_rys.cm()
+    b_oct = b_rys.domain
+    # for depth in range(30):
+    #     cx = xy_regions(b_rys.coords, _mo, depth)
+    #     hd = reg_hex_digits(cx, oc, b_oct, TailStyle.key)
+    #     print(f'depth={depth}, cx={cx[0]}, hx={hd[0]}')
+
+    # depth=0, cx=[22 42], hx=[7 5]
+    # depth=1, cx=[22 42 57], hx=[7 7 1]
+    # Labels are depth+2 long.  Consider layer 0:  they still need 0...B.
+    # However, for the purpose of reliable keys we need the c2 of parent/mode of parent
     # Now generate the set of h9f labels for each point, and convert to np.array
-    labels = f'{b_rys:h9.{layers}}'
+    labels = f'{b_rys:h9.{layers}}'  # This is reversible addresses.
     label_vec = np.array(labels.splitlines())
     # the h9f formatter h9f is used to revert this array back to barycentric.
     h9_r = h9f.revert(labels)  # Convert from addresses.
@@ -110,7 +123,7 @@ if __name__ == '__main__':
     accuracy = 1e-9  # in meters
     reg = Registrar()  # Manage Domains & Projections
     seed = 1234512
-    samples = 100_000  # _000
+    samples = 100_000
     layers = 36  # 36 reaches mathematical limits on 64-bit floats.
     np.random.seed(seed)
     base = Path(__file__).parent

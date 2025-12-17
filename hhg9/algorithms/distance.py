@@ -24,7 +24,6 @@ def haversine(p1, p2, R: float = R_MEAN):
     p2r = np.radians(p2)
     return haversine_rad(p1r, p2r, R)
 
-
 def haversine_rad(p1_rad, p2_rad, R: float = R_MEAN):
     """Haversine distance with inputs in radians. Vectorised over leading dims.
     p1_rad, p2_rad: (..., 2) arrays [lat_rad, lon_rad]
