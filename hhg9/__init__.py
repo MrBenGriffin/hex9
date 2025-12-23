@@ -10,7 +10,6 @@ from .base import (
 __all__ = [
     "Points",
     "Registrar",
-
 ]
 
 __version__ = "0.1.0a0"

@@ -92,6 +92,7 @@ class ComponentDomain(Domain):
             mode = mode_a[0]
         elif isinstance(mode, str):
             mode = 0 if mode == 'V' else 1
+        self.oid = Points.calc_octant_ids(np.asarray([sign], dtype='b'))[0]
         self.dom = dom
         self.mode = mode
         self.mode_str = 'V' if mode == 0 else 'Λ'

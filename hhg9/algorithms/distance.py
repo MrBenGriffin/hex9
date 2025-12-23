@@ -103,6 +103,17 @@ def _wgs84_distance(lat1, lon1, lat2, lon2):
     return geo.Inverse(lat1, lon1, lat2, lon2, Geodesic.DISTANCE)['s12']
 
 
+def _wgs84_offset(lat1, lon1, azi, dist):
+    """
+    Create and cache a single instance of the vectorised inverse
+    limited to just DISTANCE.
+    """
+    geo = geodesic_wgs84()
+    ll = geo.Direct(lat1, lon1, azi, dist, Geodesic.LATITUDE | Geodesic.LONGITUDE)
+    return ll['lat2'], ll['lon2']
+
+
+
 def wgs84(p1, p2):
     """
     Calculates the geodesic distance between a batch of reference points
@@ -113,6 +124,17 @@ def wgs84(p1, p2):
 
     result = np.vectorize(_wgs84_distance)(lat1, lon1, lat2, lon2)
     return result
+
+
+def wgs84_offset(p1, theta, dist):
+    """
+    Calculates the offset pt of reference points
+    given a theta (azimuth angle) and a distance (in metres).
+    """
+    lat1, lon1 = p1[..., 0], p1[..., 1]
+
+    result = np.vectorize(_wgs84_offset)(lat1, lon1, theta, dist)
+    return np.atleast_2d(result).T
 
 
 def wgs84_ratio(bounds):

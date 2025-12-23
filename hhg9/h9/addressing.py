@@ -123,7 +123,7 @@ def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
 
 def tail_pack_key(
     p_c2: NDArray[np.uint8] | np.uint8,    # terminating hex c2 of parent region
-    r_mo: NDArray[np.uint8] | np.uint8,  # root region mode
+    r_mo: NDArray[np.uint8] | np.uint8,   # root region mode
 ) -> NDArray[np.uint8]:
     """Pack key tail (binning-safe) into one uint8 byte."""
     p_c2 = np.asarray(p_c2, dtype=np.uint8)
@@ -873,13 +873,13 @@ def hex_digits_reg(hx, dom, tail=None, scheme: RegionAddressLike = H9_RA):
     return r_oct, cells
 
 
-def hex_digits(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
+def hex_digits(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
     """
     Convert Points (barycentric) to canonical hex-digit hierarchy.
 
     Args:
         pts (Points): Barycentric points.
-        depth (int): Layer level.
+        layer (int): Layer level.
         tail_style (TailStyle): whether we want a key or reversible.
 
     Returns:
@@ -888,7 +888,7 @@ def hex_digits(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversibl
     import hhg9.h9.region as rg
     dom = pts.domain
     oc, mo = pts.cm()
-    cx = rg.xy_regions(pts.coords, mo, depth)  # regions are length 2+'depth'
+    cx = rg.xy_regions(pts.coords, mo, layer)  # regions are length 2+'depth'
     return reg_hex_digits(cx, oc, dom, tail_style, scheme=scheme)
 
 
@@ -910,7 +910,7 @@ def hex_layer(vals, layer: int = 18, tail_style: TailStyle = TailStyle.key):
     return hex_digits(pts, layer, tail_style)
 
 
-def hex_str_encode(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
+def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
     """Convert Points (barycentric) to canonical hex string representation.
 
     Format: <body hex digits><tail byte>
@@ -919,7 +919,7 @@ def hex_str_encode(pts, depth: int = 36, tail_style: TailStyle = TailStyle.rever
 
     This is intentionally derived from `hex_digits(...)` so tail layout is centralized.
     """
-    hx = hex_digits(pts, depth=depth, tail_style=tail_style, scheme=scheme)
+    hx = hex_digits(pts, layer=layer, tail_style=tail_style, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
         raise ValueError("hex_digits must return (N, L) or (N, L+1)")

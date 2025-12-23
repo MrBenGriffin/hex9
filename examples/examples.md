@@ -336,6 +336,17 @@ Generate the tokyo heatmap as found on the readme.
 This depends upon running the hh_heatmaps scripts beforehand!
 (see the hh_heatmaps set below).
 
+### ex0250_geotiff
+This is a nice toy that takes the CONUS land usage dataset,
+and, given a location in the US, generates the land usage
+as a hex-grid. It's stand-alone, and uses several tricks,
+including implementing an ad-hoc domain/projection. 
+However, you will need osgeo and gdal to use it.
+This is still a toy - I have cut corners when it comes to octant seams,
+so New Orleans (at -90) is likely to fail, but it's not so hard to fix.
+
+
+
 ## ex4***
 These are poc, quick tests extracted from __main__ in the code.
 

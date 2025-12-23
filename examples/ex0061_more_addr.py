@@ -204,6 +204,9 @@ if __name__ == '__main__':
 
     pos = Points(np.array(ll), g_gcd)
     bry = reg.project(pos, [g_gcd, b_oct])  # spherical cart
+    bel = reg.project(pos, [g_gcd, 'c_ell'])
+    boc = reg.project(pos, ['c_ell', 'c_oct'])
+
     rtp = reg.project(bry, [b_oct, g_gcd])  # sph rt..
     dif = wgs84(pos.coords, rtp.coords) * 1e+9
     oc, mo = bry.cm()
@@ -241,7 +244,10 @@ if __name__ == '__main__':
             print(f'H9.key:{bry[i]:h9.k}')
             print(f'H9.adr.13:{bry[i]:h9.13}')
             print(f'H9.u64.13:{bry[i]:h9.u13}')
-            if name == 'NEA: Great Pyramid':
+            if name == 'NWA: Stonehenge':
+                print(f'ECEF: {bel.coords[i][0]:.8f},{bel.coords[i][1]:.8f},{bel.coords[i][2]:.8f}')
+                print(f'OCTA: {boc.coords[i][0]:.8f},{boc.coords[i][1]:.8f},{boc.coords[i][2]:.8f}')
+                print(f'BARY: {bry.coords[i][0]:.8f},{bry.coords[i][1]:.8f}')
                 for layer in range(35):
                     print(f'H9.key; layer {layer}:{bry[i]:h9.k{layer}}')
             print(f'Reference BRY: {bry.coords[i][0]:.18f},{bry.coords[i][1]:.18f}')

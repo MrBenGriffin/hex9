@@ -25,7 +25,7 @@ All polygons are defined in **Clockwise** order.
 from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Callable, Protocol
 
 from hhg9.h9 import H9C, H9K
 from hhg9.h9.addressing import reg_hex_digits, hex_digits_reg, HEX_LUTS, TailStyle, hex_layer, tail_unpack_reversible, \
@@ -324,27 +324,46 @@ def enmesh(pts, levels: int = 35, shape=None):
         return polys, np.array(list[range(num_pts)])
 
 
-def hex_poly_layer(pts, layers: int = 10):
-    """
-    Find hexagons for data, and display on a 'globe'.
+class HexReducer(Protocol):
+    """Callable signature for aggregating per-point data into per-hex values."""
+
+    def __call__(
+        self,
+        inv_hex: NDArray[np.int64],
+        counts: NDArray[np.int64],
+        pts,
+    ) -> NDArray[np.float64]:
+        ...
+
+
+def hex_poly_groups(pts, layers: int = 10, tail_style: TailStyle = TailStyle.reversible):
+    """Return hex polygons plus the grouping needed to aggregate arbitrary per-point data.
+
+    Returns:
+        tuple: (hx_pts, inv_hex, counts, idx)
+            hx_pts: Points of hex polygon vertices (H*6,2) with per-vertex octant components.
+            inv_hex: (N,) mapping each input point -> hex index in [0, H)
+            counts: (H,) population count per hex
+            idx: (H,) indices of representative points for each hex (as returned by np.unique)
+
+    Notes:
+        - This function does NOT aggregate values; callers can compute means/sums/modes/medians etc.
+        - `idx` can be used to recover per-hex address metadata from the representative point.
     """
     from hhg9 import Points
+
     b_oct = pts.domain
     if b_oct.name != 'b_oct':
-        raise ValueError('hex_poly_layer requires pts to be in b_oct domain')
-    h_val = hex_layer(pts, layer=layers, tail_style=TailStyle.reversible)
+        raise ValueError('hex_poly_groups requires pts to be in b_oct domain')
+
+    h_val = hex_layer(pts, layer=layers, tail_style=tail_style)
     h_key = hex_key(h_val)
 
     hex_k, idx, inv_hex = np.unique(h_key, axis=0, return_index=True, return_inverse=True)
     hex_num = hex_k.shape[0]
-    sum_wt = np.bincount(inv_hex, weights=pts.samples, minlength=hex_num)
-    pp_hx = np.bincount(inv_hex, minlength=hex_num)  # aka cnt
-    # values = np.divide(sum_wt, pp_hx, out=np.zeros_like(sum_wt, dtype=float), where=pp_hx > 0)
-    # print(pp_hx.min(), np.median(pp_hx), pp_hx.max())
-    # print(np.mean(pp_hx == 0), np.mean(pp_hx == 1), np.mean(pp_hx <= 2))
-    values = np.divide(sum_wt, pp_hx, out=np.zeros_like(sum_wt, float), where=pp_hx > 0)
+    counts = np.bincount(inv_hex, minlength=hex_num).astype(np.int64, copy=False)
 
-    # values
+    # Build hex polygons (same logic as the old hex_poly_layer)
     hex_v = h_val[idx]
     tail = hex_v[:, -1]
     xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
@@ -353,191 +372,71 @@ def hex_poly_layer(pts, layers: int = 10):
     hex_oid, hex_rgn = hex_digits_reg(hex_v, b_oct)
 
     scale = 1.0
-    for i in range(1, layers+1):
+    for i in range(1, layers + 1):
         hex_xy += H9C.off_xy[hex_rgn[:, i]] * scale
         scale /= 3.0
 
-    hex_pts = hex_xy[:, None, :] + hex_all * scale  # (n,6,2)
+    hex_pts = hex_xy[:, None, :] + hex_all * scale  # (H,6,2)
 
     # Set the basic octant id for each hexagon
     oc_poly6 = np.repeat(hex_oid[:, None], 6, axis=1)  # (H, 6)
-    nbr_oid = b_oct.oid_nb[hex_oid, xc2]                      # verified.  This c2 = that c1
+    nbr_oid = b_oct.oid_nb[hex_oid, xc2]
 
     hex_ẋ = H9K.R3 * hex_pts[..., 0].ravel()  # Classifier ẋ
-    hex_y = hex_pts[..., 1].ravel()  # Classifier y
-    oc_mo = np.repeat(xrm, 6)  # Set the octant mode for each hexagon
+    hex_y = hex_pts[..., 1].ravel()          # Classifier y
+    oc_mo = np.repeat(xrm, 6)                # Set the octant mode for each hexagon
     types = location(hex_ẋ, hex_y, oc_mo)
-    locs = types.reshape(-1, 6)  # identify locations in octant of each pt.
+    locs = types.reshape(-1, 6)
+
     ex4 = locs[:, 4] == 1
     ex5 = locs[:, 5] == 1
     ext_hex = (ex4 & ex5)
+
+    # Stitch exterior vertices across face boundaries
     hex_pts[ext_hex, 4] = hex_pts[ext_hex, 2] * [1, -1]
     hex_pts[ext_hex, 5] = hex_pts[ext_hex, 1] * [1, -1]
-    n_oct = nbr_oid[ext_hex]  # grab the related neighbour octant id.
+
+    n_oct = nbr_oid[ext_hex]
     oc_poly6[ext_hex, 4] = n_oct
     oc_poly6[ext_hex, 5] = n_oct
 
     hx_coords = hex_pts.reshape([-1, 2])
     hx_oc = oc_poly6.reshape([-1])
     hx_pts = Points(hx_coords, b_oct, components=hx_oc)
-    return hx_pts, values
+
+    return hx_pts, inv_hex.astype(np.int64, copy=False), counts, idx
 
 
-def o_hex_poly_layer(pts, layer: int = 10):
-    """
-    Aggregates points into unique Hexagons at a specific resolution layer.
 
-    This function performs sophisticated **coalescing**:
-    1.  Calculates region neighbors.
-    2.  Handles octant hops (where points wrap around the octahedron edges).
-    3.  Stitches external vertices that impinge on the boundary.
+def hex_poly_layer(pts, layers: int = 10, reducer: Optional[HexReducer] = None):
+    """Return hex polygons and an aggregated value per hex.
+
+    By default, this reproduces the previous behaviour: mean of `pts.samples` per hex.
+
+    Args:
+        pts: Input points in b_oct.
+        layers: Hex layer.
+        reducer: Optional callable to aggregate per-point data into per-hex values.
+            Signature: reducer(inv_hex, counts, pts) -> (H,) float array.
 
     Returns:
-        tuple: (polys, count, inv, oc_poly6)
-            polys: (H, 6, 2) Unique hexagon vertices.
-            count: (H,) Number of points in each hex.
-            inv: (N,) Index mapping input points to unique hexes.
-            oc_poly6: (H, 6) Octant ID for each vertex of the hexagon.
+        tuple: (hx_pts, values)
+            hx_pts: Points of hex polygon vertices (H*6,2)
+            values: (H,) aggregated value per hex (float64)
     """
-    from hhg9.h9.region import xy_regions, region_neighbours as region_neighbours
-    from hhg9.h9 import H9K, H9C, H9R, H9P, in_scope
+    hx_pts, inv_hex, counts, idx = hex_poly_groups(pts, layers=layers, tail_style=TailStyle.reversible)
 
-    n = len(pts)
-    if n == 0:
-        return (np.empty((0, 6, 2), float),
-                np.empty((0,), int),
-                np.empty((0,), int),
-                np.empty((0,), int))
-
-    b_oct = pts.domain
-    if b_oct.name != 'b_oct':
-        raise ValueError('pts must be barycentric')
-    oc, oct_mode = pts.cm()  # oc=octant id of each pt, oct_mode = octant modes.
-
-    # Address to layer+1 to get parent(L) and child(L+1)
-    rg = xy_regions(pts.coords, oct_mode, layer)
-
-    # Identify which parents are mode-1 and need coalescing
-    par = rg[:, layer]
-    pmo = H9C.mode[par]
-
-    move = (pmo == 1)
-    if np.any(move):
-        move_idx = np.flatnonzero(move)
-        og_root = rg[move, 0]
-        rg_neig, c2_neig = region_neighbours(rg[move])
-        n_root = rg_neig[:, 0]
-        root_changed = (n_root != og_root)
-        keep_local = ~root_changed  # (M,)
-        keep_global = move_idx[keep_local]  # (K,) global indices
-        non_hop_nb = rg_neig[keep_local]
-        rg[keep_global] = non_hop_nb
-
-        if np.any(root_changed):
-            sel = move_idx[root_changed]
-            oc[sel] = b_oct.oid_nb[oc[sel], c2_neig[root_changed]]
-            coords_flip = pts.coords[sel].copy()
-            coords_flip[:, 1] *= -1.0
-            mode_flip = b_oct.oid_mo[oc[sel]]
-            ogx = xy_regions(coords_flip, mode_flip, layer)
-            rg[sel] = ogx
-
-    broke = rg == H9R.invalid_region
-    if np.any(broke):
-        raise ValueError('rg broken')
-
-    hex_digits = reg_hex_digits(rg, oc, b_oct)
-    key_hex = hex_digits[:, :-1]
-    hex_tail = hex_digits[:, -1]
-
-    hex_u, hex_first, inv_hex = np.unique(key_hex, axis=0, return_index=True, return_inverse=True)
-    count = np.bincount(inv_hex, minlength=hex_u.shape[0])
-
-    # Geometry from unique representatives
-    hex_rgn = rg[hex_first]  # list of unique hexagon addresses for each hex
-    hex_oid = oc[hex_first]  # octant ids of each of those.
-    hex_omo = b_oct.oid_mo[hex_oid]  # modes of each octant for each hexagon
-    hex_num = hex_rgn.shape[0]  # number of hexagons.
-
-    # For geometry, compute c2 from the representative (coalesced) addresses
-    hex_par = hex_rgn[:, layer]  # get the parent at the hex level
-    hex_chd = hex_rgn[:, layer + 1]  # get the child
-    hex_pmo = H9C.mode[hex_par]  # local mode.
-    hex_xc2 = H9R.mcc2[hex_pmo, hex_chd]  # c2-relation/orientation of the hexagon.
-    hex_all = H9P.hx[hex_pmo, hex_xc2]  # The h,6,2 points.
-    hex_xy = np.zeros((hex_num, 2), dtype=float)
-
-    # Now calculate neighbour components also.  These are used for external/octant crossing hexagons.
-    nbr_rgn, nbr_xc2 = region_neighbours(hex_rgn)  # nbr equivalent of hex_rgn, and the c2-relation eq. of hex_xc2.
-    nbr_oid = b_oct.oid_nb[hex_oid, nbr_xc2]  # nbr equivalent of hex_oid
-    nbr_xy = np.zeros((hex_num, 2), dtype=float)
-    rtp_rgn, rtp_xc2 = region_neighbours(nbr_rgn)
-    rta = (rtp_rgn[:, :-1] == hex_rgn[:, :-1]).all(axis=1)
-
-    # Validation checks for neighbour symmetry
-    if not rta.all():
-        print(f'[hex_layer] Mismatch in round-trip neighbour calculation')
-
-    # Now compose the origin of every hexagon, along with the scale.
-    scale = 1.0
-    for i in range(1, layer + 1):
-        hex_xy += H9C.off_xy[hex_rgn[:, i]] * scale
-        nbr_xy += H9C.off_xy[nbr_rgn[:, i]] * scale
-        scale /= 3.0
-
-    # The parent mode, and c2 give us what we need to generate the hexes.
-    # This gives us the offset and scale
-    hex_pts = hex_xy[:, None, :] + hex_all * scale  # (n,6,2)
-    nbr_pts = hex_xy[:, None, :] + hex_all * scale  # (n,6,2)
-
-    # Set the basic octant id for each hexagon
-    oc_poly6 = np.repeat(hex_oid[:, None], 6, axis=1)  # (H, 6)
-
-    # Now resolve externally impinged hexagons.
-    hex_ẋ = H9K.R3 * hex_pts[..., 0].ravel()  # Classifier ẋ
-    hex_y = hex_pts[..., 1].ravel()  # Classifier y
-    oc_mo = np.repeat(hex_omo, 6)  # Set the octant mode for each hexagon
-    locs = location(hex_ẋ, hex_y, oc_mo).reshape(-1, 6)  # identify locations in octant of each pt.
-    # locs are:  0: undefined, 1: external, 2: internal, 3:edge, 4:vertex
-    ext_mask = (locs == 1)
-
-    # Handle external vertices logic...
-    # (Abbreviated comments for brevity, logic preserved)
-    if np.any(ext_mask):
-        n_ext = int(ext_mask.sum())
-        n_hex = int(ext_mask.any(axis=1).sum())
-        # print(f"[hex_layer] layer={layer}: {n_ext} external vertices across {n_hex} hexagons")
-        ext_hex = ext_mask.any(axis=1)
+    if reducer is None:
+        # Default: mean of pts.samples per hex (previous behaviour)
+        sum_wt = np.bincount(inv_hex, weights=pts.samples, minlength=counts.shape[0])
+        values = np.divide(sum_wt, counts, out=np.zeros_like(sum_wt, dtype=float), where=counts > 0)
     else:
-        ext_hex = np.any(ext_mask, axis=1)
+        values = reducer(inv_hex, counts, pts)
+        values = np.asarray(values, dtype=np.float64)
+        if values.shape != (counts.shape[0],):
+            raise ValueError(f"reducer must return shape ({counts.shape[0]},), got {values.shape}")
 
-    wnb_pts = nbr_pts[ext_hex]  # gather the related neighbour point.
-    wlx_pts = hex_pts[ext_hex]  # gather the related local point.
-    w_oct = oc_poly6[ext_hex]  # these octants are currently set to the central one.
-    n_oct = nbr_oid[ext_hex]  # grab the related neighbour octant id.
-
-    # Use location mask to update only those vertices that are external (locs == 1).
-    locs_ext = ext_mask[ext_hex]  # (Nh, 6) bool
-    for idx in (4, 5):
-        sel = locs_ext[:, idx]  # which external-hex rows have an external at this vertex
-        if not np.any(sel):
-            continue
-
-        # Build a full-length mask over the Nh external hexes.
-        mask = np.zeros(locs_ext.shape[0], dtype=bool)
-        mask[sel] = True  # Simplified from original pattern match for clarity
-        inv_idx = (6 - idx) % 6
-
-        # Substitute neighbour vertex and flip its y coordinate for the selected rows.
-        wlx_pts[mask, idx, :] = wnb_pts[mask, inv_idx, :]
-        wlx_pts[mask, idx, 1] *= -1.0
-        # Update octant id for those vertices.
-        w_oct[mask, idx] = n_oct[mask]
-
-    oc_poly6[ext_hex] = w_oct
-    hex_pts[ext_hex] = wlx_pts
-
-    return hex_pts, count.astype(int), inv_hex.astype(int), oc_poly6
+    return hx_pts, values
 
 
 def hh_layer(pts, layer: int = 10):

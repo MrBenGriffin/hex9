@@ -212,12 +212,12 @@ class Registrar:
             pts = a.binning(pts)
         # pts.coords = np.atleast_2d(pts.coords)
         res = np.zeros_like(pts.coords)
-        uvw = (pts.components >= 0) @ (4, 2, 1)
+        # uvw = (pts.components >= 0) @ (4, 2, 1)
+        uvw = pts.oids()  # grab the octant ids.
         for sig, cmp in a.components.items():
             key = (cmp.name, a2b[cmp].name)
             facilitator = next(iter(self._domain_projections[key]))
-            side = np.asarray(sig, dtype='b')
-            ref = (side >= 0) @ (4, 2, 1)
+            ref = cmp.oid
             crds = pts.coords[uvw == ref]  # these are the coordinates for this projection.
             if crds.size > 0:
                 rex = self._domain_projections[key][facilitator](crds)

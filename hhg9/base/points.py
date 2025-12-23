@@ -58,6 +58,10 @@ class Points:
                ((components[:, 1] < 0) << 1) | \
                ((components[:, 0] < 0) << 0).astype(np.uint8)
 
+    def oids(self):
+        """calculate octant IDs from sign components."""
+        return self.calc_octant_ids(self.components)
+
     @classmethod
     def invert_octant_ids(cls, octants_):
         """

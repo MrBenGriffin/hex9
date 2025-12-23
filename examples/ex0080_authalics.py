@@ -26,22 +26,14 @@ import matplotlib as mpl
 
 def chain_generator(initial_seed, depth, props=H9_RA.props, modes=H9_RA.modes):
     """Generator for comprehensive region chain generation"""
-
     def _recurse(current_chain):  # Recursive Closure
         if len(current_chain) - 2 == depth:  # Stop condition
             yield current_chain
             return
-
         seed = current_chain[-1]  # Get the current seed (last element)
-
-        # INLINED LOOKUP (No function overhead)
-        # Note: Since 'seed' is a single integer here,
-        # props[modes[seed]] returns a 1D array (the children).
         children = props[modes[seed]].flatten()
-
         for child in children:  # Iterate and dive deeper
             yield from _recurse(current_chain + [child])  # Create new list
-
     yield from _recurse([initial_seed])  # yield from closure.
 
 

@@ -1,0 +1,124 @@
+{
+  "nlcd_legend": [
+    {
+      "id": 11,
+      "name": "Open Water",
+      "color": "#466b9f",
+      "description": "Areas of open water, generally with less than 25% cover of vegetation or soil."
+    },
+    {
+      "id": 12,
+      "name": "Perennial Ice/Snow",
+      "color": "#d1def8",
+      "description": "Areas characterized by a perennial cover of ice and/or snow, generally greater than 25% of total cover."
+    },
+    {
+      "id": 21,
+      "name": "Developed, Open Space",
+      "color": "#dec5c5",
+      "description": "Areas with a mixture of some constructed materials, but mostly vegetation in the form of lawn grasses. Impervious surfaces account for less than 20% of total cover."
+    },
+    {
+      "id": 22,
+      "name": "Developed, Low Intensity",
+      "color": "#d99282",
+      "description": "Areas with a mixture of constructed materials and vegetation. Impervious surfaces account for 20% to 49% percent of total cover."
+    },
+    {
+      "id": 23,
+      "name": "Developed, Medium Intensity",
+      "color": "#eb0000",
+      "description": "Areas with a mixture of constructed materials and vegetation. Impervious surfaces account for 50% to 79% of total cover."
+    },
+    {
+      "id": 24,
+      "name": "Developed, High Intensity",
+      "color": "#ab0000",
+      "description": "Highly developed areas where people reside or work in high numbers. Impervious surfaces account for 80% to 100% of total cover."
+    },
+    {
+      "id": 31,
+      "name": "Barren Land (Rock/Sand/Clay)",
+      "color": "#b3ac9f",
+      "description": "Areas of bedrock, desert pavement, scarps, talus, slides, volcanic material, glacial debris, sand dunes, strip mines, gravel pits and other accumulations of earthen material."
+    },
+    {
+      "id": 41,
+      "name": "Deciduous Forest",
+      "color": "#68ab5f",
+      "description": "Areas dominated by trees generally greater than 5 meters tall, and greater than 20% of total vegetation cover. More than 75% of the tree species shed foliage simultaneously."
+    },
+    {
+      "id": 42,
+      "name": "Evergreen Forest",
+      "color": "#1c5f2c",
+      "description": "Areas dominated by trees generally greater than 5 meters tall, and greater than 20% of total vegetation cover. More than 75% of the tree species maintain their leaves all year."
+    },
+    {
+      "id": 43,
+      "name": "Mixed Forest",
+      "color": "#b5c58f",
+      "description": "Areas dominated by trees generally greater than 5 meters tall, and greater than 20% of total vegetation cover. Neither deciduous nor evergreen species are greater than 75% of total tree cover."
+    },
+    {
+      "id": 51,
+      "name": "Dwarf Scrub",
+      "color": "#af963c",
+      "description": "Alaska only. Areas dominated by shrubs less than 20cm tall with shrub canopy typically greater than 20% of total vegetation. This type is often co-associated with grasses, sedges, herbs, and non-vascular vegetation."
+    },
+    {
+      "id": 52,
+      "name": "Shrub/Scrub",
+      "color": "#ccb879",
+      "description": "Areas dominated by shrubs; less than 5 meters tall with shrub canopy typically greater than 20% of total vegetation."
+    },
+    {
+      "id": 71,
+      "name": "Grassland/Herbaceous",
+      "color": "#dfdfc2",
+      "description": "Areas dominated by graminoid or herbaceous vegetation, generally greater than 80% of total vegetation. These areas are not subject to intensive management such as tilling."
+    },
+    {
+      "id": 72,
+      "name": "Sedge/Herbaceous",
+      "color": "#d1d182",
+      "description": "Alaska only. Areas dominated by sedges and forbs, generally greater than 80% of total vegetation. This type can occur with central Alaskan Wetlands or other non-wetland areas."
+    },
+    {
+      "id": 73,
+      "name": "Lichens",
+      "color": "#a3cc51",
+      "description": "Alaska only. Areas dominated by fruticose or foliose lichens, generally greater than 80% of total vegetation."
+    },
+    {
+      "id": 74,
+      "name": "Moss",
+      "color": "#82ba9e",
+      "description": "Alaska only. Areas dominated by mosses, generally greater than 80% of total vegetation."
+    },
+    {
+      "id": 81,
+      "name": "Pasture/Hay",
+      "color": "#dcd939",
+      "description": "Areas of grasses, legumes, or grass-legume mixtures planted for livestock grazing or the production of seed or hay crops."
+    },
+    {
+      "id": 82,
+      "name": "Cultivated Crops",
+      "color": "#ab6c28",
+      "description": "Areas used for the production of annual crops, such as corn, soybeans, vegetables, tobacco, and cotton, and also perennial woody crops such as orchards and vineyards."
+    },
+    {
+      "id": 90,
+      "name": "Woody Wetlands",
+      "color": "#b8d9eb",
+      "description": "Areas where forest or shrubland vegetation accounts for greater than 20% of vegetative cover and the soil or substrate is periodically saturated with or covered with water."
+    },
+    {
+      "id": 95,
+      "name": "Emergent Herbaceous Wetlands",
+      "color": "#6c9fb8",
+      "description": "Areas where perennial herbaceous vegetation accounts for greater than 80% of vegetative cover and the soil or substrate is periodically saturated with or covered with water."
+    }
+  ]
+}

@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from hhg9 import Registrar, Points
 from PIL import Image  # image saving
 from hhg9.formats import OctahedralH9
-from hhg9.h9.addressing import hex_layer
+from hhg9.h9.addressing import hex_layer, hex_key, TailStyle, hex_str_encode
 
 
 def run(layout, scale, depths):
@@ -55,14 +55,25 @@ def run(layout, scale, depths):
 
     pts = Points(xy, domain=n_oct, components=signs)
 
-    bas = reg.project(pts, [n_oct, b_oct])
+    bas = reg.project(pts, [n_oct, b_oct])  # Now move from net to bary.
     good = b_oct.valid(bas)
-    ref = bas.select(good)
+    ref = bas.select(good)   # Eliminate any outliers.
     px = px[good]
     py = py[good]
     for layer in depths:
-        addr = hex_layer(ref, layer)
-        idt = addr[:, layer]  # should be same as -1
+        # h_val = hex_layer(ref, layer, tail_style=TailStyle.reversible)
+        # h_key = hex_key(addr)
+        adr = hex_str_encode(ref, layer=layer, tail_style=TailStyle.key)
+        h_key = hex_layer(ref, layer=layer, tail_style=TailStyle.key)
+        hex_k, idx, inv_hex = np.unique(h_key, axis=0, return_index=True, return_inverse=True)
+        hex_num = hex_k.shape[0]
+        # idx = range(12) if layer == 0 else range(9)
+        # sum_wt = np.bincount(inv_hex, weights=ref.samples, minlength=hex_num)
+        # pp_hx = np.bincount(inv_hex, minlength=hex_num)  # aka cnt
+
+        # The following method uses the hex-ids themselves.
+        # For layers 0..5 this should be fine.
+        idt = h_key[:, layer]  # should be same as -1
         samples = cols[idt.astype(np.uint8)]
         rgba = samples if samples.shape[1] == 4 else np.hstack(
             (samples, np.ones((samples.shape[0], 1), dtype=samples.dtype))
