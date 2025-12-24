@@ -306,10 +306,9 @@ if __name__ == '__main__':
     # grid_colors = nlcd_lut[nlcd_values]
 
     # We are going to load up a tif.  It's a proxy, so not hogging memory here.
-    # Alaska only!
-    src_file = 'src/NLCD_2016_Land_Cover_AK_20200724.img'
+    # src_file = 'src/NLCD_2016_Land_Cover_AK_20200724.img' # Alaska only!
     # 2023 Conus for the USA continent
-    # src_file = 'src/USA_NLCD_LndCov_2023_CU_C1V1.tif'  # https://www.mrlc.gov/ land usage.
+    src_file = 'src/USA_NLCD_LndCov_2023_CU_C1V1.tif'  # https://www.mrlc.gov/ land usage.
     ds = gdal.Open(src_file)
     g_wkt = Wkt(rg, 'g_wkt', ds.GetProjection())
     p_wkt = Wkt_4978(rg, g_wkt)
@@ -319,7 +318,7 @@ if __name__ == '__main__':
     c_ell = rg.domain('c_ell')  # EPSG:4978
     b_oct = rg.domain('b_oct')
     c_oct = rg.domain('c_oct')
-    # 70.1500, -148.4500 Tundra Mosaic
+    # 70.1500, -148.4500 Tundra Mosaic NEEDS Alaska!
     # 37.42222892438389, -122.08531190998633 Googleplex
     # 37.815782046081814, -122.04091803913096 Las Trampas Ca.
     # 29.9511, -90.0715  New Orleans, LA
@@ -327,11 +326,11 @@ if __name__ == '__main__':
     # 44.4280, -110.5885 Yellowstone area, WY (44.4280, -110.5885)
     # 25.4687, -80.4776 Everglades edge, FL (Homestead)
     # Here we are using A given point at the centre of the map.
-    focus = "Tundra_Mosaic"
-    rcc = Points(np.atleast_2d([70.1500, -148.4500]), g_gcd)
+    focus = "Richmond_VA"
+    rcc = Points(np.atleast_2d([37.5407, -77.4360]), g_gcd)
     # let's grab an approximate 50km square around city centre.
     centres = rcc.coords  # shape (n, 2) in (lat, lon)
-    half = 500.0
+    half = 50_000.0
     diag = half * math.sqrt(2.0)  # centre → corner
     az = np.array([45.0, 135.0, 225.0, 315.0], dtype=np.float64)
     n = centres.shape[0]
@@ -352,11 +351,11 @@ if __name__ == '__main__':
     if np.unique(cmp).size > 1:
         raise NotImplementedError('Need to improve the mode, and components part here.')
     bbox = (tp, lt, bt, rt)  # TLBR
-    for layer in range(12, 15):
+    for layer in range(4, 10):
         pts = tri_grid_clipped(level=layer+3, mode=int(mo[0]), bbox=bbox)
         bt = Points(pts, b_oct, components=bhx.components[0])
         smp = rg.project(bt, [b_oct, c_oct, c_ell, g_wkt])
         bt.samples, px_id = sample_nlcd_gdal(ds, smp.coords)
         bt.px_id = px_id   # de-dupes
         hx_pts, vals = hex_poly_layer(bt, layers=layer, reducer=mode_u8)
-        plot_hex(hx_pts, f'5c{layer}{focus}', bbox=bbox, values=vals, lut=nlcd_lut)
+        plot_hex(hx_pts, f'01k{layer}{focus}', bbox=bbox, values=vals, lut=nlcd_lut)
