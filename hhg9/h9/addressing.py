@@ -459,7 +459,9 @@ def neighbours(pts, layer=32, coalesce=True):
         Points: New points representing the neighbor/coalesced center.
     """
     from hhg9.h9.region import region_neighbours, regions_xy, xy_regions
+    from hhg9.h9 import H9O
     from hhg9 import Points
+
     dom = pts.domain
     oc, mode = pts.cm()
     coords = pts.coords.copy()
@@ -479,7 +481,7 @@ def neighbours(pts, layer=32, coalesce=True):
     xa[~hopped] = xym[:, 0]
     ya[~hopped] = xym[:, 1]
     if np.any(hopped):  # the octant_spanning neighbour is merely the inverted y-axis!
-        ca[hopped] = dom.oid_nb[ca[hopped], c2[hopped]]  # Adjust the octant accordingly
+        ca[hopped] = H9O.oid_nb[ca[hopped], c2[hopped]]  # Adjust the octant accordingly
         ya[hopped] = -ya[hopped]
     oc[active] = ca
     coords[active, 0] = xa
@@ -761,20 +763,19 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
         Final byte is meta-data (full tail is reversible; partial tail is hex-binning safe).
 
     """
+    from hhg9.h9 import H9O
     sz, cols = np.shape(cx)
     depth = cols - 1
 
     # Mode per point (from octant); we could have used the region root, but we need oc.
-    mo = dom.oid_mo[oc]
-
-    # Consider region child under root.
+    mo = H9O.oid_mo[oc]
     c2 = H9R.mcc2[mo, cx[:, 1]]
 
     # Hex body: one hex digit per region step away from the proto.
     bdy = np.full((sz, depth), 0x0F, dtype=np.uint8)
     if depth > 0:
         # Layer-0 hex digit anchored by (octant, c2).
-        bdy[:, 0] = dom.l0hex_by_id[oc, c2]  # given the octant, and the c2 we can identify the root hexagon.
+        bdy[:, 0] = H9O.l0hex_by_id[oc, c2]  # given the octant, and the c2 we can identify the root hexagon.
         # Remaining hex digits via region-to-hex LUT.
         reg_hex = HEX_LUTS.reg_hex
         rx = scheme.cell2rid[cx]  # This gives us region_address ids [0...11]
@@ -808,7 +809,7 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     return bdy
 
 
-def hex_digits_reg(hx, dom, tail=None, scheme: RegionAddressLike = H9_RA):
+def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     """
     Inverts `reg_hex_digits` (Hex -> Regions).
 
@@ -820,6 +821,7 @@ def hex_digits_reg(hx, dom, tail=None, scheme: RegionAddressLike = H9_RA):
     Returns:
         tuple: (octants, region_chain)
     """
+    from hhg9.h9 import H9O
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
         raise ValueError("hx must be (N, L[+1]):")
@@ -844,7 +846,7 @@ def hex_digits_reg(hx, dom, tail=None, scheme: RegionAddressLike = H9_RA):
     hex_reg = HEX_LUTS.hex_reg
     oob = HEX_LUTS.hex_oob
 
-    oct_c2 = dom.l0hex_back[root_hex, r_mo]  # (N, 2): [face_id, c2_root]
+    oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (N, 2): [face_id, c2_root]
     r_oct = oct_c2[:, 0]
 
     # ROOT super-regions mark hex digits as 0,1,2 in line with nominal-c2.
@@ -895,7 +897,7 @@ def hex_digits(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversibl
 def hex_layer(vals, layer: int = 18, tail_style: TailStyle = TailStyle.key):
     """
     Convert Points to unique hexagon address for the layer.
-    This is **lossy** because it coalesces neighbors into the central hex.
+    This is **lossy** because it coalesces neighbours into the central hex.
 
     Args:
         vals (Points): Input points.
@@ -970,7 +972,7 @@ def hex_str_decode(adr, reg=None, scheme: RegionAddressLike = H9_RA):
     body = np.array([[int(ch, 16) for ch in s] for s in body_strs], dtype=np.uint8)
     hx = np.column_stack([body, tail])
 
-    oc, cells = hex_digits_reg(hx, dom, scheme=scheme)
+    oc, cells = hex_digits_reg(dom, hx, scheme=scheme)
     xy_m = rg.regions_xy(cells)
     return Points(xy_m[:, :2], domain=dom, components=oc)
 
@@ -1000,7 +1002,7 @@ def hex_pack(pts, depth: int = 36, scheme: RegionAddressLike = H9_RA):
     """
     from hhg9.algorithms.packing import u64_pack
 
-    hx = hex_digits(pts, depth=depth, tail_style=TailStyle.reversible, scheme=scheme)
+    hx = hex_digits(pts, layer=depth, tail_style=TailStyle.reversible, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2 or hx.shape[1] < 2:
         raise ValueError("expected reversible hex digits (N, L+1)")
@@ -1056,7 +1058,7 @@ def hex_unpack(pts, reg=None, scheme: RegionAddressLike = H9_RA):
     tail_ids = ((tail_hi << 4) | tail_lo).astype(np.uint8)
     hx = np.column_stack([body, tail_ids])
 
-    oc, cells = hex_digits_reg(hx, dom, scheme=scheme)
+    oc, cells = hex_digits_reg(dom, hx,  scheme=scheme)
     xy_m = rg.regions_xy(cells)
     return Points(xy_m[:, :2], domain=dom, components=oc)
 
@@ -1084,13 +1086,14 @@ def reg_pack(pts, depth: int = 14, reg=None, scheme: RegionAddressLike = H9_RA):
 def reg_unpack(nibs, reg=None, scheme: RegionAddressLike = H9_RA):
     """Convert packed UInt64 (Region Address Format) back to Points."""
     from hhg9.algorithms.packing import u64_pack, u64_layers
-    from hhg9 import Points, Registrar
+    from hhg9 import Points
+    from hhg9.h9 import H9O
     import hhg9.h9.region as rg
     if reg is None:
         from hhg9 import Registrar
         reg = Registrar()
     b_oct = reg.domain('b_oct')
-    packer = region_packer(pack_fn=u64_pack, unpack_fn=u64_layers, octant_mode=lambda o: np.take(b_oct.oid_mo, o))
+    packer = region_packer(pack_fn=u64_pack, unpack_fn=u64_layers, octant_mode=lambda o: np.take(H9O.oid_mo, o))
     ocr, dec = packer.decode(nibs)
     cells = scheme.rid2cell[dec]
     reg_mo_rt = rg.regions_xy(cells)

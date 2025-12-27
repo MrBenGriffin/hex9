@@ -4,13 +4,16 @@
 
 """
 Proof of concepts taken from AKOctahedral
-Last Tested 16 December 2025 0.1.0a3 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed)
 """
 import numpy as np
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84
 from hhg9.algorithms.pickers import gcd_rnd
-from hhg9.h9 import HEX_LUTS, H9_RA
+from hhg9.h9 import HEX_LUTS, H9_RA, H9O
 from hhg9.h9.addressing import reg_pack, reg_unpack, hex_str_encode, hex_str_decode, neighbours, hex_pack, hex_unpack, \
     reg_hex_digits, hex_digits_reg
 from hhg9.algorithms.packing import u64_layers
@@ -106,7 +109,7 @@ if __name__ == "__main__":
     oid = 4
     vx_m = regions_xy(exm)
     vx = vx_m[:, :-1]
-    cmp = b_oct.signs_by_id[oid]
+    cmp = H9O.oid_cmp[oid]
     pts = Points(vx, b_oct, cmp)
     o_id, mode = pts.cm()
     ggg = reg.project(pts, ['b_oct', 'g_gcd'])
@@ -121,7 +124,7 @@ if __name__ == "__main__":
 
     po = reg_hex_digits(rn, o_id, b_oct)
     print(f"octant.0: {o_id} cells.0: {rn[0]} => reg_hex_digits() => hex_digits.0: {po[0]}")
-    oc, ba = hex_digits_reg(po, b_oct)
+    oc, ba = hex_digits_reg(b_oct, po)
     print(f"hex_digits.0: {po[0]} => hex_digits_reg() => octant.1: {oc} cells.1: {ba[0]}")
     vb = reg_hex_digits(ba, oc, b_oct)
     print(f"octant.1: {oc} cells.1: {ba[0]} => reg_hex_digits() => hex_digits.1: {vb[0]}")

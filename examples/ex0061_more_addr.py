@@ -7,6 +7,9 @@ uses hand-selected set of addresses and
 round-trips them, reporting on a series of measures and metrics,
 reporting to console.
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed; after rewriting formatter)
 25 November 2025 (passed)
 """
@@ -15,7 +18,7 @@ import numpy as np
 from hhg9 import Registrar, Points
 from hhg9.formats import OctahedralH9, DMS
 from hhg9.algorithms.distance import wgs84
-from hhg9.h9 import H9_RA
+from hhg9.h9 import H9_RA, H9O
 from hhg9.h9.addressing import Style
 import hhg9.h9.region as rg
 
@@ -37,6 +40,7 @@ if __name__ == '__main__':
     dms = DMS(reg)
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
+    # ak = reg.projection('oct_ell')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
 
@@ -199,9 +203,6 @@ if __name__ == '__main__':
             names.append(f'{k}: {v["name"]}')
             ll.append((v['lat'], v['lon']))
 
-    # ll = [ll[64]]
-    # names = [names[64]]
-
     pos = Points(np.array(ll), g_gcd)
     bry = reg.project(pos, [g_gcd, b_oct])  # spherical cart
     bel = reg.project(pos, [g_gcd, 'c_ell'])
@@ -217,39 +218,39 @@ if __name__ == '__main__':
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r36')
     ub1 = h9f.revert(hxx, Style.UR64)
-    # hxk = f'{bry:h9.k}'
-    # h9a = hxx.splitlines()
-    # h9k = hxk.splitlines()
+
     rrp = reg.project(uvr, [b_oct, g_gcd])
     ltp = reg.project(ub1, [b_oct, g_gcd])
     ltp.domain = g_gcd
     rif = wgs84(pos.coords, rrp.coords) * 1e+9
     lif = wgs84(pos.coords, ltp.coords) * 1e+9
 
-    for i, name in enumerate(names):
-        if lif[i] > 0:
-            ci = tuple([int(x) for x in bry.components[i]])
-            nm = b_oct.signs[ci]
-            mode = int(xym[i, 2])
-            print(f'{name:<24} {ci}, mode:{mode}')
-            print(f'Regions {cxx[i]}')
-            print(f'{nm} {pos[i]:dms} (Reference Coordinates)')
-            print(f'{nm} {ltp[i]:dms} (Label RT Coordinates)')
-            print(f'{nm} {ltp[i]:dms} (Label GCD Coordinates)')
+    bcc, bmo = bry.cm()
+    for idx, name in enumerate(names):
+        i = bcc[idx]
+        mo = bmo[idx]
+        ci = H9O.oid_cmp[i]
+        nm = H9O.oid_str[i]
+        mode = H9O.oid_mo[i]
+        print(f'{name:<24} {ci}, mode:{mode}')
+        print(f'Regions {cxx[i]}')
+        print(f'{nm} {pos[i]:dms} (Reference Coordinates)')
+        print(f'{nm} {ltp[i]:dms} (Label RT Coordinates)')
+        print(f'{nm} {ltp[i]:dms} (Label GCD Coordinates)')
 
-            print(f'∂{dif[i]:.6f}nm (roundtrip via GCD<->Barycentric)')
-            print(f'∂{rif[i]:.6f}nm (roundtrip via GCD<->Bary Regions)')
-            print(f'∂{lif[i]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
-            print(f'H9.adr:{bry[i]:h9}')
-            print(f'H9.key:{bry[i]:h9.k}')
-            print(f'H9.adr.13:{bry[i]:h9.13}')
-            print(f'H9.u64.13:{bry[i]:h9.u13}')
-            if name == 'NWA: Stonehenge':
-                print(f'ECEF: {bel.coords[i][0]:.8f},{bel.coords[i][1]:.8f},{bel.coords[i][2]:.8f}')
-                print(f'OCTA: {boc.coords[i][0]:.8f},{boc.coords[i][1]:.8f},{boc.coords[i][2]:.8f}')
-                print(f'BARY: {bry.coords[i][0]:.8f},{bry.coords[i][1]:.8f}')
-                for layer in range(35):
-                    print(f'H9.key; layer {layer}:{bry[i]:h9.k{layer}}')
-            print(f'Reference BRY: {bry.coords[i][0]:.18f},{bry.coords[i][1]:.18f}')
-            print(f'Label RT  BRY: {uvr.coords[i][0]:.18f},{uvr.coords[i][1]:.18f}')
-            print()
+        print(f'∂{dif[i]:.6f}nm (roundtrip via GCD<->Barycentric)')
+        print(f'∂{rif[i]:.6f}nm (roundtrip via GCD<->Bary Regions)')
+        print(f'∂{lif[i]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
+        print(f'H9.adr:{bry[i]:h9}')
+        print(f'H9.key:{bry[i]:h9.k}')
+        print(f'H9.adr.13:{bry[i]:h9.13}')
+        print(f'H9.u64.13:{bry[i]:h9.u13}')
+        if name == 'NWA: Stonehenge':
+            print(f'ECEF: {bel.coords[i][0]:.8f},{bel.coords[i][1]:.8f},{bel.coords[i][2]:.8f}')
+            print(f'OCTA: {boc.coords[i][0]:.8f},{boc.coords[i][1]:.8f},{boc.coords[i][2]:.8f}')
+            print(f'BARY: {bry.coords[i][0]:.8f},{bry.coords[i][1]:.8f}')
+            for layer in range(35):
+                print(f'H9.key; layer {layer}:{bry[i]:h9.k{layer}}')
+        print(f'Reference BRY: {bry.coords[i][0]:.18f},{bry.coords[i][1]:.18f}')
+        print(f'Label RT  BRY: {uvr.coords[i][0]:.18f},{uvr.coords[i][1]:.18f}')
+        print()

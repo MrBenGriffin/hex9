@@ -9,6 +9,7 @@ This is 's_oct' barycentric simplex uv
 import numpy as np
 from numpy.typing import NDArray
 from hhg9.base.composite import CompositeDomain, ComponentDomain
+from hhg9.h9 import H9O
 
 
 class OctantSimplex(ComponentDomain):
@@ -17,9 +18,11 @@ class OctantSimplex(ComponentDomain):
     Validity should be easy enough since we have the 3 points that define it.
     """
 
-    def __init__(self, registrar, dom, name: str, sign, t_pt):
-        super().__init__(registrar, name, dom, None, sign, 2)
-        self.tpt = t_pt
+    def __init__(self, registrar, dom, oid):
+        face = H9O.oid_str[oid]
+        sign = f'{dom.name}:{face}'
+        super().__init__(registrar, sign, dom, oid, 2)
+        self.tpt = None
 
     def valid(self, pts: NDArray) -> NDArray:
         """
@@ -38,13 +41,13 @@ class OctahedralSimplex(CompositeDomain):
 
     def __init__(self, registrar):
         from hhg9.projections import OctantXYUV
-        from hhg9.h9 import H9K
+        from hhg9.h9 import H9K, H9O
 
         super().__init__(registrar, 's_oct', 2)
-        c_oct = registrar.domain('c_oct')
+        # c_oct = registrar.domain('c_oct')
         b_oct = registrar.domain('b_oct')
-        self.oid_mo = b_oct.oid_mo
-        self.signs = {}
+        # self.oid_mo = H9O.oid_mo
+        # self.signs = {}
         self.sides = {}
         self.projs = {}
 
@@ -54,16 +57,15 @@ class OctahedralSimplex(CompositeDomain):
             [[k.TL, k.ΛF], [k.TR, k.ΛF], [0.0, k.ΛC]]
         ])
 
-        for sign, face in c_oct.signs.items():
-            s_sig = f'{self.name}:{face}'
-            b_sig = b_oct.sides[face].name
-            oid = b_oct.sign_to_id[sign]
-            o_mode = b_oct.oid_mo[oid]
-            t_pt = self.tx[o_mode]
-            self.sides[face] = OctantSimplex(registrar, self, s_sig, sign, t_pt)
-            self.projs[face] = OctantXYUV(registrar, face, b_sig, s_sig)
-            self.signs[sign] = face
-            self.components[sign] = self.sides[face]
+        for oid in range(8):
+            face = H9O.oid_str[oid]
+            ob = b_oct.sides[face]
+            os = OctantSimplex(registrar, self, oid)
+            mode = H9O.oid_mo[oid]
+            os.tpt = self.tx[mode]
+            self.sides[face] = os
+            self.projs[face] = OctantXYUV(registrar, face, ob.name, os.name)
+
 
     @classmethod
     def clamp(cls, pts, eps=0.0):

@@ -38,6 +38,21 @@ net_layouts = {
             (-1, +1, -1): (7., 2., 6),  # SEP
         }
     },
+    'pacific_windmill': {
+        'width': 3.5,  # number of full triangles across
+        'height': 3,  # number of full triangles up.
+        'grid': {
+            (-1, -1, +1): (4., 5., 2),  # NWP 3
+            (-1, -1, -1): (5., 4., 2),  # SWP 7
+            (+1, -1, +1): (4., 7., 4),  # NWA
+            (+1, -1, -1): (6., 5., 0),  # SWA 6
+            (+1, +1, +1): (2., 5., 4),  # NEA 0
+            (+1, +1, -1): (1., 4., 4),  # SEA 4
+            (-1, +1, +1): (3., 4., 0),  # NEP 1
+            (-1, +1, -1): (3., 2., 0),  # SEP 5
+        }
+    },
+
     'windmill': {
         'flipped': True,
         'width': 3.5,   # number of full triangles across

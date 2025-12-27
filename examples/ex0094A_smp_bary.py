@@ -11,8 +11,11 @@ Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
 This is functionally no different from 0094, as we are currently not implementing warps.
 Though it -does- do a roundtrip to simplex.
-Last Tested 16 December 2025 0.1.0a3 (?passed)
-Last Tested 08 October 2025 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed)
+08 October 2025 (passed)
 """
 import numpy as np
 from matplotlib import image
@@ -24,7 +27,7 @@ from PIL import Image  # image saving
 from experimental.algorithms.warp import Warper
 
 
-def run(scale=2003):
+def run(scale=605):
     """Runner"""
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')
@@ -37,13 +40,12 @@ def run(scale=2003):
     pc_px = p_pix.adopt(img)
     pc_el = reg.project(pc_px, [p_pix, 'g_gcd', 'c_ell'])
     src = KDTree(pc_el.coords)  # KDTree of plate_carrée projected onto unit sphere.
-    # We now have our sample source.
 
     grid_bits_u = sq_grid_vx(scale, 1)
     grid_bits_d = sq_grid_vx(scale, 0)
     # These are the pixel grids we will use
 
-    for side in ["NWA", "NEA"]:
+    for side in b_oct.sides:
         octant = b_oct.sides[side]
         if octant.mode == 1:
             wid, hgt, rec, msk, _, _ = grid_bits_u

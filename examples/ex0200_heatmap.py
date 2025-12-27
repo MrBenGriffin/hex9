@@ -4,8 +4,12 @@
 
 """
 Part of the H9 project - Visualisation of hexagons as a heatmap (using Tokyo details).
-Last Tested 16 December 2025 0.1.0a3 (passed - with rewrite)
-Last Tested 23 October 2025 (passed)
+This could be better - the sampling isn't ideal, and I have modified the approach.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed - with rewrite)
+23 October 2025 (passed)
 """
 import os
 from pathlib import Path

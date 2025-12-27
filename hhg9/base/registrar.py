@@ -209,12 +209,12 @@ class Registrar:
 
     def _project_composites(self, pts: Points, a, a2b):
         if pts.components is None:
-            pts = a.binning(pts)
+            a.binning(pts)
         # pts.coords = np.atleast_2d(pts.coords)
         res = np.zeros_like(pts.coords)
         # uvw = (pts.components >= 0) @ (4, 2, 1)
         uvw = pts.oids()  # grab the octant ids.
-        for sig, cmp in a.components.items():
+        for sig, cmp in a.sides.items():
             key = (cmp.name, a2b[cmp].name)
             facilitator = next(iter(self._domain_projections[key]))
             ref = cmp.oid
@@ -240,8 +240,8 @@ class Registrar:
                 # Composite fallback: if both domains are composite and have matching components,
                 # project component-wise without requiring a pairwise registration.
                 if isinstance(a, CompositeDomain) and isinstance(b, CompositeDomain):
-                    a_components = a.components
-                    b_components = b.components
+                    a_components = a.sides
+                    b_components = b.sides
                     shared = a_components.keys() & b_components.keys()
                     # Require a one-to-one mapping for all a's components
                     if shared and len(shared) == len(a_components):
@@ -282,8 +282,8 @@ class Registrar:
                         isinstance(a, CompositeDomain) and isinstance(b, CompositeDomain)
                         and alts['chain'] == [a.name, b.name]
                     ):
-                        a_components = a.components
-                        b_components = b.components
+                        a_components = a.sides
+                        b_components = b.sides
                         ab = a_components.keys() & b_components.keys()
                         if len(ab) == len(a_components):
                             a2b = {a_components[k]: b_components[k] for k in ab}

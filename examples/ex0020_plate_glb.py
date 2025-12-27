@@ -6,6 +6,7 @@ Supporting System Test - No octahedral projection or H9
 This follows ex0010_plate_px.py (which loaded a png and displayed it).
 This loads a Plate Carrée png, converts it to latitude/longitude, and displays it.
 Needless to say, in this case, we could just use Basemap - but the point is to demonstrate
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """

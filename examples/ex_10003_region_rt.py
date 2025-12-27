@@ -7,6 +7,9 @@ This round-trips region encode/decode
 and shows the maximum difference after 50 cycles
 The near zero ulps will be quite large in x.
 This is designed to hit some soft_clamp tests.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 """
 import numpy as np

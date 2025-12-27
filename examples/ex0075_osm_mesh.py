@@ -6,6 +6,9 @@
 Compose a set of zooms into stonehenge vi cartopy and OSM.
 This grabs rectangle boundaries from which we sample the octahedral.
 The actual octahedral render series is found in 0076.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """
@@ -44,9 +47,6 @@ if __name__ == '__main__':
     spot = region['Stonehenge']
     ll0 = g_gcd.adopt(np.array([spot]))
     bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
-
-    cmp = tuple(bc0.components[0])
-    sdo = bc0.domain.components[cmp]
     co, mo = bc0.cm()
     comp = bc0.invert_octant_ids(co)
     uri = xy_regions(bc0.coords, mo, layers)
@@ -82,11 +82,11 @@ if __name__ == '__main__':
         ax.set_extent(final_extent, ccrs.PlateCarree())
         print(f'Layer {layer_depth}, detail:{detail[layer_depth]}')
         ax.add_image(imagery, detail[layer_depth], regrid_shape=(2*IMG_PIXELS, 2*IMG_PIXELS))
-        print(f'file saved at output/ex0075_{i:02}.png')
         fig.savefig(f'output/ex0075_{i:02}.png',
                     dpi=dpi,
                     format='png', bbox_inches='tight',
                     pad_inches=0, transparent=True)
         plt.close(fig)
-    print(f'extents file saved at output/ex0075_extents.npy')
+        print(f'file saved at output/ex0075_{i:02}.png')
     np.save('output/ex0075_extents.npy', np.array([extents]))
+    print(f'extents file saved at output/ex0075_extents.npy')

@@ -4,7 +4,10 @@
 
 """
 Proof of concepts taken from AKOctahedral, demonstrating jacobian
-Last Tested 16 December 2025 0.1.0a3 (passed - with rewrite)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed - with rewrite)
 """
 
 import numpy as np

@@ -6,8 +6,11 @@
 Part of the H9 project - using locations.json,
 Test and report the neighbours, showing deviation from original.
 There is normally a least-layer accuracy error
-Last Tested 16 December 2025 0.1.0a3 (passed - but of questionable value)
-Last Tested 12 October 2025 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed - but questionable)
+16 December 2025 0.1.0a3 (passed - but of questionable value)
+12 October 2025 (passed)
 
 """
 import json

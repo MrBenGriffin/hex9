@@ -11,6 +11,7 @@ The ellipsoid -> octahedral projection is slow, and depends upon using H9 for ro
 so here we use a cache. Recent work on vectorising the forward projection has improved timings,
 but root-finding is inherently slow.
 This takes about 25s to project 1e+6 points at 3e+4m accuracy.
+26 December 2025 0.1.0a4 (fixed/passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """
@@ -72,7 +73,7 @@ def run(*, force=False):
         np.save(cache, oc_xyz.coords)
 
     oc = np.load(cache)
-    c_pix = c_oct.adopt(oc)
+    c_pix = Points(oc, c_oct)
     c_pix.samples = pc_pix.samples
     show_octahedron(c_pix)
 

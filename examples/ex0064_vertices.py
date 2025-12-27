@@ -9,6 +9,9 @@ points at each vertex, round-trips them, and then draws a heatmap
 demonstrating variation across the entire vertex.
 Vertices are, like seams, special edge cases.
 Looks at radii of 3,000km, 10,000km, and 5m.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """

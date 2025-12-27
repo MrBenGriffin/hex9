@@ -8,6 +8,7 @@ It saves a colouring of the authalic score (deviation from mean) of an octant of
 it has been projected onto WGS84.
 All renders follow the triangular sub-grid.
 Another way of calculating this has been used with hexagons in ex0080_authalics
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """
@@ -18,6 +19,7 @@ from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area
+from hhg9.h9 import H9O
 # from experimental.algorithms.warp import Warper
 from hhg9.h9.polygon import tri_grid
 import matplotlib as mpl
@@ -161,8 +163,8 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
         return Points.concat(repo)
     else:
         o_id = octant_id
-        mode = b_oct.oid_mo[o_id]
-        cmp = b_oct.signs_by_id[o_id]
+        mode = H9O.oid_mo[o_id]
+        cmp = H9O.oid_cmp[o_id]
         return Points(tgx[mode], b_oct, components=cmp)
 
 

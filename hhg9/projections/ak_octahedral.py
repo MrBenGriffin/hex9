@@ -13,7 +13,7 @@ from hhg9.base.projection import Projection
 from hhg9.algorithms.distance import haversine_rad
 from hhg9.algorithms import find_coords
 from pyproj import CRS
-from hhg9.h9 import H9C, H9K
+from hhg9.h9 import H9C, H9K, H9O
 
 
 class AKOctahedralEllipsoid(Projection):
@@ -35,11 +35,13 @@ class AKOctahedralEllipsoid(Projection):
         self.c_oct = self.reg.domain('c_oct')
         self.c_ell = self.reg.domain('c_ell')
         self.g_gcd = self.reg.domain('g_gcd')
-        self.vertices = np.array(list(self.rev_cs.vertices.values()))
+
+        self.vertices = H9O.oct_vrt   # np.array(list(self.rev_cs.vertices.values()))
         self._e = 1e-200
         self.tol = 1e-15
 
         # Level 0 area ≈ 5362 km (area of Earth / 12 hexes)
+        # This shouldn't be here.
         earth = 510_065_621_724_154.6
         self.hex_0 = earth / 12
         self.tri_0 = earth / 8
@@ -52,7 +54,7 @@ class AKOctahedralEllipsoid(Projection):
             self.t_areas[i] = l_tri
             l_hex /= 9
             l_tri /= 9
-        self.accuracy = 34  # accuracy is nanometres.
+        self.accuracy = 38  # accuracy is nanometres.
 
     @cache
     def rad_gcd(self):

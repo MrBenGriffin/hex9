@@ -8,8 +8,11 @@ This serves to depict the calculations used to identify neighbour offsets.
 However, it's out of date and is probably not really doing what it was used for.
 The region list would be better expressed as a set of legal regions (rather than cells),
 and use the correct semantics for neighbour management (which are now resolved).
-Last Tested 16 December 2025 0.1.0a3 (passed - but meaningless)
-Last Tested 29 August 2025 (failed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed - but meaningless)
+16 December 2025 0.1.0a3 (passed - but meaningless)
+29 August 2025 (failed)
 """
 import numpy as np
 from matplotlib import pyplot as plt

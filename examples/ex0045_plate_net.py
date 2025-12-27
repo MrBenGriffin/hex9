@@ -9,6 +9,7 @@ loads the octahedral cache and
 displays it as an octahedron net, under different layouts.
 Normally I do not project maps this way, but use grid sampling instead.
 It's still relevant for managing datasets captured over GCD.
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """

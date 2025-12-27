@@ -8,7 +8,10 @@ Finding acceptable authalic reference points.
 At an address that is normative,
 for each layer calculate the area of a hexagon.
 Compare with the ak_area values.
-Last Tested 17 December 2025 0.1.0a3 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+17 December 2025 0.1.0a3 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt, colors
@@ -16,7 +19,7 @@ from matplotlib.collections import PolyCollection
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area, enu_planar_polygon_area
-from hhg9.h9 import H9_RA, H9C, H9K
+from hhg9.h9 import H9_RA, H9C, H9K, H9O
 from hhg9.h9.region import regions_xy, xy_regions, H9R, region_neighbours
 from hhg9.h9.polygon import hex_poly_layer, hh_layer, H9P, tri_grid
 from hhg9.h9.addressing import hex_layer, hex_digits_reg, neighbours, hex_digits, TailStyle, hex_key, \
@@ -58,8 +61,8 @@ def get_tri_data(reg: Registrar, layer=3, octant_id=None):
         return Points.concat(repo)
     else:
         o_id = octant_id
-        mode = b_oct.oid_mo[o_id]
-        cmp = b_oct.signs_by_id[o_id]
+        mode = H9O.oid_mo[o_id]
+        cmp = H9O.oid_cmp[o_id]
         return Points(tgx[mode], b_oct, components=cmp)
 
 
@@ -106,10 +109,10 @@ def log_lat_ref(gxd: Points, n=100_000):
 
 def min_authalic(reg, gxd, depth):
     """Given 2 points in gcd, discover a midpoint of least authalic"""
-    b_oct = reg.domain('b_oct')
     xy = reg.project(gxd, ['g_gcd', 'b_oct'])
+    b_oct = reg.domain('b_oct')
     cmp = tuple(list(xy.components[0]))
-    oid = b_oct.sign_to_id[cmp]  # NEA
+    oid = H9O.cmp_oid[cmp]  # NEA
     ref_data = get_tri_data(reg, layer=depth, octant_id=oid)
     o_ref = rg.project(ref_data, ['b_oct', 'c_oct'])
     ref_areas = enu_planar_polygon_area(rg, o_ref, 3)
@@ -123,7 +126,7 @@ def min_authalic(reg, gxd, depth):
     tr_cts = tr_pts.mean(axis=1)
     ref = Points(tr_cts, b_oct, components=cmp, samples=ref_areas / ideal_tri)
     ref_o = rg.project(ref, ['b_oct', 'c_oct'])
-    face = b_oct.signs[cmp]  # NEA
+    face = H9O.oid_str[oid]  # NEA
     prj = b_oct.projs[face]  # NEA matrices etc.
     q = prj.matrix.T @ prj.orient
     e1_xyz = q[:, 0]  # 3-vector

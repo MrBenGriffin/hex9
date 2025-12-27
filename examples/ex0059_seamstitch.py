@@ -8,6 +8,7 @@ This is a processor intensive analysis of all edge-cases, measuring behaviour
 on each seam, and alongside it. These are then depicted as graphs and summarised
 in console messages. Seams are important edge cases (literally!)
 This is a bit of a dogs dinner, thanks to AI assistance.
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES. These values represent SUB-MILLIMETRE projection fidelity checks.
@@ -16,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84
+from hhg9.h9 import H9O
 from hhg9.h9.region import xy_regions
 from hhg9.formats import OctahedralH9, DMS, DecimalDegrees, DecimalCartesian
 from geographiclib.geodesic import Geodesic
@@ -408,8 +410,10 @@ def run():
     c_ell.register_format(DecimalCartesian(reg))
     b_oct.register_format(h9f)
 
+    edge_list = H9O.edges_by_id.flatten()
+
     # Projections/Transforms. Bary and Net are loaded by the domains.
-    edge_list = [k for k in c_oct.edges]
+    # edge_list = [k for k in c_oct.edges]
     gcd_stitches = {''.join(k): stitch_seam(k, 1.0, 0.1) for k in edge_list}
     globe = []
     lengths = []
@@ -458,9 +462,9 @@ def run():
                         diag['t_clean'], diag['nmL_clean'], diag['nmR_clean'],
                         diag['nb_clean'], diag['beta_clean'], diag['lat0_clean'],
                         n_bad=diag['filtered'])
-        fig.savefig(f"output/ex0062_{k}.png", dpi=100)
+        fig.savefig(f"output/ex0059_{k}.png", dpi=100)
         plt.close(fig)
-        print(f'fig saved at output/ex0062_{k}.png')
+        print(f'fig saved at output/ex0059_{k}.png')
 
 
 if __name__ == '__main__':

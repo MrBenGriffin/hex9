@@ -25,6 +25,7 @@ See ``constants.md`` for further documentation.
 
 from dataclasses import dataclass
 import numpy as np
+from numpy.typing import NDArray
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,3 +251,134 @@ assert np.isclose((H9K.ΛC - H9K.ΛF), (H9K.VC - H9K.VF), rtol=1e-12, atol=1e-15
 
 # Apex farther than base; combined band ordering
 assert H9K.ΛC > H9K.VC > 0.0 > H9K.ΛF > H9K.VF
+
+
+@dataclass(frozen=True, slots=True)
+class OctConst:
+    """These are octahedral map properties."""
+    oct_vrt: NDArray[np.float64]
+    oct_str: NDArray
+    oid_tht: NDArray[np.uint8]
+    oid_cmp: NDArray[np.uint8]
+    cmp_oid: NDArray[np.uint8]
+    oid_str: NDArray[np.uint8]
+    oid_mo: NDArray[np.uint8]
+    oid_nb: NDArray[np.uint8]
+    nb_c2p: NDArray[np.bool]
+    nb_c2map: NDArray[np.uint8]
+    edges_by_id: NDArray
+    l0hex_by_id: NDArray[np.uint8]
+    l0hex_back: NDArray[np.uint8]
+
+
+def oct_constants() -> OctConst:
+    """
+    Factory method to initialize the OctConst singleton.
+    """
+    # Define axes of symmetry for octahedron
+    # These are the underlying processes
+    axes = np.array([['A', 'P'], ['E', 'W'], ['N', 'S']])
+    v_pos = np.zeros((6, 3), dtype=np.float64)
+    v_str = np.zeros((6,), dtype='<U1')
+    vertices = {}
+    for i, axis in enumerate(axes):
+        for j, v in enumerate(axis):
+            k = j * 2 - 1
+            vertex = [0, 0, 0]
+            vertex[i] = k
+            vertices[v] = tuple(vertex)
+            v_str[i*2+j] = v
+            v_pos[i*2+j] = vertex
+
+    # # Generate all face permutations using np.meshgrid
+    # face_permutations = np.stack(np.meshgrid(*axes), axis=-1).reshape((-1, 3))
+    # # Generate a canonical list of edges also. Why?
+    # # It could generate the ID and name of the 12 root0 hexagons.
+    # edges = np.unique(face_permutations[:, [[0, 1], [1, 2], [0, 2]]].reshape((-1, 2)), axis=0)[:, ::-1]
+    # for face_arr in face_permutations:
+    #     face = ''.join(face_arr[::-1])  # Reverse order to match face naming
+    #     triple = np.asarray([vertices[s] for s in face_arr])
+    #     sign = tuple(np.sum(triple, axis=1).tolist())
+
+    props = {
+        # Octahedral Triangle Identities differ. 0x16, 0x49
+        # Note that OID do not share the id % 2 == mode logic(!)
+        # Also, 'c2' is always equator=0; with nb.c2=1 == self.c2 = 2
+        # AP EW  NS    θ  c2 hexagon region  mo o_id, c2* ngh  hex_id
+        (+1, +1, +1): (2, ('EA', 'NA', 'NE'), 0, 0, (4, 2, 1), (0, 4, 5),   'NEA'),  # 0 'NEA' N:5, E:8, A: 0
+        (-1, +1, +1): (5, ('EP', 'NE', 'NP'), 1, 1, (5, 0, 3), (1, 5, 7),   'NEP'),  # 1 'NEP' N:4, E:7, P: 0
+        (+1, -1, +1): (5, ('WA', 'NW', 'NA'), 1, 2, (6, 3, 0), (2, 6, 4),   'NWA'),  # 2 'NWA'
+        (-1, -1, +1): (2, ('WP', 'NP', 'NW'), 0, 3, (7, 1, 2), (3, 7, 6),   'NWP'),  # 3 'NWP' N:5, W:8, P: 0
+        (+1, +1, -1): (5, ('EA', 'SE', 'SA'), 1, 4, (0, 5, 6), (0, 8, 10),  'SEA'),  # 4 'SEA' S:4, E:7, A: 0
+        (-1, +1, -1): (2, ('EP', 'SP', 'SE'), 0, 5, (1, 7, 4), (1, 9, 8),   'SEP'),  # 5 'SEP' S:5, E:8, P: 0
+        (+1, -1, -1): (2, ('WA', 'SA', 'SW'), 0, 6, (2, 4, 7), (2, 10, 11), 'SWA'),  # 6 'SWA' S:5, W:8, A: 0
+        (-1, -1, -1): (5, ('WP', 'SW', 'SP'), 1, 7, (3, 6, 5), (3, 11, 9),  'SWP')   # 7 'SWP' S:4, W:7, P: 0
+    }
+    # 0   1        2      3       4      5,  6
+    i_th, i_edges, i_mo, i_oid, i_c2n, i_hx, i_str = 0, 1, 2, 3, 4, 5, 6
+    oid_th = np.zeros((8,), dtype=np.int8)
+    oid_cmp = np.zeros((8, 3), dtype=np.int8)
+    cmp_oid = np.empty((3, 3, 3), dtype=np.int8)
+    oid_str = np.empty((8, ), dtype='<U3')
+    oid_mo = np.zeros((8,), dtype=np.uint8)
+    oid_nb = np.zeros((8, 3), dtype=np.int8)
+    nb_c2p = np.zeros((8, 3), dtype=bool)
+    nb_c2map = np.zeros((8, 3), dtype=np.uint8)
+    edges_by_id = np.empty((8, 3), dtype='<U2')
+    l0hex_by_id = np.empty((8, 3), dtype=np.uint8)
+    l0hex_back = np.full((12, 2, 2), 0x0F, dtype=np.uint8)
+    for sign, row in props.items():
+        o_id = row[i_oid]
+        o_mode = row[i_mo]
+        oid_mo[o_id] = o_mode
+        oid_th[o_id] = row[i_th]
+        edges_by_id[o_id] = np.array(row[i_edges], dtype='<U2')
+        cmp_oid[sign] = o_id
+        oid_cmp[o_id] = list(sign)
+        oid_str[o_id] = row[i_str]
+        l0_hex = np.array(row[i_hx], dtype=np.uint8)
+        l0hex_by_id[o_id] = l0_hex
+        for c2, hx in enumerate(l0_hex):
+            l0hex_back[hx, o_mode] = [o_id, c2]
+        l0_hex = np.array(row[i_hx], dtype=np.uint8)
+        for c2, hx in enumerate(l0_hex):
+            l0hex_back[hx, o_mode] = [o_id, c2]
+        oid_nb[o_id] = np.array(list(row[i_c2n]))
+
+    preserve_edges = {'EA', 'EP', 'NA', 'WA', 'WP', 'SA'}  # axial edges preserve; diagonals swap
+    swap_code = {
+        'NP': 2, 'SE': 2, 'SP': 2,  # reflect across C2=1 axis (y = ẋ)
+        'NE': 3, 'NW': 3, 'SW': 3,  # reflect across C2=2 axis (y = −ẋ)
+    }
+    for f in range(8): # Boolean preserve matrix: True where the edge label is in preserve_edges
+        for i, e in enumerate(edges_by_id[f]):
+            nb_c2p[f, i] = (e in preserve_edges)
+        for ci, e in enumerate(edges_by_id[f]):
+            if nb_c2p[f, ci]:
+                nb_c2map[f, ci] = 0
+            else:
+                try:
+                    nb_c2map[f, ci] = swap_code[e]
+                except KeyError as ke:
+                    raise KeyError(
+                        f"Unknown swap edge label '{e}'. Ensure it is in swap_code or preserve_edges.") from ke
+
+    return OctConst(
+        v_pos,
+        v_str,
+        oid_th,
+        oid_cmp,
+        cmp_oid,
+        oid_str,
+        oid_mo,
+        oid_nb,
+        nb_c2p,
+        nb_c2map,
+        edges_by_id,
+        l0hex_by_id,
+        l0hex_back,
+    )
+
+
+H9O: OctConst = oct_constants()  # singleton for typical use
+

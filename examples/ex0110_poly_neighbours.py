@@ -7,8 +7,11 @@ Visualisation of neighbouring Half-hexagons.
 This serves to depict the calculations used to identify neighbours.
 It also shows how we can tell if the neighbour is outside the region's
 own parent region (as a supercell). Values are shown as cell-ids (hex)
-Last Tested 16 December 2025 0.1.0a3 (passed)
-Last Tested 20 October 2025 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed)
+20 October 2025 (passed)
 """
 import json
 import numpy as np

@@ -38,17 +38,18 @@ class Points:
                 raise ValueError(
                     f"Invalid component shape: expected {(self.coords.shape[0], 3)} or (3,), got {components.shape}")
         self.components = components
-        if self.components is None and self.coords.shape[1] == 3:
-            self.binning()
+        from hhg9.base.composite import CompositeDomain
+        if self.components is None and self.domain is not None and isinstance(self.domain, CompositeDomain):
+            self.domain.binning(self)
         self.samples = samples
 
     def binning(self, sig: tuple = None):
         """Return points with domain set by composite set_domain"""
         # caller('Points: binning')
-        if self.components is None:
-            c = self.coords.copy()  # don't mess with the coords.
-            c[c == 0] = np.finfo(self.coords.dtype).tiny
-            self.components = np.atleast_2d(np.sign(c).astype(np.int8))
+        if self.components is None and self.domain is not None:
+            from hhg9.base.composite import CompositeDomain
+            if isinstance(self.domain, CompositeDomain):
+                self.domain.binning(self)
         return self
 
     @classmethod

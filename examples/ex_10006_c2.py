@@ -5,6 +5,8 @@
 """
 Checks cells, c2 via angular sectors.
 This is possibly not used - but does demonstrate the geometric relations.
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 """
 import numpy as np

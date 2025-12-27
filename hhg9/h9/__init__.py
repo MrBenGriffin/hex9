@@ -6,7 +6,7 @@ H9 Subpackage Initialization.
 Order matters here to avoid circular imports.
 """
 
-from .constants import H9Const, H9K
+from .constants import H9Const, H9K, H9O
 from .classifier import H9Classifier, H9CL, classify_cell, in_scope, in_down, in_up
 from .lattice import H9C, H9Cell
 from .region import H9R, H9Region
@@ -14,7 +14,7 @@ from .addressing import H9_RA, HEX_LUTS
 from .polygon import H9P, H9Polygon
 
 __all__ = [
-    "H9K", "H9Const",
+    "H9K", "H9Const", "H9O",
     "H9CL", "H9Classifier",
     "H9C", "H9Cell",
     "H9R", "H9Region",

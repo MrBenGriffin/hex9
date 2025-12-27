@@ -11,13 +11,17 @@ The octahedral->spherical projection is relatively fast (about 40x spherical->oc
 so we can handle larger images this way.
 Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
-Last Tested 16 December 2025 0.1.0a3 (?passed)
-Last Tested 12 October 2025 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (?passed)
+12 October 2025 (passed)
 """
 import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
+from hhg9.h9 import H9O
 from hhg9.algorithms.grid import sq_grid, fit
 from PIL import Image  # image saving
 
@@ -43,16 +47,18 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
     grid_u = full_grid_u[mask_u]
     grid_d = full_grid_d[mask_d]
 
+
     for flavour in flavours:
         n_oct = reg.domain(f'n_oct:{flavour}')
         img_w, img_h = n_oct.image_dims(pixels=scale)
         pt_list = []
 
-        for sig, composite in n_oct.components.items():
-            name = n_oct.c_oct.signs[sig]
+        for name, sdom in n_oct.sides.items():
+            oid = sdom.oid
+            sig = H9O.oid_cmp[oid]
             prj = n_oct.projs[name]
             offset = prj.offset
-            grid_base = [grid_d, grid_u][prj.fwd_cs.mode]
+            grid_base = [grid_d, grid_u][sdom.mode]
             grid = grid_base.copy()+offset
             pt_list.append(Points(grid, n_oct, sig))
         pcs = Points.concat(pt_list)  # These are our net points.
@@ -70,5 +76,5 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 
 if __name__ == '__main__':
-    flavours = ['mortar', 'butterfly', 'c_butterfly', 'windmill', 'turbine']
+    flavours = ['pacific_windmill']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
     run(flavours=flavours, scale=600, file='src/tissot_2560x1280.png')

@@ -4,6 +4,7 @@
 
 """
 uses single address and walks through it.
+26 December 2025 0.1.0a4 (passed)
 21 December 2025 0.1.0a3 (passed; after rewriting formatter)
 
 """
@@ -15,7 +16,6 @@ from hhg9.algorithms.distance import wgs84
 from hhg9.h9 import H9_RA
 from hhg9.h9.addressing import Style
 import hhg9.h9.region as rg
-
 
 
 if __name__ == '__main__':
@@ -41,10 +41,10 @@ if __name__ == '__main__':
     print(name)
     print(f'{pos:dms} (Reference Coordinate)')
     bel = reg.project(pos, [g_gcd, 'c_ell'])
-    print(f'ECEF: {bel.coords[0,0]:.8f},{bel.coords[0,1]:.8f},{bel.coords[0,2]:.8f}, face:{bel.components[0]}')
+    print(f'ECEF: {bel.coords[0,0]:.8f},{bel.coords[0,1]:.8f},{bel.coords[0,2]:.8f}')
 
     boc = reg.project(pos, ['c_ell', 'c_oct'])
-    print(f'OCTA: {boc.coords[0, 0]:.8f},{boc.coords[0, 1]:.8f},{boc.coords[0, 2]:.8f} (via AK)')
+    print(f'OCTA: {boc.coords[0, 0]:.8f},{boc.coords[0, 1]:.8f},{boc.coords[0, 2]:.8f}, face:{boc.components[0]} (via AK)')
 
     bro = reg.project(boc, ['c_oct', 'b_oct'])
     oc, mo = bro.cm()

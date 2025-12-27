@@ -5,12 +5,14 @@
 """
 H9 HexGrid generation proofs-of-concept
 This does not print much unless there are failures!
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 """
 
 
 import numpy as np
-from hhg9.h9 import  H9_RA
+from hhg9.h9 import H9_RA, H9O
 from hhg9.h9.addressing import reg_hex_digits, hex_digits_reg, hex_digits, hex_layer
 from hhg9.base import Registrar, Points
 from hhg9.h9.region import regions_xy, xy_regions
@@ -48,10 +50,10 @@ def get_data(reg: Registrar, depth):
     rgn = H9_RA.rid2cell[np.array(all_rgn)]  # cell addresses.
     sides = []
     for oc in range(8):  # all octants
-        rgc = rgn[b_oct.oid_mo[oc]]
+        rgc = rgn[H9O.oid_mo[oc]]
         xym = regions_xy(rgc)
         xy = xym[:, :-1]
-        sides.append(Points(xy, b_oct, b_oct.signs_by_id[oc]))
+        sides.append(Points(xy, b_oct, H9O.oid_cmp[oc]))
     globe = Points.concat(sides)
     return globe  # This will return six points per hexagon.
 

@@ -16,6 +16,7 @@ from numpy.typing import NDArray
 from .domain import Domain
 from .point_format import PointFormat
 from .points import Points
+from hhg9.h9 import H9O
 
 
 class CompositeDomain(Domain, ABC):
@@ -27,12 +28,18 @@ class CompositeDomain(Domain, ABC):
     def __init__(self, registrar, name: str, axes):
         super().__init__(registrar, name, axes)
         self.eps = 1e-22
-        self.components = {}  # class static
+        self.projs = {}  # component projections
+        self.sides = {}  # component domains
 
-    @classmethod
-    def binning(cls, pts: Points, sig: tuple = None):
+    def binning(self, pts: Points, sig: tuple = None):
         """Identify the components of the points"""
-        return pts.binning(sig)
+        if self.axes == 3:
+            c = pts.coords.copy()  # don't mess with the coords.
+            c[c == 0] = np.finfo(pts.coords.dtype).tiny
+            pts.components = np.atleast_2d(np.sign(c).astype(np.int8))
+        else:
+            raise NotImplementedError(f'{self.name} needs to bin {self.axes} axes')
+
 
     @cache
     def handlers(self):
@@ -41,7 +48,7 @@ class CompositeDomain(Domain, ABC):
         While this might be a bit round-about it guarantees integrity with the cm values.
         """
         _handlers = np.empty(8, dtype=object)
-        for sign_tuple, handler_instance in self.components.items():
+        for sign_tuple, handler_instance in self.projs.items():
             components_arr = np.array([sign_tuple])
             octant_id = Points.calc_octant_ids(components_arr)[0]
             _handlers[octant_id] = handler_instance
@@ -53,12 +60,11 @@ class CompositeDomain(Domain, ABC):
         Return array of c2 values in 'c2' order (see Points)
         """
         data = np.empty((8, 3), dtype='<U3')
-        for sign_tuple, handler_instance in self.components.items():
+        for sign_tuple, handler_instance in self.projs.items():
             components_arr = np.array([sign_tuple])
             octant_id = Points.calc_octant_ids(components_arr)[0]
             data[octant_id] = handler_instance.oc
         return data
-
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
@@ -85,14 +91,11 @@ class CompositeDomain(Domain, ABC):
 
 class ComponentDomain(Domain):
 
-    def __init__(self, registrar, name: str, dom, mode, sign: tuple, axes):
+    def __init__(self, registrar, name: str, dom, oid, axes):
         super().__init__(registrar, name, axes)
-        if mode is None:
-            _, mode_a = Points.class_mode([sign])
-            mode = mode_a[0]
-        elif isinstance(mode, str):
-            mode = 0 if mode == 'V' else 1
-        self.oid = Points.calc_octant_ids(np.asarray([sign], dtype='b'))[0]
+        mode = H9O.oid_mo[oid]
+        sign = H9O.oid_cmp[oid]
+        self.oid = oid
         self.dom = dom
         self.mode = mode
         self.mode_str = 'V' if mode == 0 else 'Λ'

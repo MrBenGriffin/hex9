@@ -6,6 +6,9 @@
 This reads in the GCD for Stonehenge, then converts it into a set of nested half-hexagons,
 each of which represents a single Stage of the H9 Journey.
 This is a much earlier proof of concept, but still gives a good idea of layers 0-12 of the H9 grid.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """

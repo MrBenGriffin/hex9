@@ -12,7 +12,7 @@ from hhg9.base.composite import CompositeDomain, ComponentDomain
 from hhg9.base.point_format import PointFormat
 from hhg9.projections import BaryNet
 from hhg9.domains.nets import net_layouts
-from hhg9.h9 import H9K, H9P
+from hhg9.h9 import H9K, H9P, H9O
 from hhg9.algorithms.geometry import inside_triangle_cw
 
 
@@ -21,8 +21,9 @@ class OctantNet(ComponentDomain):
     This a 2D side of an Octant that belongs to a Net.
     Validity should be easy enough since we have the 3 points that define it.
     """
-    def __init__(self, registrar, dom, name: str, sign: tuple, mode: int):
-        super().__init__(registrar, name, dom, mode, sign, 2)
+    def __init__(self, registrar, dom, name: str, oid: int, mode: int):
+        super().__init__(registrar, name, dom, oid, 2)
+        self.mode = mode  # need to over-ride here!
 
     def valid(self, pts: NDArray) -> NDArray:
         """
@@ -51,16 +52,14 @@ class OctahedralNet(CompositeDomain):
             layout = 'mortar'
         super().__init__(registrar, f'n_oct:{layout}', 2)
         tp = H9P.sv  # mode vertices
-        self.sides = {}
-        self.projs = {}
+        # self.sides = {}
+        # self.projs = {}
         self.face_tris = {}
-        self.sign_to_side = {}
+        # self.sign_to_side = {}
         self.c_oct = c_oct
         self.b_oct = b_oct
         self.layout = net_layouts[layout]
         grid_xy = np.array(list(self.layout['grid'].values()))[:, :2]
-        # gx_min, gx_max = grid_xy[:, 0].min(), grid_xy[:, 0].max()
-        # gy_min, gy_max = grid_xy[:, 1].min(), grid_xy[:, 1].max()
 
         # Each placed face contributes [x_off, x_off + 2*GW] and [y_off, y_off + 3*GH]
         # So total width/height is span of gx,gy plus the single-face width/height
@@ -71,8 +70,9 @@ class OctahedralNet(CompositeDomain):
 
         self.oid_mo = np.zeros((8,), dtype=np.uint8)
         for sign, val in self.layout['grid'].items():
-            side = self.c_oct.signs[sign]
-            oid = self.c_oct.face_id[side]
+            oid = H9O.cmp_oid[sign]
+            side = H9O.oid_str[oid]
+            # oid = self.c_oct.face_id[side]
             bary = b_oct.sides[side]
             gx, gy, th = val
             x_off = gx * self.GW
@@ -83,19 +83,18 @@ class OctahedralNet(CompositeDomain):
             n_sig = f'{self.name}:{side}'
             b_sig = f'{b_oct.name}:{side}'
             self.oid_mo[oid] = mode
-            self.sides[sign] = OctantNet(registrar, self, n_sig, sign, mode)
+            self.sides[side] = OctantNet(registrar, self, n_sig, oid, mode)
             face = BaryNet(registrar, side, b_sig, n_sig, n_theta, (x_off, y_off))
             self.projs[side] = face
             tri = H9P.sv[bary.mode]  # triangle from H9P. Use bary.mo b/c will transform!
             tri_rt = tri @ face.matrix + face.offset  # bary->net
             # Map sign→triangle and sign→side for fast lookup
             self.face_tris[sign] = tri_rt
-            self.sign_to_side[sign] = side
+            # self.sign_to_side[sign] = side
             if 'c2' in self.layout:
                 c2f = self.layout['c2'][sign]
                 c2x = [(x * self.GW, y * self.GH, (t % 6) * self.RT) for (x, y, t) in c2f]
                 face.c2trans = c2x
-            self.components[sign] = self.sides[sign]
 
 
     def ratio(self):

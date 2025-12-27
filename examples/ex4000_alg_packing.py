@@ -4,7 +4,10 @@
 
 """
 Part of the H9 project - This is proof-of-concept for uint64 packing.
-Last Tested 16 December 2025 0.1.0a3 (passed - with rewrite)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed - with rewrite)
 """
 import numpy as np
 import hhg9.algorithms.packing as pk

@@ -2,7 +2,20 @@
 # Copyright ©2025, Ben Griffin
 # Licensed under the Apache License, Version 2.0
 
-"""This example requires gdal in order to read geotiffs."""
+"""
+Given a point in the continental US (or anywhere for which you have geotiff
+land usage that uses NLCD categories) and generate a hexgrid plot of that area.
+
+This is really good - but generates a grid in a rather inefficient manner.
+
+This example requires osgeo, gdal in order to read geotiffs
+While hhg9 does not depend upon such tools, with GIS it's not
+a bad idea to have these libraries, alongside the GIS stack it does use
+(geographiclib, proj)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+"""
 from matplotlib import pyplot as plt, colors
 from matplotlib.collections import PolyCollection
 from matplotlib.patches import Rectangle
@@ -21,35 +34,60 @@ from geographiclib.geodesic import Geodesic
 geod = Geodesic.WGS84
 
 
-def densify_quad_geodesic_by_step(corners_latlon: np.ndarray,
+def densify_poly_geodesic_by_step(poly_latlon: np.ndarray,
                                   max_step_m: float = 2_000.0,
-                                  max_points_per_edge: int = 512) -> np.ndarray:
+                                  max_per_edge: int = 512,
+                                  closed: bool = True) -> np.ndarray:
     """
-    corners_latlon: (4,2) in (lat, lon), ordered around the quad.
-    Returns boundary samples (lat, lon) around perimeter.
+    poly_latlon: (m,2) in (lat, lon), ordered along the boundary.
+    Returns boundary samples (lat, lon).
+
+    Notes:
+      - Samples include each edge start, exclude each edge end (avoids duplicate vertices).
+      - If closed and last vertex repeats first, the duplicate is ignored.
     """
-    corners = np.asarray(corners_latlon, dtype=np.float64)
+    poly = np.asarray(poly_latlon, dtype=np.float64)
+    if poly.ndim != 2 or poly.shape[1] != 2:
+        raise ValueError(f"poly_latlon must have shape (m,2); got {poly.shape}")
+    if poly.shape[0] < 2:
+        return poly.copy()
+
+    if closed and np.allclose(poly[0], poly[-1]):
+        poly = poly[:-1]
+
+    m = poly.shape[0]
+    last = m if closed else (m - 1)
+
     out = []
+    for i in range(last):
+        lat1, lon1 = poly[i]
+        lat2, lon2 = poly[(i + 1) % m]
 
-    for i in range(4):
-        lat1, lon1 = corners[i]
-        lat2, lon2 = corners[(i + 1) % 4]
-
-        inv = geod.Inverse(lat1, lon1, lat2, lon2)
+        inv = geod.Inverse(float(lat1), float(lon1), float(lat2), float(lon2))
         s12 = float(inv["s12"])
-        line = geod.Line(lat1, lon1, inv["azi1"])
+        line = geod.Line(float(lat1), float(lon1), float(inv["azi1"]))
 
-        # number of segments so each is <= max_step_m
-        nseg = int(np.ceil(s12 / max_step_m))
-        nseg = max(1, min(nseg, max_points_per_edge))  # cap safety
+        nseg = int(np.ceil(s12 / max_step_m)) if max_step_m > 0 else 1
+        nseg = max(1, min(nseg, max_per_edge))
 
-        # sample points along the edge, excluding the end to avoid duplicates at vertices
         s = np.linspace(0.0, s12, nseg, endpoint=False)
         for si in s:
             r = line.Position(float(si))
             out.append((r["lat2"], r["lon2"]))
 
     return np.array(out, dtype=np.float64)
+
+
+def densify_quad_geodesic_by_step(corners_latlon: np.ndarray,
+                                  max_step_m: float = 2_000.0,
+                                  max_per_edge: int = 512) -> np.ndarray:
+    """Convenience wrapper for densifying a 4-corner geodesic quad."""
+    return densify_poly_geodesic_by_step(
+        corners_latlon,
+        max_step_m=max_step_m,
+        max_per_edge=max_per_edge,
+        closed=True,
+    )
 
 
 def mode_u8(inv_hex, counts, pts):
@@ -121,7 +159,11 @@ def create_nlcd_lut():
 
 
 class Wkt(Domain):
-    """Custom wkt domain"""
+    """
+    Custom wkt domain
+    The default name is g_wkt.
+    This is fine while one is using only one Wkt defined domain.
+    """
 
     def valid(self, arr) -> NDArray:
         return super().valid(arr)
@@ -325,13 +367,13 @@ if __name__ == '__main__':
     # 37.5407, -77.4360  City-Centre of Richmond, Virginia
     # 44.4280, -110.5885 Yellowstone area, WY (44.4280, -110.5885)
     # 25.4687, -80.4776 Everglades edge, FL (Homestead)
+    # 33.84118870718737, -109.96478418965168 Whiteriver
     # Here we are using A given point at the centre of the map.
     focus = "Richmond_VA"
+    size, size_str = 25_000.0, '25k'        # width/height of map, in metres.
     rcc = Points(np.atleast_2d([37.5407, -77.4360]), g_gcd)
-    # let's grab an approximate 50km square around city centre.
     centres = rcc.coords  # shape (n, 2) in (lat, lon)
-    half = 50_000.0
-    diag = half * math.sqrt(2.0)  # centre → corner
+    diag = (size / 2.0) * math.sqrt(2.0)  # centre → corner
     az = np.array([45.0, 135.0, 225.0, 315.0], dtype=np.float64)
     n = centres.shape[0]
     centres_rep = np.repeat(centres, az.size, axis=0)  # (n*4, 2)
@@ -351,11 +393,11 @@ if __name__ == '__main__':
     if np.unique(cmp).size > 1:
         raise NotImplementedError('Need to improve the mode, and components part here.')
     bbox = (tp, lt, bt, rt)  # TLBR
-    for layer in range(4, 10):
+    for layer in range(6, 10):
         pts = tri_grid_clipped(level=layer+3, mode=int(mo[0]), bbox=bbox)
         bt = Points(pts, b_oct, components=bhx.components[0])
         smp = rg.project(bt, [b_oct, c_oct, c_ell, g_wkt])
         bt.samples, px_id = sample_nlcd_gdal(ds, smp.coords)
         bt.px_id = px_id   # de-dupes
         hx_pts, vals = hex_poly_layer(bt, layers=layer, reducer=mode_u8)
-        plot_hex(hx_pts, f'01k{layer}{focus}', bbox=bbox, values=vals, lut=nlcd_lut)
+        plot_hex(hx_pts, f'{size_str}{layer}{focus}', bbox=bbox, values=vals, lut=nlcd_lut)

@@ -5,8 +5,11 @@
 """
 This shows the hexagon ids as colours, for each layer. Note that
 layer zero has 11 colours, whereas every other layer has 9.
-Last Tested 16 December 2025 0.1.0a3 (passed - and written better)
-Last Tested 08 October 2025 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed - and written better)
+08 October 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt

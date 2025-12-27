@@ -5,9 +5,109 @@
 """
 Grid Methods - eg for composing rectilinear pixel grids for projected sampling.
 """
+from functools import cache
 import numpy as np
 from hhg9.h9 import H9K
 from hhg9.h9.classifier import in_scope
+
+
+@cache
+def _hex_areas():
+    """Return characteristic lengths for an ideal regular hexagon at each level.
+    Returns:
+        np.array (max_depth, 5):
+            area: area in m^2
+            side: side length s (aka) circumradius: (vertex-centre)
+            inradius: r (flat-centre)
+            flat_diameter: 2*r aka 'height'
+            point_diameter: 2*side
+    """
+    # Level 0 area ≈ 42_505_468 km^2 (area of Earth / 12 hexes)
+    max_depth = 64  # way over the top.
+    earth = 510_065_621_724_154.6
+    hex_0 = earth / 12
+    l_hex = hex_0
+    h_areas = np.zeros((max_depth, 5), dtype=np.float64)
+    for i in range(max_depth):
+        area = l_hex
+        side = np.sqrt((2.0 * area) / (3.0 * np.sqrt(3.0)))  # for hex, side aka big_r
+        r = (np.sqrt(3.0) / 2.0) * side
+        in_radius = r
+        flat_diameter = 2.0 * r
+        point_diameter = 2.0 * side
+        h_areas[i] = [area, side, in_radius, flat_diameter, point_diameter]
+        l_hex /= 9
+    return h_areas
+
+
+@cache
+def _tri_areas():
+    """Return characteristic lengths for an ideal equilateral triangle at `level`.
+    Derived from area A = (sqrt(3)/4) * a^2.
+    returns np.array (max_depth, 5):
+        area: area in m^2
+        side: side length a
+        inradius: r
+        height: altitude
+        circumradius: R
+    """
+    # Level 0 area ≈ 63_758_203 km^2 (area of Earth / 8 faces)
+    max_depth = 64  # way over the top.
+    earth = 510_065_621_724_154.6
+    tri_0 = earth / 8
+    l_tri = tri_0
+    t_areas = np.zeros((max_depth, 5), dtype=np.float64)
+    for i in range(max_depth):
+        area = l_tri
+        a = np.sqrt((4.0 * area) / np.sqrt(3.0))  # side
+        r = (np.sqrt(3.0) / 6.0) * a  # inradius
+        h = (np.sqrt(3.0) / 2.0) * a  # height
+        big_r = (np.sqrt(3.0) / 3.0) * a
+        side = a
+        in_radius = r
+        height = h
+        t_areas[i] = [area, side, in_radius, height, big_r]
+        l_tri /= 9
+    return t_areas
+
+
+@cache
+def hex_props(level):
+    """return (ideal) hex_grid properties for level"""
+    h_areas = _hex_areas()
+    return h_areas[level]
+
+
+@cache
+def tri_props(level):
+    """return  (ideal)  tri_grid properties for level"""
+    t_areas = _tri_areas()
+    return t_areas[level]
+
+
+def densify_step_for_layer(level, kind: str = 'hex', factor: float = 1.0, safety: float = 0.9) -> float:
+    """
+    Suggest a geodesic densify step (metres) from layer semantics.
+    Intended for boundary densification when building a bbox for clipping.
+
+    Args:
+        level: grid layer.
+        kind: 'hex' or 'tri'.
+        factor: multiplier applied to a conservative characteristic span.
+        safety: shrink factor (<=1) to hedge against local authalic shrink.
+
+    Returns:
+        step length in metres.
+
+    Notes:
+        This errs on the side of more boundary samples.
+    """
+    if kind == 'tri':
+        props = tri_props(level)
+    else:
+        props = hex_props(level)
+    base = float(props[2])  # inradius
+    return float(base) * float(safety) / float(factor)
 
 
 def fit(pts, img_w, img_h):

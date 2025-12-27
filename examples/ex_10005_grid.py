@@ -5,6 +5,9 @@
 """
 Various geometric/coordinates tests
 This reports nothing if everything is working!
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 """
 

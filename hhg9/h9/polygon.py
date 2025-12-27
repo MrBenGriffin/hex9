@@ -336,55 +336,53 @@ class HexReducer(Protocol):
         ...
 
 
-def hex_poly_groups(pts, layers: int = 10, tail_style: TailStyle = TailStyle.reversible):
-    """Return hex polygons plus the grouping needed to aggregate arbitrary per-point data.
-
-    Returns:
-        tuple: (hx_pts, inv_hex, counts, idx)
-            hx_pts: Points of hex polygon vertices (H*6,2) with per-vertex octant components.
-            inv_hex: (N,) mapping each input point -> hex index in [0, H)
-            counts: (H,) population count per hex
-            idx: (H,) indices of representative points for each hex (as returned by np.unique)
-
-    Notes:
-        - This function does NOT aggregate values; callers can compute means/sums/modes/medians etc.
-        - `idx` can be used to recover per-hex address metadata from the representative point.
-    """
-    from hhg9 import Points
-
-    b_oct = pts.domain
-    if b_oct.name != 'b_oct':
-        raise ValueError('hex_poly_groups requires pts to be in b_oct domain')
-
-    h_val = hex_layer(pts, layer=layers, tail_style=tail_style)
+def hex_reduce(pts, layer):
+    """Given a set of points, find the hex"""
+    h_val = hex_layer(pts, layer=layer, tail_style=TailStyle.reversible)
     h_key = hex_key(h_val)
-
-    hex_k, idx, inv_hex = np.unique(h_key, axis=0, return_index=True, return_inverse=True)
+    hex_k, hex_idx, hex_inv = np.unique(h_key, axis=0, return_index=True, return_inverse=True)
     hex_num = hex_k.shape[0]
-    counts = np.bincount(inv_hex, minlength=hex_num).astype(np.int64, copy=False)
+    hex_v = h_val[hex_idx]
+    return hex_num, hex_v, hex_inv, hex_idx
 
-    # Build hex polygons (same logic as the old hex_poly_layer)
-    hex_v = h_val[idx]
-    tail = hex_v[:, -1]
-    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
-    hex_all = H9P.hx[xpm, xc2]
+
+def hex_parents(dom, hex_v, hex_num, layer):
+    """Hex parent centroids - return the b_oct points, octants, and remaining scale"""
     hex_xy = np.zeros((hex_num, 2), dtype=float)
-    hex_oid, hex_rgn = hex_digits_reg(hex_v, b_oct)
-
+    hex_oid, hex_rgn = hex_digits_reg(dom, hex_v)
     scale = 1.0
-    for i in range(1, layers + 1):
+    for i in range(1, layer + 1):
         hex_xy += H9C.off_xy[hex_rgn[:, i]] * scale
         scale /= 3.0
+    return hex_xy, hex_oid, scale
 
-    hex_pts = hex_xy[:, None, :] + hex_all * scale  # (H,6,2)
+
+def ctr_from_pars(dom, hex_par, hex_oid, scale, tail):
+    """Build hex polygons, return Points (N)"""
+    from hhg9 import Points
+    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
+    hex_all = H9P.hx[xpm, xc2]  # given the parent, and modes, c2 of hexes we want...
+    hex_pts = hex_par[:, None, :] + hex_all * scale  # (H,6,2)
+    hex_ctr = np.mean(hex_pts, axis=1)
+    hx_pts = Points(hex_ctr, dom, components=hex_oid)
+    return hx_pts
+
+
+def hex_from_pars(dom, hex_par, hex_oid, scale, tail):
+    """Build hex polygons, return Points (N*6)"""
+    from hhg9 import Points
+    from hhg9.h9 import H9O
+    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
+    hex_all = H9P.hx[xpm, xc2]  # given the parent, and modes, c2 of hexes we want...
+    hex_pts = hex_par[:, None, :] + hex_all * scale  # (H,6,2)
 
     # Set the basic octant id for each hexagon
     oc_poly6 = np.repeat(hex_oid[:, None], 6, axis=1)  # (H, 6)
-    nbr_oid = b_oct.oid_nb[hex_oid, xc2]
+    nbr_oid = H9O.oid_nb[hex_oid, xc2]
 
     hex_ẋ = H9K.R3 * hex_pts[..., 0].ravel()  # Classifier ẋ
-    hex_y = hex_pts[..., 1].ravel()          # Classifier y
-    oc_mo = np.repeat(xrm, 6)                # Set the octant mode for each hexagon
+    hex_y = hex_pts[..., 1].ravel()           # Classifier y
+    oc_mo = np.repeat(xrm, 6)          # Set the octant mode for each hexagon
     types = location(hex_ẋ, hex_y, oc_mo)
     locs = types.reshape(-1, 6)
 
@@ -402,10 +400,36 @@ def hex_poly_groups(pts, layers: int = 10, tail_style: TailStyle = TailStyle.rev
 
     hx_coords = hex_pts.reshape([-1, 2])
     hx_oc = oc_poly6.reshape([-1])
-    hx_pts = Points(hx_coords, b_oct, components=hx_oc)
+    hx_pts = Points(hx_coords, dom, components=hx_oc)
+    return hx_pts
 
-    return hx_pts, inv_hex.astype(np.int64, copy=False), counts, idx
 
+def hex_poly_groups(pts, layers: int = 10):
+    """Return hex polygons plus the grouping needed to aggregate arbitrary per-point data.
+
+    Returns:
+        tuple: (hx_pts, inv_hex, counts, idx)
+            hx_pts: Points of hex polygon vertices (H*6,2) with per-vertex octant components.
+            inv_hex: (N,) mapping each input point -> hex index in [0, H)
+            counts: (H,) population count per hex
+            idx: (H,) indices of representative points for each hex (as returned by np.unique)
+
+    Notes:
+        - This function does NOT aggregate values; callers can compute means/sums/modes/medians etc.
+        - `idx` can be used to recover per-hex address metadata from the representative point.
+    """
+
+    dom = pts.domain
+    if dom.name[1:5] != '_oct':
+        raise ValueError('hex_poly_groups requires pts to be in b_oct/n_oct domain')
+
+    # reduce all points to hex ids, preserving reversible (needed for pts construction)
+    hex_num, hex_v, hex_inv, hex_idx = hex_reduce(pts, layers)
+    hex_xy, hex_oid, scale = hex_parents(dom, hex_v, hex_num, layers)   # (HP,2)
+    hx_pts = hex_from_pars(dom, hex_xy, hex_oid, scale, hex_v[:, -1])
+
+    counts = np.bincount(hex_inv, minlength=hex_num).astype(np.int64, copy=False)
+    return hx_pts, hex_inv.astype(np.int64, copy=False), counts, hex_idx
 
 
 def hex_poly_layer(pts, layers: int = 10, reducer: Optional[HexReducer] = None):
@@ -424,7 +448,7 @@ def hex_poly_layer(pts, layers: int = 10, reducer: Optional[HexReducer] = None):
             hx_pts: Points of hex polygon vertices (H*6,2)
             values: (H,) aggregated value per hex (float64)
     """
-    hx_pts, inv_hex, counts, idx = hex_poly_groups(pts, layers=layers, tail_style=TailStyle.reversible)
+    hx_pts, inv_hex, counts, idx = hex_poly_groups(pts, layers=layers)
 
     if reducer is None:
         # Default: mean of pts.samples per hex (previous behaviour)

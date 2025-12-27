@@ -14,6 +14,9 @@ This:
 (d) Measures, via GeographicLib Inverse, the ∂ distance from Reference
 (e) Logs the results into a CSV file.
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed; accuracy has changed to area m^2)
 16 December 2025 0.1.0a3 (passed; after rewriting formatter)
 25 November 2025 (passed)
 """
@@ -63,34 +66,16 @@ class CSVLogger:
 
 def run(reg, logger, refs, layers=36):
     h9f = OctahedralH9(reg)
+    h9f.width = layers
     lat = refs.coords[:, 0]
     lon = refs.coords[:, 1]
-    # Resolve Ambiguity flags (vectorised)
-    ε = 1e-15
-    ambiguous = (
-        (np.isclose(np.abs(lat), 90.0, atol=ε)) |
-        (np.isclose(lat, 0.0, atol=ε) & (np.isclose(np.abs(lon), 180.0, atol=ε) | np.isclose(lon, 0.0, atol=ε)))
-    ).astype(np.uint8)
-    # 'ambiguous' marks any points which are on vertices.
-    # such points might have multiple addresses.
-    # project the GCD reference points onto barycentric octahedral.
+    # b_rys = reg.project(refs, ['g_gcd', 'c_ell', 'c_oct', 'b_oct'])  # components filled
+
     b_rys = reg.project(refs, ['g_gcd', 'b_oct'])  # components filled
-    # Get the domain managing the barycentric, and register the h9f grid format.
     b_rys.domain.register_format(h9f)
-    # project barycentric octahedral back to GCD
     b_rtp = reg.project(b_rys, ['b_oct', 'g_gcd'])
     # Get the octant id and mode of each point (discarding mode here).
     oc, _mo = b_rys.cm()
-    b_oct = b_rys.domain
-    # for depth in range(30):
-    #     cx = xy_regions(b_rys.coords, _mo, depth)
-    #     hd = reg_hex_digits(cx, oc, b_oct, TailStyle.key)
-    #     print(f'depth={depth}, cx={cx[0]}, hx={hd[0]}')
-
-    # depth=0, cx=[22 42], hx=[7 5]
-    # depth=1, cx=[22 42 57], hx=[7 7 1]
-    # Labels are depth+2 long.  Consider layer 0:  they still need 0...B.
-    # However, for the purpose of reliable keys we need the c2 of parent/mode of parent
     # Now generate the set of h9f labels for each point, and convert to np.array
     labels = f'{b_rys:h9.{layers}}'  # This is reversible addresses.
     label_vec = np.array(labels.splitlines())
@@ -108,7 +93,6 @@ def run(reg, logger, refs, layers=36):
             "lat_in": f"{refs.coords[i][0]:.16f}", "lon_in": f"{refs.coords[i][1]:.16f}",
             "bry_x": f"{b_rys.coords[i][0]:.16f}", "bry_y": f"{b_rys.coords[i][1]:.16f}",
             "oct_in": int(oc[i]),
-            "ambiguous": ambiguous[i],
             "lat_rt_gb": f"{b_rtp.coords[i][0]:.16f}", "lon_rt_gb": f"{b_rtp.coords[i][1]:.16f}",
             "gcd_err": f'{b_deltas[i]:.6f}nm',
             "gcd_err_val": f'{b_deltas[i]:.6f}',
@@ -120,11 +104,12 @@ def run(reg, logger, refs, layers=36):
 
 
 if __name__ == '__main__':
-    accuracy = 1e-9  # in meters
+    accuracy = 1e-22  # in meters^2
     reg = Registrar()  # Manage Domains & Projections
     seed = 1234512
     samples = 100_000
-    layers = 36  # 36 reaches mathematical limits on 64-bit floats.
+    ake = reg.projection('oct_ell')
+    layers = ake.set_accuracy(accuracy)
     np.random.seed(seed)
     base = Path(__file__).parent
 
@@ -134,7 +119,7 @@ if __name__ == '__main__':
 
     locr = gcd_rnd(samples)
     gpts = Points(locr, 'g_gcd')
-    run(reg, main_logger, gpts, layers=layers)
+    run(reg, main_logger, gpts, layers)
     main_logger.close()
     elapsed = time.perf_counter() - start_time
     print(f'Results written to {log_file.relative_to(base)}\n'

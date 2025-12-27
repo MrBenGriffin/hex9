@@ -6,21 +6,20 @@
 For a given layer, compose a reference address for each
 hexagon in that layer - generate the set of hexagons at that layer
 and display on the globe.
-Last Tested 16 December 2025 0.1.0a3 (passed)
-Last Tested 25 November 2025 (passed)
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt, colors
-from matplotlib.collections import PolyCollection
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area
-from hhg9.h9 import H9_RA, H9C, H9K
-from hhg9.h9.region import regions_xy, xy_regions, H9R, region_neighbours
-from hhg9.h9.polygon import hex_poly_layer, hh_layer, H9P
-from hhg9.h9.addressing import hex_layer, hex_digits_reg, neighbours, hex_digits, TailStyle, hex_key, \
-    tail_unpack_reversible
-from hhg9.h9.classifier import location
+from hhg9.h9 import H9_RA, H9O
+from hhg9.h9.region import regions_xy
+from hhg9.h9.polygon import hex_poly_layer
 import matplotlib as mpl
 
 
@@ -147,13 +146,14 @@ def get_data(reg: Registrar, depth, mode=None):
     rgn = H9_RA.rid2cell[np.array(all_rgn)]  # cell addresses.
     sides = []
     for oc in range(8):  # all octants
-        mo = b_oct.oid_mo[oc]
+        mo = H9O.oid_mo[oc]
+        cmp = H9O.oid_cmp[oc]
         if mode is not None and mo != mode:
             continue
         rgc = rgn[mo]
         xym = regions_xy(rgc)
         xy = xym[:, :-1]
-        sides.append(Points(xy, b_oct, b_oct.signs_by_id[oc]))
+        sides.append(Points(xy, b_oct, cmp))
     result = Points.concat(sides)
     return result
 
