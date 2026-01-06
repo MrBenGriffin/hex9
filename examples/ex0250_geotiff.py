@@ -113,7 +113,7 @@ def mode_u8(inv_hex, counts, pts):
 def sample_nlcd_gdal(ds, coords):
     """
     ds: gdal.Open(src_file) object
-    coords: NumPy array of shape (N, 2) in the same CRS as the TIFF
+    coords: NumPy array of shape (layer, 2) in the same CRS as the TIFF
     """
     gt = ds.GetGeoTransform()   # Affine Transform [UL_x, res_x, rot_x, UL_y, rot_y, res_y]
     inv_gt = gdal.InvGeoTransform(gt)  # API change! Get the Inverse Transform to go from Map -> Pixel
@@ -206,13 +206,13 @@ class Wkt_4978(Projection):
 
 
 def tri_grid_clipped(level, mode, bbox, h9p=H9P):
-    """Return a set of barycentric xy cell centroids for level N, mode M, clipped by a TLBR bounding box"""
+    """Return a set of barycentric xy cell centroids for level layer, mode M, clipped by a TLBR bounding box"""
     tp, lt, bt, rt = bbox
     from hhg9.h9 import H9C, H9R
 
     # Initialize arrays with the starting triangle
-    origins = np.array([[0.0, 0.0]])  # Shape (N, 2)
-    modes = np.array([mode], dtype=int)  # Shape (N,)
+    origins = np.array([[0.0, 0.0]])  # Shape (layer, 2)
+    modes = np.array([mode], dtype=int)  # Shape (layer,)
     scale = 1.0
 
     # Pre-fetch lookup tables as NumPy arrays for faster indexing
@@ -224,11 +224,11 @@ def tri_grid_clipped(level, mode, bbox, h9p=H9P):
 
     for _ in range(level):
         # 1. Get the child indices for every current triangle
-        # ks shape: (N, 9)
+        # ks shape: (layer, 9)
         ks = mo_reg_lut[modes]
 
         # 2. Calculate child origins using broadcasting
-        # (N, 1, 2) + (N, 9, 2) * scale -> (N, 9, 2)
+        # (layer, 1, 2) + (layer, 9, 2) * scale -> (layer, 9, 2)
         child_offsets = off_xy_lut[ks] * scale
         origins = (origins[:, np.newaxis, :] + child_offsets).reshape(-1, 2)
 

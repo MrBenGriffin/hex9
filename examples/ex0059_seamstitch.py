@@ -34,7 +34,7 @@ ALIAS_CAP_NM = None  # e.g., 10 for 1 m; None disables
 # Number of endpoints to elide from each end when plotting/fit (0 keeps all)
 ELIDE_VERTICES = 0 if RAW_MODE else 1
 # ---------------------------------------------------------------------------
-# Given: arrays t (N,), nm_L (N,), nm_R (N,), nb_nm (N,), beta (N,), lat0 (N,)
+# Given: arrays t (layer,), nm_L (layer,), nm_R (layer,), nb_nm (layer,), beta (layer,), lat0 (layer,)
 
 
 def _fit_slope(x, y):
@@ -111,7 +111,7 @@ def elide_vertices(*arrs, drop=0):
 
 
 def seam_litmus(b_on_seq, mode, depth=12, delta=1e-12, engine=None):
-    """b_on_seq: (N,2) bary on-seam; engine: H9Engine"""
+    """b_on_seq: (layer,2) bary on-seam; engine: H9Engine"""
     xy = np.asarray(b_on_seq)
     # tangent & normal in b_oct
     tvec = np.gradient(xy, axis=0)
@@ -319,7 +319,7 @@ def vert_ll(label, partner_lon=None):
     if label == 'P': return (0.0, 180.0)  # Let GeographicLib normalise
     if label == 'E': return (0.0, 90.0)
     if label == 'W': return (0.0, -90.0)
-    if label == 'N': return (90.0, float(partner_lon))
+    if label == 'layer': return (90.0, float(partner_lon))
     if label == 'S': return (-90.0, float(partner_lon))
     raise ValueError(f"Unknown vertex {label}")
 
@@ -346,7 +346,7 @@ def stitch_seam(edge_name, step_km=1.0, offset_m=0.1, ellipsoid=WGS84):
       - 's': 1D array of along-edge distances (meters) corresponding to each point
       - 'azi': forward azimuths at each on-edge point (degrees)
       - 'left_az' / 'right_az': left/right normal bearings (degrees)
-      - 'on', 'L', 'R': (N,2) arrays of lat/lon for the on-edge points and the
+      - 'on', 'L', 'R': (layer,2) arrays of lat/lon for the on-edge points and the
                          left/right offsets (offset_m) at each sample
     """
     (lat1, lon1), (lat2, lon2) = edge_endpoints_ll(edge_name)

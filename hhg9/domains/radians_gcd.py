@@ -40,13 +40,13 @@ class RadiansGCD(Domain):
 
     def adopt(self, pts: NDArray):
         """
-        Adopt a (N,2) array of [lat_rad, lon_rad] into this domain.
+        Adopt a (layer,2) array of [lat_rad, lon_rad] into this domain.
         - Ensures float64 dtype
         - Wraps longitude to [-pi, pi]
         """
         arr = np.asarray(pts, dtype=np.float64)
         if arr.ndim != 2 or arr.shape[1] != 2:
-            raise ValueError(f"{arr.shape} seems wrong for latitude/longitude array; expected (N,2).")
+            raise ValueError(f"{arr.shape} seems wrong for latitude/longitude array; expected (layer,2).")
         arr = arr.copy()
         arr[:, 1] = _wrap_lon_rad(arr[:, 1])
         return Points(arr, self)

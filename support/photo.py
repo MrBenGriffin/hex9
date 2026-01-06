@@ -105,7 +105,7 @@ class Photo:
     #
     #     color = stroke_col
     #     th_off = stroke_width // 2
-    #     # Latitude (N-S)
+    #     # Latitude (layer-S)
     #     if lat_deg > 0:
     #         lat_off = self.lat_min % lat_deg
     #         for lat in np.arange(self.lat_min+lat_off, self.lat_max, lat_deg):

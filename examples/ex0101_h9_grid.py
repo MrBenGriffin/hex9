@@ -47,7 +47,7 @@ def run(layout, scale, depths):
     xy = np.column_stack([ux, uy])
 
     # classify to faces
-    signs = n_oct.pt_face(xy)  # (N,3) int8
+    signs = n_oct.pt_face(xy)  # (layer,3) int8
     in_net = np.any(signs != 0, axis=1)
 
     # only keep pixels in the net

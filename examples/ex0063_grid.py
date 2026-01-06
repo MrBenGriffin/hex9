@@ -13,14 +13,12 @@ Another way of calculating this has been used with hexagons in ex0080_authalics
 25 November 2025 (passed)
 """
 from pathlib import Path
-
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area
 from hhg9.h9 import H9O
-# from experimental.algorithms.warp import Warper
 from hhg9.h9.polygon import tri_grid
 import matplotlib as mpl
 

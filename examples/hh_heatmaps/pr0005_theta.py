@@ -15,7 +15,7 @@ from bounds_utils import load_presets, resolve_bounds, needs_run
 from hhg9 import Registrar, Points
 
 
-def north_arrow(ax, centroid, poly, color, scale=0.12, label="N"):
+def north_arrow(ax, centroid, poly, color, scale=0.12, label="layer"):
     """Draw a north-pointing arrow above the given polygon’s centroid.
     The arrow length scales with the polygon’s extent so it remains visible for tiny patches.
     """
@@ -165,7 +165,7 @@ def compute_north_vector_boct(centroid_boct: np.ndarray, reg: Registrar,
 
 
 def draw_north_arrow(ax, origin: np.ndarray, vec: np.ndarray, poly: np.ndarray,
-                      color: str, scale: float = 0.12, label: str = "N") -> None:
+                      color: str, scale: float = 0.12, label: str = "layer") -> None:
     """Draw a north arrow from origin along `vec`, scaled to polygon extent.
     - `origin`: (1,2) array-like in b_oct coords
     - `vec`: geographic north direction at origin in b_oct coords

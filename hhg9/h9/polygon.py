@@ -208,7 +208,7 @@ def tri_grid(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P) -> NDArray[np
     Generate all triangle centroids for an octant at a given depth.
 
     Returns:
-        NDArray: Shape (N, 3, 2) array of triangle vertices.
+        NDArray: Shape (layer, 3, 2) array of triangle vertices.
     """
     queue = region_grid(levels, mode, h9p)
     pts = np.empty((len(queue), 3, 2), dtype=np.float64)
@@ -220,7 +220,6 @@ def tri_grid(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P) -> NDArray[np
 def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
     """
     Return unique vertices and edges for the triangular mesh at a given level.
-
     Useful for creating Matplotlib Triangulations.
 
     Args:
@@ -240,7 +239,9 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
 
     # Flatten all triangle vertices and deduplicate
     flat = tris_xy.reshape(-1, 2)  # (T*3, 2)
-    verts, inv = np.unique(flat, axis=0, return_inverse=True)
+    strat = np.around(flat, decimals=15)
+    vt_, idx, inv = np.unique(strat, axis=0, return_index=True, return_inverse=True)
+    verts = flat[idx]
 
     # Map each triangle to indices into the unique vertex array
     tris = inv.reshape(num_tris, 3)
@@ -266,7 +267,7 @@ def enmesh(pts, levels: int = 35, shape=None):
     Returns:
         tuple: (uniques, refs)
             uniques: (U, 4, 2) Unique polygons in global coordinates.
-            refs: (N, depth) Indices into `uniques` for each input point/layer.
+            refs: (layer, depth) Indices into `uniques` for each input point/layer.
     """
     from hhg9.h9 import H9C
     from hhg9.h9.region import H9R, xy_regions_iter
@@ -285,7 +286,7 @@ def enmesh(pts, levels: int = 35, shape=None):
     parent_xy = np.zeros((num_pts, 2), dtype=np.float64)
     scale = 1.0
 
-    # We'll collect per-layer polygons flattened as (N*D, 4, 2)
+    # We'll collect per-layer polygons flattened as (layer*D, 4, 2)
     polys = np.empty((num_pts * depth, 4, 2), dtype=np.float64)
     flat_idx = np.empty((num_pts, depth), dtype=np.int64)  # indices into `polys`
 
@@ -295,11 +296,11 @@ def enmesh(pts, levels: int = 35, shape=None):
         i = ev.i  # 0..D-1
 
         # Child c2 for each row under the parent mode
-        c2 = H9R.mcc2[ev.pmo, ev.cid]  # (N,)
+        c2 = H9R.mcc2[ev.pmo, ev.cid]  # (layer,)
         hh_shape = hh[ev.pmo, c2]  # pmo
 
         # Translate/scale each triangle to global coords
-        polygon = parent_xy[:, None, :] + hh_shape * scale  # (N,4,2)
+        polygon = parent_xy[:, None, :] + hh_shape * scale  # (layer,4,2)
 
         # Store flattened by layer, keeping a stable mapping back to rows
         start = i * num_pts
@@ -358,7 +359,7 @@ def hex_parents(dom, hex_v, hex_num, layer):
 
 
 def ctr_from_pars(dom, hex_par, hex_oid, scale, tail):
-    """Build hex polygons, return Points (N)"""
+    """Build hex polygons, return Points (layer)"""
     from hhg9 import Points
     xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
     hex_all = H9P.hx[xpm, xc2]  # given the parent, and modes, c2 of hexes we want...
@@ -369,7 +370,7 @@ def ctr_from_pars(dom, hex_par, hex_oid, scale, tail):
 
 
 def hex_from_pars(dom, hex_par, hex_oid, scale, tail):
-    """Build hex polygons, return Points (N*6)"""
+    """Build hex polygons, return Points (layer*6)"""
     from hhg9 import Points
     from hhg9.h9 import H9O
     xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
@@ -410,7 +411,7 @@ def hex_poly_groups(pts, layers: int = 10):
     Returns:
         tuple: (hx_pts, inv_hex, counts, idx)
             hx_pts: Points of hex polygon vertices (H*6,2) with per-vertex octant components.
-            inv_hex: (N,) mapping each input point -> hex index in [0, H)
+            inv_hex: (layer,) mapping each input point -> hex index in [0, H)
             counts: (H,) population count per hex
             idx: (H,) indices of representative points for each hex (as returned by np.unique)
 

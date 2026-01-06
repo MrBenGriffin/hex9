@@ -16,12 +16,12 @@ from hhg9.h9 import H9C
 def c2_groups(cell_ids, offsets, supercell_mode):
     """
     Split the 9 cells of one supercell into 3 C2 wedges (size 3) by angular sectors.
-    Returns (N,2): [c2 in {0,1,2}, cell_id]
+    Returns (layer,2): [c2 in {0,1,2}, cell_id]
     """
     # nudge pushes non-collinear cells to align with favoured group.
     # base aligns labels so C2=0 matches canon: Λ→base=0, V→base=2
     nudge, base = (1, 0) if supercell_mode else (-1, 2)
-    pts = offsets[cell_ids].astype(np.float64)  # (N,2)
+    pts = offsets[cell_ids].astype(np.float64)  # (layer,2)
     theta6 = np.arctan2(pts[:, 1], pts[:, 0]) / (np.pi/3)  # 60° units, (half-integer)
     sector = np.rint(6.5 + theta6).astype(np.int32) % 6    # 30° shift; 6.5 + half-integer -> 0...5
     counts = np.bincount(sector, minlength=6)  # find singletons

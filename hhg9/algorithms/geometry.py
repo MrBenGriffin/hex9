@@ -10,7 +10,7 @@ import numpy as np
 
 def inside_triangle_cw(pts: np.ndarray, tri: np.ndarray) -> np.ndarray:
     """Vectorised point-in-triangle test.
-    points: (N,2), tri: (3,2) in CW order. Returns mask bool."""
+    points: (layer,2), tri: (3,2) in CW order. Returns mask bool."""
     # Edges
     a, b, c = tri[0], tri[1], tri[2]
     ab = b - a

@@ -84,7 +84,7 @@ class AKOctahedralEllipsoid(Projection):
 
     def _core_raw(self, uvw: NDArray) -> NDArray:
         """
-        Vectorized core projection: maps points from the unit octahedron to the unit sphere.
+        Vectorized core projection: maps points from the unit octahedron to a spheroidal.
         Handles edge cases where one coordinate is near zero (i.e., edge of the octant).
         Returns the un-normalised projection vector.
         """

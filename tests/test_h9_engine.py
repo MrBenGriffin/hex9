@@ -306,7 +306,7 @@ class GridRegions(GridConstants):
         # After reconstructing the coordinates, find the initial mode from the root URI.
         initial_mode = self.ugc_lut[uri_address[:, 0], self.mode]
 
-        # Stack all three results into a final (N, 3) array.
+        # Stack all three results into a final (layer, 3) array.
         return np.stack([x, y, initial_mode], axis=-1)
 
     def alt_ugc_dec(self, uri_address):
@@ -660,8 +660,8 @@ class GridNeighbours:
         return neighbour
 
     def encroach_to_neighbour(self, xy, mode, c1_edge, preserve):
-        # xy: (N,2) local coords in source face
-        # mode: (N,) source face mode (not used in math here, but good to thread)
+        # xy: (layer,2) local coords in source face
+        # mode: (layer,) source face mode (not used in math here, but good to thread)
         # c1_edge: 0,1,2 – which edge family you crossed (on the source face)
         # preserve: bool – whether this face-to-face seam preserves or swaps C1
 

@@ -224,7 +224,7 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
 @dataclass(frozen=True, slots=True)
 class RegionPacker(AddressPackerLike):
     """
-    Packs (N, L+1) region-ids into a backend representation.
+    Packs (layer, L+1) region-ids into a backend representation.
 
     This class enforces the H9 region addressing **root nibble** protocol:
 
@@ -254,13 +254,13 @@ class RegionPacker(AddressPackerLike):
         Builds the root nibble and delegates to the backend pack function.
 
         Args:
-            reg_ids: (N, L+1) array of region IDs. Column 0 must be prototype {0, 1}.
-            octants: Optional (N,) array of octant IDs.
+            reg_ids: (layer, L+1) array of region IDs. Column 0 must be prototype {0, 1}.
+            octants: Optional (layer,) array of octant IDs.
                 * If provided, root nibble becomes octant (0..7).
                 * If None, root nibble becomes 8 or 9 (unanchored proto tag).
         """
         reg_ids = np.asarray(reg_ids, dtype=np.uint8)
-        assert reg_ids.ndim == 2, "reg_ids must be (N, L+1)"
+        assert reg_ids.ndim == 2, "reg_ids must be (layer, L+1)"
         N, L1 = reg_ids.shape
         if L1 < 1:
             raise ValueError("reg_ids must have at least the root nibble")
@@ -355,10 +355,10 @@ class HexPacker(AddressPackerLike):
         Encodes hex components into packed nibbles.
 
         Args:
-            hex_body: (N, L) array of hex digits in 0..8.
-            octants: (N,) array of octant IDs 0..7.
-            c2s: (N,) array of supercell c2 values 0..2.
-            tail_regions: (N,) array of terminating region IDs 0..11.
+            hex_body: (layer, L) array of hex digits in 0..8.
+            octants: (layer,) array of octant IDs 0..7.
+            c2s: (layer,) array of supercell c2 values 0..2.
+            tail_regions: (layer,) array of terminating region IDs 0..11.
 
         Returns:
             Packed words via the backend `pack_fn`.
@@ -371,14 +371,14 @@ class HexPacker(AddressPackerLike):
         tail_regions = np.asarray(tail_regions, dtype=np.uint8)
 
         if hex_body.ndim != 2:
-            raise ValueError("hex_body must be (N, L)")
+            raise ValueError("hex_body must be (layer, L)")
         N, L = hex_body.shape
         if octants.shape != (N,):
-            raise ValueError("octants must be shape (N,)")
+            raise ValueError("octants must be shape (layer,)")
         if c2s.shape != (N,):
-            raise ValueError("c2s must be shape (N,)")
+            raise ValueError("c2s must be shape (layer,)")
         if tail_regions.shape != (N,):
-            raise ValueError("tail_regions must be shape (N,)")
+            raise ValueError("tail_regions must be shape (layer,)")
         if not np.all(octants < 8):
             raise ValueError("octant must be in 0..7")
         if not np.all(c2s < 3):
@@ -759,7 +759,7 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     :param scheme: RegionAddressLike (normally H9_RA)
 
     Returns:
-        NDArray: The canonical hex-digit hierarchy (N, L+1)
+        NDArray: The canonical hex-digit hierarchy (layer, L+1)
         Final byte is meta-data (full tail is reversible; partial tail is hex-binning safe).
 
     """
@@ -814,9 +814,9 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     Inverts `reg_hex_digits` (Hex -> Regions).
 
     Args:
-        hx: (N, L) hex-digit addresses.
+        hx: (layer, L) hex-digit addresses.
         dom: Domain object.
-        tail: Optional (N,) meta-tail nibble. If None, expects it in the last column of `hx`.
+        tail: Optional (layer,) meta-tail nibble. If None, expects it in the last column of `hx`.
 
     Returns:
         tuple: (octants, region_chain)
@@ -824,15 +824,15 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     from hhg9.h9 import H9O
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
-        raise ValueError("hx must be (N, L[+1]):")
+        raise ValueError("hx must be (layer, L[+1]):")
 
     sz, cols = hx.shape
     if cols < 2 and tail is None:
         raise ValueError("hx must contain at least one hex digit and one tail nibble")
 
     if tail is None:
-        body = hx[:, :-1]  # (N, L): root + layer hex digits
-        tail = hx[:, -1]  # (N,): meta-tail
+        body = hx[:, :-1]  # (layer, L): root + layer hex digits
+        tail = hx[:, -1]  # (layer,): meta-tail
     else:
         body = hx
 
@@ -846,7 +846,7 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     hex_reg = HEX_LUTS.hex_reg
     oob = HEX_LUTS.hex_oob
 
-    oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (N, 2): [face_id, c2_root]
+    oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (layer, 2): [face_id, c2_root]
     r_oct = oct_c2[:, 0]
 
     # ROOT super-regions mark hex digits as 0,1,2 in line with nominal-c2.
@@ -924,7 +924,7 @@ def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.rever
     hx = hex_digits(pts, layer=layer, tail_style=tail_style, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
-        raise ValueError("hex_digits must return (N, L) or (N, L+1)")
+        raise ValueError("hex_digits must return (layer, L) or (layer, L+1)")
 
     if tail_style is TailStyle.none:
         body = hx
@@ -981,7 +981,7 @@ def hex_key(hx: NDArray[np.uint8], *, copy: bool = True) -> NDArray[np.uint8]:
     """Rewrite a reversible hex address into a key address by rewriting the tail byte."""
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2 or hx.shape[1] < 2:
-        raise ValueError("hx must be (N, L+1) with a tail byte")
+        raise ValueError("hx must be (layer, L+1) with a tail byte")
     out = hx.copy() if copy else hx
     out[:, -1] = tail_key_from_reversible(out[:, -1])
     return out
@@ -1005,7 +1005,7 @@ def hex_pack(pts, depth: int = 36, scheme: RegionAddressLike = H9_RA):
     hx = hex_digits(pts, layer=depth, tail_style=TailStyle.reversible, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2 or hx.shape[1] < 2:
-        raise ValueError("expected reversible hex digits (N, L+1)")
+        raise ValueError("expected reversible hex digits (layer, L+1)")
 
     body = hx[:, :-1]
     tail_ids = hx[:, -1]

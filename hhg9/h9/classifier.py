@@ -18,7 +18,7 @@ Therefore, we use a fourfold coordinate scheme,
  * M is the mode (polarity of cell),
  * H is the horizontal band it belongs to.
  * P is the positive slope band it belongs to.
- * N is the negative slope band it belongs to.
+ * layer is the negative slope band it belongs to.
  The origin is fixed to the barycentre of the supercell.
 
 Barycentric Cell LUTs
@@ -46,6 +46,7 @@ class H9Classifier:
     n_levels: NDArray[np.float64]  # n_levels: negative slope (y + ẋ) vs [-Ẇ, 0, +Ẇ]
     mode_0_lim: Tuple[float, float]  # (VF barycentric floor, VC barycentric ceiling)
     mode_1_lim: Tuple[float, float]  # (ΛF barycentric floor, ΛC barycentric ceiling)
+    mode_lim: NDArray[np.float64]  # both mode_0_lim, mode_1_lim
     encode: NDArray[np.uint8]  # shape (6,4,4)
     decode: NDArray[np.uint8]  # shape (96,3)
     eps: np.floating
@@ -75,10 +76,11 @@ def h9_classifier(h9k: H9ConstLike = None) -> H9Classifier:
 
     mode_0_lim = h9k.VF, h9k.VC
     mode_1_lim = h9k.ΛF, h9k.ΛC
+    mode_lim = np.array([mode_0_lim, mode_1_lim], dtype=np.float64)
 
     encode, decode, *_ = compose_luts([h_bands, s_bands, s_bands])  # id lut = 96 size.
     eps = np.finfo(np.float64).eps
-    return H9Classifier(h_levels, p_levels, n_levels, mode_0_lim, mode_1_lim, encode, decode, eps)
+    return H9Classifier(h_levels, p_levels, n_levels, mode_0_lim, mode_1_lim, mode_lim, encode, decode, eps)
 
 
 H9CL = h9_classifier()  # singleton for typical use
@@ -135,38 +137,38 @@ def location(ẋ, y, mode=0, h9c: H9ClassifierLike = H9CL):
     with respect to supercell boundaries, using barycentric inclusion.
     Vectorized for scalar or array input, returns array of strings.
     """
+    from hhg9.h9 import H9K
     eps = h9c.eps
-    ẋ = np.asarray(ẋ)
-    y = np.asarray(y)
-    mode = np.asarray(mode)
-    # Broadcast all inputs
-    ẋ, y, mode = np.broadcast_arrays(ẋ, y, mode)
-    inside = in_scope(ẋ, y, mode, h9c)
-    # Get limits for each point depending on mode
-    min_y = np.where(mode == 1, h9c.mode_1_lim[0], h9c.mode_0_lim[0])
-    max_y = np.where(mode == 1, h9c.mode_1_lim[1], h9c.mode_0_lim[1])
-    # horizontal boundaries
-    dist_h_min = np.abs(y - min_y)
-    dist_h_max = np.abs(y - max_y)
-    # positive slope: (y - ẋ) vs ±Ẇ
-    ymx = y - ẋ
-    dist_p_min = np.abs(ymx + h9c.p_levels[0])  # ymx - (-Ẇ)
-    dist_p_max = np.abs(ymx - h9c.p_levels[0])  # ymx - (+Ẇ)
-    # negative slope: (y + ẋ) vs ±Ẇ
-    ypx = y + ẋ
-    dist_n_min = np.abs(ypx + h9c.n_levels[0])  # ypx - (-Ẇ)
-    dist_n_max = np.abs(ypx - h9c.n_levels[0])  # ypx - (+Ẇ)
-    # For each point, count boundaries within eps
-    close_h = (dist_h_min <= eps) | (dist_h_max <= eps)
-    close_p = (dist_p_min <= eps) | (dist_p_max <= eps)
-    close_n = (dist_n_min <= eps) | (dist_n_max <= eps)
-    n_close = close_h.astype(int) + close_p.astype(int) + close_n.astype(int)
-    # Result array
-    result = np.zeros(ẋ.shape, dtype=int)
-    result[inside & (n_close >= 2)] = BaryLoc.VTX  # Vertex: inside and two or more boundaries within eps
-    result[inside & (n_close == 1)] = BaryLoc.EDG  # Edge: inside and exactly one boundary within eps
-    result[inside & (n_close == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
-    result[~inside | ((n_close > 0) & ~inside)] = BaryLoc.EXT  # External: all others
+    # eps = 1e-15
+    if not isinstance(mode, np.ndarray):
+        mode = np.full(ẋ.shape[0], mode, dtype=np.uint8)
+    ups = np.flatnonzero(mode)
+    dns = np.flatnonzero(~mode)
+    ẋu, yu = ẋ[ups], y[ups]
+    ẋd, yd = ẋ[dns], y[dns]
+    in_d, in_u = in_down(ẋd, yd, h9c), in_up(ẋu, yu, h9c)
+    # Solves C2=0
+    on0_d = abs(yd - h9c.mode_lim[0, 1]) <= eps
+    on0_u = abs(yu - h9c.mode_lim[1, 0]) <= eps
+    # Solve C2=1 (forward) H9K.derived.Ẇ
+    # D: y-ẋ == -w; U: y-ẋ == w
+    w = H9K.derived.Ẇ
+    on1_d = abs(yd - ẋd + w) <= eps
+    on1_u = abs(yu - ẋu - w) <= eps
+    # Solve C2=1 (forward) H9K.derived.Ẇ
+    # D: y+ẋ == -w; U: y+ẋ == w
+    w = H9K.derived.Ẇ
+    on2_d = abs(yd + ẋd + w) <= eps
+    on2_u = abs(yu + ẋu - w) <= eps
+    close_d = on0_d.astype(int) + on1_d.astype(int) + on2_d.astype(int)
+    close_u = on0_u.astype(int) + on1_u.astype(int) + on2_u.astype(int)
+    result = np.full(ẋ.shape, BaryLoc.EXT, dtype=int)
+    result[in_d & (close_d == 2)] = BaryLoc.VTX  # Vertex: inside and two or more boundaries within eps
+    result[in_d & (close_d == 1)] = BaryLoc.EDG  # Edge: inside and exactly one boundary within eps
+    result[in_d & (close_d == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
+    result[in_u & (close_u == 2)] = BaryLoc.VTX  # Vertex: inside and two or more boundaries within eps
+    result[in_u & (close_u == 1)] = BaryLoc.EDG  # Edge: inside and exactly one boundary within eps
+    result[in_u & (close_u == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
     return result
 
 

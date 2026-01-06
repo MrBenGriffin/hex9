@@ -31,7 +31,7 @@ def compose_luts(
     dtype: np.dtype | None = None,
 ):
     """
-    General N-axis bit-packing.
+    General layer-axis bit-packing.
     Given sizes = [S0, S1, ..., Sk-1], pack a coordinate (i0, i1, ..., ik-1) into an
     integer ID using bit fields:
         ID = sum( i_a << shift[a] ) over a=0...k-1

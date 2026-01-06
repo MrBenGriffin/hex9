@@ -158,7 +158,7 @@ def stage(file: str,
         # Robust barycentric test, orientation agnostic
         v0 = T1 - T0
         v1 = T2 - T0
-        a = P - T0  # (N,2)
+        a = P - T0  # (layer,2)
         den = v0[0]*v1[1] - v0[1]*v1[0]
         # signed sub-areas (scaled by 2*area)
         s = a[:, 0]*v1[1] - a[:, 1]*v1[0]

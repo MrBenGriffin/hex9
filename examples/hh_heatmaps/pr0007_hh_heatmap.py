@@ -190,7 +190,7 @@ def stage(file: str,
     matrix = np.array([[cos_, -sin_], [sin_, cos_]])
 
     pop_data = np.load(pop_f)
-    # Normalize population input: allow (N,) weights or Nx2/3 [lon,lat,(w)]
+    # Normalize population input: allow (layer,) weights or Nx2/3 [lon,lat,(w)]
     pop_weights = None
     if pop_data.ndim == 1:
         pop_weights = pop_data.astype(float)
@@ -227,8 +227,8 @@ def stage(file: str,
     pop_bry_f = src_dir / f"{base}_bry.npy"
     pop_cmp_f  = src_dir / f"{base}_bry_cmp.npy"
     if pop_bry_f.exists() and pop_cmp_f.exists():
-        pop_bary = np.load(pop_bry_f)              # (N,2)
-        pop_cmp  = np.load(pop_cmp_f)               # (N,3)
+        pop_bary = np.load(pop_bry_f)              # (layer,2)
+        pop_cmp  = np.load(pop_cmp_f)               # (layer,3)
         pop_pts_b = Points(pop_bary, b_oct, components=pop_cmp)
         if debug:
             print(f"[pr0007] loaded precomputed bary points: {pop_bary.shape}")

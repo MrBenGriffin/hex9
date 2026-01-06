@@ -43,7 +43,7 @@ It acts as the bridge between the mathematical classifier and the discrete grid 
 
 **Coordinate Systems:**
 
-* **(N, P, H, M):** An affine cube-like system (Negative slope, Positive slope, Horizontal, Mode).
+* **(layer, P, H, M):** An affine cube-like system (Negative slope, Positive slope, Horizontal, Mode).
     Constraint: :math:`n - p + h + m = 3` for every valid lattice point.
 * **(U, V):** A rectangular lattice over the plane.
     * U interval: 1/2 triangle width.

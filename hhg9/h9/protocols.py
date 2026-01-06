@@ -114,6 +114,7 @@ class H9ClassifierLike(Protocol):
     n_levels: NDArray[np.float64]  #: Negative slope tiers [-Ẇ, 0, +Ẇ].
     mode_0_lim: Tuple[float, float]  #: (Floor, Ceiling) for Mode 0.
     mode_1_lim: Tuple[float, float]  #: (Floor, Ceiling) for Mode 1.
+    mode_lim: NDArray[np.float64]  #: (Floor, Ceiling) for Mode.
     encode: NDArray[np.uint8]  #: Encoding LUT shape (6, 4, 4).
     decode: NDArray[np.uint8]  #: Decoding LUT shape (96, 3).
     eps: np.floating  #: Machine epsilon for float64.

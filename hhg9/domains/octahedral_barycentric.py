@@ -71,7 +71,7 @@ class OctahedralBarycentric(CompositeDomain):
 
         # Compute rotation matrices
         north, south = trans, trans @ mirror_y_neg_x  # South is the mirror of North
-        # Loop in 90º rotation order and compute projection matrices for N and S.
+        # Loop in 90º rotation order and compute projection matrices for layer and S.
         scale_factors = np.sqrt([2, 6, 3])[:, np.newaxis]
         self.rot90_idx = np.zeros(8, dtype=np.uint8)
         # These are set in order of rotation, starting with NEA

@@ -28,7 +28,7 @@ def sub_sample(pts: Points):
     xu = np.sort(np.unique(xy[:, 0]))
     yu = np.sort(np.unique(xy[:, 1]))
     dx = np.mean(np.diff(xu))  # typical E/W step in b_oct
-    dy = np.median(np.diff(yu))  # typical N/S step in b_oct
+    dy = np.median(np.diff(yu))  # typical layer/S step in b_oct
     offsets = np.array([
         [0.0, 0.0],
         [(r.random() - 0.5) * dx, 0.0],

@@ -146,7 +146,7 @@ class OctahedralNet(CompositeDomain):
 
     def pt_face(self, pts: NDArray) -> NDArray:
         """Vectorised: identify octant sign for each point in net coordinates.
-        Returns (N,3) int8 array of signs (±1), or (0,0,0) for invalid.
+        Returns (layer,3) int8 array of signs (±1), or (0,0,0) for invalid.
         """
         num_points = pts.shape[0]
         out = np.zeros((num_points, 3), dtype=np.int8)

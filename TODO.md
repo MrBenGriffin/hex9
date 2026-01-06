@@ -1,20 +1,28 @@
-# Hex addresses.
-0.1.0a3: Hex addresses have been radically modified, both in format and in 
-value. Documentation is pending!
+# Documentation!
 
-# Octant seams (neighbours)
-0.1.0a1: Seam hopping is now complete
+# work on overlays in a better manner
+Being able to add overlays is already in place, but it might be good to consider
+how best to approach that.
 
-# pr0004_theta.py
-0.1.0a1: The theta issue was fixed.
+# adding net rotations 
+(eg butterfly, but also the uk running along the prime meridian gives it a tilt). 
 
-# data clipping.
-With Japan, looking at Kyushu, it would be better for me to elide the entire population data for the country to that within a set of manual boundaries.
-This is roughly in place, but currently scattered in more than once place.
+# hill-shading 
+Then, it would be great to add hill-shading. this sort of is a freeby with 
+matplotlib, so good to try it.
 
-# Major tidy up of code.
-0.1.0a1: h9Engine has been refactored to h9 directory
-There are, maybe, 3 different generations of code in the h9Engine class at the moment, which is far from ideal.
+# as well as labels
+On-grid labels (and titles showing label prefixes)
+
+# grid overlays
+super-layer(s) / sub-layer grid overlayer  seem to be def. worthwhile.  
+Most of the time, data belongs to a single grid though
+
+# multi-layer hexbinning.
+This should be do-able. 
+Scrape full hexes at the finest resolution.
+...and work backwards.
+
 
 # Continue to rewrite / update documentation.
 # More unit tests...

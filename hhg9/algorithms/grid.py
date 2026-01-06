@@ -139,7 +139,7 @@ def sq_grid(scale: float = 1000, mode: int = 1):
 
     # IMPORTANT: one meshgrid for everything; keep indexing="xy"
     xx, yy = np.meshgrid(xl, yl, indexing="xy")                   # shapes (hgt, wid)
-    rec    = np.stack((xx.ravel(), yy.ravel()), axis=1)     # N = hgt*wid
+    rec    = np.stack((xx.ravel(), yy.ravel()), axis=1)     # layer = hgt*wid
 
     ii, jj = np.meshgrid(np.arange(wid), np.arange(hgt), indexing="xy")
     px_idx = ii.ravel().astype(np.int32)                        # x (col)
@@ -228,7 +228,7 @@ def in_convex_poly(points, poly):
         a = poly[i]
         b = poly[(i + 1) % m]
         ab = b - a
-        cp = _cross2d(ab, points - a)  # (N,)
+        cp = _cross2d(ab, points - a)  # (layer,)
         # Keep points on the same side as the centroid (within tolerance)
         inside &= (s * cp >= -eps)
         if not inside.any():
