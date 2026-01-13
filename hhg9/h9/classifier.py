@@ -138,8 +138,11 @@ def location(ẋ, y, mode=0, h9c: H9ClassifierLike = H9CL):
     Vectorized for scalar or array input, returns array of strings.
     """
     from hhg9.h9 import H9K
-    eps = h9c.eps
-    # eps = 1e-15
+    # NOTE: some boundary constants (e.g. VC/ΛF) can be ~0, in which case np.isclose
+    # relies almost entirely on `atol`. This needs to be comfortably above float64
+    # epsilon-scale noise and consistent with the mesh de-dup tolerance.
+    a_eps = 2e-14
+    r_eps = 1e-12
     if not isinstance(mode, np.ndarray):
         mode = np.full(ẋ.shape[0], mode, dtype=np.uint8)
     ups = np.flatnonzero(mode)
@@ -147,28 +150,33 @@ def location(ẋ, y, mode=0, h9c: H9ClassifierLike = H9CL):
     ẋu, yu = ẋ[ups], y[ups]
     ẋd, yd = ẋ[dns], y[dns]
     in_d, in_u = in_down(ẋd, yd, h9c), in_up(ẋu, yu, h9c)
-    # Solves C2=0
-    on0_d = abs(yd - h9c.mode_lim[0, 1]) <= eps
-    on0_u = abs(yu - h9c.mode_lim[1, 0]) <= eps
-    # Solve C2=1 (forward) H9K.derived.Ẇ
-    # D: y-ẋ == -w; U: y-ẋ == w
-    w = H9K.derived.Ẇ
-    on1_d = abs(yd - ẋd + w) <= eps
-    on1_u = abs(yu - ẋu - w) <= eps
-    # Solve C2=1 (forward) H9K.derived.Ẇ
-    # D: y+ẋ == -w; U: y+ẋ == w
-    w = H9K.derived.Ẇ
-    on2_d = abs(yd + ẋd + w) <= eps
-    on2_u = abs(yu + ẋu - w) <= eps
+
+    # Solve C2=0 (flat edge)
+    on0_d = np.isclose(yd, H9K.limits.VC, rtol=r_eps, atol=a_eps)  # uppermost point is flat
+    on0_u = np.isclose(yu, H9K.limits.ΛF, rtol=r_eps, atol=a_eps)  # lowermost point is flat
+    # Solve C2=1 (forward edge)
+    ẇ = H9K.derived.Ẇ
+    on1_d = np.isclose(yd - ẋd, -ẇ, rtol=r_eps, atol=a_eps)  # y-ẋ == -ẇ
+    on1_u = np.isclose(yu - ẋu,  ẇ, rtol=r_eps, atol=a_eps)  # y-ẋ == ẇ
+    # Solve C2=1 (backward edge)
+    on2_d = np.isclose(yd + ẋd, -ẇ, rtol=r_eps, atol=a_eps)  # y+ẋ == -ẇ
+    on2_u = np.isclose(yu + ẋu,  ẇ, rtol=r_eps, atol=a_eps)  # y+ẋ == ẇ
     close_d = on0_d.astype(int) + on1_d.astype(int) + on2_d.astype(int)
     close_u = on0_u.astype(int) + on1_u.astype(int) + on2_u.astype(int)
+
+    # If a point is within tolerance of a boundary line, treat it as "inside" for
+    # classification purposes. This prevents epsilon-scale drift from turning true
+    # edge/vertex points into EXT.
+    in_d_eff = in_d | (close_d > 0)
+    in_u_eff = in_u | (close_u > 0)
+
     result = np.full(ẋ.shape, BaryLoc.EXT, dtype=int)
-    result[in_d & (close_d == 2)] = BaryLoc.VTX  # Vertex: inside and two or more boundaries within eps
-    result[in_d & (close_d == 1)] = BaryLoc.EDG  # Edge: inside and exactly one boundary within eps
-    result[in_d & (close_d == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
-    result[in_u & (close_u == 2)] = BaryLoc.VTX  # Vertex: inside and two or more boundaries within eps
-    result[in_u & (close_u == 1)] = BaryLoc.EDG  # Edge: inside and exactly one boundary within eps
-    result[in_u & (close_u == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
+    result[in_d_eff & (close_d == 2)] = BaryLoc.VTX  # Vertex: two or more boundaries within eps
+    result[in_d_eff & (close_d == 1)] = BaryLoc.EDG  # Edge: exactly one boundary within eps
+    result[in_d_eff & (close_d == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
+    result[in_u_eff & (close_u == 2)] = BaryLoc.VTX  # Vertex: two or more boundaries within eps
+    result[in_u_eff & (close_u == 1)] = BaryLoc.EDG  # Edge: exactly one boundary within eps
+    result[in_u_eff & (close_u == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
     return result
 
 

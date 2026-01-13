@@ -73,6 +73,24 @@ or projecting onto (or from) the `barycentric plane`.
 | U      | W/6     | ≈ 0.235  | Horizontal lattice step size       | Derived     |
 | V      | H/9     | ≈ 0.136  | Vertical lattice step size         | Derived     |
 
+### Vertices
+Vertex values are in H9K.Limits (eg `H9K.Limits.TR`)
+
+    TR: Positive right-hand x-limit:                   H/R3
+    TL: Negative left-hand x-limit:                   -TR
+    ΛC: Mode 1 (Up) supercell barycentric ceiling:     2Ḣ
+    VC: Mode 0 (Down) supercell barycentric ceiling:    Ḣ
+    ΛF: Mode 1 (Up) supercell barycentric floor:       -Ḣ         
+    VF: Mode 0 (Down) supercell barycentric floor:    -2Ḣ
+
+The mode 0 (downward pointing) vertices of an octant/supercell are
+
+    (0, VF), (TL, VC), (TR, VC)
+
+The mode 1 (upward pointing) vertices of an octant/supercell are
+
+    (0, ΛC), (TL, ΛF), (TR, ΛF)
+
 
 ###  Summary
 These constants are referenced throughout Hex9’s projection, addressing, 

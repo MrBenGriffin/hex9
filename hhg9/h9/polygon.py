@@ -217,6 +217,33 @@ def tri_grid(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P) -> NDArray[np
     return pts
 
 
+def _unique_rows_tol(xy: np.ndarray, tol: float = 1e-12):
+    """Deduplicate 2D points by absolute tolerance `tol`.
+
+    Uses power-of-two quantization (via `np.ldexp`) to avoid large-magnitude division.
+    Returns original representatives (first occurrence) plus an inverse map.
+
+    Args:
+        xy: (N, 2) float64 points.
+        tol: absolute tolerance in the same units as xy.
+
+    Returns:
+        verts: (V, 2) representative original values (one per bucket)
+        inv: (N,) indices mapping each input row -> bucket index
+    """
+    tol = float(tol)
+    if tol <= 0:
+        raise ValueError("tol must be > 0")
+
+    # Choose k such that 2**(-k) <= tol (quantization step ~ 2**(-k)).
+    k = int(np.ceil(-np.log2(tol)))
+    key = np.rint(np.ldexp(xy, k)).astype(np.int64)
+
+    _, idx, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    verts = xy[idx]  # representative original (first occurrence)
+    return verts, inv
+
+
 def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
     """
     Return unique vertices and edges for the triangular mesh at a given level.
@@ -233,18 +260,25 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
             edges: (E, 2) Edge indices into verts.
             tris: (T, 3) Triangle indices into verts.
     """
-    # Use existing tri_grid to get all triangle vertices at this level
     tris_xy = tri_grid(levels=levels, mode=mode, h9p=h9p)  # (T, 3, 2)
     num_tris = tris_xy.shape[0]
-
     # Flatten all triangle vertices and deduplicate
     flat = tris_xy.reshape(-1, 2)  # (T*3, 2)
-    strat = np.around(flat, decimals=15)
-    vt_, idx, inv = np.unique(strat, axis=0, return_index=True, return_inverse=True)
-    verts = flat[idx]
+    # By layer 7, true vertex spacing is ~O(1/m) (~1.5e-4), so tol can be
+    # relaxed substantially without collapsing genuine neighbours. A tol of 1e-10
+    # should still be far below true spacing, but will merge the rare epsilon-drift
+    # duplicates that show up at very high layers.
+    tol = 1e-10 if levels >= 6 else 1e-12
+    verts, inv = _unique_rows_tol(flat, tol=tol)
 
     # Map each triangle to indices into the unique vertex array
     tris = inv.reshape(num_tris, 3)
+
+    # Hard-stop: ensure verts contains no exact duplicates (should usually be a no-op)
+    verts_u, inv_u = np.unique(verts, axis=0, return_inverse=True)
+    if verts_u.shape[0] != verts.shape[0]:
+        tris = inv_u[tris]
+        verts = verts_u
 
     # Build undirected edge list from triangle connectivity
     e01 = tris[:, [0, 1]]
