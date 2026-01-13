@@ -76,5 +76,5 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 
 if __name__ == '__main__':
-    flavours = ['pacific_windmill']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    flavours = ['pacific_windmill', 'diamonds']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
     run(flavours=flavours, scale=600, file='src/tissot_2560x1280.png')
