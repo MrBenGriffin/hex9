@@ -187,11 +187,10 @@ This project includes:
   Needless to say, Hex9 is a self-funded solo project which is written as a 
   proof-of-concept and demonstrator, to show that there are still many new 
   approaches to the HHG question.
-  The current Hex9 octahedral projection (AK) is not amazingly
-  equal-area, especially across a global level.  However, it's hexagons are (for the main part)
-  pretty round, and the area is pretty stable (±7% or so, globally), however local variation is
-  far more stable.  For example, when examining nations,
-  the variation is not so strong  (maybe not so much Russia, or Canada).
+  The current Hex9 octahedral projection (AK) has improved authalicity
+  (equal-area), especially across a global level.  However, it's hexagons are (for the main part)
+  pretty round, and the area is pretty stable (±0.01% or so, globally), however local variation is
+  far more stable - other than about 100km areound the poles..  
   The authalicity example reveals global variation very clearly.
 
 
