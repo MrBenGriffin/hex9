@@ -17,6 +17,7 @@ htmlcov/
 /other/
 /examples/sh/
 /examples/logs/
+/experimental/personal/
 /examples/**.npy
 /examples/**.tif
 /examples/**.zip
