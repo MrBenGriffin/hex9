@@ -33,6 +33,8 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
     for flavour in flavours:
         reg.domain(f'n_oct:{flavour}')  # or 'butterfly', etc.
     # reg.projection(f'plt_net')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
 
     # Load in plate carrée - will use 2700x1350 Blue Marble here.
     img = image.imread(file, 'png')
@@ -46,7 +48,6 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
     full_grid_d, mask_d = gbd[2], gbd[3]
     grid_u = full_grid_u[mask_u]
     grid_d = full_grid_d[mask_d]
-
 
     for flavour in flavours:
         n_oct = reg.domain(f'n_oct:{flavour}')
@@ -76,5 +77,5 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 
 if __name__ == '__main__':
-    flavours = ['pacific_windmill', 'diamonds']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    flavours = ['pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
     run(flavours=flavours, scale=600, file='src/tissot_2560x1280.png')

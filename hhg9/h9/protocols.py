@@ -27,6 +27,22 @@ from numpy.typing import NDArray
 
 
 @unique
+class BaryPlc(IntEnum):
+    """
+    Enumeration for locations of barycentric coordinates relative to a supercell.
+    """
+    UDF = 0  #: Undefined location.
+    EXT = 1  #: External (outside the supercell).
+    INT = 2  #: Internal (strictly inside the supercell).
+    VXA = 3  #: APEX Vertex (at a corner of the supercell).
+    VXL = 4  #: LEFT Vertex (at a corner of the supercell).
+    VXR = 5  #: RGT Vertex (at a corner of the supercell).
+    EG0 = 8   #: C2=0 (flat) Edge (on the boundary, not a vertex).
+    EG1 = 9   #: C2=1 (+ve) Edge (on the boundary, but not a vertex).
+    EG2 = 10  #: C2=2 (-ve) Edge (on the boundary, but not a vertex).
+
+
+@unique
 class BaryLoc(IntEnum):
     """
     Enumeration for locations of barycentric coordinates relative to a supercell.
@@ -169,7 +185,8 @@ class RegionAddressLike(Protocol):
     """
     rid2cell: NDArray[np.uint8]  #: Map Region ID -> Cell ID.
     cell2rid: NDArray[np.uint8]  #: Map Cell ID -> Region ID (-1 if unmapped).
-    modes: NDArray[np.uint8]  #: Mode of the regions.
+    modes: NDArray[np.uint8]     #: Mode of the regions.
+    c2: NDArray[np.uint8]        #: S.Mode Region -> C2
     props: NDArray[np.uint8]
     proto: NDArray[np.uint8]  #: Protocol array.
     r_size: int  #: Total number of region IDs.

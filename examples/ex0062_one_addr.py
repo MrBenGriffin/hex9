@@ -26,6 +26,7 @@ if __name__ == '__main__':
     h9f = OctahedralH9(reg)  # formatter.
     dms = DMS(reg)
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = reg.domain('g_gcd')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)

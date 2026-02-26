@@ -30,8 +30,8 @@ The core structure is as follows
            each of which is composed of three half-hexagons.  This gives 24 half-hexagons, and
            therefore 12 'bent' hexagons. That cover the entire octahedron.
            This is Layer 0.
-L*[0...7]  Within each hexagon, there are a group of six full hexagons of the subsequent layer,
-           and six half-hexagons of the subsequent layer.  They are all numbered between 0..7
+L*[0...7]  Within each hexagon, there are a group of six full hexagons of the subsequent hex_layer,
+           and six half-hexagons of the subsequent hex_layer.  They are all numbered between 0..7
            The specific pattern is documented elsewhere.
 1*[mm|reg] Metadata; Without recognising the region-mode of the terminal hexagon, there is some ambiguity
            Therefore, we need a digit to indicate the region-mode.  It is also useful to record
@@ -59,8 +59,8 @@ from enum import unique, Enum
 from functools import lru_cache
 import numpy as np
 from numpy.typing import NDArray
-from hhg9.h9 import H9R, H9C
-from hhg9.h9.protocols import RegionAddressLike, AddressPackerLike, H9CellLike, HexLUTLike, H9RegionLike
+from hhg9.h9 import H9R, H9C, H9K
+from hhg9.h9.protocols import RegionAddressLike, AddressPackerLike, H9CellLike, HexLUTLike, H9RegionLike, BaryLoc
 
 
 @unique
@@ -90,7 +90,7 @@ class TailStyle(Enum):
 # ---------- Hex Address Tail packing helpers ----------------------------------------
 
 # Reversible tail byte layout (one byte):
-# bit7: parent-mode of terminating region (p_mo)
+# bit7: parent-mode of terminating region (par_mode)
 # bits6..5: terminating c2
 # bit4: root mode (r_mo)
 # bits3..0: terminating region id (h)
@@ -104,18 +104,25 @@ def tail_pack_reversible(
 ) -> NDArray[np.uint8]:
 
     """Pack reversible tail metadata into one uint8 byte."""
-    p_mo = np.asarray(p_mo, dtype=np.uint8)  # terminating hex mode of parent region
-    p_c2 = np.asarray(p_c2, dtype=np.uint8)  # terminating hex c2 of parent region
-    r_mo = np.asarray(r_mo, dtype=np.uint8)  # root region mode
-    h = np.asarray(h, dtype=np.uint8)        # terminating region (under hex)
+    p_mo = np.asarray(p_mo, dtype=np.uint8)  # [0,1]   terminating hex mode of parent region
+    p_c2 = np.asarray(p_c2, dtype=np.uint8)  # [0,1,2] terminating hex c2 of parent region
+    # assert len(p_c2 > 2) == 0, "bad c2 in tail_pack_reversible"
+    r_mo = np.asarray(r_mo, dtype=np.uint8)  # [0,1]   root region mode
+    h = np.asarray(h, dtype=np.uint8)        # [0..11] terminating region (under hex)
     return (((p_mo << 7) & 0x80) | ((p_c2 << 5) & 0x60) | ((r_mo << 4) & 0x10) | (h & 0x0F)).astype(np.uint8)
+#   00000001 pmo
+#   10000000 pmo   <<7
+#   00000011 c2
+#   01100000 c2    <<5
+#   00000001 r_mo
+#   00010000 r_mo  <<4
 
 
 def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
-    """Unpack reversible tail metadata (p_mo, p_c2, r_mo, h) from one uint8 byte."""
+    """Unpack reversible tail metadata (par_mode, p_c2, r_mo, h) from one uint8 byte."""
     tail_ids = np.asarray(tail_ids, dtype=np.uint8)
     p_mo = ((tail_ids & 0x80) >> 7).astype(np.uint8)  # terminating mode of parent region
-    p_c2 = ((tail_ids & 0x60) >> 5).astype(np.uint8)    # terminating hex c2 of parent region
+    p_c2 = ((tail_ids & 0x60) >> 5).astype(np.uint8)  # terminating hex c2 of parent region
     r_mo = ((tail_ids & 0x10) >> 4).astype(np.uint8)  # root region mode
     h = (tail_ids & 0x0F).astype(np.uint8)            # terminating region
     return p_mo, p_c2, r_mo, h
@@ -162,6 +169,7 @@ class RegionIdScheme(RegionAddressLike):
     rid2cell: NDArray[np.uint8]
     cell2rid: NDArray[np.uint8]
     modes: NDArray[np.uint8]
+    c2: NDArray[np.uint8]
     props: NDArray[np.uint8]
     proto: NDArray[np.uint8]
     r_size: int
@@ -210,21 +218,28 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
     # These two values should come from / be sanitised against region protos.
     assert rid2cell[0] == 0x49 and rid2cell[1] == 0x16
     parity = (np.arange(r_size, dtype=np.uint8) & 1)
+    mc_c2 = np.full((2, 12), 0x0F, dtype=np.uint8)
+    for mo in [0, 1]:
+        for c2, rx in enumerate(H9C.c2[mo]):
+            for cx in rx:
+                rg = cell2rid[cx]
+                mc_c2[mo, rg] = c2
 
+    # mc_c2 = np.array([[mo, cell2rid[cx], c2] for mo in [0, 1] for c2, rx in enumerate(H9C.c2[mo]) for cx in rx], dtype=np.uint8)
     # Enforce parity==mode only for in-bounds cells.
     # rid2cell[12..15] are OOB placeholders (0x5F) and should not participate in the parity check.
     oob_cell = np.uint8(0x5F)
     valid = rid2cell != oob_cell
     assert np.all(parity[valid] == h9c.mode[rid2cell[valid]]), "rid parity must match cell mode (excluding OOB)"
     proto = cell2rid[h9r.proto]
-    return RegionIdScheme(rid2cell=rid2cell, cell2rid=cell2rid, modes=parity, props=mo_c2, proto=proto, r_size=r_size)
+    return RegionIdScheme(rid2cell=rid2cell, cell2rid=cell2rid, modes=parity, props=mo_c2, c2=mc_c2, proto=proto, r_size=r_size)
 
 
 # ---------- Packer (Pack Regions) -----------------
 @dataclass(frozen=True, slots=True)
 class RegionPacker(AddressPackerLike):
     """
-    Packs (layer, L+1) region-ids into a backend representation.
+    Packs (hex_layer, L+1) region-ids into a backend representation.
 
     This class enforces the H9 region addressing **root nibble** protocol:
 
@@ -254,13 +269,13 @@ class RegionPacker(AddressPackerLike):
         Builds the root nibble and delegates to the backend pack function.
 
         Args:
-            reg_ids: (layer, L+1) array of region IDs. Column 0 must be prototype {0, 1}.
-            octants: Optional (layer,) array of octant IDs.
+            reg_ids: (hex_layer, L+1) array of region IDs. Column 0 must be prototype {0, 1}.
+            octants: Optional (hex_layer,) array of octant IDs.
                 * If provided, root nibble becomes octant (0..7).
                 * If None, root nibble becomes 8 or 9 (unanchored proto tag).
         """
         reg_ids = np.asarray(reg_ids, dtype=np.uint8)
-        assert reg_ids.ndim == 2, "reg_ids must be (layer, L+1)"
+        assert reg_ids.ndim == 2, "reg_ids must be (hex_layer, L+1)"
         N, L1 = reg_ids.shape
         if L1 < 1:
             raise ValueError("reg_ids must have at least the root nibble")
@@ -310,7 +325,7 @@ class RegionPacker(AddressPackerLike):
 
         # Final sanity: column 0 must be proto {0,1}
         if not np.all((out[:, 0] == 0) | (out[:, 0] == 1)):
-            raise ValueError("Decoded address has non-proto at layer 0")
+            raise ValueError("Decoded address has non-proto at hex_layer 0")
         return octants, out
 
 
@@ -336,7 +351,7 @@ class HexPacker(AddressPackerLike):
 
     1.  **Octant (0..7):** The face ID.
     2.  **C2 (0..2):** The supercell C2 cluster of the address root.
-    3.  **Hex Digits (0..8):** The body of the address, one nibble per layer.
+    3.  **Hex Digits (0..8):** The body of the address, one nibble per hex_layer.
     4.  **Tail Region (0..11):** The terminating region ID (offset by +2 for packing).
 
     Note:
@@ -355,10 +370,10 @@ class HexPacker(AddressPackerLike):
         Encodes hex components into packed nibbles.
 
         Args:
-            hex_body: (layer, L) array of hex digits in 0..8.
-            octants: (layer,) array of octant IDs 0..7.
-            c2s: (layer,) array of supercell c2 values 0..2.
-            tail_regions: (layer,) array of terminating region IDs 0..11.
+            hex_body: (hex_layer, L) array of hex digits in 0..8.
+            octants: (hex_layer,) array of octant IDs 0..7.
+            c2s: (hex_layer,) array of supercell c2 values 0..2.
+            tail_regions: (hex_layer,) array of terminating region IDs 0..11.
 
         Returns:
             Packed words via the backend `pack_fn`.
@@ -371,14 +386,14 @@ class HexPacker(AddressPackerLike):
         tail_regions = np.asarray(tail_regions, dtype=np.uint8)
 
         if hex_body.ndim != 2:
-            raise ValueError("hex_body must be (layer, L)")
+            raise ValueError("hex_body must be (hex_layer, L)")
         N, L = hex_body.shape
         if octants.shape != (N,):
-            raise ValueError("octants must be shape (layer,)")
+            raise ValueError("octants must be shape (hex_layer,)")
         if c2s.shape != (N,):
-            raise ValueError("c2s must be shape (layer,)")
+            raise ValueError("c2s must be shape (hex_layer,)")
         if tail_regions.shape != (N,):
-            raise ValueError("tail_regions must be shape (layer,)")
+            raise ValueError("tail_regions must be shape (hex_layer,)")
         if not np.all(octants < 8):
             raise ValueError("octant must be in 0..7")
         if not np.all(c2s < 3):
@@ -443,12 +458,10 @@ def hex_packer(pack_fn=None, unpack_fn=None) -> AddressPackerLike:
 def neighbours(pts, layer=32, coalesce=True):
     """
     Calculates neighbors and optionally coalesces half-hexagons into hexagons.
-
-
     **Coalescing Logic:**
-    At a specific layer, 3 "half-hex" triangles meet at a vertex. To form a valid
+    At a specific hex_layer, 3 "half-hex" triangles meet at a vertex. To form a valid
     Hexagon Grid for binning, these three must be merged (coalesced) into one logical hexagon.
-    This involves checking the parent layer's mode and adjusting the C2 cluster accordingly.
+    This involves checking the parent hex_layer's mode and adjusting the C2 cluster accordingly.
 
     Args:
         pts (Points): The input barycentric points.
@@ -456,9 +469,10 @@ def neighbours(pts, layer=32, coalesce=True):
         coalesce (bool): If True, merges triangles into hexagons.
 
     Returns:
-        Points: New points representing the neighbor/coalesced center.
+        Points: New points representing the neighbour/coalesced centre - in same order, same number.
     """
     from hhg9.h9.region import region_neighbours, regions_xy, xy_regions
+    from hhg9.h9.classifier import location
     from hhg9.h9 import H9O
     from hhg9 import Points
 
@@ -468,15 +482,20 @@ def neighbours(pts, layer=32, coalesce=True):
     x = coords[:, 0]
     y = coords[:, 1]
     c = oc[:]
-    active = np.full(len(pts), 1, dtype=bool)
-    regions = xy_regions(coords, mode, layer)  # no depth?!
+    # active = np.full(len(pts), 1, dtype=bool)     # [-0.6896473544905836, 0.3780076763554287]
+    u, v = H9K.R3 * x, y
+    locs = location(u, v, mode)
+    active = locs == BaryLoc.INT  # external,vertex,edge - not moving.
+    regions = xy_regions(coords[active], mode[active], layer)  # no depth?!
     if coalesce:
-        active = H9C.mode[regions[:, -2]].astype(bool)
+        local_m0 = H9C.mode[regions[:, -2]].astype(bool)
+        active[active] = local_m0  # only mode 1 (mode 0 -> false).
+        regions = regions[local_m0]
     xa = x[active]
     ya = y[active]
     ca = c[active]
-    nbr, c2 = region_neighbours(regions[active])
-    hopped = regions[active, 0] != nbr[:, 0]
+    nbr, c2 = region_neighbours(regions)
+    hopped = regions[:, 0] != nbr[:, 0]
     xym = regions_xy(nbr[~hopped])
     xa[~hopped] = xym[:, 0]
     ya[~hopped] = xym[:, 1]
@@ -549,11 +568,11 @@ _m_c2_hx_v2025 = [
     # - mode 0 has a cluster of 3 '0' hexes around its origin.
     # - mode 1 has a cluster of 3 '1' hexes around its origin.
     # Layer i+1 hexes will have a cluster of 3 '2' hexes at the centres
-    #     of the layer i+0 0/1/2 (and 3/4/5, 6/7/8) clusters
+    #     of the hex_layer i+0 0/1/2 (and 3/4/5, 6/7/8) clusters
     # This dict is the ground-truth for all hexagon digits.
     # It considers the digits from the (triangular) region/super-region context.
     # Consider an equilateral triangle at Layer i.  In hhg9, this is divided into 3 half-hexes (aka c2) at Layer i.
-    # - because each triangle in hhg9 is divided into 9 triangles (regions), each c2 contains 3 layer i+1 regions,
+    # - because each triangle in hhg9 is divided into 9 triangles (regions), each c2 contains 3 hex_layer i+1 regions,
     # each having (according to its mode) 3 half-hexes.
     # regions are 'shared' or 'unshared'; six regions are shared across both modes. six regions are 1-mode only.
     # Given a Li; mode j, it's Li+1 hexagons are shared with every other Li; mode j triangle.
@@ -759,7 +778,7 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     :param scheme: RegionAddressLike (normally H9_RA)
 
     Returns:
-        NDArray: The canonical hex-digit hierarchy (layer, L+1)
+        NDArray: The canonical hex-digit hierarchy (hex_layer, L+1)
         Final byte is meta-data (full tail is reversible; partial tail is hex-binning safe).
 
     """
@@ -782,9 +801,9 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
         p, c = rx[:, 0], rx[:, 1]  # first region will be either 0, or 1 (protos).
         h = rx[:, -1]
         p_mo = scheme.modes[p]
-        for ri in range(2, rx.shape[1]):  # we will go down the p, c line of each region.
+        for ri in range(2, rx.shape[1]):  # we will go down the tri_points, c line of each region.
             # (2, rg_sz, rg_sz, 2)
-            h = rx[:, ri]  # [p, c, h]
+            h = rx[:, ri]  # [tri_points, c, h]
             hx_c2 = reg_hex[p_mo, c, h]  # This gives us the c_mode hex
             hx = hx_c2[:, 0]
             c2 = hx_c2[:, 1]
@@ -793,7 +812,7 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
             p_mo = scheme.modes[p]
 
         # Tail metadata uses one byte:
-        # bit7: parent-mode of terminating region (p_mo)
+        # bit7: parent-mode of terminating region (par_mode)
         # bits6..5: terminating c2
         # bit4: root mode (mo)
         # bits3..0: terminating region id (h)
@@ -814,9 +833,9 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     Inverts `reg_hex_digits` (Hex -> Regions).
 
     Args:
-        hx: (layer, L) hex-digit addresses.
+        hx: (hex_layer, L) hex-digit addresses.
         dom: Domain object.
-        tail: Optional (layer,) meta-tail nibble. If None, expects it in the last column of `hx`.
+        tail: Optional (hex_layer,) meta-tail nibble. If None, expects it in the last column of `hex_points`.
 
     Returns:
         tuple: (octants, region_chain)
@@ -824,15 +843,15 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     from hhg9.h9 import H9O
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
-        raise ValueError("hx must be (layer, L[+1]):")
+        raise ValueError("hex_points must be (hex_layer, L[+1]):")
 
     sz, cols = hx.shape
     if cols < 2 and tail is None:
-        raise ValueError("hx must contain at least one hex digit and one tail nibble")
+        raise ValueError("hex_points must contain at least one hex digit and one tail nibble")
 
     if tail is None:
-        body = hx[:, :-1]  # (layer, L): root + layer hex digits
-        tail = hx[:, -1]  # (layer,): meta-tail
+        body = hx[:, :-1]  # (hex_layer, L): root + hex_layer hex digits
+        tail = hx[:, -1]  # (hex_layer,): meta-tail
     else:
         body = hx
 
@@ -846,7 +865,7 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     hex_reg = HEX_LUTS.hex_reg
     oob = HEX_LUTS.hex_oob
 
-    oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (layer, 2): [face_id, c2_root]
+    oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (hex_layer, 2): [face_id, c2_root]
     r_oct = oct_c2[:, 0]
 
     # ROOT super-regions mark hex digits as 0,1,2 in line with nominal-c2.
@@ -896,19 +915,19 @@ def hex_digits(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversibl
 
 def hex_layer(vals, layer: int = 18, tail_style: TailStyle = TailStyle.key):
     """
-    Convert Points to unique hexagon address for the layer.
+    Convert Points to unique hexagon address for the hex_layer.
     This is **lossy** because it coalesces neighbours into the central hex.
 
     Args:
         vals (Points): Input points.
-        layer (int): Hexagon layer.
+        layer (int): Hexagon hex_layer.
         tail_style (TailStyle): Whether to include the terminating region tail.
             Because this is most used for hex-binning, the terminating tail is normally excluded.
 
     Returns:
-        NDArray: Hex addresses for the specific layer.
+        NDArray: Hex addresses for the specific hex_layer.
     """
-    pts = neighbours(vals, layer=layer, coalesce=True)  # We now have collapsed for this layer.
+    pts = neighbours(vals, layer=layer, coalesce=True)  # We now have collapsed for this hex_layer.
     return hex_digits(pts, layer, tail_style)
 
 
@@ -924,7 +943,7 @@ def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.rever
     hx = hex_digits(pts, layer=layer, tail_style=tail_style, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
-        raise ValueError("hex_digits must return (layer, L) or (layer, L+1)")
+        raise ValueError("hex_digits must return (hex_layer, L) or (hex_layer, L+1)")
 
     if tail_style is TailStyle.none:
         body = hx
@@ -981,7 +1000,7 @@ def hex_key(hx: NDArray[np.uint8], *, copy: bool = True) -> NDArray[np.uint8]:
     """Rewrite a reversible hex address into a key address by rewriting the tail byte."""
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2 or hx.shape[1] < 2:
-        raise ValueError("hx must be (layer, L+1) with a tail byte")
+        raise ValueError("hex_points must be (hex_layer, L+1) with a tail byte")
     out = hx.copy() if copy else hx
     out[:, -1] = tail_key_from_reversible(out[:, -1])
     return out
@@ -1005,7 +1024,7 @@ def hex_pack(pts, depth: int = 36, scheme: RegionAddressLike = H9_RA):
     hx = hex_digits(pts, layer=depth, tail_style=TailStyle.reversible, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2 or hx.shape[1] < 2:
-        raise ValueError("expected reversible hex digits (layer, L+1)")
+        raise ValueError("expected reversible hex digits (hex_layer, L+1)")
 
     body = hx[:, :-1]
     tail_ids = hx[:, -1]

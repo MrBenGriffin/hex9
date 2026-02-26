@@ -38,7 +38,7 @@ def load_kml_polygons(path):
         if ring is None:
             continue  # skip non-polygon Placemarks
 
-        verts_ll = _parse_coord_string(ring.text)  # (N,2) lat,lon
+        verts_ll = _parse_coord_string(ring.text)  # (hex_layer,2) lat,lon
         if len(verts_ll) == 0:
             continue
 

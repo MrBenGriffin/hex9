@@ -5,7 +5,7 @@
 """
 Registrar is the central registry of the Hex9 coordinate domains, point-formats, and projections.
 It exposes a uniform API for discovering domains, instantiating them on demand,
- and composing projection chains between them. It acts as dependency-resolver and orchestration layer.
+ and composing projection chains between them. It acts as dependency-resolver and orchestration hex_layer.
 """
 from functools import cache
 from itertools import pairwise
@@ -143,6 +143,9 @@ class Registrar:
                 case 'gcd_bry':
                     from hhg9.projections import GCDBary
                     _ = GCDBary(self)
+                # case 'g2b_par':
+                #     from hhg9.algorithms.ak_parallel import GCDToBOctParallel
+                #     _ = GCDToBOctParallel(self)
                 case _:
                     raise KeyError(key)
         return self._projections[key]

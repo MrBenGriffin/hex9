@@ -54,7 +54,7 @@ class AKOctahedralEllipsoid(Projection):
             self.t_areas[i] = l_tri
             l_hex /= 9
             l_tri /= 9
-        self.accuracy = 38  # accuracy is nanometres.
+        self.accuracy = 40  # accuracy is nanometres.
 
     @cache
     def rad_gcd(self):
@@ -112,7 +112,7 @@ class AKOctahedralEllipsoid(Projection):
         Get accuracy in m2 from a given level.
         """
         if layer < 0:
-            raise ValueError("get_accuracy: layer must be >= 0")
+            raise ValueError("get_accuracy: hex_layer must be >= 0")
         h_area = self.h_areas[-1]
         t_area = self.t_areas[-1]
         if layer < len(self.h_areas):
@@ -241,7 +241,7 @@ class AKOctahedralEllipsoid(Projection):
         x, y, z = p[..., 0], p[..., 1], p[..., 2]
         n = np.sqrt((x ** 2 + y ** 2) / a2 + z ** 2 / b2)
 
-        # Mp (ellipsoidal metric times p)
+        # Mp (ellipsoidal metric times tri_points)
         mp = np.stack([x / a2, y / a2, z / b2], axis=-1)  # (...,3)
 
         eye = np.eye(3)
@@ -251,7 +251,7 @@ class AKOctahedralEllipsoid(Projection):
         n2 = n[..., None, None]
         mp_scaled = mp / (n[..., None] ** 2)
 
-        # Df = (I - p ⊗ (Mp)/n**2) / n
+        # Df = (I - tri_points ⊗ (Mp)/n**2) / n
         outer = p[..., :, None] * mp_scaled[..., None, :]  # (...,3,3)
         return (eye - outer) / n2
 

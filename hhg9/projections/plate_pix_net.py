@@ -13,7 +13,7 @@ from hhg9.base.projection import Projection
 
 class PlatePixelNet(Projection):
     """
-        Convert Plate Carrée pixel to Barycentric Net
+        Convert pixel grid to Barycentric Net
     """
 
     def __init__(self, registrar, n_dom):

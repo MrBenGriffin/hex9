@@ -4,7 +4,7 @@
 
 """
 Given a polygon in Latitude/Longitude points,
-and a layer, generate the hex-grid for that layer
+and a hex_layer, generate the hex-grid for that hex_layer
 and draw it in b_oct.
 
 Last Tested
@@ -19,6 +19,7 @@ from hhg9 import Points, Registrar
 from hhg9.h9.polygon import hex_poly_layer
 from geographiclib.geodesic import Geodesic
 from contextlib import contextmanager
+
 geod = Geodesic.WGS84
 
 
@@ -66,12 +67,12 @@ def plot_hex(pts, name='hex', ctrs=None, values=None, lut=None, nodata=0):
         lut: optional uint8 LUT of shape (256,3) mapping class -> RGB.
         nodata: class code treated as nodata (alpha=0). Set to None to disable.
     """
-    xmax = 2.4443197374349794
-    xmin = 2.3977612662457415
-    ymax = 1.9353993029397951
-    ymin = 1.9101987911827665
-    # xmin, ymin = float(np.min(pts.coords[:, 0])), float(np.min(pts.coords[:, 1]))
-    # xmax, ymax = float(np.max(pts.coords[:, 0])), float(np.max(pts.coords[:, 1]))
+    # xmax = 2.4443197374349794
+    # xmin = 2.3977612662457415
+    # ymax = 1.9353993029397951
+    # ymin = 1.9101987911827665
+    xmin, ymin = float(np.min(pts.coords[:, 0])), float(np.min(pts.coords[:, 1]))
+    xmax, ymax = float(np.max(pts.coords[:, 0])), float(np.max(pts.coords[:, 1]))
     ratio = np.abs(xmax - xmin) / np.abs(ymax - ymin)
     fig = plt.figure(figsize=(ratio * 10, 10), dpi=200, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
@@ -205,29 +206,37 @@ if __name__ == '__main__':
     g_gcd = rg.domain('g_gcd')
     c_ell = rg.domain('c_ell')  # EPSG:4978
     b_oct = rg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
+
     c_oct = rg.domain('c_oct')
     n_oct = rg.domain(f'n_oct:butterfly')
 
     # birmingham-[bristol-london]-dover motorway polygon in gcd
+    # b_dll = np.array([
+    #     [51.484464524954795, -3.0462861844929585],
+    #     [52.68223344923537, -2.189458562294672],
+    #     [52.60858425701964, -1.432594162686184],
+    #     [51.648685168766754, -2.0537941887799422],
+    #     [51.52446468552721, -0.8970768988122543],
+    #     [51.82555423461282, -0.747132064927554],
+    #     [51.684114370958646, 0.5309691381848917],
+    #     [51.40435883726121, 0.47384729670500597],
+    #     [51.29190823165293, 1.4859054058927266],
+    #     [50.95448838777691, 1.4044368907702074],
+    # ])
     b_dll = np.array([
-        [51.484464524954795, -3.0462861844929585],
-        [52.68223344923537, -2.189458562294672],
-        [52.60858425701964, -1.432594162686184],
-        [51.648685168766754, -2.0537941887799422],
-        [51.52446468552721, -0.8970768988122543],
-        [51.82555423461282, -0.747132064927554],
-        [51.684114370958646, 0.5309691381848917],
-        [51.40435883726121, 0.47384729670500597],
-        [51.29190823165293, 1.4859054058927266],
-        [50.95448838777691, 1.4044368907702074],
+        (33.9333814840111, -118.418990325877004),
+        (33.933926959066604, -118.419070754935007),
+        (33.9376406125145, -118.382766218171994),
+        (33.937095114458899, -118.382686017115006),
     ])
     pll = Points(b_dll, g_gcd)
     pnt = rg.project(pll, [g_gcd, b_oct])
     ntt = rg.project(pnt, [b_oct, n_oct])
 
-    for layer in range(4, 10):
+    for layer in range(12, 15):
         with time_block(f"{layer} scanline_h9_sheet"):
-            scn = scanline_h9_sheet(ntt, layer+1)
+            scn = scanline_h9_sheet(ntt, layer)
             bpt = rg.project(scn, [n_oct, b_oct])
             plot_pts(scn, layer)
             b_pts = rg.project(scn, [n_oct, b_oct])

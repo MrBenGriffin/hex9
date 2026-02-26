@@ -34,13 +34,14 @@ def json_load(path):
 if __name__ == '__main__':
     reg = Registrar()  # Manage Domains & Projections
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = reg.domain('g_gcd')
     h9 = OctahedralH9(reg)            # formatter.
     b_oct.register_format(h9)
 
     # Support Classes
     imagery = OSM()
-    layers = 13
+    layers = 12
 
     locs = json_load('../assets/locations.json')
     region = locs['NWA']

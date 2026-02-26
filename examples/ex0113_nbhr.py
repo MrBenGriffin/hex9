@@ -5,7 +5,7 @@
 """
 Part of the H9 project - using locations.json,
 Test and report the neighbours, showing deviation from original.
-There is normally a least-layer accuracy error
+There is normally a least-hex_layer accuracy error
 
 Last Tested
 26 December 2025 0.1.0a4 (passed - but questionable)
@@ -36,6 +36,7 @@ if __name__ == '__main__':
     locs = json_load('../assets/locations.json')
     decimal = DecimalDegrees(reg)
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = reg.domain('g_gcd')
     g_gcd.register_format(decimal)
 
@@ -49,7 +50,6 @@ if __name__ == '__main__':
         ll0 = Points(spots, g_gcd)
         bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
         cmp = tuple(bc0.components[0])
-        sdo = bc0.domain.components[cmp]
         co, mo = bc0.cm()
         uri = xy_regions(bc0.coords, mo, accuracy)
         nbr, nmo = region_neighbours(uri)

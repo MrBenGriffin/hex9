@@ -103,6 +103,7 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
     tg1 = tri_grid(layer, 1).reshape([-1, 2])  # triangle polygons.
     tgx = [tg0, tg1]
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     if octant_id is None:
         repo = []
         for octant in b_oct.signs.keys():
@@ -120,7 +121,7 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
 def octa_layer_stats(l: int, r=6371000.0):
     """
     Return triangle/vertex/edge counts and safe spacing estimates for a global
-    octahedral grid with layer indexing based on emergent hexagons.
+    octahedral grid with hex_layer indexing based on emergent hexagons.
 
     Parameters
     ----------
@@ -153,14 +154,15 @@ def octa_layer_stats(l: int, r=6371000.0):
 
 if __name__ == '__main__':
     """
-    Triangular grid will be 9 triangles per octant at layer 0
-    At each subsequent layer, the number of triangles will increase by 9 per triangle.
-    So the number of triangles will be 8*9**(layer+1)
+    Triangular grid will be 9 triangles per octant at hex_layer 0
+    At each subsequent hex_layer, the number of triangles will increase by 9 per triangle.
+    So the number of triangles will be 8*9**(hex_layer+1)
     """
     rg = Registrar()  # Manage Domains & Projections
     octant = 0  # None = entire sphere.
     for depth in [5]:  #  range(4, 5):
         data = get_data(rg, layer=depth, octant_id=octant)
+
         o_pts = rg.project(data, ['b_oct', 'c_oct'])
         g_pts = rg.project(data, ['b_oct', 'g_gcd'])
         g_areas = wgs84_area(rg, g_pts, 3)

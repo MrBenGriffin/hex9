@@ -40,6 +40,7 @@ if __name__ == '__main__':
     reg = Registrar()  # Manage Domains & Projections
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     p_pix = reg.domain('p_pix')
     pix_gcd = reg.projection('pix_gcd')
 
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     co, mo = bc0.cm()
     cmp = bc0.invert_octant_ids(co)[0]
     uri = xy_regions(bc0.coords, mo)
-    polys, mesh = enmesh(bc0, 13)
+    polys, mesh = enmesh(bc0, 11)
 
     # We don't need to tile here as all share the same component in this case.
     verts = polys.reshape(-1, 2)                  # (U*4, 2)

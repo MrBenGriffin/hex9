@@ -5,7 +5,7 @@
 """
 H9 Region Management.
 
-This module defines the 12 legal layer **Regions** and manages layer/interlayer relations.
+This module defines the 12 legal hex_layer **Regions** and manages hex_layer/interlayer relations.
 It handles the transition between the raw barycentric coordinates of a face and its
 hierarchical addresses.
 
@@ -21,7 +21,8 @@ from numpy.typing import NDArray
 from typing import Literal, Optional, Generator
 from dataclasses import dataclass
 
-from hhg9.h9.protocols import H9ConstLike, H9ClassifierLike, H9CellLike, H9RegionLike
+from hhg9.h9.classifier import location
+from hhg9.h9.protocols import H9ConstLike, H9ClassifierLike, H9CellLike, H9RegionLike, BaryPlc as L
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,11 +67,11 @@ class H9Context:
     r: H9RegionLike
 
 
-# --- StepEvent dataclasses for per-layer introspection ---
+# --- StepEvent dataclasses for per-hex_layer introspection ---
 @dataclass(slots=True)
 class StepEvent:
     """Event data emitted during hierarchical traversal steps."""
-    i: int  #: Current layer index.
+    i: int  #: Current hex_layer index.
     phase: Literal['pre', 'post']  #: Phase of the step (before or after update).
     addresses: np.ndarray  #: Current address buffer.
     pmo: np.ndarray  #: Parent mode array.
@@ -274,57 +275,91 @@ NDArray[bool]:
     return result
 
 
-def hard_clamp(ẋ: NDArray[np.float64], y: NDArray[np.float64], mode: NDArray[int], ulps: float, h9k: H9ConstLike):
+def hard_clamp(ẋ: NDArray[np.float64], y: NDArray[np.float64], mode: NDArray[int], h9k: H9ConstLike):
     """
     Strictly clamps points to be within their respective barycentric triangles.
-
     Used as a fallback when points drift out of bounds during recursive steps.
     """
     ẋ_final = ẋ.copy()
     y_final = y.copy()
+    eps = np.finfo(np.float64).eps
 
+    locs = location(ẋ, y, mode, True)
     # --- Calculate the Clamped Result for UP Mode Points ---
+    #     VXA = 3  #: APEX Vertex (at a corner of the supercell).
+    #     VXL = 4  #: LEFT Vertex (at a corner of the supercell).
+    #     VXR = 5  #: RGT Vertex (at a corner of the supercell).
+    #     EG0 = 8   #: C2=0 (flat) Edge (on the boundary, not a vertex).
+    #     EG1 = 9   #: C2=1 (+ve) Edge (on the boundary, but not a vertex).
+    #     EG2 = 10  #: C2=2 (-ve) Edge (on the boundary, but not a vertex).
     up_mask = (mode == 1)
+
     if np.any(up_mask):
-        y_up, ẋ_up = y[up_mask], ẋ[up_mask]
-
-        at_apex = near_ulps(y_up, h9k.limits.ΛC, k=ulps)
-        at_base = near_ulps(y_up, h9k.limits.ΛF, k=ulps)
-        if np.any(at_base | at_apex):
-            y_up_clamped = np.clip(y_up, h9k.limits.ΛF, h9k.limits.ΛC)
-
-            max_abs_ẋ = h9k.limits.ΛC - y_up_clamped
-            max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
-
-            ẋ_clamped = np.clip(ẋ_up, -max_abs_ẋ, max_abs_ẋ)
-
-            ẋ_final[up_mask] = ẋ_clamped
-            y_final[up_mask] = np.where(at_base, h9k.limits.ΛF, y_up_clamped)
-
-    # --- 2. Calculate the Clamped Result for DOWN Mode Points ---
-    down_mask = (mode == 0)
-    if np.any(down_mask):
-        y_down, ẋ_down = y[down_mask], ẋ[down_mask]
-
-        at_apex = near_ulps(y_down, h9k.limits.VF, k=ulps)
-        at_base = near_ulps(y_down, h9k.limits.VC, k=ulps)
-        if np.any(at_base | at_apex):
-            y_down_clamped = np.clip(y_down, h9k.limits.VF, h9k.limits.VC)
-
-            max_abs_ẋ = y_down_clamped - h9k.limits.VF
-            max_abs_ẋ = np.where(at_apex, 0.0, max_abs_ẋ)
-            ẋ_clamped = np.clip(ẋ_down, -max_abs_ẋ, max_abs_ẋ)
-
-            ẋ_final[down_mask] = ẋ_clamped
-            y_final[down_mask] = np.where(at_base, h9k.limits.VC, y_down_clamped)
-
+        _idx = np.flatnonzero(up_mask)
+        u_locs = locs[_idx]
+        at_apex = u_locs == L.VXA
+        if np.any(at_apex):
+            idx_to_fix = _idx[at_apex]
+            y_final[idx_to_fix] = h9k.limits.ΛC - eps
+            ẋ_final[idx_to_fix] = 0.0
+        at_vrl = u_locs == L.VXL
+        if np.any(at_vrl):
+            idx_to_fix = _idx[at_vrl]
+            y_final[idx_to_fix] = h9k.limits.ΛF + eps
+            ẋ_final[idx_to_fix] = h9k.limits.TL + eps
+        at_vrr = u_locs == L.VXR
+        if np.any(at_vrr):
+            idx_to_fix = _idx[at_vrr]
+            y_final[idx_to_fix] = h9k.limits.ΛF + eps
+            ẋ_final[idx_to_fix] = h9k.limits.TR - eps
+        at_eg0 = u_locs == L.EG0
+        if np.any(at_eg0):
+            idx_to_fix = _idx[at_eg0]
+            y_final[idx_to_fix] = h9k.limits.ΛF + eps
+        at_eg1 = u_locs == L.EG1
+        if np.any(at_eg1):
+            idx_to_fix = _idx[at_eg1]
+            ẋ_final[idx_to_fix] = y_final[idx_to_fix] - h9k.derived.Ẇ + eps
+        at_eg2 = u_locs == L.EG2
+        if np.any(at_eg2):
+            idx_to_fix = _idx[at_eg2]
+            ẋ_final[idx_to_fix] = h9k.derived.Ẇ - y_final[idx_to_fix] - eps
+    if np.any(~up_mask):
+        _idx = np.flatnonzero(~up_mask)
+        d_locs = locs[_idx]
+        at_apex = d_locs == L.VXA
+        if np.any(at_apex):
+            idx_to_fix = _idx[at_apex]
+            y_final[idx_to_fix] = h9k.limits.VF + eps
+            ẋ_final[idx_to_fix] = 0.0
+        at_vrl = d_locs == L.VXL
+        if np.any(at_vrl):
+            idx_to_fix = _idx[at_vrl]
+            y_final[idx_to_fix] = h9k.limits.VC - eps
+            ẋ_final[idx_to_fix] = h9k.limits.TL + eps
+        at_vrr = d_locs == L.VXR
+        if np.any(at_vrr):
+            idx_to_fix = _idx[at_vrr]
+            y_final[idx_to_fix] = h9k.limits.VC - eps
+            ẋ_final[idx_to_fix] = h9k.limits.TR - eps
+        at_eg0 = d_locs == L.EG0
+        if np.any(at_eg0):
+            idx_to_fix = _idx[at_eg0]
+            y_final[idx_to_fix] = h9k.limits.VC - eps
+        at_eg1 = d_locs == L.EG1
+        if np.any(at_eg1):
+            idx_to_fix = _idx[at_eg1]
+            ẋ_final[idx_to_fix] = h9k.derived.Ẇ + y_final[idx_to_fix] - eps
+        at_eg2 = d_locs == L.EG2
+        if np.any(at_eg2):
+            idx_to_fix = _idx[at_eg2]
+            ẋ_final[idx_to_fix] = - h9k.derived.Ẇ - y_final[idx_to_fix] + eps
     return ẋ_final, y_final
 
 
 def soft_clamp(ẋ: NDArray[np.float64], y: NDArray[np.float64], mode: NDArray[int], ulps: float, h9k: H9ConstLike):
     """
     Clamps points with minimal modifications.
-
     Only snaps points that are BOTH near a boundary AND out-of-bounds.
     Valid points are never modified.
     """
@@ -336,7 +371,6 @@ def soft_clamp(ẋ: NDArray[np.float64], y: NDArray[np.float64], mode: NDArray[i
     if np.any(up_mask):
         up_indices = np.flatnonzero(up_mask)
         y_up, ẋ_up = y[up_indices], ẋ[up_indices]
-
         is_near_apex = near_ulps(y_up, h9k.limits.ΛC, k=ulps)
         is_near_base = near_ulps(y_up, h9k.limits.ΛF, k=ulps)
         is_in_middle = ~is_near_apex & ~is_near_base
@@ -417,6 +451,7 @@ def _recover(cid: np.ndarray,
              bad: np.ndarray,
              h9cl: H9ClassifierLike,
              h9k: H9ConstLike,
+             h9c: H9CellLike,
              ) -> np.ndarray:
     """
     Common 'bad' squashing routine for steppers.
@@ -446,7 +481,7 @@ def _recover(cid: np.ndarray,
         (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 1.0, h9k)),  # Clamp 1.0
         (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 2.0, h9k)),  # Clamp 2.0
         (lambda ẋ_s, y_s, m_s: soft_clamp(ẋ_s, y_s, m_s, 4.0, h9k)),  # Clamp 4.0
-        (lambda ẋ_s, y_s, m_s: hard_clamp(ẋ_s, y_s, m_s, 10.0, h9k)),  # Clamp 10.0
+        (lambda ẋ_s, y_s, m_s: hard_clamp(ẋ_s, y_s, m_s, h9k)),  # Clamp 10.0
     ]
 
     for fix_int, fixer in enumerate(strategies):
@@ -457,20 +492,89 @@ def _recover(cid: np.ndarray,
         ẋ_sub = ẋ[to_fix]
         y_sub = y[to_fix]
         ẋ_loc, y_loc = fixer(ẋ_sub, y_sub, m_s=m_sub)
-        ok = in_scope(ẋ_loc, y_loc, m_sub, h9cl)
-        if np.any(ok):
-            ok_idx = to_fix[ok]
-            cid[ok_idx] = classify_mode_cell(ẋ_loc[ok], y_loc[ok], m_sub[ok], h9cl)
-            ẋ[ok_idx] = ẋ_loc[ok]
-            y[ok_idx] = y_loc[ok]
-            to_fix = to_fix[~ok]
+
+        ok_geo = in_scope(ẋ_loc, y_loc, m_sub, h9cl)
+        if np.any(ok_geo):
+            # Re-classify and only accept if the resulting cid is legal for this mode.
+            from hhg9.h9.classifier import classify_mode_cell
+            cid_try = classify_mode_cell(ẋ_loc[ok_geo], y_loc[ok_geo], m_sub[ok_geo], h9cl)
+            ok_lut = h9c.in_mode[m_sub[ok_geo], cid_try]
+
+            if np.any(ok_lut):
+                ok_geo_idx = np.flatnonzero(ok_geo)
+                ok_sel = ok_geo_idx[ok_lut]
+                ok_idx = to_fix[ok_sel]
+
+                cid[ok_idx] = cid_try[ok_lut]
+                ẋ[ok_idx] = ẋ_loc[ok_sel]
+                y[ok_idx] = y_loc[ok_sel]
+
+            # Keep trying strategies for any remaining failures.
+            still_bad = np.ones_like(to_fix, dtype=bool)
+            ok_geo_idx = np.flatnonzero(ok_geo)
+            if np.any(ok_lut):
+                ok_sel = ok_geo_idx[ok_lut]
+                still_bad[ok_sel] = False
+            to_fix = to_fix[still_bad]
+
+    # Final tie-break: if any points remain LUT-illegal, try tiny signed nudges.
+    # This primarily handles exact-axis cases (e.g. ẋ==0) where ulp_nudge is a no-op.
+    if to_fix.size != 0:
+        m_sub = p_mo[to_fix]
+        ẋ_sub = ẋ[to_fix]
+        y_sub = y[to_fix]
+
+        dx = np.spacing(np.float64(lat_ü))
+        dy = np.spacing(np.float64(lat_v))
+
+        # Try a small set of signed nudges; accept the first that yields a legal (mode,cid).
+        for dẋ, dy_ in (
+                ( dx,  0.0),
+                (-dx,  0.0),
+                (0.0,   dy),
+                (0.0,  -dy),
+                ( dx,   dy),
+                ( dx,  -dy),
+                (-dx,   dy),
+                (-dx,  -dy),
+        ):
+            if to_fix.size == 0:
+                break
+
+            m_sub = p_mo[to_fix]
+            ẋ_sub = ẋ[to_fix]
+            y_sub = y[to_fix]
+
+            ẋ_loc = ẋ_sub + np.float64(dẋ)
+            y_loc = y_sub + np.float64(dy_)
+
+            ok_geo = in_scope(ẋ_loc, y_loc, m_sub, h9cl)
+            if not np.any(ok_geo):
+                continue
+
+            cid_try = classify_mode_cell(ẋ_loc[ok_geo], y_loc[ok_geo], m_sub[ok_geo], h9cl)
+            ok_lut = h9c.in_mode[m_sub[ok_geo], cid_try]
+            if not np.any(ok_lut):
+                continue
+
+            ok_geo_idx = np.flatnonzero(ok_geo)
+            ok_sel = ok_geo_idx[ok_lut]
+            ok_idx = to_fix[ok_sel]
+
+            cid[ok_idx] = cid_try[ok_lut]
+            ẋ[ok_idx] = ẋ_loc[ok_sel]
+            y[ok_idx] = y_loc[ok_sel]
+
+            still_bad = np.ones_like(to_fix, dtype=bool)
+            still_bad[ok_sel] = False
+            to_fix = to_fix[still_bad]
     return cid
 
 
 def xy_regions_iter(xy: NDArray[np.float64], mode: NDArray[int] = None, depth: int = 36, ctx: H9Context = None) -> \
 Generator[StepEventXY, None, NDArray[np.uint8]]:
     """
-    Generator that mirrors `xy_regions` but yields per-layer StepEvents.
+    Generator that mirrors `xy_regions` but yields per-hex_layer StepEvents.
 
     Useful for debugging or visualizing the traversal process step-by-step.
 
@@ -487,14 +591,18 @@ Generator[StepEventXY, None, NDArray[np.uint8]]:
     proto_up, proto_dn = cr.proto_up, cr.proto_dn
     addresses = np.full((xy.shape[0], depth + 2), invalid_region, dtype=np.uint8)
     addresses[:, 0] = np.where(mode == 1, proto_up, proto_dn)
-    pid = addresses[:, 0]
+
     offs_ẋ = h9c.off_ẋy[:, 0].astype(np.float64, copy=False)
     offs_y = h9c.off_ẋy[:, 1].astype(np.float64, copy=False)
+
     x = np.array(xy[:, 0], copy=True)
     y = np.array(xy[:, 1], copy=True)
     ẋ = x * h9k.radical.R3
 
-    p_mo = h9c.mode[pid]
+    # Seed parent-mode directly from the caller-provided supercell mode.
+    # (Do not derive it from the virtual proto IDs.)
+    p_mo = np.asarray(mode, dtype=np.uint8)
+
     bad = ~clf.in_scope(ẋ, y, p_mo, h9cl)
 
     if np.any(bad):
@@ -505,8 +613,11 @@ Generator[StepEventXY, None, NDArray[np.uint8]]:
     for i in range(depth + 1):
         cid = clf.classify_mode_cell(ẋ, y, p_mo, h9cl)
         bad = ~h9c.in_mode[p_mo, cid]
+        # bad_lut = np.flatnonzero(~h9c.in_mode[p_mo, cid])  # LUT membership
+        # bad_geo = np.flatnonzero(~clf.in_scope(ẋ, y, p_mo, h9cl))  # actual geometric scope
+
         yield StepEventXY(i=i, phase='pre', addresses=addresses, pmo=p_mo, cid=cid, bad=bad, y=y, ẋ=ẋ)
-        cid = _recover(cid, ẋ, y, p_mo, bad, h9cl, h9k)
+        cid = _recover(cid, ẋ, y, p_mo, bad, h9cl, h9k, h9c)
         addresses[:, i + 1] = cid
         ẋ = (ẋ - offs_ẋ[cid]) * 3.0
         y = (y - offs_y[cid]) * 3.0
@@ -528,7 +639,7 @@ def xy_regions(xy: NDArray[np.float64], mode: NDArray[int] = None, depth: int = 
         depth: Recursion depth. This is probably out; hex depth is 2 when this is 1 (But returns 3 values).  Which isn't correct.
 
     Returns:
-        NDArray[np.uint8]: Array of region IDs for each layer.
+        NDArray[np.uint8]: Array of region IDs for each hex_layer.
     """
     ctx = ctx or default_ctx()
     it = xy_regions_iter(xy, mode=mode, depth=depth, ctx=ctx)
@@ -561,7 +672,7 @@ def regions_xy(uri_address: NDArray[np.uint8], ctx: H9Context = None) -> NDArray
     ẋ = np.zeros(num_points, dtype=np.float64)
     y = np.zeros(num_points, dtype=np.float64)
 
-    # Walk from the last *real* layer down to 1
+    # Walk from the last *real* hex_layer down to 1
     for i in range(depth - 1, 0, -1):
         cid = uri_address[:, i]
         valid = (cid != cr.invalid_region)
@@ -577,7 +688,7 @@ def regions_xy(uri_address: NDArray[np.uint8], ctx: H9Context = None) -> NDArray
 
 def region_neighbours(addresses: NDArray[np.uint8], ctx: H9Context = None):
     """
-    Calculates the neighboring regions for a list of addresses.
+    Calculates the neighbouring regions for a list of addresses.
 
     Used primarily for hex-binning to find adjacent cells.
 
@@ -638,20 +749,49 @@ def region_neighbours(addresses: NDArray[np.uint8], ctx: H9Context = None):
     nb_array[:, -1] = trm
     nb_array[:, -2] = nbr
 
-    # Cascade up the hierarchy where parent mode changes
     cascading = (pmn != pmo)
-    for poi in range(layers - 3, -1, -1):
+
+    for poi in range(layers - 3, 0, -1):  # stop at 1 (exclude 0)
         if not np.any(cascading):
             break
         active = np.where(cascading)[0]
         c2a = c2[active]
-        cur = addresses[active, poi]
-        par = addresses[active, poi - 1]
-        pmo = h9c.mode[par]
-        nb_region, nb_parent_mode = h9r.cmc2n[cur, pmo, c2a].T
+
+        cur = nb_array[active, poi]  # use nb_array, not addresses
+        par = nb_array[active, poi - 1]  # parent exists here
+
+        pmo_a = h9c.mode[par]
+        nb_region, nb_parent_mode = h9r.cmc2n[cur, pmo_a, c2a].T
         nb_array[active, poi] = nb_region
-        hop = nb_parent_mode != pmo
-        cascading[active] = hop
+
+        cascading[active] = (nb_parent_mode != pmo_a)
+
+    # if cascade is still “live” at root, set proto from nb_parent_mode
+    if np.any(cascading):
+        active = np.where(cascading)[0]
+        # nb_parent_mode from the last iteration is the desired parent mode for the root
+        # easiest is to recompute it from poi=1 state:
+        # cur = nb_array[active, 1]
+        par = nb_array[active, 0]  # proto; only used for mode
+        pmo = h9c.mode[par]
+        nb_array[active, 0] = h9r.proto[1 - pmo]
+        # _, nb_parent_mode = h9r.cmc2n[cur, pmo_a, c2[active]].T
+        # nb_array[active, 0] = h9r.proto[nb_parent_mode]
+
+    # # Cascade up the hierarchy where parent mode changes
+    # cascading = (pmn != pmo)
+    # for poi in range(layers - 3, -1, -1):
+    #     if not np.any(cascading):
+    #         break
+    #     active = np.where(cascading)[0]
+    #     c2a = c2[active]
+    #     cur = addresses[active, poi]
+    #     par = addresses[active, max(0, poi - 1)]
+    #     pmo = h9c.mode[par]
+    #     nb_region, nb_parent_mode = h9r.cmc2n[cur, pmo, c2a].T
+    #     nb_array[active, poi] = nb_region
+    #     hop = nb_parent_mode != pmo
+    #     cascading[active] = hop
 
     # Normalise root proto
     nmo = h9c.mode[nb_array[:, 0]]

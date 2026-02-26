@@ -168,7 +168,7 @@ class GridRegions(GridConstants):
         ugc = self.ugc_lut  # (num_regions, 1) -> mode
         chd = self.child_lut()  # (2, 3, 3)
 
-        # For every parent region p, infer its mode and fill reverse mapping.
+        # For every parent region tri_points, infer its mode and fill reverse mapping.
         for par in self.in_regions:
             mode = ugc[par, self.mode]
             for c1 in (0, 1, 2):
@@ -288,7 +288,7 @@ class GridRegions(GridConstants):
         x = np.zeros(num_points, dtype=np.float64)
         y = np.zeros(num_points, dtype=np.float64)
 
-        # Loop backwards from the penultimate layer down to the first REAL layer (index 1),
+        # Loop backwards from the penultimate hex_layer down to the first REAL hex_layer (index 1),
         # skipping the placeholder root at index 0.
         # Likewise, leaf residual is ignored by design; its mag. is ≤ ~7·3⁻ᵏ and below fp noise for k≥34.
         for i in range(depth - 2, 0, -1):
@@ -306,7 +306,7 @@ class GridRegions(GridConstants):
         # After reconstructing the coordinates, find the initial mode from the root URI.
         initial_mode = self.ugc_lut[uri_address[:, 0], self.mode]
 
-        # Stack all three results into a final (layer, 3) array.
+        # Stack all three results into a final (hex_layer, 3) array.
         return np.stack([x, y, initial_mode], axis=-1)
 
     def alt_ugc_dec(self, uri_address):
@@ -350,7 +350,7 @@ class GridRegions(GridConstants):
             region_id = np.where(in_scope, region, self.invalid_ugc)
             addresses[:, i + 1] = region_id
 
-            # 3) step one layer **in the classifier plane** for x, native for y;
+            # 3) step one hex_layer **in the classifier plane** for x, native for y;
             #    then convert back to x for the next iteration
             off_ẋ = self.ugc_off_ẋ[region_id]  # √3-scaled x-offsets
             off_y = self.ugc_off_y[region_id]
@@ -660,8 +660,8 @@ class GridNeighbours:
         return neighbour
 
     def encroach_to_neighbour(self, xy, mode, c1_edge, preserve):
-        # xy: (layer,2) local coords in source face
-        # mode: (layer,) source face mode (not used in math here, but good to thread)
+        # xy: (hex_layer,2) local coords in source face
+        # mode: (hex_layer,) source face mode (not used in math here, but good to thread)
         # c1_edge: 0,1,2 – which edge family you crossed (on the source face)
         # preserve: bool – whether this face-to-face seam preserves or swaps C1
 

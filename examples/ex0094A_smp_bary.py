@@ -24,8 +24,6 @@ from hhg9 import Registrar, Points
 from hhg9.algorithms.grid import sq_grid_vx, fit
 from PIL import Image  # image saving
 
-from experimental.algorithms.warp import Warper
-
 
 def run(scale=605):
     """Runner"""
@@ -33,7 +31,7 @@ def run(scale=605):
     p_pix = reg.domain('p_pix')
     b_oct = reg.domain('b_oct')
     s_oct = reg.domain('s_oct')
-    # warper = Warper()
+    b_oct.set_warp('src/l4_polished.npz')
 
     # Load in plate carrée - will use 2700x1350 Blue Marble here.
     img = image.imread(f'src/world5400x2700.png', 'png')

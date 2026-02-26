@@ -18,7 +18,7 @@ Therefore, we use a fourfold coordinate scheme,
  * M is the mode (polarity of cell),
  * H is the horizontal band it belongs to.
  * P is the positive slope band it belongs to.
- * layer is the negative slope band it belongs to.
+ * hex_layer is the negative slope band it belongs to.
  The origin is fixed to the barycentre of the supercell.
 
 Barycentric Cell LUTs
@@ -26,7 +26,7 @@ After classifying a point into horizontal and slope tiers (h_id, p_id, n_id),
 we pack these integers into a compact cell ID using a fixed bit layout.
 This mapping is bijective; a matching decode[cell_id] → (h_id, p_id, n_id) recovers the tiers.
 The encode/decode tables are precomputed once to avoid drift and to centralise the convention.
-lattice.py defines the [h,p,d,m] <-> [u,v] luts.
+lattice.py defines the [h,tri_points,d,m] <-> [u,v] luts.
 
 Included here are the core functions concerning the identification of a given barycentric coordinate with
 its cell, as defined by the LUTs
@@ -35,7 +35,7 @@ from dataclasses import dataclass
 import numpy as np
 from typing import Tuple
 from numpy.typing import NDArray
-from .protocols import H9ConstLike, H9ClassifierLike, BaryLoc
+from .protocols import H9ConstLike, H9ClassifierLike, BaryLoc, BaryPlc
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +93,15 @@ def in_up(ẋ, y, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
     :param h9c: H9Classifier
     :return: boolean (in scope or not)
     """
-    min_y, max_y = h9c.mode_1_lim
-    return (min_y <= y) & (y <= max_y - np.abs(ẋ))
+    # Supercell-1 (up) is bounded by:
+    #   y >= ΛF  (flat floor)
+    #   y - ẋ <= +Ẇ
+    #   y + ẋ <= +Ẇ
+    min_y, _ = h9c.mode_1_lim
+    w = float(h9c.p_levels[0])  # +Ẇ
+    scale = np.maximum(1.0, np.maximum(np.abs(ẋ), np.abs(y)))
+    tol = 256 * h9c.eps * scale
+    return (y >= (min_y - tol)) & ((y - ẋ) <= (w + tol)) & ((y + ẋ) <= (w + tol))
 
 
 def in_down(ẋ, y, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
@@ -104,8 +111,15 @@ def in_down(ẋ, y, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
     :param h9c: H9Classifier
     :return: boolean (in scope or not)
     """
-    min_y, max_y = h9c.mode_0_lim
-    return (min_y + np.abs(ẋ) <= y) & (y <= max_y)
+    # Supercell-0 (down) is bounded by:
+    #   y <= VC  (flat ceiling)
+    #   y - ẋ >= -Ẇ
+    #   y + ẋ >= -Ẇ
+    _, max_y = h9c.mode_0_lim
+    w = float(h9c.p_levels[0])  # +Ẇ
+    scale = np.maximum(1.0, np.maximum(np.abs(ẋ), np.abs(y)))
+    tol = 256 * h9c.eps * scale
+    return (y <= (max_y + tol)) & ((y - ẋ) >= (-w - tol)) & ((y + ẋ) >= (-w - tol))
 
 
 def in_scope(ẋ, y, mode=1, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
@@ -131,52 +145,132 @@ def in_scope_xym(xym, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
     return in_scope(ẋ, y, mode, h9c)
 
 
-def location(ẋ, y, mode=0, h9c: H9ClassifierLike = H9CL):
+def location(ẋ, y, mode=0, detailed: bool = False, h9c: H9ClassifierLike = H9CL):
     """
-    Classify the location of (ẋ, y) as "internal", "edge", "vertex", or "external"
+    Classify the location of (ẋ, y) as internal / edge / vertex / external
     with respect to supercell boundaries, using barycentric inclusion.
-    Vectorized for scalar or array input, returns array of strings.
+
+    Returns:
+      - detailed=False: BaryLoc.{EXT, INT, EDG, VTX}
+      - detailed=True : BaryPlc.{EXT, INT, EG0, EG1, EG2, VXL, VXR, VXA}
     """
-    from hhg9.h9 import H9K
-    # NOTE: some boundary constants (e.g. VC/ΛF) can be ~0, in which case np.isclose
-    # relies almost entirely on `atol`. This needs to be comfortably above float64
-    # epsilon-scale noise and consistent with the mesh de-dup tolerance.
-    a_eps = 2e-14
-    r_eps = 1e-12
-    if not isinstance(mode, np.ndarray):
-        mode = np.full(ẋ.shape[0], mode, dtype=np.uint8)
-    ups = np.flatnonzero(mode)
-    dns = np.flatnonzero(~mode)
+
+    # Tolerance: scale by float64 ULP at the local magnitude.
+    # (Avoid rtol-based isclose; we want tight, geometry-consistent predicates.)
+    ulp_k = 128  # ~128 ulps at |x|~1 => ~2.8e-14
+
+    ẋ = np.atleast_1d(np.asarray(ẋ))
+    y = np.atleast_1d(np.asarray(y))
+    n = y.shape[0]
+
+    mode_arr = np.asarray(mode, dtype=np.uint8)
+    if mode_arr.ndim == 0:
+        mode_arr = np.full(n, int(mode_arr), dtype=np.uint8)
+    else:
+        mode_arr = np.atleast_1d(mode_arr).astype(np.uint8, copy=False)
+
+    is_up = (mode_arr == 1)
+    ups = np.flatnonzero(is_up)
+    dns = np.flatnonzero(~is_up)
+
+    # Partitioned coordinates
     ẋu, yu = ẋ[ups], y[ups]
     ẋd, yd = ẋ[dns], y[dns]
-    in_d, in_u = in_down(ẋd, yd, h9c), in_up(ẋu, yu, h9c)
 
-    # Solve C2=0 (flat edge)
-    on0_d = np.isclose(yd, H9K.limits.VC, rtol=r_eps, atol=a_eps)  # uppermost point is flat
-    on0_u = np.isclose(yu, H9K.limits.ΛF, rtol=r_eps, atol=a_eps)  # lowermost point is flat
-    # Solve C2=1 (forward edge)
-    ẇ = H9K.derived.Ẇ
-    on1_d = np.isclose(yd - ẋd, -ẇ, rtol=r_eps, atol=a_eps)  # y-ẋ == -ẇ
-    on1_u = np.isclose(yu - ẋu,  ẇ, rtol=r_eps, atol=a_eps)  # y-ẋ == ẇ
-    # Solve C2=1 (backward edge)
-    on2_d = np.isclose(yd + ẋd, -ẇ, rtol=r_eps, atol=a_eps)  # y+ẋ == -ẇ
-    on2_u = np.isclose(yu + ẋu,  ẇ, rtol=r_eps, atol=a_eps)  # y+ẋ == ẇ
-    close_d = on0_d.astype(int) + on1_d.astype(int) + on2_d.astype(int)
+    # Residuals to the three half-space constraints (partition-sized).
+    # Using residuals prevents treating points on the *infinite* edge line (but outside the
+    # triangle segment) as “in-scope”. A point is in-scope iff all residuals >= -tol.
+
+    # Per-partition tolerances (scaled by local magnitude).
+    scale_u = np.maximum(1.0, np.maximum(np.abs(ẋu), np.abs(yu)))
+    scale_d = np.maximum(1.0, np.maximum(np.abs(ẋd), np.abs(yd)))
+    tol_u = ulp_k * h9c.eps * scale_u
+    tol_d = ulp_k * h9c.eps * scale_d
+
+    # Mode-specific limits (synonyms are fine; we use h9c to keep a single source of truth).
+    min_u, _ = h9c.mode_1_lim   # (ΛF, ΛC)
+    _, max_d = h9c.mode_0_lim   # (VF, VC)
+
+    # Diagonal boundary constant (±Ẇ) in classifier units.
+    w = float(h9c.p_levels[0])  # +Ẇ
+
+    # Up triangle constraints:
+    #   r0: y >= ΛF
+    #   r1: y - ẋ <= +Ẇ
+    #   r2: y + ẋ <= +Ẇ
+    r0_u = yu - min_u
+    r1_u = w - (yu - ẋu)
+    r2_u = w - (yu + ẋu)
+
+    # Down triangle constraints:
+    #   r0: y <= VC
+    #   r1: y - ẋ >= -Ẇ
+    #   r2: y + ẋ >= -Ẇ
+    r0_d = max_d - yd
+    r1_d = (yd - ẋd) + w
+    r2_d = (yd + ẋd) + w
+
+    # In-scope within tolerance
+    in_u_eff = np.minimum.reduce([r0_u, r1_u, r2_u]) >= -tol_u
+    in_d_eff = np.minimum.reduce([r0_d, r1_d, r2_d]) >= -tol_d
+
+    # On-edge within tolerance (only meaningful when also in-scope)
+    on0_u = in_u_eff & (np.abs(r0_u) <= tol_u)
+    on1_u = in_u_eff & (np.abs(r1_u) <= tol_u)
+    on2_u = in_u_eff & (np.abs(r2_u) <= tol_u)
+
+    on0_d = in_d_eff & (np.abs(r0_d) <= tol_d)
+    on1_d = in_d_eff & (np.abs(r1_d) <= tol_d)
+    on2_d = in_d_eff & (np.abs(r2_d) <= tol_d)
+
+    # close counts (partition-sized)
     close_u = on0_u.astype(int) + on1_u.astype(int) + on2_u.astype(int)
+    close_d = on0_d.astype(int) + on1_d.astype(int) + on2_d.astype(int)
 
-    # If a point is within tolerance of a boundary line, treat it as "inside" for
-    # classification purposes. This prevents epsilon-scale drift from turning true
-    # edge/vertex points into EXT.
-    in_d_eff = in_d | (close_d > 0)
-    in_u_eff = in_u | (close_u > 0)
+    # ---- Lift everything back to full length ----
+    in_eff = np.zeros(n, dtype=bool)
+    close = np.zeros(n, dtype=int)
 
-    result = np.full(ẋ.shape, BaryLoc.EXT, dtype=int)
-    result[in_d_eff & (close_d == 2)] = BaryLoc.VTX  # Vertex: two or more boundaries within eps
-    result[in_d_eff & (close_d == 1)] = BaryLoc.EDG  # Edge: exactly one boundary within eps
-    result[in_d_eff & (close_d == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
-    result[in_u_eff & (close_u == 2)] = BaryLoc.VTX  # Vertex: two or more boundaries within eps
-    result[in_u_eff & (close_u == 1)] = BaryLoc.EDG  # Edge: exactly one boundary within eps
-    result[in_u_eff & (close_u == 0)] = BaryLoc.INT  # Internal: inside and no boundary within eps
+    on0 = np.zeros(n, dtype=bool)
+    on1 = np.zeros(n, dtype=bool)
+    on2 = np.zeros(n, dtype=bool)
+
+    in_eff[ups] = in_u_eff
+    in_eff[dns] = in_d_eff
+
+    close[ups] = close_u
+    close[dns] = close_d
+
+    on0[ups] = on0_u
+    on0[dns] = on0_d
+    on1[ups] = on1_u
+    on1[dns] = on1_d
+    on2[ups] = on2_u
+    on2[dns] = on2_d
+
+    # ---- Assign results using full-length masks ----
+    if detailed:
+        result = np.full(n, BaryPlc.EXT, dtype=int)
+
+        # Internal: inside and not within eps of any boundary
+        result[in_eff & (close == 0)] = BaryPlc.INT
+
+        # Edges (override INT where appropriate)
+        result[in_eff & on0] = BaryPlc.EG0
+        result[in_eff & on1] = BaryPlc.EG1
+        result[in_eff & on2] = BaryPlc.EG2
+
+        # Vertices (override edges)
+        result[in_eff & on1 & on2] = BaryPlc.VXA  # apex: forward/backward
+        result[in_eff & on0 & on1] = BaryPlc.VXL  # left:  flat/forward
+        result[in_eff & on0 & on2] = BaryPlc.VXR  # right: flat/backward
+
+    else:
+        result = np.full(n, BaryLoc.EXT, dtype=int)
+        result[in_eff & (close == 0)] = BaryLoc.INT
+        result[in_eff & (close == 1)] = BaryLoc.EDG
+        result[in_eff & (close >= 2)] = BaryLoc.VTX
+
     return result
 
 
@@ -250,20 +344,26 @@ def classify_mode_cell(ẋ, y, m, h9c: H9ClassifierLike = H9CL) -> NDArray[np.ui
     m0 = (m == 0)
 
     h_id = np.full(y.shape, 5, dtype=np.uint8)
-    # Horizontal tiers (C2 := 0) we need the two >= for up/down
+    # Horizontal tiers (C2 := 0) we need the three >= for up/down
     #                 [h9k.ΛC, h9k.VC, 0.0, h9k.ΛF, h9k.VF]
-    h_m0_conditions = [y[m0] > h0, y[m0] > h1, y[m0] > h2, y[m0] > h3, y[m0] >= h4]
-    h_m1_conditions = [y[m1] > h0, y[m1] > h1, y[m1] > h2, y[m1] >= h3, y[m1] > h4]
+    h_m0_conditions = [y[m0] > h0, y[m0] >= h1, y[m0] >= h2, y[m0] > h3, y[m0] > h4]
+    h_m1_conditions = [y[m1] > h0, y[m1] > h1, y[m1] >= h2, y[m1] > h3, y[m1] > h4]
     h_id[m0] = np.select(h_m0_conditions, [0, 1, 2, 3, 4], default=5)
     h_id[m1] = np.select(h_m1_conditions, [0, 1, 2, 3, 4], default=5)
 
+    p_id = np.full(y.shape, 3, dtype=np.uint8)
     # Positive slope tiers (C2 := 1) we need the two >= for up/down
-    p_conditions = [ymx > p0, ymx > p1, ymx >= p2]
-    p_id = np.select(p_conditions, [0, 1, 2], default=3)
+    p_m0_conditions = [ymx[m0] >= p0, ymx[m0] >= p1, ymx[m0] >= p2]
+    p_m1_conditions = [ymx[m1] > p0, ymx[m1] > p1, ymx[m1] > p2]
+    p_id[m0] = np.select(p_m0_conditions, [0, 1, 2], default=3)
+    p_id[m1] = np.select(p_m1_conditions, [0, 1, 2], default=3)
 
     # Negative slope tiers (C2 := 2) we need the two >= for up/down
-    n_conditions = [ypx < n0, ypx < n1, ypx <= n2]
-    n_id = np.select(n_conditions, [0, 1, 2], default=3)
+    n_id = np.full(y.shape, 3, dtype=np.uint8)
+    n_m0_conditions = [ypx[m0] < n0, ypx[m0] <= n1, ypx[m0] < n2]
+    n_m1_conditions = [ypx[m1] <= n0, ypx[m1] <= n1, ypx[m1] <= n2]
+    n_id[m0] = np.select(n_m0_conditions, [0, 1, 2], default=3)
+    n_id[m1] = np.select(n_m1_conditions, [0, 1, 2], default=3)
 
     # Encode the result into the same format. Ranges 0..0x5f (see ascii reference above).
     return encode[h_id, p_id, n_id]  # h_id << 4 | p_id << 2 | n_id

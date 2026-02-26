@@ -829,7 +829,7 @@ if __name__ == '__main__':
     octant = 0              # which octant to process
     ma_deg = 16             # MA potential ψ
     bn_deg = 16             # Preconditioned Bernstein degree
-    layer = 5               # choose octant layer
+    layer = 5               # choose octant hex_layer
     configs = [
         'l5_v0305',
      ]

@@ -102,6 +102,8 @@ def stage(file: str,
     g_gcd = reg.domain('g_gcd')  # latitude longitude
     p_pix = reg.domain('p_pix')  # plate carrée pixel
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('../src/l4_polished.npz')
+
     n_oct = reg.domain(f'n_oct:{net_name}')
     pix_gcd = reg.projection('pix_gcd')  # convert plate carrée to gcd
 

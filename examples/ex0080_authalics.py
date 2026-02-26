@@ -129,7 +129,12 @@ def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
     ax.set_axis_off()
     authalic_p75 = np.quantile(np.abs(scores), 0.75)
     p75_frac = 100 * np.expm1(authalic_p75)
-    ax.title.set_text(f'75% of hexes have area within ±{p75_frac:3f}% of mean.')
+    # ax.title.set_text(f'75% of hexes have area within ±{p75_frac:3f}% of mean.')
+    lil, big = np.min(scores), np.max(scores)
+    # authalic_p98 = np.quantile(np.abs(scores), 0.98)
+    # p98_frac = 100 * np.expm1(authalic_p98)
+    ax.title.set_text(f'min:{lil}, max:{big} deviation from ideal.')
+
     plt.tight_layout()
     fig.savefig(f"output/ex0080_{layers}.png", dpi=400)
     print(f'fig saved at output/ex0080_{layers}.png')
@@ -180,6 +185,8 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
 if __name__ == '__main__':
     depth = 4  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
+    b_oct = rg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
     hexify(rg, data, layers=depth)
 

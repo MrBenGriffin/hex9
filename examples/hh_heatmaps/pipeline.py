@@ -59,7 +59,7 @@ if __name__ == "__main__":
     p.add_argument("--force", action="store_true", help="force recompute where supported")
 
     p.add_argument('--layers', type=int, nargs=2, default=None,
-                   help='[start end) layers to render in stage 7; e.g. 12 13 renders only layer 12')
+                   help='[start end) layers to render in stage 7; e.g. 12 13 renders only hex_layer 12')
     p.add_argument('--hex-layers', type=int, default=None,
                    help='classification depth for hex addressing (max depth for ugc_regions)')
 

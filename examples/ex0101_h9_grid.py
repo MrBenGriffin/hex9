@@ -3,8 +3,8 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-This shows the hexagon ids as colours, for each layer. Note that
-layer zero has 11 colours, whereas every other layer has 9.
+This shows the hexagon ids as colours, for each hex_layer. Note that
+hex_layer zero has 11 colours, whereas every other hex_layer has 9.
 
 Last Tested
 26 December 2025 0.1.0a4 (passed)
@@ -26,7 +26,9 @@ def run(layout, scale, depths):
     cols[15] = np.array([1, 1, 1, 1])  # stick alpha=transparent onto illegal.
 
     reg = Registrar()                        # Manage Domains & Projections
-    b_oct = reg.domain(f'b_oct')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
+
     n_oct = reg.domain(f'n_oct:{layout}')   # 'mortar', 'butterfly', etc.
 
     h9f = OctahedralH9(reg)
@@ -47,7 +49,7 @@ def run(layout, scale, depths):
     xy = np.column_stack([ux, uy])
 
     # classify to faces
-    signs = n_oct.pt_face(xy)  # (layer,3) int8
+    signs = n_oct.pt_face(xy)  # (hex_layer,3) int8
     in_net = np.any(signs != 0, axis=1)
 
     # only keep pixels in the net
@@ -64,13 +66,13 @@ def run(layout, scale, depths):
     px = px[good]
     py = py[good]
     for layer in depths:
-        # h_val = hex_layer(ref, layer, tail_style=TailStyle.reversible)
+        # h_val = hex_layer(ref, hex_layer, tail_style=TailStyle.reversible)
         # h_key = hex_key(addr)
         adr = hex_str_encode(ref, layer=layer, tail_style=TailStyle.key)
         h_key = hex_layer(ref, layer=layer, tail_style=TailStyle.key)
         hex_k, idx, inv_hex = np.unique(h_key, axis=0, return_index=True, return_inverse=True)
         hex_num = hex_k.shape[0]
-        # idx = range(12) if layer == 0 else range(9)
+        # idx = range(12) if hex_layer == 0 else range(9)
         # sum_wt = np.bincount(inv_hex, weights=ref.samples, minlength=hex_num)
         # pp_hx = np.bincount(inv_hex, minlength=hex_num)  # aka cnt
 

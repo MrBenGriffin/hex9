@@ -255,6 +255,7 @@ def run():
     c_ell = reg.domain('c_ell')   # Cartesian Ellipsoid (xyz) ECEF
     c_oct = reg.domain('c_oct')   # Cartesian Octahedron (xyz)
     b_oct = reg.domain('b_oct')   # Octahedron Barycentric-origin xy
+    b_oct.set_warp('src/l4_polished.npz')
 
     # Projections/Transforms. Bary and Net are loaded by the domains.
     # EllipsoidGCD(reg)  # g_sph <=> c_sph
@@ -279,7 +280,7 @@ def run():
     # 10_000_000 = hemisphere.
     # 20_000_000 = global. , 3_000_000, 10_000_000.0, 5.0
 
-    for radius in [20_000_000, 0.1, 20_000_000, 3_000_000, 10_000_000.0, 5.0]:
+    for radius in [20_000_000, 0.1, 5.0]:
         for name, (lat, lon) in vertices.items():
             centre = Points(np.array([[lat, lon]]), g_gcd)
             ll_pts = geodesic_cap_rnd_ecef(reg, lat, lon, 100_000, radius, seed=4325325)

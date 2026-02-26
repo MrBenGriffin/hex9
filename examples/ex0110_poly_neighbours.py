@@ -69,6 +69,8 @@ def run():
     spot = region['Stonehenge']
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
+
     ll0 = Points(np.array([spot]), g_gcd)
     bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
     co_, mode = bc0.cm()

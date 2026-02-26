@@ -21,8 +21,8 @@ class StepEventUV(StepEvent):
 
 
 def xyu_regions_iter(xy, mode=None, depth=36, ctx: H9Context = H9CTX):
-    """Generator mirroring xyu_regions but yielding per-layer StepEventUV.
-    Yields two events per layer (pre/post) and returns the final addresses at StopIteration.
+    """Generator mirroring xyu_regions but yielding per-hex_layer StepEventUV.
+    Yields two events per hex_layer (pre/post) and returns the final addresses at StopIteration.
     """
     import hhg9.h9.classifier as clf
     h9k, h9cl, h9c, cr = ctx.k, ctx.cl, ctx.c, ctx.r

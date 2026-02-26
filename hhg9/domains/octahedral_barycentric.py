@@ -11,6 +11,137 @@ from hhg9.base.composite import CompositeDomain, ComponentDomain
 from hhg9.base.point_format import PointFormat
 from hhg9.projections import OctantBary
 from hhg9.h9 import H9K, H9O, in_scope
+from scipy.interpolate import CloughTocher2DInterpolator, LinearNDInterpolator, NearestNDInterpolator
+
+
+class AuthalicWarp:
+    def __init__(self, file_name='output/H9_L4_Gold_v1.pkl', interp='ct'):
+        # Load Data
+        self.file_name = file_name
+        repo = np.load(file_name, allow_pickle=True)
+        # self.src = repo['src_pts']
+        # self.dst = repo['dst_pts']
+        self.src = repo['source_pts']  # Regular Grid (a_p)
+        self.dst = repo['target_pts']  # Deformed Grid (x_prime)
+
+        # 1. Forward Engine (Cubic / Smooth)
+        # We model the *displacement* (diff) rather than absolute position for better stability
+        diff = self.dst - self.src
+        # self.fwd_dx = CloughTocher2DInterpolator(self.src, diff[:, 0])
+        # self.fwd_dy = CloughTocher2DInterpolator(self.src, diff[:, 1])
+        if interp != 'linear':
+            self.fwd_dx = CloughTocher2DInterpolator(self.src, diff[:, 0])
+            self.fwd_dy = CloughTocher2DInterpolator(self.src, diff[:, 1])
+
+        else:
+            lin_dx = LinearNDInterpolator(self.src, diff[:, 0])
+            lin_dy = LinearNDInterpolator(self.src, diff[:, 1])
+            nn_dx = NearestNDInterpolator(self.src, diff[:, 0])
+            nn_dy = NearestNDInterpolator(self.src, diff[:, 1])
+
+            def fwd_dx(xy):
+                d = lin_dx(xy)
+                m = np.isnan(d)
+                if np.any(m):
+                    d[m] = nn_dx(xy[m])
+                return d
+
+            def fwd_dy(xy):
+                d = lin_dy(xy)
+                m = np.isnan(d)
+                if np.any(m):
+                    d[m] = nn_dy(xy[m])
+                return d
+
+            self.fwd_dx = fwd_dx
+            self.fwd_dy = fwd_dy
+
+        # 2. Inverse Guesser (Linear + Nearest Backup)
+        # This provides the "seed" for the solver.
+        self.inv_linear = LinearNDInterpolator(self.dst, self.src)
+        self.inv_nearest = NearestNDInterpolator(self.dst, self.src)
+
+    def do(self, pts, mo=0):
+        """ Forward Warp (Precise Cubic) """
+        xy = np.array(pts, dtype=np.float64)  # Force Copy
+        mode = 1.0 if mo == 0 else -1.0
+        xy[:, 1] *= mode
+
+        # Interpolate displacement
+        dx = self.fwd_dx(xy)
+        dy = self.fwd_dy(xy)
+
+        # Handle outliers (if any)
+        # mask_nan = np.isnan(dx)
+        # if np.any(mask_nan):
+        #     dx[mask_nan] = 0.0
+        #     dy[mask_nan] = 0.0
+
+        res = xy + np.stack([dx, dy], axis=1)
+        res[:, 1] *= mode
+        return res
+
+    def undo(self, pts, mo=0, iterations=30, tolerance=1e-17):
+        """
+        Precise Inverse Warp (Newton-Raphson).
+        1. Guess using Linear Interpolation.
+        2. Refine by minimizing |Forward(guess) - target|.
+        """
+        target = np.array(pts, dtype=np.float64)  # Target points we want to find source for
+        mode = 1.0 if mo == 0 else -1.0
+        target[:, 1] *= mode
+
+        # --- STEP 1: COARSE GUESS ---
+        # Try Linear first
+        guess = self.inv_linear(target)
+
+        # Fix Hull Failures (The 93km Error)
+        # If Linear returns NaN, snap to nearest neighbor to get a valid starting point
+        nan_mask = np.isnan(guess[:, 0])
+        if np.any(nan_mask):
+            guess[nan_mask] = self.inv_nearest(target[nan_mask])
+
+        # --- ITERATIVE POLISH ---
+        # We want to find 'u' such that Forward(u) = target.
+        # Function f(u) = Forward(u) - target. We want f(u) = 0.
+        # Simple update: u_new = u - (Forward(u) - target)
+
+        curr = guess.copy()
+
+        for i in range(iterations):
+            # A. Run Forward Warp on current guess
+            # (Inline the forward logic here for speed/gradients if needed, but calling self.do is safer)
+            # Note: We can't use self.do() directly because it handles the mode flip.
+            # We need the raw internal forward warp.
+
+            # Internal Forward Logic:
+            dx = self.fwd_dx(curr)
+            dy = self.fwd_dy(curr)
+
+            # If our guess drifted off the map, clamp it (prevents explosion)
+            bad_guess = np.isnan(dx)
+            if np.any(bad_guess):
+                # Reset bad points to the nearest neighbour safety
+                curr[bad_guess] = self.inv_nearest(target[bad_guess])
+                dx = self.fwd_dx(curr)
+                dy = self.fwd_dy(curr)
+
+            # B. Calculate Residual (Error)
+            est = curr + np.stack([dx, dy], axis=1)
+            error = est - target
+
+            # C. Check Convergence (Optional optimization)
+            max_err = np.max(np.abs(error))
+            if max_err < tolerance:
+                break
+
+            # D. Update (Simple Gradient Descent / Fixed Point)
+            # Since the warp is ~1.0 scale (authalic), J is approx Identity.
+            # So u_new = u_old - error works surprisingly well.
+            curr -= error
+
+        curr[:, 1] *= mode
+        return curr
 
 
 class OctantBarycentric(ComponentDomain):
@@ -53,6 +184,7 @@ class OctahedralBarycentric(CompositeDomain):
 
         self.sides = {}
         self.projs = {}
+        self.warp = None
 
         c_oct = registrar.domain('c_oct')
 
@@ -71,7 +203,7 @@ class OctahedralBarycentric(CompositeDomain):
 
         # Compute rotation matrices
         north, south = trans, trans @ mirror_y_neg_x  # South is the mirror of North
-        # Loop in 90º rotation order and compute projection matrices for layer and S.
+        # Loop in 90º rotation order and compute projection matrices for hex_layer and S.
         scale_factors = np.sqrt([2, 6, 3])[:, np.newaxis]
         self.rot90_idx = np.zeros(8, dtype=np.uint8)
         # These are set in order of rotation, starting with NEA
@@ -94,6 +226,14 @@ class OctahedralBarycentric(CompositeDomain):
             north = north @ r90
             south = south @ r90
             rot = (rot + 1) % 4
+
+    def set_warp(self, warp_file, method=None):
+        """Add a warp method to the domain"""
+        # pprj = rg.projection('gcd_bry')
+        # pprj.warp_file = warp_file
+        self.warp = AuthalicWarp(warp_file, method)
+        for proj in self.projs.values():
+            proj.warp = self.warp
 
     def decode(self, addr):
         """Decode octahedral coordinates into a point"""

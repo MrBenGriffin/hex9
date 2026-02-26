@@ -14,7 +14,7 @@ from bounds_utils import load_presets, resolve_bounds, needs_run
 from hhg9 import Registrar, Points
 
 
-def north_arrow(ax, centroid, poly, color, scale=0.12, label="layer"):
+def north_arrow(ax, centroid, poly, color, scale=0.12, label="hex_layer"):
     """Draw a north-pointing arrow above the given polygon’s centroid.
     The arrow length scales with the polygon’s extent so it remains visible for tiny patches.
     """
@@ -95,7 +95,7 @@ def _rectangularity_score(rotated: np.ndarray) -> float:
 
 
 def draw_north_arrow(ax, origin: np.ndarray, vec: np.ndarray, poly: np.ndarray,
-                      color: str, scale: float = 0.12, label: str = "layer") -> None:
+                      color: str, scale: float = 0.12, label: str = "hex_layer") -> None:
     """Draw a north arrow from origin along `vec`, scaled to polygon extent.
     - `origin`: (1,2) array-like in b_oct coords
     - `vec`: geographic north direction at origin in b_oct coords
@@ -216,6 +216,7 @@ def stage(file: str,
     reg = Registrar()
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('../src/l4_polished.npz')
     n_oct = reg.domain(f'n_oct:{net_name}')
 
     # Build GCD rectangle and project to n_oct

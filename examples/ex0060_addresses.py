@@ -28,14 +28,16 @@ from hhg9 import Registrar, Points
 from hhg9.formats import OctahedralH9
 from hhg9.algorithms.distance import wgs84
 from hhg9.algorithms.pickers import gcd_rnd
+from hhg9.h9 import H9K
 from hhg9.h9.addressing import reg_hex_digits, TailStyle
+from hhg9.h9.classifier import location
 from hhg9.h9.region import xy_regions
 
 
 class CSVLogger:
     """Append rows to a CSV with a fixed header; creates parent dirs as needed."""
     HEADER = [
-        "lat_in", "lon_in", "oct_in", "bry_x", "bry_y", "gcd_err_val", "grid_addr", "grid_err_val",
+        "lat_in", "lon_in", "oct_in", "bry_x", "bry_y", "gcd_err_val", "grid_addr", "grid_err_val", "loc"
     ]
 
     def __init__(self, path, header=None):
@@ -64,6 +66,13 @@ class CSVLogger:
             self._w = None
 
 
+def pt_loc(coords, mo):
+    """Identify where points lie in their octants."""
+    x, y = coords[:, 0], coords[:, 1]
+    ẋ = H9K.R3 * x
+    return location(ẋ, y, mo)
+
+
 def run(reg, logger, refs, layers=36):
     h9f = OctahedralH9(reg)
     h9f.width = layers
@@ -75,7 +84,8 @@ def run(reg, logger, refs, layers=36):
     b_rys.domain.register_format(h9f)
     b_rtp = reg.project(b_rys, ['b_oct', 'g_gcd'])
     # Get the octant id and mode of each point (discarding mode here).
-    oc, _mo = b_rys.cm()
+    oc, mo = b_rys.cm()
+    locs = pt_loc(b_rys.coords, mo)
     # Now generate the set of h9f labels for each point, and convert to np.array
     labels = f'{b_rys:h9.{layers}}'  # This is reversible addresses.
     label_vec = np.array(labels.splitlines())
@@ -100,7 +110,18 @@ def run(reg, logger, refs, layers=36):
             "lat_rt_ga": f"{l_rtp.coords[i][0]:.16f}", "lon_rt_ga": f"{l_rtp.coords[i][1]:.16f}",
             "grid_err": f'{l_deltas[i]:.6f}nm',
             "grid_err_val": f'{l_deltas[i]:.6f}',
+            "loc": f'{locs[i]}',
         })
+    b_min = float(np.min(b_deltas))
+    b_max = float(np.max(b_deltas))
+    b_p90 = np.percentile(b_deltas, 90)
+    b_p99 = np.percentile(b_deltas, 99)
+    l_min = float(np.min(l_deltas))
+    l_max = float(np.max(l_deltas))
+    l_p90 = np.percentile(l_deltas, 90)
+    l_p99 = np.percentile(l_deltas, 99)
+    print(f'b_min: {b_min:.6f}, b_max: {b_max:.6f}, b_p90: {b_p90:.6f}, b_p99: {b_p99:.6f}')
+    print(f'l_min: {l_min:.6f}, l_max: {l_max:.6f}, l_p90: {l_p90:.6f}, l_p99: {l_p99:.6f}')
 
 
 if __name__ == '__main__':
@@ -112,6 +133,8 @@ if __name__ == '__main__':
     layers = ake.set_accuracy(accuracy)
     np.random.seed(seed)
     base = Path(__file__).parent
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
 
     log_file = base.joinpath(f'logs/L{layers}_{samples}_{seed}.csv')
     main_logger = CSVLogger(log_file)

@@ -28,7 +28,7 @@ def sub_sample(pts: Points):
     xu = np.sort(np.unique(xy[:, 0]))
     yu = np.sort(np.unique(xy[:, 1]))
     dx = np.mean(np.diff(xu))  # typical E/W step in b_oct
-    dy = np.median(np.diff(yu))  # typical layer/S step in b_oct
+    dy = np.median(np.diff(yu))  # typical hex_layer/S step in b_oct
     offsets = np.array([
         [0.0, 0.0],
         [(r.random() - 0.5) * dx, 0.0],
@@ -83,8 +83,9 @@ def load_data(src_dir: Path, base: str, dom: Domain, bbox=None, rnd=False):
 def run(layers):
     """Do the work"""
     reg = Registrar()
-    g_gcd = reg.domain('g_gcd')
+    # g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     n_oct = reg.domain('n_oct:c_butterfly')
     ak = reg.projection('oct_ell')
     ha, ta = ak.get_accuracy(layers)
@@ -107,7 +108,6 @@ def run(layers):
     xy = hxd.coords
     nx, mx, ny, my = min(xy[:, 0]), max(xy[:, 0]), min(xy[:, 1]), max(xy[:, 1])
     ratio = (my-ny)/(mx-nx)
-
 
     norm = colors.Normalize(vmin=np.min(pops), vmax=np.max(pops))
     cmap = plt.get_cmap('plasma')

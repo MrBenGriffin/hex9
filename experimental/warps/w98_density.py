@@ -41,10 +41,10 @@ def get_density(reg: Registrar, pts: Points, octant_id: int = 0):
     kmin = np.argmin(det)
     kmax = np.argmax(det)
     mn, mx = pts.coords[kmin], pts.coords[kmax]
-    v1 = j_pts @ e1_xyz  # (N, 3)
-    v2 = j_pts @ e2_xyz  # (N, 3)
-    cross = np.cross(v1, v2)  # (N, 3)
-    area_scale = np.linalg.norm(cross, axis=1)  # (N,)
+    v1 = j_pts @ e1_xyz  # (hex_layer, 3)
+    v2 = j_pts @ e2_xyz  # (hex_layer, 3)
+    cross = np.cross(v1, v2)  # (hex_layer, 3)
+    area_scale = np.linalg.norm(cross, axis=1)  # (hex_layer,)
     area_clip = np.clip(area_scale, 1e-20, None)
     return np.log(area_clip)  # authalic log-density ℓ
 

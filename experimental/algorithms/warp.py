@@ -174,7 +174,7 @@ class Warper:
 
         # Apply uv-metric correction: g_inv corresponds to the equilateral metric
         g_inv = np.array([[2.0 / 3.0, -1.0 / 3.0], [-1.0 / 3.0, 2.0 / 3.0]], dtype=float)
-        grad_metric = grad @ g_inv.T  # (N, 2)
+        grad_metric = grad @ g_inv.T  # (hex_layer, 2)
 
         u, v = uv[..., 0], uv[..., 1]
         # assert np.all(u >= -1e-9) and np.all(v >= -1e-9) and np.all(u + v <= 1 + 1e-9), "input not in simplex"

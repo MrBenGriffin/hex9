@@ -8,9 +8,8 @@ import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
-from hhg9.domains import PlatePixel, GeneralGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric
-from hhg9.projections import PlatePixelGCD, EllipsoidGCD, AKOctahedralEllipsoid
 from hhg9.algorithms.grid import qa_grid
+from hhg9.projections import PlatePixelGCD
 from support import Util
 from PIL import Image  # Pillow for clean image saving
 
@@ -95,10 +94,13 @@ def stage(file: str,
                 [min_lat, min_lon], [max_lat, min_lon], [max_lat, max_lon], [min_lat, max_lon]
             ], dtype=float)
             reg = Registrar()
-            g_gcd = GeneralGCD(reg)
-            c_ell = EllipsoidCartesian(reg)
-            c_oct = OctahedralCartesian(reg)
-            b_oct = OctahedralBarycentric(reg, c_oct)
+            g_gcd = reg.domain('g_gcd')
+            c_ell = reg.domain('c_ell')
+            c_oct = reg.domain('c_oct')
+            b_oct = reg.domain('b_oct')
+            b_oct.set_warp('../src/l4_polished.npz')
+            ak = reg.projection('oct_ell')
+            ak.set_accuracy(0.0000000001)
             b_gcd = Points(gcd_r, g_gcd)
             b_data = reg.project(b_gcd, [g_gcd, c_ell, c_oct, b_oct])
             cmp_arr = b_data.components.copy()
@@ -124,13 +126,13 @@ def stage(file: str,
     # Registrar & domains
     util = Util()
     reg = Registrar()
-    g_gcd = GeneralGCD(reg)
-    p_pix = PlatePixel(reg)
-    c_ell = EllipsoidCartesian(reg)
-    c_oct = OctahedralCartesian(reg)
-    b_oct = OctahedralBarycentric(reg, c_oct)
-    EllipsoidGCD(reg)
-    AKOctahedralEllipsoid(reg).set_accuracy(1e-10)  # tiny per-hex area?!
+    g_gcd = reg.domain('g_gcd')
+    c_ell = reg.domain('c_ell')
+    c_oct = reg.domain('c_oct')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('../src/l4_polished.npz')
+    ak = reg.projection('oct_ell')
+    ak.set_accuracy(0.0000000001)
 
     # Load inputs: use the *rotated* border so the grid is tight in its own extent
     rot_border = np.load(rot_bry)  # polygon corners in rotated b_oct (shape (4,2))
@@ -158,7 +160,7 @@ def stage(file: str,
         # Robust barycentric test, orientation agnostic
         v0 = T1 - T0
         v1 = T2 - T0
-        a = P - T0  # (layer,2)
+        a = P - T0  # (hex_layer,2)
         den = v0[0]*v1[1] - v0[1]*v1[0]
         # signed sub-areas (scaled by 2*area)
         s = a[:, 0]*v1[1] - a[:, 1]*v1[0]
@@ -245,7 +247,7 @@ def stage(file: str,
     if not gcd_img.exists():
         raise FileNotFoundError(f"{gcd_img} not found. Run stage 3.")
     img = image.imread(str(gcd_img), 'png')
-
+    p_pix = reg.domain('p_pix')
     pc_px = p_pix.adopt(img)  # create pixel cloud from image
     # Order for set_dim is (lon_min, lon_max, lat_min, lat_max)
     PlatePixelGCD(reg).set_dim(pc_px, (min_lon, max_lon, min_lat, max_lat))

@@ -28,7 +28,7 @@ class OctantCartesian(ComponentDomain):
         """
         Return a boolean mask indicating which 3D points belong to this octant face,
         i.e. their coordinate-wise signs match the face sign triple.
-        Accepts a single point shape (3,) or an array of points shape (layer,3).
+        Accepts a single point shape (3,) or an array of points shape (hex_layer,3).
         """
         vals = np.atleast_2d(np.asarray(pts, dtype=float))
         target = np.array(self.sig(), dtype=float)  # (+/-1, +/-1, +/-1)

@@ -10,7 +10,7 @@ import numpy as np
 
 def inside_triangle_cw(pts: np.ndarray, tri: np.ndarray) -> np.ndarray:
     """Vectorised point-in-triangle test.
-    points: (layer,2), tri: (3,2) in CW order. Returns mask bool."""
+    points: (hex_layer,2), tri: (3,2) in CW order. Returns mask bool."""
     # Edges
     a, b, c = tri[0], tri[1], tri[2]
     ab = b - a
@@ -44,7 +44,7 @@ def ortho_basis_from_normal(n):
 
 def ellipsoid_f_grad(p, a, b):
     """Implicit surface function f(x,y,z)=x^2/a^2 + y^2/a^2 + z^2/b^2 - 1
-    and its gradient at p (shape (3,)).
+    and its gradient at tri_points (shape (3,)).
     Returns (f, gradF).
     """
     x, y, z = p

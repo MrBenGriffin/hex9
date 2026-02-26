@@ -50,6 +50,8 @@ def run(*, force=False):
     # Domains - 2D image and GCD Spherical.
     p_pix = reg.domain('p_pix')           # Pixel Plate Carrée
     c_oct = reg.domain('c_oct')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
 
     # circumference of earth: 40075017m
     # 1 pix = 40075017/1350 m = about 30km

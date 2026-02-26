@@ -13,7 +13,7 @@ It acts as the bridge between the mathematical classifier and the discrete grid 
 1.  **Lattice Generation:** Generates a set of cell barycentres using the H9K constants.
 2.  **Cell Identification:** Fixes each of the 42 geometric cells of the barycentric domain
     with an integer (u, v) coordinate.
-3.  **Region Collapse:** Collapses these into 12 legal layer **regions**:
+3.  **Region Collapse:** Collapses these into 12 legal hex_layer **regions**:
     * 9 cells belonging to the **Up** supercell.
     * 9 cells belonging to the **Down** supercell.
     * Shared cells are handled via C2 membership logic.
@@ -43,8 +43,8 @@ It acts as the bridge between the mathematical classifier and the discrete grid 
 
 **Coordinate Systems:**
 
-* **(layer, P, H, M):** An affine cube-like system (Negative slope, Positive slope, Horizontal, Mode).
-    Constraint: :math:`n - p + h + m = 3` for every valid lattice point.
+* **(hex_layer, P, H, M):** An affine cube-like system (Negative slope, Positive slope, Horizontal, Mode).
+    Constraint: :math:`n - tri_points + h + m = 3` for every valid lattice point.
 * **(U, V):** A rectangular lattice over the plane.
     * U interval: 1/2 triangle width.
     * V interval: 1/3 triangle height.
@@ -135,7 +135,7 @@ def h9_cell_lattice(h9k: Optional[H9ConstLike] = None, h9cl: Optional[H9Classifi
         h9cl = clf.H9CL
 
     c_dec = h9cl.decode
-    s_count = h9cl.p_levels.shape[0]  # p and n share the same shape.
+    s_count = h9cl.p_levels.shape[0]  # tri_points and n share the same shape.
     h_count = h9cl.h_levels.shape[0]
     cell_size = len(c_dec)
 

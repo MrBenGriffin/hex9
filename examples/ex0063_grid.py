@@ -169,7 +169,7 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
 def octa_layer_stats(l: int, r=6371000.0):
     """
     Return triangle/vertex/edge counts and safe spacing estimates for a global
-    octahedral grid with layer indexing based on emergent hexagons.
+    octahedral grid with hex_layer indexing based on emergent hexagons.
 
     Parameters
     ----------
@@ -209,13 +209,14 @@ def quantised_ecef_key(xyz: np.ndarray, tol_m: float = 50.0):
 
 if __name__ == '__main__':
     """
-    Triangular grid will be 9 triangles per octant at layer 0
-    At each subsequent layer, the number of triangles will increase by 9 per triangle.
-    So the number of triangles will be 8*9**(layer+1)
+    Triangular grid will be 9 triangles per octant at hex_layer 0
+    At each subsequent hex_layer, the number of triangles will increase by 9 per triangle.
+    So the number of triangles will be 8*9**(hex_layer+1)
     """
     rg = Registrar()  # Manage Domains & Projections
     octant = 0  # entire sphere = None.
-    # warper = Warper()
+    b_oct = rg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     s_oct = rg.domain('s_oct')
     for depth in [4]:  # range(6):
         l_stats = octa_layer_stats(depth)
@@ -223,38 +224,6 @@ if __name__ == '__main__':
         pos_f = Path(f"experiments/graph_pos__{octant}_{depth}.json")
         b_pts = get_data(rg, layer=depth, octant_id=octant)
         u, v = b_pts.coords[:, 0], b_pts.coords[:, 1]
-        print(f"\npre_simplex:",
-              "x[min,max]=", u.min(), u.max(),
-              "y[min,max]=", v.min(), v.max())
-
-        s_pts = rg.project(b_pts, ['b_oct', 's_oct'])
-        u, v = s_pts.coords[:, 0], s_pts.coords[:, 1]
-        s = u+v
-        print(f"pre-warp:",
-              "u[min,max]=", u.min(), u.max(),
-              "v[min,max]=", v.min(), v.max(),
-              "u+v[min,max]=", s.min(), s.max())
-
-        # s_wrp = warper.warp(s_pts)
-        s_wrp = s_pts
-        u, v = s_wrp.coords[:, 0], s_wrp.coords[:, 1]
-        s = u+v
-        print(f"pre-clamp:",
-              "u[min,max]=", u.min(), u.max(),
-              "v[min,max]=", v.min(), v.max(),
-              "u+v[min,max]=", s.min(), s.max())
-
-        s_oct.clamp(s_wrp, eps=1e-6)
-
-        u, v = s_wrp.coords[:, 0], s_wrp.coords[:, 1]
-        s = u+v
-
-        print(f"post-clamp:",
-              "u[min,max]=", u.min(), u.max(),
-              "v[min,max]=", v.min(), v.max(),
-              "u+v[min,max]=", s.min(), s.max())
-
-        b_pts = rg.project(s_wrp, ['s_oct', 'b_oct'])
         g_pts = rg.project(b_pts, ['b_oct', 'g_gcd'])
         c_pts = rg.project(b_pts, ['b_oct', 'c_oct', 'c_ell'])
         areas = wgs84_area(rg, g_pts, 3)

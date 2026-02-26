@@ -18,6 +18,8 @@ class OctantBary(Projection):
     def __init__(self, registrar, base, o_name, b_name):
         super().__init__(registrar, f'{base}_ob', o_name, b_name)
         self.matrix = None
+        self.mode = self.fwd_cs.mode
+        self.warp = None
         self.z_off = 1.0 / np.sqrt(3)
         rot_z = self.fwd_cs.th  # -120º As we define NS as apex we need to orient.
         ct, st = np.cos(rot_z), np.sin(rot_z)
@@ -34,8 +36,9 @@ class OctantBary(Projection):
         xyz = arr.coords if isinstance(arr, Points) else arr
         xya = xyz @ (self.matrix.T @ self.orient)  # z should be aligned.
         pts = np.delete(xya, 2, -1)  # These are now in barycentric 2D.
+        if self.warp is not None:
+            pts = self.warp.undo(pts, self.mode)
         if isinstance(arr, Points):
-            #
             return Points(pts, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
         else:
             return pts
@@ -46,6 +49,8 @@ class OctantBary(Projection):
         2D points are un-flattened from the Z-Plane.
         """
         xy = arr.coords if isinstance(arr, Points) else arr
+        if self.warp is not None:
+            xy = self.warp.do(xy, self.mode)
         xyz = np.insert(xy, xy.shape[-1], self.z_off, axis=-1)
         xyo = xyz @ (self.matrix.T @ self.orient).T
         if isinstance(arr, Points):

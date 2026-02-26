@@ -61,6 +61,8 @@ def run():
     Then display it as various nets.
     """
     reg = Registrar()  # Manage Domains & Projections
+    # b_oct = reg.domain('b_oct')
+    # b_oct.set_warp('src/l4_polished.npz')
     oc_px = load_cache(reg, 'tissot_2560x1280')  # 'world1350x675' on octahedral, with samples.
     bb_px = reg.project(oc_px, ['c_oct', 'b_oct'])
     for layout in ['butterfly']:  # 'diamonds', 'mortar', 'butterfly', 'turbine'

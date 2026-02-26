@@ -87,11 +87,11 @@ def tri_props(level):
 
 def densify_step_for_layer(level, kind: str = 'hex', factor: float = 1.0, safety: float = 0.9) -> float:
     """
-    Suggest a geodesic densify step (metres) from layer semantics.
+    Suggest a geodesic densify step (metres) from hex_layer semantics.
     Intended for boundary densification when building a bbox for clipping.
 
     Args:
-        level: grid layer.
+        level: grid hex_layer.
         kind: 'hex' or 'tri'.
         factor: multiplier applied to a conservative characteristic span.
         safety: shrink factor (<=1) to hedge against local authalic shrink.
@@ -139,7 +139,7 @@ def sq_grid(scale: float = 1000, mode: int = 1):
 
     # IMPORTANT: one meshgrid for everything; keep indexing="xy"
     xx, yy = np.meshgrid(xl, yl, indexing="xy")                   # shapes (hgt, wid)
-    rec    = np.stack((xx.ravel(), yy.ravel()), axis=1)     # layer = hgt*wid
+    rec    = np.stack((xx.ravel(), yy.ravel()), axis=1)     # hex_layer = hgt*wid
 
     ii, jj = np.meshgrid(np.arange(wid), np.arange(hgt), indexing="xy")
     px_idx = ii.ravel().astype(np.int32)                        # x (col)
@@ -228,7 +228,7 @@ def in_convex_poly(points, poly):
         a = poly[i]
         b = poly[(i + 1) % m]
         ab = b - a
-        cp = _cross2d(ab, points - a)  # (layer,)
+        cp = _cross2d(ab, points - a)  # (hex_layer,)
         # Keep points on the same side as the centroid (within tolerance)
         inside &= (s * cp >= -eps)
         if not inside.any():

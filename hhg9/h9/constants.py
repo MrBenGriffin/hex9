@@ -277,7 +277,7 @@ def oct_constants() -> OctConst:
     """
     # Define axes of symmetry for octahedron
     # These are the underlying processes
-    axes = np.array([['A', 'P'], ['E', 'W'], ['layer', 'S']])
+    axes = np.array([['A', 'P'], ['E', 'W'], ['N', 'S']])
     v_pos = np.zeros((6, 3), dtype=np.float64)
     v_str = np.zeros((6,), dtype='<U1')
     vertices = {}
@@ -305,10 +305,10 @@ def oct_constants() -> OctConst:
         # Note that OID do not share the id % 2 == mode logic(!)
         # Also, 'c2' is always equator=0; with nb.c2=1 == self.c2 = 2
         # AP EW  NS    θ  c2 hexagon region  mo o_id, c2* ngh  hex_id
-        (+1, +1, +1): (2, ('EA', 'NA', 'NE'), 0, 0, (4, 2, 1), (0, 4, 5),   'NEA'),  # 0 'NEA' layer:5, E:8, A: 0
-        (-1, +1, +1): (5, ('EP', 'NE', 'NP'), 1, 1, (5, 0, 3), (1, 5, 7),   'NEP'),  # 1 'NEP' layer:4, E:7, P: 0
+        (+1, +1, +1): (2, ('EA', 'NA', 'NE'), 0, 0, (4, 2, 1), (0, 4, 5),   'NEA'),  # 0 'NEA' hex_layer:5, E:8, A: 0
+        (-1, +1, +1): (5, ('EP', 'NE', 'NP'), 1, 1, (5, 0, 3), (1, 5, 7),   'NEP'),  # 1 'NEP' hex_layer:4, E:7, P: 0
         (+1, -1, +1): (5, ('WA', 'NW', 'NA'), 1, 2, (6, 3, 0), (2, 6, 4),   'NWA'),  # 2 'NWA'
-        (-1, -1, +1): (2, ('WP', 'NP', 'NW'), 0, 3, (7, 1, 2), (3, 7, 6),   'NWP'),  # 3 'NWP' layer:5, W:8, P: 0
+        (-1, -1, +1): (2, ('WP', 'NP', 'NW'), 0, 3, (7, 1, 2), (3, 7, 6),   'NWP'),  # 3 'NWP' hex_layer:5, W:8, P: 0
         (+1, +1, -1): (5, ('EA', 'SE', 'SA'), 1, 4, (0, 5, 6), (0, 8, 10),  'SEA'),  # 4 'SEA' S:4, E:7, A: 0
         (-1, +1, -1): (2, ('EP', 'SP', 'SE'), 0, 5, (1, 7, 4), (1, 9, 8),   'SEP'),  # 5 'SEP' S:5, E:8, P: 0
         (+1, -1, -1): (2, ('WA', 'SA', 'SW'), 0, 6, (2, 4, 7), (2, 10, 11), 'SWA'),  # 6 'SWA' S:5, W:8, A: 0

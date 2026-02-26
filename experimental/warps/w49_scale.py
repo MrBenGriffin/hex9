@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-For a given layer, generate the canonical triangle grid and display on the globe.
+For a given hex_layer, generate the canonical triangle grid and display on the globe.
 Last Tested 6 November 2025 √
 """
 import numpy as np
@@ -14,7 +14,7 @@ from pathlib import Path
 def get_grid(reg: Registrar, layer: int = 3, octant_id: int = 0):
     """
     :param reg: h9 Registrar
-    :param layer: layer index (0 is coarsest: 72 global triangles)
+    :param layer: hex_layer index (0 is coarsest: 72 global triangles)
     :param octant_id: which octant to extract (0–7); default is 1
     :return: b_oct - Points of triangle grid, in clockwise order.
     Because this only needs a single octant - we can choose any single octant.
@@ -153,12 +153,12 @@ def find_max_safe_scale(reg, ma_file, degree=None,
 
 if __name__ == '__main__':
     reg = Registrar()
-    # layer at which the MA coefficients are meant to be evaluated
+    # hex_layer at which the MA coefficients are meant to be evaluated
     layer = 5
     octant_id = 0
 
-    # Use a (possibly deeper) safety layer to detect flips more conservatively.
-    # You can set safety_layer = layer for equal resolution, or layer+1 for extra safety.
+    # Use a (possibly deeper) safety hex_layer to detect flips more conservatively.
+    # You can set safety_layer = hex_layer for equal resolution, or hex_layer+1 for extra safety.
     safety_layer = layer
 
     cache_dir = Path("cache")

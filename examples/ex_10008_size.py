@@ -2,6 +2,7 @@
 # Copyright ©2025, Ben Griffin
 # Licensed under the Apache License, Version 2.0
 import numpy as np
+from math import sqrt
 
 if __name__ == '__main__':
     earth = 510_065_621_724_154.6
@@ -11,10 +12,9 @@ if __name__ == '__main__':
     l_tri = tri_0
     h_areas = np.zeros((64,), dtype=np.float64)
     t_areas = np.zeros((64,), dtype=np.float64)
-    for i in range(64):
+    for i in range(20):
         h_areas[i] = l_hex
-        t_areas[i] = l_tri
+        h_a = sqrt(2)*3**(1/4)*sqrt(l_hex)/3   #
         l_hex /= 9
-        l_tri /= 9
-        print(f'layer: {i}, hex_area: {h_areas[i]}, tri_areas: {t_areas[i]}')
+        print(f'layer: {i}, hex_area: {h_areas[i]}, side: {h_a}')
     accuracy = 38  # accuracy is nanometres.

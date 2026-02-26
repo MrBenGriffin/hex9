@@ -40,40 +40,41 @@ if __name__ == '__main__':
     dms = DMS(reg)
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
-    # ak = reg.projection('oct_ell')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
+    b_oct.set_warp('src/l4_polished.npz')
 
     locs = {
         'centroids': {
-                "EAV": {"name": "centroid", "lat": 1.860751, "lon": 43.328763},
-                "NAV": {"name": "centroid", "lat": 35.952813, "lon": 18.328413},
-                "NEV": {"name": "centroid", "lat": 36.477125, "lon": 66.347867},
-                "NPΛ": {"name": "centroid", "lat": 62.739925, "lon": 140.52874},
-                "EPΛ": {"name": "centroid", "lat": 32.801097, "lon": 159.38627},
-                "NEΛ": {"name": "centroid", "lat": 33.290631, "lon": 115.36871},
-                "NWΛ": {"name": "centroid", "lat": 62.739925, "lon": -39.47126},
-                "WAΛ": {"name": "centroid", "lat": 32.801097, "lon": -19.44909},
-                "NAΛ": {"name": "centroid", "lat": 33.290631, "lon": -64.94493},
-                "WPV": {"name": "centroid", "lat": 1.860751, "lon": -136.67064},
-                "NPV": {"name": "centroid", "lat": 35.952813, "lon": -161.22549},
-                "NWV": {"name": "centroid", "lat": 36.477125, "lon": -113.92880},
-                "SAΛ": {"name": "centroid", "lat": -62.739925, "lon": 39.47126},
-                "EAΛ": {"name": "centroid", "lat": -32.801097, "lon": 19.449089},
-                "SEΛ": {"name": "centroid", "lat": -33.290631, "lon": 64.944931},
-                "EPV": {"name": "centroid", "lat": -1.860751, "lon": 136.67064},
-                "SPV": {"name": "centroid", "lat": -35.952813, "lon": 161.225489},
-                "SEV": {"name": "centroid", "lat": -36.477125, "lon": 113.92880},
-                "WAV": {"name": "centroid", "lat": -1.860751, "lon": -43.328763},
-                "SAV": {"name": "centroid", "lat": -35.952813, "lon": -18.328413},
-                "SWV": {"name": "centroid", "lat": -36.477125, "lon": -66.347867},
-                "SPΛ": {
-                    "name": "centroid", "lat": -62.739925, "lon": -140.52874,
-                    "name": "bad girl", "lat": -45.372511693007, "lon": -148.055724862128
-                },
-                "WPΛ": {"name": "centroid", "lat": -32.801097, "lon": -159.899089},
-                "SWΛ": {"name": "centroid", "lat": -33.093812, "lon": -115.138392}
+            "bad": {"name": "poor", "lat": -71.7856153167678000,	"lon": 0.4539945781898160},
+            "EAV": {"name": "centroid", "lat": 1.860751, "lon": 43.328763},
+            "NAV": {"name": "centroid", "lat": 35.952813, "lon": 18.328413},
+            "NEV": {"name": "centroid", "lat": 36.477125, "lon": 66.347867},
+            "NPΛ": {"name": "centroid", "lat": 62.739925, "lon": 140.52874},
+            "EPΛ": {"name": "centroid", "lat": 32.801097, "lon": 159.38627},
+            "NEΛ": {"name": "centroid", "lat": 33.290631, "lon": 115.36871},
+            "NWΛ": {"name": "centroid", "lat": 62.739925, "lon": -39.47126},
+            "WAΛ": {"name": "centroid", "lat": 32.801097, "lon": -19.44909},
+            "NAΛ": {"name": "centroid", "lat": 33.290631, "lon": -64.94493},
+            "WPV": {"name": "centroid", "lat": 1.860751, "lon": -136.67064},
+            "NPV": {"name": "centroid", "lat": 35.952813, "lon": -161.22549},
+            "NWV": {"name": "centroid", "lat": 36.477125, "lon": -113.92880},
+            "SAΛ": {"name": "centroid", "lat": -62.739925, "lon": 39.47126},
+            "EAΛ": {"name": "centroid", "lat": -32.801097, "lon": 19.449089},
+            "SEΛ": {"name": "centroid", "lat": -33.290631, "lon": 64.944931},
+            "EPV": {"name": "centroid", "lat": -1.860751, "lon": 136.67064},
+            "SPV": {"name": "centroid", "lat": -35.952813, "lon": 161.225489},
+            "SEV": {"name": "centroid", "lat": -36.477125, "lon": 113.92880},
+            "WAV": {"name": "centroid", "lat": -1.860751, "lon": -43.328763},
+            "SAV": {"name": "centroid", "lat": -35.952813, "lon": -18.328413},
+            "SWV": {"name": "centroid", "lat": -36.477125, "lon": -66.347867},
+            "SPΛ": {
+                "name": "centroid", "lat": -62.739925, "lon": -140.52874,
+                "name": "bad girl", "lat": -45.372511693007, "lon": -148.055724862128
             },
+            "WPΛ": {"name": "centroid", "lat": -32.801097, "lon": -159.899089},
+            "SWΛ": {"name": "centroid", "lat": -33.093812, "lon": -115.138392}
+        },
         'places': {
             "EAV": {
                 "name": "Mogadishu, Somalia",

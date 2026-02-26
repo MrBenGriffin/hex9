@@ -58,7 +58,7 @@ class DMS(PointFormat):
         arr = pts.coords
         vals = np.array([arr]) if len(arr.shape) == 1 else arr
         for coords in vals:
-            lat_dms = dms(coords[0], "layer", "S")
+            lat_dms = dms(coords[0], "N", "S")
             lon_dms = dms(coords[1], "E", "W")
             result.append(f"{lat_dms}, {lon_dms}")
         if len(result) == 1:

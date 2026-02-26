@@ -364,9 +364,9 @@ class Util:
     # def e_grid(self, n, a=1.0):
     #     """Generates a grid of points within an equilateral"""
     #     e = 1e-40
-    #     hx = a / 2.0
+    #     hex_points = a / 2.0
     #     th = a * np.sqrt(3) / 6.0
-    #     abc = (-hx, -th), (e, 2*th), (hx, -th)
+    #     abc = (-hex_points, -th), (e, 2*th), (hex_points, -th)
     #     # print(abc)
     #     grid, _ = self.t_grid(n, abc)
     #     return np.unique(grid)
@@ -374,9 +374,9 @@ class Util:
     # def hh_grid(self, n, a=1.0, tol=1.0e-12):
     #     """Generates a grid of points within an equilateral - with half-hex polys"""
     #     e = 1e-40
-    #     hx = a / 2.0
+    #     hex_points = a / 2.0
     #     th = a * np.sqrt(3) / 6.0
-    #     abc = (-hx, -th), (e, 2*th), (hx, -th)
+    #     abc = (-hex_points, -th), (e, 2*th), (hex_points, -th)
     #     # print(abc)
     #     grid, hhx = self.t_grid(n, abc)
     #     gx, oi, ri = np.unique(np.floor(grid / tol).astype(int), return_index=True, return_inverse=True, axis=0)

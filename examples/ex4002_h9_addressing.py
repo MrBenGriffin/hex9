@@ -105,6 +105,8 @@ def poc_hex_pak():
 if __name__ == "__main__":
     reg = Registrar()
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
+
     exm = np.array([[0x16, 0x39, 0x3A, 0x35]])
     oid = 4
     vx_m = regions_xy(exm)

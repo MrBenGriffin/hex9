@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-For a given layer, generate the canonical triangle grid and optionally display.
+For a given hex_layer, generate the canonical triangle grid and optionally display.
 Last Tested 6 November 2025 √
 """
 import numpy as np
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 def octa_layer_stats(l: int, r=6371000.0):
     """
     Return triangle/vertex/edge counts and safe spacing estimates for a global
-    octahedral grid with layer indexing based on emergent hexagons.
+    octahedral grid with hex_layer indexing based on emergent hexagons.
 
     Parameters
     ----------
@@ -46,9 +46,9 @@ def octa_layer_stats(l: int, r=6371000.0):
 
 def run(rg: Registrar, layer: int = 3, octant_id: int = 1, plotting: bool = False, save=True):
     """
-    Triangular grid will be 9 triangles per octant at layer 0.
-    At each subsequent layer, the number of triangles will increase by 9 per triangle.
-    So the number of triangles will be 8*9**(layer+1).
+    Triangular grid will be 9 triangles per octant at hex_layer 0.
+    At each subsequent hex_layer, the number of triangles will increase by 9 per triangle.
+    So the number of triangles will be 8*9**(hex_layer+1).
     """
     b_oct = rg.domain('b_oct')
     cmp = b_oct.signs_by_id[octant_id]
@@ -98,7 +98,7 @@ def run(rg: Registrar, layer: int = 3, octant_id: int = 1, plotting: bool = Fals
         np.savez(
             f"grid_l{layer}_m{mode}_simplex.npz",
             components=cmp,          # octant-identity (3,)
-            depth=layer,             # mesh size = 9**(layer+1)
+            depth=layer,             # mesh size = 9**(hex_layer+1)
             tri_xy=tri_xy,           # triangle xy-coordinates (N_tri,3,2)
             uv_cent=uv_cent.coords,         # triangle uv-centroids (N_tri,2)
             xy_vert=b_vert.coords,

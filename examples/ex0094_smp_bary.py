@@ -29,6 +29,7 @@ def run(scale=2003):
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
 
     # Load in plate carrée - will use 2700x1350 Blue Marble here.
     img = image.imread(f'src/world5400x2700.png', 'png')

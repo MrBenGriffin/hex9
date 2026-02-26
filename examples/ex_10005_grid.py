@@ -24,12 +24,12 @@ def _in_dn(ẋ, y, vf, vc):
 
 
 def uv(n, p, h, m):
-    """Convert (n,p,h,m) to (u,v)"""
+    """Convert (n,tri_points,h,m) to (u,v)"""
     return n + p - 3, 8 - (3 * h) - m
 
 
 def nph(u, v, hn, m):
-    """Convert (u,v, h_numerator, m) to (n,p,h)"""
+    """Convert (u,v, h_numerator, m) to (n,tri_points,h)"""
     h = hn // 3
     n = (u - h - m + 6) >> 1
     p = (u + h + m) >> 1
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     # Decode has several non-geometrics (04,05,06, etc.) which we need to mask.
     # (1)√ identify the 42 valid geometric ids.
     # (2)√ to determine the mode of each geometric cell
-    # Because the H-layer is downward, rather than traditional
+    # Because the H-hex_layer is downward, rather than traditional
     # upward, we invert the parity of each address accordingly.
     # (3)√ To identify the Lattice-related U,V indices of each
     # of the 42 geometrically valid cell that determine their triangle-centroids.
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     #  50 / 54  / 58  /5c\  5d \  5e \ 5f
 
     # Unpack classifier thresholds
-    # h_idx, p_idx, n_idx = decode.astype(int).T  # Gather decode (96,3) into h,p,n arrays.
+    # h_idx, p_idx, n_idx = decode.astype(int).T  # Gather decode (96,3) into h,tri_points,n arrays.
     # m_idx = ((h_idx + p_idx + n_idx) & 1) ^ 1  # 0=V, 1=Λ
 
     # from geometry.

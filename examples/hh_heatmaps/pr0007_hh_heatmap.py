@@ -10,10 +10,8 @@ import pandas as pd
 from PIL import Image
 from matplotlib.colors import Normalize, LogNorm
 from hhg9 import Registrar, Points
-from hhg9.domains import GeneralGCD, EllipsoidCartesian, OctahedralCartesian, OctahedralBarycentric
 from hhg9.h9.polygon import enmesh
 from hhg9.h9.region import xy_regions
-from hhg9.projections import EllipsoidGCD, AKOctahedralEllipsoid
 from matplotlib import pyplot as plt, image, patches
 from matplotlib.collections import PolyCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -26,7 +24,7 @@ def heatmap(df, addresses, polys, layers, weights: dict | None = None):
     """
     Generates a hexbin heatmap from binned addresses data in barycentric space.
     If `weights` is provided (mapping address tuple -> value), those values are
-    used for the final layer instead of counting rows.
+    used for the final hex_layer instead of counting rows.
     """
     if df.empty:
         print("Heatmap data is empty. Nothing to plot.")
@@ -46,14 +44,14 @@ def heatmap(df, addresses, polys, layers, weights: dict | None = None):
         next_col = f'L{layer}'
         if last_col not in df.columns:
             continue
-        if next_col not in df.columns:  # deepest possible layer
+        if next_col not in df.columns:  # deepest possible hex_layer
             mask = df[last_col].notna().to_numpy()
         else:
             mask = (df[last_col].notna() & df[next_col].isna()).to_numpy()
         if not np.any(mask):
             continue
 
-        # Collect polygons in this layer
+        # Collect polygons in this hex_layer
         polys_for_layer = []
         # Iterate only over selected rows, but use precomputed tuples
         for i, ok in enumerate(mask):
@@ -157,7 +155,7 @@ def stage(file: str,
         cand = sorted(src_dir.glob(f"{file}__*_theta.npy"), key=lambda p: p.stat().st_mtime, reverse=True)
         base = cand[0].name.replace("_theta.npy","") if cand else file
 
-    # Highest rendered layer tag (e.g., L12) for distinct outputs per run
+    # Highest rendered hex_layer tag (e.g., L12) for distinct outputs per run
     hi_layer = layer_range[1] - 1
     layer_tag = f"L{hi_layer:02d}"
 
@@ -190,7 +188,7 @@ def stage(file: str,
     matrix = np.array([[cos_, -sin_], [sin_, cos_]])
 
     pop_data = np.load(pop_f)
-    # Normalize population input: allow (layer,) weights or Nx2/3 [lon,lat,(w)]
+    # Normalize population input: allow (hex_layer,) weights or Nx2/3 [lon,lat,(w)]
     pop_weights = None
     if pop_data.ndim == 1:
         pop_weights = pop_data.astype(float)
@@ -207,13 +205,14 @@ def stage(file: str,
     if pos_c.shape != (4, 3):
         raise ValueError(f"[pr0007] invalid cmp shape: expected (4,3), got {pos_c.shape}")
 
-     reg = Registrar()
-    g_gcd = GeneralGCD(reg)
-    c_ell = EllipsoidCartesian(reg)
-    c_oct = OctahedralCartesian(reg)
-    b_oct = OctahedralBarycentric(reg, c_oct)
-    EllipsoidGCD(reg)
-    AKOctahedralEllipsoid(reg).set_accuracy(0.01) # 1cm per-hex area.
+    reg = Registrar()
+    g_gcd = reg.domain('g_gcd')
+    c_ell = reg.domain('c_ell')
+    c_oct = reg.domain('c_oct')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('../src/l4_polished.npz')
+    ak = reg.projection('oct_ell')
+    ak.set_accuracy(0.0000000001)
 
     # --- Population‑driven classification/enmesh ---
     # Use rotated border only for plotting extent
@@ -227,8 +226,8 @@ def stage(file: str,
     pop_bry_f = src_dir / f"{base}_bry.npy"
     pop_cmp_f  = src_dir / f"{base}_bry_cmp.npy"
     if pop_bry_f.exists() and pop_cmp_f.exists():
-        pop_bary = np.load(pop_bry_f)              # (layer,2)
-        pop_cmp  = np.load(pop_cmp_f)               # (layer,3)
+        pop_bary = np.load(pop_bry_f)              # (hex_layer,2)
+        pop_cmp  = np.load(pop_cmp_f)               # (hex_layer,3)
         pop_pts_b = Points(pop_bary, b_oct, components=pop_cmp)
         if debug:
             print(f"[pr0007] loaded precomputed bary points: {pop_bary.shape}")
@@ -254,7 +253,7 @@ def stage(file: str,
     _, mo_pop = pop_pts_b.cm()
     uri_pop   = xy_regions(pop_pts_b.coords, mo_pop, hex_layers)
 
-    # Build per‑cell weights for the final layer (count of children or sum of weights)
+    # Build per‑cell weights for the final hex_layer (count of children or sum of weights)
     L_final = layer_range[1] - 1
     if L_final <= 0:
         raise ValueError(f"[pr0007] invalid layer_range {layer_range}")
@@ -287,9 +286,9 @@ def stage(file: str,
             if layer_counts:
                 msg = ", ".join([f"L{n}:{c}" for (n, c) in layer_counts])
                 total = int(counter.df.shape[0])
-                print(f"[pr0007] address counts by layer [{start},{stop}): {msg}  | total={total}")
+                print(f"[pr0007] address counts by hex_layer [{start},{stop}): {msg}  | total={total}")
         except Exception as e:
-            print(f"[pr0007] layer-count report failed: {e}")
+            print(f"[pr0007] hex_layer-count report failed: {e}")
 
     layer_polys, final_pops = heatmap(counter.df, ums_mesh, shapes_mesh, layers, weights=weights_by_addr)
     if not layer_polys:
@@ -535,7 +534,7 @@ if __name__ == '__main__':
     p.add_argument('--preset', type=str, help="named bounds preset (per-dataset, see bounds_presets.yaml)")
     p.add_argument('--tag', type=str, help='explicit signature tag to embed in output filenames')
     p.add_argument('--layers', type=int, nargs=2, default=(4, 12),
-                   help='[start, end): render layers in this half-open range; e.g. 12 13 renders only layer 12')
+                   help='[start, end): render layers in this half-open range; e.g. 12 13 renders only hex_layer 12')
     p.add_argument('--hex-layers', type=int, default=15,
                    help='classification depth for hex addressing (max depth passed to ugc_regions)')
     p.add_argument('--cmap', type=str, default='plasma')

@@ -43,6 +43,9 @@ def run():
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')           # Pixel Plate Carrée
     c_oct = reg.domain('c_oct')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
+
 
     # Load cached octahedral and colours from original.
     pc_map = 'world1350x675'

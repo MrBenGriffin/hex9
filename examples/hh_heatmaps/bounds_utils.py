@@ -129,7 +129,7 @@ def resolve_bounds(
 
 def apply_bounds(lat_lon: np.ndarray, bounds: Tuple[float, float, float, float] | None) -> np.ndarray:
     """Filter rows by (min_lat, min_lon, max_lat, max_lon) bounds if provided.
-    Returns the filtered lat_lon (layer,2).
+    Returns the filtered lat_lon (hex_layer,2).
     """
     if not bounds:
         return lat_lon

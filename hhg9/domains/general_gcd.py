@@ -34,3 +34,17 @@ class GeneralGCD(Domain):
         if pts.ndim == 2 and pts.shape[1] == 2:
             return Points(pts, self)
         raise ValueError(f'{pts.shape} seems wrong for latitude/longitude array.')
+
+
+    def bounds(self, pts: Points):
+        """
+        Take an array and return a bounding box for this domain.
+        :param pts:
+        :return: xmin, xmax, ymin, ymax
+        """
+        lat, lon = pts.coords[..., 0], pts.coords[..., 1]
+        min_lat, max_lat = np.min(lat), np.max(lat)
+        min_lon, max_lon = np.min(lon), np.max(lon)
+        return min_lon, max_lon, min_lat, max_lat
+
+

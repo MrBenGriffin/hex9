@@ -75,10 +75,12 @@ def stage(file: str,
     cmp_file.parent.mkdir(parents=True, exist_ok=True)
     reg = Registrar()
     b_oct = reg.domain('b_oct')
+    b_oct.set_warp('../src/l4_polished.npz')
+
     g_gcd = reg.domain('g_gcd')
     pts = Points(lat_lon, g_gcd)
     del lat_lon
-    reg.projection('gcd_bry').set_accuracy(accuracy)
+    # reg.projection('gcd_bry').set_accuracy(accuracy)
     start_time = time.perf_counter()
     bry = reg.project(pts, [g_gcd, b_oct])
     seconds = time.perf_counter() - start_time

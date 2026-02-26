@@ -52,10 +52,7 @@ class OctahedralNet(CompositeDomain):
             layout = 'mortar'
         super().__init__(registrar, f'n_oct:{layout}', 2)
         tp = H9P.sv  # mode vertices
-        # self.sides = {}
-        # self.projs = {}
         self.face_tris = {}
-        # self.sign_to_side = {}
         self.c_oct = c_oct
         self.b_oct = b_oct
         self.layout = net_layouts[layout]
@@ -72,7 +69,6 @@ class OctahedralNet(CompositeDomain):
         for sign, val in self.layout['grid'].items():
             oid = H9O.cmp_oid[sign]
             side = H9O.oid_str[oid]
-            # oid = self.c_oct.face_id[side]
             bary = b_oct.sides[side]
             gx, gy, th = val
             x_off = gx * self.GW
@@ -95,7 +91,6 @@ class OctahedralNet(CompositeDomain):
                 c2f = self.layout['c2'][sign]
                 c2x = [(x * self.GW, y * self.GH, (t % 6) * self.RT) for (x, y, t) in c2f]
                 face.c2trans = c2x
-
 
     def ratio(self):
         """Return width/height ratio"""
@@ -146,7 +141,7 @@ class OctahedralNet(CompositeDomain):
 
     def pt_face(self, pts: NDArray) -> NDArray:
         """Vectorised: identify octant sign for each point in net coordinates.
-        Returns (layer,3) int8 array of signs (±1), or (0,0,0) for invalid.
+        Returns (hex_layer,3) int8 array of signs (±1), or (0,0,0) for invalid.
         """
         num_points = pts.shape[0]
         out = np.zeros((num_points, 3), dtype=np.int8)

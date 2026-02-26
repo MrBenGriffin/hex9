@@ -6,7 +6,7 @@
 Finding acceptable authalic reference points.
 11.87976511 45.
 At an address that is normative,
-for each layer calculate the area of a hexagon.
+for each hex_layer calculate the area of a hexagon.
 Compare with the ak_area values.
 
 Last Tested
@@ -36,7 +36,7 @@ import matplotlib as mpl
 #
 #     # Now calculate their area as a metric. (ignore pops).
 #     gm2 = 510_065_621_724_154.6  # total surface area of WGS-84 (m²)
-#     bins = 12*9**layers          # number of hexes at this layer
+#     bins = 12*9**layers          # number of hexes at this hex_layer
 #     w_area_m2_mean = gm2/bins    # ideal equal-area per hex
 #
 #     c_pts = reg.project(pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.
@@ -132,13 +132,11 @@ def min_authalic(reg, gxd, depth):
     e1_xyz = q[:, 0]  # 3-vector
     e2_xyz = q[:, 1]  # 3-vector
     ref_j_pts = ake.jacobian(ref_o.coords)
-    ref_v1 = ref_j_pts @ e1_xyz  # (layer, 3)
-    ref_v2 = ref_j_pts @ e2_xyz  # (layer, 3)
-    ref_cross = np.cross(ref_v1, ref_v2)  # (layer, 3)
-    ref_scale = np.linalg.norm(ref_cross, axis=1)  # (layer,)
+    ref_v1 = ref_j_pts @ e1_xyz  # (hex_layer, 3)
+    ref_v2 = ref_j_pts @ e2_xyz  # (hex_layer, 3)
+    ref_cross = np.cross(ref_v1, ref_v2)  # (hex_layer, 3)
+    ref_scale = np.linalg.norm(ref_cross, axis=1)  # (hex_layer,)
     ref_clip = np.clip(ref_scale, 1e-20, None)
-    # w = ref_areas.astype(float)
-    # ref_mean = np.sum(ref_clip * w) / np.sum(w)
     w_param = ref_areas / ref_clip  # ≈ param-space area weights
     ref_mean = np.sum(ref_clip * w_param) / np.sum(w_param)  # param-area mean of s
     log_ref = np.log(ref_mean)  # reference log-density ℓ
@@ -147,10 +145,10 @@ def min_authalic(reg, gxd, depth):
         g3d = mid_lat(gxd)
         uvw = reg.project(g3d, ['g_gcd', 'c_ell', 'c_oct'])
         j_pts = ake.jacobian(uvw.coords)
-        v1 = j_pts @ e1_xyz  # (layer, 3)
-        v2 = j_pts @ e2_xyz  # (layer, 3)
-        cross = np.cross(v1, v2)  # (layer, 3)
-        area_scale = np.linalg.norm(cross, axis=1)  # (layer,)
+        v1 = j_pts @ e1_xyz  # (hex_layer, 3)
+        v2 = j_pts @ e2_xyz  # (hex_layer, 3)
+        cross = np.cross(v1, v2)  # (hex_layer, 3)
+        area_scale = np.linalg.norm(cross, axis=1)  # (hex_layer,)
         area_clip = np.clip(area_scale, 1e-20, None)
         density = np.log(area_clip)  # authalic log-density ℓ
         gxd = mid_select(g3d, density, log_ref)
@@ -180,6 +178,8 @@ if __name__ == '__main__':
     start = np.array([[11.0, 45.0], [12.0, 45.0]])
     rg = Registrar()  # Manage Domains & Projections
     g_gcd = rg.domain('g_gcd')
+    b_oct = rg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
     pts = Points(start, g_gcd)
     pt = min_authalic(rg, pts, 3)
 

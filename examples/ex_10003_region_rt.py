@@ -47,6 +47,7 @@ if __name__ == '__main__':
     reg = Registrar()  # Manage Domains & Projections
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
+    # b_oct.set_warp('src/l4_polished.npz')
 
     samples = np.array([
         [0.707106781029412934, -0.4082482904638631],

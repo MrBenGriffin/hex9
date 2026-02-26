@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-For a given layer, generate the canonical triangle grid and display on the globe.
+For a given hex_layer, generate the canonical triangle grid and display on the globe.
 Last Tested 6 November 2025 √
 """
 import numpy as np
@@ -122,7 +122,7 @@ def find_max_safe_scale(reg, ma_file, layer=3, octant_id=0, degree=None,
 def get_grid(reg: Registrar, layer: int = 3, octant_id: int = 0):
     """
     :param reg: h9 Registrar
-    :param layer: layer index (0 is coarsest: 72 global triangles)
+    :param layer: hex_layer index (0 is coarsest: 72 global triangles)
     :param octant_id: which octant to extract (0–7); default is 1
     :return: b_oct - Points of triangle grid, in clockwise order.
     Because this only needs a single octant - we can choose any single octant.
@@ -139,9 +139,9 @@ _grid_cache = {}
 
 
 def get_cache(rg: Registrar, layer: int = 3, octant_id: int = 0):
-    """Compute and cache geometric data (grid, centers, areas, authalic ell) for a given layer/octant.
+    """Compute and cache geometric data (grid, centers, areas, authalic ell) for a given hex_layer/octant.
 
-    The result is cached in-memory keyed by (layer, octant_id) so repeated calls with different
+    The result is cached in-memory keyed by (hex_layer, octant_id) so repeated calls with different
     MA coefficient files or warp scales don't redo the heavy geometry work.
     """
     key = (layer, octant_id)
@@ -173,9 +173,9 @@ def get_cache(rg: Registrar, layer: int = 3, octant_id: int = 0):
 
 def run(rg: Registrar, ma_file, layer: int = 3, octant_id: int = 0, warp_scale: float = 1.0, idx=0):
     """
-    Triangular grid will be 9 triangles per octant at layer 0.
-    At each subsequent layer, the number of triangles will increase by 9 per triangle.
-    So the number of triangles will be 8*9**(layer+1).
+    Triangular grid will be 9 triangles per octant at hex_layer 0.
+    At each subsequent hex_layer, the number of triangles will increase by 9 per triangle.
+    So the number of triangles will be 8*9**(hex_layer+1).
     """
     cache = get_cache(rg, layer=layer, octant_id=octant_id)
     mode = cache['mode']
@@ -211,7 +211,7 @@ def run(rg: Registrar, ma_file, layer: int = 3, octant_id: int = 0, warp_scale: 
     rmse_ell = np.sqrt(np.mean(ell ** 2))
     rmse_w = np.sqrt(np.mean(w_ell ** 2))
     rmse_delta = rmse_w - rmse_ell
-    print(f"[w50] layer={layer} mode={mode} warp_scale={warp_scale}")
+    print(f"[w50] hex_layer={layer} mode={mode} warp_scale={warp_scale}")
     print(f"  ell:   min={ell.min():+.4f} max={ell.max():+.4f} std={ell.std():.4f}")
     print(f"  w_ell: min={w_ell.min():+.4f} max={w_ell.max():+.4f} std={w_ell.std():.4f}")
     print(f"  RMSE(ell vs 0)   = {rmse_ell:.6f}")
@@ -247,10 +247,10 @@ if __name__ == '__main__':
         # 'ma_psi_l5_sft_lambda_925e2_l5_m0_n16_vtw010820.npz',  # 0.000921085691452027
     ]):
         ma_file = file
-        # run(reg, ma_file, layer, octant_id)
+        # run(reg, ma_file, hex_layer, octant_id)
 
         # First, run with zero warp to inspect gradient norms and derive a geometric scale.
-        # grad_norm = run(reg, ma_file, layer, octant_id, warp_scale=0.0)
+        # grad_norm = run(reg, ma_file, hex_layer, octant_id, warp_scale=0.0)
         # gmin, gmed, gmax = grad_norm.min(), np.median(grad_norm), grad_norm.max()
         # print(f"[w50_main] grad_norm stats: min={gmin:.3e} med={gmed:.3e} max={gmax:.3e}")
 

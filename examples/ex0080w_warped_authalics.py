@@ -1,0 +1,191 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+
+"""
+For a given layer, compose a reference address for each
+hexagon in that layer - generate the set of hexagons at that layer
+and display on the globe.
+
+Last Tested
+26 December 2025 0.1.0a4 (passed)
+16 December 2025 0.1.0a3 (passed)
+25 November 2025 (passed)
+"""
+import numpy as np
+from matplotlib import pyplot as plt, colors
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from hhg9 import Registrar, Points
+from hhg9.algorithms.distance import wgs84_area
+from hhg9.h9 import H9_RA, H9O, H9K
+from hhg9.h9.classifier import location
+from hhg9.h9.protocols import BaryLoc
+from hhg9.h9.region import regions_xy
+from hhg9.h9.polygon import hex_poly_layer
+import matplotlib as mpl
+
+
+def chain_generator(initial_seed, depth, props=H9_RA.props, modes=H9_RA.modes):
+    """Generator for comprehensive region chain generation"""
+    def _recurse(current_chain):  # Recursive Closure
+        if len(current_chain) - 2 == depth:  # Stop condition
+            yield current_chain
+            return
+        seed = current_chain[-1]  # Get the current seed (last element)
+        children = props[modes[seed]].flatten()
+        for child in children:  # Iterate and dive deeper
+            yield from _recurse(current_chain + [child])  # Create new list
+    yield from _recurse([initial_seed])  # yield from closure.
+
+
+def rgba_from(arr: np.ndarray, cmap_name: str = "plasma", norm=None, alpha: float = 1.0):
+    """Return RGBA array from a 1D array of values.
+
+    Parameters
+    ----------
+    arr : array-like
+        Scalar values to map to colours.
+    cmap_name : str
+        Name of the Matplotlib colormap.
+    norm : matplotlib.colors.Normalize or None
+        Normalization object. If None, a simple Normalize based on arr
+        is constructed.
+    alpha : float
+        Global alpha to apply to the colours.
+    """
+    arr = np.asarray(arr, dtype=float)
+    if norm is None:
+        norm = colors.Normalize(vmin=arr.min(), vmax=arr.max())
+
+    base_cmap = plt.get_cmap(cmap_name)
+
+    # If the colormap exposes a `.colors` table (ListedColormap), build a
+    # new ListedColormap with an explicit alpha channel so we don't mutate
+    # the global colormap in-place.
+    if hasattr(base_cmap, "colors"):
+        base_colors = np.asarray(base_cmap.colors)
+        if base_colors.shape[1] == 3:
+            # Append alpha channel
+            alpha_col = np.full((base_colors.shape[0], 1), alpha, dtype=float)
+            rgba_colors = np.concatenate([base_colors, alpha_col], axis=1)
+        else:
+            rgba_colors = base_colors.copy()
+            rgba_colors[:, 3] = alpha
+        cmap = colors.ListedColormap(rgba_colors, name=base_cmap.name + "_with_alpha")
+    else:
+        # For continuous maps, just use the base cmap and apply alpha after
+        cmap = base_cmap
+
+    rgba = cmap(norm(arr))
+
+    # If the colormap didn't already encode alpha, enforce it here.
+    if rgba.shape[1] == 4:
+        rgba[:, 3] = alpha
+
+    return rgba, norm
+
+
+def mplot_ax_vector(ax):
+    """mplot3d uses azim around z and elev from xy-plane"""
+    az = np.deg2rad(ax.azim)
+    el = np.deg2rad(ax.elev)
+    return np.array([np.cos(el)*np.cos(az), np.cos(el)*np.sin(az), np.sin(el)])
+
+
+def cull_backface(arr, axis):
+    """back-face culling"""
+    centroids = arr.mean(axis=1)
+    sides = centroids @ axis
+    return sides >= 0
+
+
+def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
+    """Display a 3D point cloud using matplotlib"""
+    mpl.rcParams['path.simplify'] = False
+    fig = plt.figure(figsize=(15, 15), dpi=200, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=30, azim=40)
+    axis = mplot_ax_vector(ax)
+    all_polys = arr.coords.reshape(-1, poly_len, 3)
+    mask = cull_backface(all_polys, axis)
+    front = all_polys[mask]
+    # front = all_polys
+    max_abs = float(np.max(np.abs(scores)))
+    norm = colors.TwoSlopeNorm(vcenter=0.0, vmin=-max_abs, vmax=+max_abs)
+    cmap_name = 'RdBu_r'
+    sm = plt.cm.ScalarMappable(cmap=cmap_name, norm=norm)
+    sm.set_array([])
+    rgba, _norm = rgba_from(scores, cmap_name, norm=norm)
+    # pops = scores[mask]
+    ax.set_proj_type('ortho')  # FOV = 0 deg
+    if True:
+        ax.set_xlim(-4e+6, 4e+6)  # fill the area with the map.
+        ax.set_ylim(-4e+6, 4e+6)
+        ax.set_zlim(-4e+6, 4e+6)
+    polys = [p for p in front]
+
+    collection = Poly3DCollection(polys, ec='black', facecolors=rgba[mask], alpha=0.9, linewidth=0.02)
+    ax.add_collection(collection)
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_axis_off()
+    lil, big = np.min(scores), np.max(scores)
+    # authalic_p98 = np.quantile(np.abs(scores), 0.98)
+    # p98_frac = 100 * np.expm1(authalic_p98)
+    ax.title.set_text(f'min:{lil}, max:{big} deviation from ideal.')
+    plt.tight_layout()
+    fig.savefig(f"output/ex0080w_{layers}.png", dpi=400)
+    print(f'fig saved at output/ex0080w_{layers}.png')
+
+
+def get_data(reg: Registrar, depth, mode=None):
+    """Load up global sample data"""
+    # grab generation for given depth
+    b_oct = reg.domain('b_oct')
+    all_rgn = [   # these are 0..11
+        list(chain_generator(H9_RA.proto[0], depth)),
+        list(chain_generator(H9_RA.proto[1], depth))
+    ]
+    rgn = H9_RA.rid2cell[np.array(all_rgn)]  # cell addresses.
+    sides = []
+    for oc in range(8):  # all octants
+        mo = H9O.oid_mo[oc]
+        cmp = H9O.oid_cmp[oc]
+        if mode is not None and mo != mode:
+            continue
+        rgc = rgn[mo]
+        xym = regions_xy(rgc)
+        xy = xym[:, :-1]
+        sides.append(Points(xy, b_oct, cmp))
+    result = Points.concat(sides)
+    return result
+
+
+def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
+    """
+    Find hexagons for data, and display on a 'globe'.
+    """
+    pts, pops = hex_poly_layer(b_pts, layers)
+
+    # Now calculate their area as a metric. (ignore pops).
+    gm2 = 510_065_621_724_154.6  # total surface area of WGS-84 (m²)
+    bins = 12*9**layers          # number of hexes at this layer
+    w_area_m2_mean = gm2/bins    # ideal equal-area per hex
+    h_pts = pts.copy()
+    c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.
+    g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
+    w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
+    w_adj = np.abs(w_area_m2 / w_area_m2_mean) + 1e-12
+    score = np.log(w_adj)  # authalic log-density ℓ
+    snow_globe(c_pts, 6, score, f'{layers}')
+
+
+if __name__ == '__main__':
+    depth = 7  # 0,...5 √
+    rg = Registrar()  # Manage Domains & Projections
+    b_oct = rg.domain('b_oct')
+    b_oct.set_warp('src/l4_polished.npz')
+    data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
+    hexify(rg, data, layers=depth)
+
+

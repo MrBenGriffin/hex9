@@ -40,8 +40,8 @@ class EllipsoidCartesian(Domain):
     def adopt(self, pts: NDArray) -> Points:
         """
         Wrap raw Cartesian data as Points in this domain.
-        Accepts (layer, 3) arrays only.
+        Accepts (hex_layer, 3) arrays only.
         """
         if pts.ndim == 2 and pts.shape[1] == 3:
             return Points(pts, domain=self)
-        raise ValueError(f"EllipsoidCartesian expects shape (layer, 3), got {pts.shape}")
+        raise ValueError(f"EllipsoidCartesian expects shape (hex_layer, 3), got {pts.shape}")

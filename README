@@ -8,6 +8,9 @@ Examples and further documentation may be found on the git repository.
 
 #### Changelog
 ```
+0.1.0a5 More bug-fixes - especially regarding grids.
+        A new example, showing multiple hexagons over Chiginagak volcano, AK.
+        A little more documentation.
 0.1.0a4 Couple of small bug-fixes,
         A couple of new features
 0.1.0a3 Rewrite of the hex address and hex polygon code.

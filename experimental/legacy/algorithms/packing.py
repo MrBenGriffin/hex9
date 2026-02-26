@@ -56,7 +56,7 @@ def u64_hx_words(octant, mode0, regions, depth):
 
     context_initial = np.array([0, 1, 2], dtype=np.uint8)
 
-    # Header nibble (layer 0): octant at the MSB nibble of word 0
+    # Header nibble (hex_layer 0): octant at the MSB nibble of word 0
     hdr = octant.astype(np.uint64) & np.uint64(0xF)
     words[:, 0] |= (hdr << np.uint64(60))
 
@@ -120,7 +120,7 @@ def u64_pack(values, depth_to_use=None):
 def u64_layers(words: np.ndarray, positions: np.ndarray = None) -> np.ndarray:
     """
     Generic nibble extractor for BCD-packed uint64 words.
-    - words:     (N, W) uint64, MS word first
+    - words:     (hex_layer, W) uint64, MS word first
     - positions: array-like of nibble indices, where within each word:
                    0 = MS nibble,
                    1 = next nibble (i.e., immediately below MS),
@@ -128,7 +128,7 @@ def u64_layers(words: np.ndarray, positions: np.ndarray = None) -> np.ndarray:
                    15 = LS nibble.
                  Globally, positions increments across words: 16 = MS nibble of word 1, etc.
                  If None, we return **all nibbles** including the MS header nibble at position 0.
-    Returns: (N, len(positions)) uint8, raw nibble values (0..15)
+    Returns: (hex_layer, len(positions)) uint8, raw nibble values (0..15)
     """
     W = words.shape[1]
     max_pos = W * 16

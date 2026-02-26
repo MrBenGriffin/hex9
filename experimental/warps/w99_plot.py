@@ -87,7 +87,7 @@ def plot_grid(grid_pts, simplex: bool = False,
 
     if shrink != 1.0:
         # Shrink each triangle towards its centroid so edges are visually separated
-        centroids = tris.mean(axis=1, keepdims=True)  # (N,1,2)
+        centroids = tris.mean(axis=1, keepdims=True)  # (hex_layer,1,2)
         tris = centroids + (tris - centroids) * shrink
 
     if facecolors is None:
@@ -137,7 +137,7 @@ def plot_bwr(idx, grid_pts, bv, wv, rv, title='Base, Warp, Residual', mask_centr
     tris = grid_pts.coords.reshape([-1, 3, 2])
 
     n_tri = tris.shape[0]
-    centroids = tris.mean(axis=1)  # (N,2)
+    centroids = tris.mean(axis=1)  # (hex_layer,2)
 
     mask = None
 
@@ -240,12 +240,12 @@ def plot_mesh(v, t, t_val, simplex: bool = False, title: str | None = None, cmap
 
     Parameters
     ----------
-    v : (N,2) array
+    v : (hex_layer,2) array
         Vertex coordinates.
     t : (M,3) array
         Triangle indices (into v).
-    t_val : (N,) or (M,) array
-        Scalar data. If length == N, interpreted as per-vertex values.
+    t_val : (hex_layer,) or (M,) array
+        Scalar data. If length == hex_layer, interpreted as per-vertex values.
         If length == M, interpreted as per-triangle values and averaged
         onto vertices for plotting.
     """

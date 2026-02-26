@@ -35,8 +35,8 @@ class OctantXYUV(Projection):
         Normally we do not clip during a projection, but barycentric UV only makes sense between 0 and 1.
         """
         n = xy.shape[0]
-        xy1 = np.column_stack([xy, np.ones(n, dtype=float)])  # (layer,3)
-        bary = xy1 @ self.uv_matrix.T  # (layer,3)
+        xy1 = np.column_stack([xy, np.ones(n, dtype=float)])  # (hex_layer,3)
+        bary = xy1 @ self.uv_matrix.T  # (hex_layer,3)
         bary = np.clip(bary, 0.0, 1.0)  # or np.clip(bary, -1e-12, 1.0 + 1e-12)
         s = bary.sum(axis=1, keepdims=True)
         s[s == 0.0] = 1.0
@@ -54,4 +54,4 @@ class OctantXYUV(Projection):
         v = uv[:, 1]
         a = 1.0 - (u + v)
         auv = np.column_stack([a, u, v])
-        return auv @ self.abc  # (layer,3) @ (3,2) -> (layer,2)
+        return auv @ self.abc  # (hex_layer,3) @ (3,2) -> (hex_layer,2)

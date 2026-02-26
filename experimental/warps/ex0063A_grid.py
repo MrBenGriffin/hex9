@@ -1,6 +1,6 @@
 """
 Part of the H9 project
-For a given layer, generate the canonical triangle grid
+For a given hex_layer, generate the canonical triangle grid
 and display on the globe.
 Last Tested 19 October 2025 √
 """
@@ -348,9 +348,9 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
 
 if __name__ == '__main__':
     """
-    Triangular grid will be 9 triangles per octant at layer 0
-    At each subsequent layer, the number of triangles will increase by 9 per triangle.
-    So the number of triangles will be 8*9**(layer+1)
+    Triangular grid will be 9 triangles per octant at hex_layer 0
+    At each subsequent hex_layer, the number of triangles will increase by 9 per triangle.
+    So the number of triangles will be 8*9**(hex_layer+1)
     """
     # --- Config ---
     depth = 5

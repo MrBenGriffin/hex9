@@ -15,7 +15,7 @@ from bounds_utils import load_presets, resolve_bounds, needs_run
 from hhg9 import Registrar, Points
 
 
-def north_arrow(ax, centroid, poly, color, scale=0.12, label="layer"):
+def north_arrow(ax, centroid, poly, color, scale=0.12, label="hex_layer"):
     """Draw a north-pointing arrow above the given polygon’s centroid.
     The arrow length scales with the polygon’s extent so it remains visible for tiny patches.
     """
@@ -140,11 +140,8 @@ def _orient_theta_by_north(theta: float, north_vec_boct: np.ndarray) -> float:
     return best_theta
 
 
-def compute_north_vector_boct(centroid_boct: np.ndarray, reg: Registrar,
-                               g_gcd: GeneralGCD, c_ell: EllipsoidCartesian,
-                               c_oct: OctahedralCartesian, b_oct: OctahedralBarycentric,
-                               comp_row: np.ndarray,
-                               dlat: float = 1e-6) -> np.ndarray:
+def compute_north_vector_boct(centroid_boct: np.ndarray, reg: Registrar, g_gcd, c_ell, c_oct, b_oct,
+                              comp_row: np.ndarray, dlat: float = 1e-6) -> np.ndarray:
     """Compute the local geographic north vector in b_oct coordinates at the given centroid.
     We inverse-project the centroid to GCD, nudge latitude by +dlat (same lon), and project back.
     Returns an unnormalized 2D vector in b_oct space; caller may pixels it for plotting.
@@ -165,7 +162,7 @@ def compute_north_vector_boct(centroid_boct: np.ndarray, reg: Registrar,
 
 
 def draw_north_arrow(ax, origin: np.ndarray, vec: np.ndarray, poly: np.ndarray,
-                      color: str, scale: float = 0.12, label: str = "layer") -> None:
+                      color: str, scale: float = 0.12, label: str = "hex_layer") -> None:
     """Draw a north arrow from origin along `vec`, scaled to polygon extent.
     - `origin`: (1,2) array-like in b_oct coords
     - `vec`: geographic north direction at origin in b_oct coords
@@ -196,9 +193,7 @@ def draw_north_arrow(ax, origin: np.ndarray, vec: np.ndarray, poly: np.ndarray,
 
 
 def choose_rotation_and_visualize(corners: np.ndarray, centroid: np.ndarray,
-                                  reg: Registrar, g_gcd: GeneralGCD,
-                                  c_ell: EllipsoidCartesian, c_oct: OctahedralCartesian,
-                                  b_oct: OctahedralBarycentric, comp_row: np.ndarray, ax=None):
+                                  reg: Registrar, g_gcd, c_ell, c_oct, b_oct, comp_row: np.ndarray, ax=None):
     methods = {
         "axis-mean": axis_mean_rotation(corners),
         "pca":       pca_rotation(corners),
@@ -341,12 +336,12 @@ def stage(file: str,
 
     # Registrar / domains
     reg = Registrar()
-    g_gcd = GeneralGCD(reg)
-    c_ell = EllipsoidCartesian(reg)
-    c_oct = OctahedralCartesian(reg)
-    b_oct = OctahedralBarycentric(reg, c_oct)
-    EllipsoidGCD(reg)
-    ak = AKOctahedralEllipsoid(reg)
+    g_gcd = reg.domain('g_gcd')
+    c_ell = reg.domain('c_ell')
+    c_oct = reg.domain('c_oct')
+    b_oct = reg.domain('b_oct')
+    b_oct.set_warp('../src/l4_polished.npz')
+    ak = reg.projection('oct_ell')
     ak.set_accuracy(0.0000000001)
 
     # Build GCD rectangle and project to b_oct

@@ -84,10 +84,10 @@ def metric_from_mode(mode: int):
 @lru_cache(maxsize=None)
 def load_simplex_grid(layer: int, mode: int):
     """
-    Cached loader for the simplex grid NPZ for a given (layer, mode).
+    Cached loader for the simplex grid NPZ for a given (hex_layer, mode).
 
     This avoids re-reading the same file from disk when `run` is called
-    repeatedly for the same (layer, mode) pair.
+    repeatedly for the same (hex_layer, mode) pair.
     """
     fname = Path(f"grid_l{layer}_m{mode}_simplex.npz")
     repo = np.load(fname, allow_pickle=True)
@@ -127,7 +127,7 @@ def bernstein_eval_vec(a, b, c, n, terms, coeffs):
 
     Parameters
     ----------
-    a, b, c : array_like, shape (N,)
+    a, b, c : array_like, shape (hex_layer,)
         Barycentric coords (a+b+c=1).
     n : int
         Total Bernstein degree.
@@ -138,7 +138,7 @@ def bernstein_eval_vec(a, b, c, n, terms, coeffs):
 
     Returns
     -------
-    y : ndarray, shape (N,)
+    y : ndarray, shape (hex_layer,)
         Fitted values at each point.
     """
     a = np.asarray(a, dtype=float)
@@ -154,7 +154,7 @@ def bernstein_eval_vec(a, b, c, n, terms, coeffs):
     if coeffs.shape[0] != k_terms:
         raise ValueError(f"coeffs length {coeffs.shape[0]} != number of terms {k_terms}")
 
-    # Build basis matrix B (N, K)
+    # Build basis matrix B (hex_layer, K)
     b_matrix = np.empty((n_pts, k_terms), dtype=float)
     for idx, (i, j, k) in enumerate(terms):
         # sanity: i+j+k should equal n
@@ -163,7 +163,7 @@ def bernstein_eval_vec(a, b, c, n, terms, coeffs):
         binom = comb(n, i) * comb(n - i, j)
         b_matrix[:, idx] = binom * (a**i) * (b**j) * (c**k)
 
-    # Apply coefficients → shape (N,)
+    # Apply coefficients → shape (hex_layer,)
     return b_matrix @ coeffs
 
 
@@ -447,7 +447,7 @@ def run(rg, layer, octant_id, conf, *, tweak='base', plot=False, save=True, diag
     uv_vert, v_ell = load_simplex_grid(layer, mode)
     ell = v_ell - v_ell.mean()
     if diagnostics:
-        print(f"[w20] layer={layer} mode={mode} ell stats: min={ell.min():.4f}, max={ell.max():.4f}, mean={ell.mean():.4f}, std={ell.std():.4f}")
+        print(f"[w20] hex_layer={layer} mode={mode} ell stats: min={ell.min():.4f}, max={ell.max():.4f}, mean={ell.mean():.4f}, std={ell.std():.4f}")
     n_fit = conf['n_fit']        # number of Bernstein terms to fit
     neumann = conf['neumann']    # edge sampling for BC/Neumann rows
     ns_fac = conf['ns_fac']      # Neumann damping factor
