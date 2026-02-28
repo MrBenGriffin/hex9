@@ -12,7 +12,7 @@ def u64_pack(values, depth_to_use=None):
     """Generate u64 addresses (MSB-first within each 64-bit word)."""
     val_count = values.shape[0]
     max_depth = values.shape[1]
-    req_depth = depth_to_use or max_depth
+    req_depth = depth_to_use if depth_to_use else max_depth
     nibbles = min(req_depth, max_depth)
     w_count = (nibbles + 15) // 16
     words = np.zeros((val_count, w_count), dtype=np.uint64)

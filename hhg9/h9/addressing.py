@@ -30,8 +30,8 @@ The core structure is as follows
            each of which is composed of three half-hexagons.  This gives 24 half-hexagons, and
            therefore 12 'bent' hexagons. That cover the entire octahedron.
            This is Layer 0.
-L*[0...7]  Within each hexagon, there are a group of six full hexagons of the subsequent hex_layer,
-           and six half-hexagons of the subsequent hex_layer.  They are all numbered between 0..7
+L*[0...8]  Within each hexagon, there are a group of six full hexagons of the subsequent hex_layer,
+           and six half-hexagons of the subsequent hex_layer.  They are all numbered between 0..8
            The specific pattern is documented elsewhere.
 1*[mm|reg] Metadata; Without recognising the region-mode of the terminal hexagon, there is some ambiguity
            Therefore, we need a digit to indicate the region-mode.  It is also useful to record
@@ -75,8 +75,9 @@ class Style(Enum):
     HEX = 0
     NUMERIC = 4
     U64 = 6
-    UH64 = 7
-    UR64 = 8
+    UH64K = 7  # identifying uint64 address
+    UH64A = 8  # reversible uint64 address
+    UR64 = 9
 
 
 # --- Hex Address TailStyle enum and helper ---
@@ -129,7 +130,7 @@ def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
 
 
 def tail_pack_key(
-    p_c2: NDArray[np.uint8] | np.uint8,    # terminating hex c2 of parent region
+    p_c2: NDArray[np.uint8] | np.uint8,   # terminating hex c2 of parent region
     r_mo: NDArray[np.uint8] | np.uint8,   # root region mode
 ) -> NDArray[np.uint8]:
     """Pack key tail (binning-safe) into one uint8 byte."""
@@ -139,10 +140,16 @@ def tail_pack_key(
 
 
 def tail_unpack_key(short_tail: NDArray[np.uint8] | np.uint8):
-    """Unpack key tail into (p_c2, r_mo)."""
+    """Unpack key tail into (p_c2, r_mo).
+
+    Layout must match `tail_pack_key`:
+      bits6..5: p_c2
+      bit4:     r_mo
+      bits3..0: sentinel (0xF)
+    """
     short_tail = np.asarray(short_tail, dtype=np.uint8)
-    p_c2 = ((short_tail >> 1) & 0x03).astype(np.uint8)
-    r_mo = (short_tail & 0x01).astype(np.uint8)
+    p_c2 = ((short_tail >> 5) & 0x03).astype(np.uint8)
+    r_mo = ((short_tail >> 4) & 0x01).astype(np.uint8)
     return p_c2, r_mo
 
 
@@ -1006,7 +1013,7 @@ def hex_key(hx: NDArray[np.uint8], *, copy: bool = True) -> NDArray[np.uint8]:
     return out
 
 
-def hex_pack(pts, depth: int = 36, scheme: RegionAddressLike = H9_RA):
+def hex_pack(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
     """
     Convert Points to packed UInt64 (Hex Address Format).
 
@@ -1015,33 +1022,55 @@ def hex_pack(pts, depth: int = 36, scheme: RegionAddressLike = H9_RA):
     Args:
         pts (Points): Input points.
         depth (int): Depth of address.
-
+        tail_style (TailStyle): Controls how the tail metadata is packed.
+            - reversible: tail is packed as two nibbles (full reversible metadata).
+            - key: tail is packed as one nibble (high nibble only, binning key).
+            - none: no tail is packed.
     Returns:
         NDArray[uint64]: Packed integers.
     """
     from hhg9.algorithms.packing import u64_pack
 
-    hx = hex_digits(pts, layer=depth, tail_style=TailStyle.reversible, scheme=scheme)
+    hx = hex_digits(pts, layer=depth, tail_style=tail_style, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
-    if hx.ndim != 2 or hx.shape[1] < 2:
-        raise ValueError("expected reversible hex digits (hex_layer, L+1)")
+    if hx.ndim != 2:
+        raise ValueError("expected hex digits as (hex_layer, L) or (hex_layer, L+1)")
+
+    if tail_style is TailStyle.none:
+        nibbles = hx.astype(np.uint8)
+        return u64_pack(nibbles)
+
+    if hx.shape[1] < 2:
+        raise ValueError("expected hex digits output to include at least one body digit and a tail")
 
     body = hx[:, :-1]
     tail_ids = hx[:, -1]
-    tail_hi = ((tail_ids >> 4) & 0x0F).astype(np.uint8)
-    tail_lo = (tail_ids & 0x0F).astype(np.uint8)
 
-    nibbles = np.column_stack([body, tail_hi, tail_lo]).astype(np.uint8)
-    return u64_pack(nibbles)
+    if tail_style is TailStyle.reversible:
+        tail_hi = ((tail_ids >> 4) & 0x0F).astype(np.uint8)
+        tail_lo = (tail_ids & 0x0F).astype(np.uint8)
+        nibbles = np.column_stack([body, tail_hi, tail_lo]).astype(np.uint8)
+        return u64_pack(nibbles)
+
+    if tail_style is TailStyle.key:
+        # Key tail is stored as a single nibble (high nibble). Low nibble is sentinel 0xF and is not packed.
+        tail_hi = ((tail_ids >> 4) & 0x0F).astype(np.uint8)
+        nibbles = np.column_stack([body, tail_hi]).astype(np.uint8)
+        return u64_pack(nibbles)
+
+    raise ValueError(f"unknown tail_style: {tail_style}")
 
 
-def hex_unpack(pts, reg=None, scheme: RegionAddressLike = H9_RA):
+def hex_unpack(pts, tail_style: TailStyle = TailStyle.reversible, reg=None, scheme: RegionAddressLike = H9_RA):
     """
     Convert packed UInt64 (Hex Address Format) back to Points.
 
     Args:
         pts (NDArray[uint64]): Packed integers.
-
+        tail_style (TailStyle): Controls how the tail metadata is unpacked.
+            - reversible: expects tail as two nibbles.
+            - key: expects tail as one nibble (high nibble); not invertible for TailStyle.none.
+            - none: not invertible (raises error).
     Returns:
         Points: Reconstructed coordinates.
     """
@@ -1054,11 +1083,11 @@ def hex_unpack(pts, reg=None, scheme: RegionAddressLike = H9_RA):
     dom = reg.domain('b_oct')
 
     words = np.asarray(pts)
-    if words.ndim != 1:
-        words = words.reshape(-1)
+    # if words.ndim != 1:
+    #     words = words.reshape(-1)
 
     nibbles = np.asarray(u64_layers(words), dtype=np.uint8)
-    if nibbles.ndim != 2 or nibbles.shape[1] < 3:
+    if nibbles.ndim != 2 or nibbles.shape[1] < 2:
         raise ValueError("decoded nibble array invalid for hex_unpack")
 
     # Infer the used width by stripping trailing 0x0F padding columns.
@@ -1067,17 +1096,31 @@ def hex_unpack(pts, reg=None, scheme: RegionAddressLike = H9_RA):
     if used_idx.size == 0:
         raise ValueError("no non-padding nibbles found")
     last = int(used_idx[-1])
-    if last < 2:
-        raise ValueError("not enough nibbles to recover tail")
 
-    tail_lo = nibbles[:, last]
-    tail_hi = nibbles[:, last - 1]
-    body = nibbles[:, :last - 1]
+    if tail_style is TailStyle.none:
+        raise ValueError("hex_unpack cannot invert TailStyle.none: no tail metadata")
 
-    tail_ids = ((tail_hi << 4) | tail_lo).astype(np.uint8)
-    hx = np.column_stack([body, tail_ids])
+    if tail_style is TailStyle.reversible:
+        if last < 2:
+            raise ValueError("not enough nibbles to recover reversible tail")
+        tail_lo = nibbles[:, last]
+        tail_hi = nibbles[:, last - 1]
+        body = nibbles[:, :last - 1]
+        tail_ids = ((tail_hi << 4) | tail_lo).astype(np.uint8)
+        hx = np.column_stack([body, tail_ids])
+        oc, cells = hex_digits_reg(dom, hx, scheme=scheme)
 
-    oc, cells = hex_digits_reg(dom, hx,  scheme=scheme)
+    elif tail_style is TailStyle.key:
+        # Key tail is stored as a single nibble (high nibble); reconstruct sentinel low nibble (0xF).
+        tail_hi = nibbles[:, last]
+        body = nibbles[:, :last]
+        tail_ids = ((tail_hi.astype(np.uint8) << 4) | np.uint8(0x0F)).astype(np.uint8)
+        hx = np.column_stack([body, tail_ids])
+        oc, cells = hex_digits_reg(dom, hx, scheme=scheme)
+
+    else:
+        raise ValueError(f"unknown tail_style: {tail_style}")
+
     xy_m = rg.regions_xy(cells)
     return Points(xy_m[:, :2], domain=dom, components=oc)
 

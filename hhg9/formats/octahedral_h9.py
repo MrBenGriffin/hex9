@@ -25,13 +25,16 @@ class OctahedralH9(PointFormat):
         super().__init__(registrar, 'h9')
         self.scheme = adr.H9_RA
         self.width = 34  # default printed width
+        u64 = False
         self.subs = {
             'k': adr.TailStyle.key,
             'x': adr.Style.HEX,
             'i': adr.Style.NUMERIC,
-            'u': adr.Style.UH64,
+            'uk': adr.Style.UH64K,
+            'ua': adr.Style.UH64A,
             'r': adr.Style.UR64,
         }
+
 
     def is_valid(self, address: str) -> bool:
         """Required by PointFormat; not implemented yet."""
@@ -48,19 +51,28 @@ class OctahedralH9(PointFormat):
                 arr = address.splitlines()
             else:
                 arr = [address]
-            if style != adr.Style.HEX:
-                dgt = [([int(a, 16) for a in adx]) for adx in arr]
-                arr = u64_pack(np.array(dgt))
+            if style not in [adr.Style.HEX]:
+                if ';' in arr[0]:
+                    farr = [a.replace(';', '') for a in arr]
+                    width = max(np.array([len(ref.rstrip('0')) for ref in farr]))
+                    arr = np.array([f[:width] for f in farr])
+                    style = adr.Style.HEX
+                else:
+                    # Nibble-string input (e.g. numeric / raw digits): pack nibbles into u64 words.
+                    dgt = [([int(a, 16) for a in adx]) for adx in arr]
+                    arr = u64_pack(np.array(dgt, dtype=np.uint8))
             else:
                 arr = np.array(arr)
         match style:
             case adr.Style.HEX:
                 result = adr.hex_str_decode(arr, self.registrar, self.scheme)
-            case adr.Style.UH64:
-                result = adr.hex_unpack(arr, self.registrar, self.scheme)
+            case adr.Style.UH64A:
+                result = adr.hex_unpack(arr, adr.TailStyle.reversible, self.registrar, self.scheme)
+            case adr.Style.UH64K:
+                result = adr.hex_unpack(arr, adr.TailStyle.key, self.registrar, self.scheme)
             case adr.Style.NUMERIC:
-                result = adr.hex_unpack(arr, self.registrar, self.scheme)
-            case adr.Style.UR64:
+                result = adr.hex_unpack(arr, adr.TailStyle.key, self.registrar, self.scheme)
+            case adr.Style.UR64:  # This is a REGION-based style.
                 result = adr.reg_unpack(arr, self.registrar, self.scheme)
         return result
 
@@ -73,11 +85,20 @@ class OctahedralH9(PointFormat):
         style = adr.Style.HEX
         # Parse sub: optional style letter(s) + optional integer width
         if sub:
-            # long token 'u' takes precedence; otherwise first char
             if sub.startswith('u'):
-                width = 13
-                style = self.subs['u']
-                sub = sub[1:]
+                if sub.startswith('ua'):
+                    width = 13
+                    style = self.subs['ua']
+
+                    sub = sub[2:]
+                else:
+                    if sub.startswith('uk'):  # adr.Style.UH64K,
+                        sub = sub[2:]
+                    else:
+                        sub = sub[1:]
+                    width = 14
+                    style = self.subs['uk']
+
             elif sub.startswith('r'):
                 width = 14
                 style = self.subs['r']
@@ -108,25 +129,28 @@ class OctahedralH9(PointFormat):
         tail_style = adr.TailStyle.reversible
         count = len(pts)
         style, width = self._select_style(sub)
-        if style == adr.TailStyle.key:
+        if style == adr.TailStyle.key or style == adr.Style.UH64K:
             tail_style = adr.TailStyle.key
 
-        if style == adr.Style.UH64:
-            u64 = adr.hex_pack(pts, width, self.scheme)  # 3 metres - not great!
-            strs = [''.join([f'{u:0x}' for u in v])[:width+4] for v in u64]
+        if style == adr.Style.UH64K or style == adr.Style.UH64A:
+            # fmt = f'0{int(np.rint(width / 16)) * 16}x'
+            fmt = f'016x'
+            u64 = adr.hex_pack(pts, width, tail_style, self.scheme)  #
+            strs = [';'.join([f'{u:{fmt}}' for u in v]) for v in u64]
             if count < 2:
                 return strs[0]
             return '\n'.join(strs)
 
         if style == adr.Style.UR64:
-            u64 = adr.reg_pack(pts, width, self.registrar, self.scheme)  # 0.5 metres - ok!
+            u64 = adr.reg_pack(pts, width, self.registrar, self.scheme)
             strs = [''.join([f'{u:016x}' for u in v])[:width+2] for v in u64]
             if count < 2:
                 return strs[0]
             return '\n'.join(strs)
 
         if style == adr.Style.NUMERIC:
-            u64 = adr.hex_pack(pts, width, self.scheme)
+            # Numeric form is a key/id-oriented encoding.
+            u64 = adr.hex_pack(pts, width, adr.TailStyle.key, self.scheme)
             strs = [''.join(f"{n:0x}" for n in row) for row in u64]
             if count < 2:
                 return str(strs[0])

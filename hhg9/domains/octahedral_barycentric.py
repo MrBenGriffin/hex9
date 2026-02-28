@@ -6,6 +6,7 @@
 This is 'b_oct' barycentric xy equilateral.
 """
 import numpy as np
+from importlib import resources
 from numpy.typing import NDArray
 from hhg9.base.composite import CompositeDomain, ComponentDomain
 from hhg9.base.point_format import PointFormat
@@ -15,8 +16,10 @@ from scipy.interpolate import CloughTocher2DInterpolator, LinearNDInterpolator, 
 
 
 class AuthalicWarp:
-    def __init__(self, file_name='l4_boct_warp_data.npz', interp='ct'):
+    def __init__(self, file_name=None, interp='ct'):
         # Load Data
+        if file_name is None:
+            return
         self.file_name = file_name
         repo = np.load(file_name, allow_pickle=True)
         self.src = repo['source_pts']  # Regular Grid (a_p)
@@ -214,7 +217,9 @@ class OctahedralBarycentric(CompositeDomain):
             north = north @ r90
             south = south @ r90
             rot = (rot + 1) % 4
-        self.set_warp()  # This is the better default.
+        pkg = "hhg9.data"
+        data = resources.files(pkg).joinpath("l4_boct_warp_data.npz")
+        self.set_warp(data)  # This is the better default.
 
     def set_warp(self, warp_file=None, method=None):
         """Add a warp method to the domain"""

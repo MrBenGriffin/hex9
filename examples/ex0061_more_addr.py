@@ -42,7 +42,6 @@ if __name__ == '__main__':
     g_gcd = reg.domain('g_gcd')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
-    b_oct.set_warp('src/l4_polished.npz')
 
     locs = {
         'centroids': {
@@ -218,40 +217,56 @@ if __name__ == '__main__':
     rgx = [H9_RA.cell2rid[i] for i in cxx]
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r36')
-    ub1 = h9f.revert(hxx, Style.UR64)
+    h64k = h9f.format(bry, None, 'uk')
+    h64a = h9f.format(bry, None, 'ua')
+    ha36 = h9f.format(bry, None, 'ua36')
+    h36 = h9f.format(bry, None, '36')
+    r36_str = h9f.revert(h36)                 # from full H9 layer-36 string
+    ruk = h9f.revert(h64k, Style.UH64K)       # key/id (representative)
+    rua = h9f.revert(h64a, Style.UH64A)       # reversible u64 (representative)
+    r36_u64 = h9f.revert(ha36, Style.UH64A)   # u64 version of layer-36 (representative)
 
-    rrp = reg.project(uvr, [b_oct, g_gcd])
-    ltp = reg.project(ub1, [b_oct, g_gcd])
-    ltp.domain = g_gcd
-    rif = wgs84(pos.coords, rrp.coords) * 1e+9
-    lif = wgs84(pos.coords, ltp.coords) * 1e+9
+    g36 = reg.project(r36_str, [b_oct, g_gcd])
+    u36 = reg.project(r36_u64, [b_oct, g_gcd])
+    atp = reg.project(rua, [b_oct, g_gcd])
+
+    d36 = wgs84(pos.coords, g36.coords) * 1e+9
+    dmf = wgs84(pos.coords, u36.coords) * 1e+9
+    daf = wgs84(pos.coords, atp.coords)
+    l36 = h36.split('\n')
+    l64a = h64a.split('\n')
+    l64k = h64k.split('\n')
 
     bcc, bmo = bry.cm()
     for idx, name in enumerate(names):
-        i = bcc[idx]
+        oid = bcc[idx]        # octant id (0..5)
         mo = bmo[idx]
-        ci = H9O.oid_cmp[i]
-        nm = H9O.oid_str[i]
-        mode = H9O.oid_mo[i]
+        ci = H9O.oid_cmp[oid]
+        nm = H9O.oid_str[oid]
+        mode = H9O.oid_mo[oid]
         print(f'{name:<24} {ci}, mode:{mode}')
-        print(f'Regions {cxx[i]}')
-        print(f'{nm} {pos[i]:dms} (Reference Coordinates)')
-        print(f'{nm} {ltp[i]:dms} (Label RT Coordinates)')
-        print(f'{nm} {ltp[i]:dms} (Label GCD Coordinates)')
+        print(f'Regions {cxx[idx]}')
+        print(f'{nm} {pos[idx]:dms} (Reference Coordinates)')
+        print(f'{nm} {l36[idx]} (H9 Layer 36)')
+        print(f'{nm} {l64a[idx]} (U64A Address)')
+        print(f'{nm} {l64k[idx]} (U64K Identity)')
 
-        print(f'∂{dif[i]:.6f}nm (roundtrip via GCD<->Barycentric)')
-        print(f'∂{rif[i]:.6f}nm (roundtrip via GCD<->Bary Regions)')
-        print(f'∂{lif[i]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
-        print(f'H9.adr:{bry[i]:h9}')
-        print(f'H9.key:{bry[i]:h9.k}')
-        print(f'H9.adr.13:{bry[i]:h9.13}')
-        print(f'H9.u64.13:{bry[i]:h9.u13}')
+        print(f'∂{dif[idx]:.6f}nm (roundtrip via GCD<->Barycentric)')
+        # print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->Bary Regions)')
+        print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->H9 Layer 36)')
+        print(f'∂{dmf[idx]:.6f}nm (roundtrip via GCD<->H9 U64 36)')
+        print(f'∂{daf[idx]:.6f}m (roundtrip via GCD<->H9 U64 Reversible)')
+
+        # print(f'H9.adr:{bry[i]:h9}')
+        # print(f'H9.key:{bry[i]:h9.k}')
+        # print(f'H9.u64k:{bry[i]:h9.uk}')
+        # print(f'H9.u64a:{bry[i]:h9.ua}')
         if name == 'NWA: Stonehenge':
-            print(f'ECEF: {bel.coords[i][0]:.8f},{bel.coords[i][1]:.8f},{bel.coords[i][2]:.8f}')
-            print(f'OCTA: {boc.coords[i][0]:.8f},{boc.coords[i][1]:.8f},{boc.coords[i][2]:.8f}')
-            print(f'BARY: {bry.coords[i][0]:.8f},{bry.coords[i][1]:.8f}')
+            print(f'ECEF: {bel.coords[oid][0]:.8f},{bel.coords[oid][1]:.8f},{bel.coords[oid][2]:.8f}')
+            print(f'OCTA: {boc.coords[oid][0]:.8f},{boc.coords[oid][1]:.8f},{boc.coords[oid][2]:.8f}')
+            print(f'BARY: {bry.coords[oid][0]:.8f},{bry.coords[oid][1]:.8f}')
             for layer in range(35):
-                print(f'H9.key; layer {layer}:{bry[i]:h9.k{layer}}')
-        print(f'Reference BRY: {bry.coords[i][0]:.18f},{bry.coords[i][1]:.18f}')
-        print(f'Label RT  BRY: {uvr.coords[i][0]:.18f},{uvr.coords[i][1]:.18f}')
+                print(f'H9.key; layer {layer}:{bry[oid]:h9.k{layer}}')
+        print(f'Reference BRY: {bry.coords[oid][0]:.18f},{bry.coords[oid][1]:.18f}')
+        print(f'Label RT  BRY: {uvr.coords[oid][0]:.18f},{uvr.coords[oid][1]:.18f}')
         print()
