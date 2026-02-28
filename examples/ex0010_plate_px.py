@@ -22,7 +22,7 @@ def run():
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')
 
-    img = image.imread(f'src/world1350x675.png', 'png')
+    img = image.imread(f'src/bm3600x1800.jpg', 'jpg')
     plate = p_pix.adopt(img)     # ps.img shape is [675,1350,4]
     img = p_pix.image(plate)     # convert points back to an [675,1350,4] image.
 

@@ -61,7 +61,6 @@ class PlatePixel(Domain):
         self.height = int(height)
         self.width = int(width)
         self.type = dtype
-
         self.y_up = bool(y_up)
         self.center = bool(center)
 

@@ -10,7 +10,8 @@ Normally we sample the image via the forward projection, instead of converting f
 The ellipsoid -> octahedral projection is slow, and depends upon using H9 for root-finding,
 so here we use a cache. Recent work on vectorising the forward projection has improved timings,
 but root-finding is inherently slow.
-This takes about 25s to project 1e+6 points at 3e+4m accuracy.
+This processes about 7k points / second at full accuracy.
+28 February 2026 0.1.1a1 (passed)
 26 December 2025 0.1.0a4 (fixed/passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
@@ -50,35 +51,34 @@ def run(*, force=False):
     # Domains - 2D image and GCD Spherical.
     p_pix = reg.domain('p_pix')           # Pixel Plate Carrée
     c_oct = reg.domain('c_oct')
-    b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
     # circumference of earth: 40075017m
     # 1 pix = 40075017/1350 m = about 30km
-    cache = Path('src/world1350x675.npy')
-    img = image.imread(f'src/world1350x675.png', 'png')
-    pc_pix = p_pix.adopt(img)
+    cache = Path('src/tissot_3600x1800.npy')
+    img = image.imread(f'src/tissot_3600x1800.png', 'png')
+    pc_extent = (-180.0, -90.0, 180.0, 90.0)
+    pc_px = p_pix.adopt(img, extent=pc_extent, y_up=True, center=False)
 
     if not cache.exists() or force:
         import time
         # circumference of earth: 40075017m
         # 1 pix = 40075017/1350 m = about 30km
-        acc = 3e+4  # 23s for 30km, 60s for 1nm. 1e-9 is default
-        reg.projection('gcd_bry').set_accuracy(acc)
+        # acc = 3e+4  # 23s for 30km, 60s for 1nm. 1e-9 is default
+        # reg.projection('gcd_bry').set_accuracy(acc)
 
-        gcd = reg.project(pc_pix, ['p_pix', 'g_gcd'])
+        gcd = reg.project(pc_px, ['p_pix', 'g_gcd'])
         start_time = time.perf_counter()
         bry = reg.project(gcd, ['g_gcd', 'b_oct'])
         seconds = time.perf_counter() - start_time
-        print(f'{seconds:.6f} seconds to process {len(gcd)} points at {acc}m accuracy.')
+        print(f'{seconds:.6f} seconds to process {len(gcd)} points.')
         oc_xyz = reg.project(bry, ['b_oct', 'c_oct'])
         np.save(cache, oc_xyz.coords)
 
     oc = np.load(cache)
     c_pix = Points(oc, c_oct)
-    c_pix.samples = pc_pix.samples
+    c_pix.samples = pc_px.samples
     show_octahedron(c_pix)
 
 
 if __name__ == '__main__':
-    run(force=True)
+    run(force=False)

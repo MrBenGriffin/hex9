@@ -35,8 +35,19 @@ class CompositeDomain(Domain, ABC):
         """Identify the components of the points"""
         if self.axes == 3:
             c = pts.coords.copy()  # don't mess with the coords.
-            c[c == 0] = np.finfo(pts.coords.dtype).tiny
-            pts.components = np.atleast_2d(np.sign(c).astype(np.int8))
+
+            # Robustness: NaN in coords would make np.sign return NaN, which then warns on cast.
+            # We leave components as 0 for any non-finite rows.
+            finite_mask = np.isfinite(c).all(axis=1)
+            comps = np.zeros((c.shape[0], 3), dtype=np.int8)
+
+            if np.any(finite_mask):
+                cf = c[finite_mask]
+                # Avoid zeros landing in the "0" sign bucket; preserve octant semantics.
+                cf[cf == 0] = np.finfo(cf.dtype).tiny
+                comps[finite_mask] = np.sign(cf).astype(np.int8)
+
+            pts.components = np.atleast_2d(comps)
         else:
             raise NotImplementedError(f'{self.name} needs to bin {self.axes} axes')
 

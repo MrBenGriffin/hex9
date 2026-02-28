@@ -80,18 +80,35 @@ class AuthalicWarp:
         1. Guess using Linear Interpolation.
         2. Refine by minimizing |Forward(guess) - target|.
         """
-        target = np.array(pts, dtype=np.float64)  # Target points we want to find source for
+        target_all = np.array(pts, dtype=np.float64)  # Target points we want to find source for
         mode = 1.0 if mo == 0 else -1.0
-        target[:, 1] *= mode
+        target_all[:, 1] *= mode
+
+        # Guard: scipy's KDTree query requires finite inputs.
+        finite_mask = np.isfinite(target_all).all(axis=1)
+        if not np.all(finite_mask):
+            # Process only finite points; propagate NaNs for non-finite rows.
+            out = np.full_like(target_all, np.nan)
+            if not np.any(finite_mask):
+                out[:, 1] *= mode
+                return out
+            target = target_all[finite_mask]
+        else:
+            out = None
+            target = target_all
 
         # --- COARSE GUESS ---
         # Try Linear first
         guess = self.inv_linear(target)
 
-        # If Linear returns NaN, snap to nearest neighbour to get a valid starting point
         nan_mask = np.isnan(guess[:, 0])
         if np.any(nan_mask):
-            guess[nan_mask] = self.inv_nearest(target[nan_mask])
+            # `target[nan_mask]` must be finite for KDTree.
+            tgt_nan = target[nan_mask]
+            tgt_nan_finite = np.isfinite(tgt_nan).all(axis=1)
+            if np.any(tgt_nan_finite):
+                guess[nan_mask][tgt_nan_finite] = self.inv_nearest(tgt_nan[tgt_nan_finite])
+            # leave any non-finite rows as NaN (they will be propagated)
 
         # --- ITERATIVE POLISH ---
         # We want to find 'u' such that Forward(u) = target.
@@ -131,7 +148,23 @@ class AuthalicWarp:
             # So u_new = u_old - error works surprisingly well.
             curr -= error
 
+            # If any rows become non-finite, snap them back to a safe seed.
+            nonfinite = ~np.isfinite(curr).all(axis=1)
+            if np.any(nonfinite):
+                tgt_nf = target[nonfinite]
+                tgt_nf_finite = np.isfinite(tgt_nf).all(axis=1)
+                if np.any(tgt_nf_finite):
+                    # only reset where the corresponding target is finite
+                    idx = np.flatnonzero(nonfinite)
+                    curr[idx[tgt_nf_finite]] = self.inv_nearest(tgt_nf[tgt_nf_finite])
+
         curr[:, 1] *= mode
+
+        if out is not None:
+            out[finite_mask] = curr
+            out[:, 1] *= mode
+            return out
+
         return curr
 
 

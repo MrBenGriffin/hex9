@@ -15,6 +15,7 @@ from .octahedral_barycentric import OctantBarycentric, OctahedralBarycentric  # 
 from .octahedral_net import OctantNet, OctahedralNet  # n_oct
 from .plate_pixel import PlatePixel  # p_pix
 from .net_pixel import NetPixel  # n_pix
+from .plate_pixel_carree import PlatePixelCarree
 
 __all__ = [
     "GeneralGCD",
@@ -25,6 +26,7 @@ __all__ = [
     "OctantSimplex", "OctahedralSimplex",
     "OctantNet", "OctahedralNet",
     "PlatePixel", "NetPixel",
-    "EllipsoidCartesian"
+    "EllipsoidCartesian",
+    "PlatePixelCarree"
 ]
 
