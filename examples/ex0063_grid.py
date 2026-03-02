@@ -8,11 +8,11 @@ It saves a colouring of the authalic score (deviation from mean) of an octant of
 it has been projected onto WGS84.
 All renders follow the triangular sub-grid.
 Another way of calculating this has been used with hexagons in ex0080_authalics
+02 March 2026 0.1.1a1 (passed)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
 """
-from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -216,12 +216,8 @@ if __name__ == '__main__':
     rg = Registrar()  # Manage Domains & Projections
     octant = 0  # entire sphere = None.
     b_oct = rg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
-    s_oct = rg.domain('s_oct')
     for depth in [4]:  # range(6):
         l_stats = octa_layer_stats(depth)
-        net_f = Path(f"experiments/graph_{octant}_{depth}.json")
-        pos_f = Path(f"experiments/graph_pos__{octant}_{depth}.json")
         b_pts = get_data(rg, layer=depth, octant_id=octant)
         u, v = b_pts.coords[:, 0], b_pts.coords[:, 1]
         g_pts = rg.project(b_pts, ['b_oct', 'g_gcd'])

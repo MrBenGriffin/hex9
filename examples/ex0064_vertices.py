@@ -11,6 +11,7 @@ Vertices are, like seams, special edge cases.
 Looks at radii of 3,000km, 10,000km, and 5m.
 
 Last Tested
+02 March 2026 0.1.1a1 (passed)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
@@ -255,7 +256,6 @@ def run():
     c_ell = reg.domain('c_ell')   # Cartesian Ellipsoid (xyz) ECEF
     c_oct = reg.domain('c_oct')   # Cartesian Octahedron (xyz)
     b_oct = reg.domain('b_oct')   # Octahedron Barycentric-origin xy
-    b_oct.set_warp('src/l4_polished.npz')
 
     # Projections/Transforms. Bary and Net are loaded by the domains.
     # EllipsoidGCD(reg)  # g_sph <=> c_sph

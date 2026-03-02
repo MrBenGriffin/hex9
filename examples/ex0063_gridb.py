@@ -7,6 +7,7 @@ Further breakdown for warp analysis (currently experimental/and put to one side)
 All renders follow the triangular sub-grid.
 Another way of calculating this has been used with hexagons in ex0080_authalics
 
+02 March 2026 0.1.1a1 (passed)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
@@ -59,10 +60,6 @@ def snow_globe(arr: Points, poly_len: int = 6, pop=None, name='grid'):
     if pop is not None:
         authalic_error = np.mean(np.abs(pop))
         pops = pop[mask]
-        # v_min = np.min(pops)
-        # v_max = np.max(pops)
-        # norm = colors.Normalize(vmin=v_min, vmax=v_max)
-        # cmap = plt.get_cmap('RdBu_r')
         col_map_name = 'RdBu_r'
         max_abs = float(np.max(np.abs(pops)))
         norm = colors.TwoSlopeNorm(vcenter=0.0, vmin=-max_abs, vmax=+max_abs)
@@ -103,7 +100,6 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
     tg1 = tri_grid(layer, 1).reshape([-1, 2])  # triangle polygons.
     tgx = [tg0, tg1]
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     if octant_id is None:
         repo = []
         for octant in b_oct.signs.keys():
@@ -180,9 +176,6 @@ if __name__ == '__main__':
         c_pts = rg.project(o_pts, ['c_oct', 'c_ell'])
         tr_pts = data.coords.reshape([-1, 3, 2])
         tr_cts = tr_pts.mean(axis=1)
-        # cache = Path(f'src/O{octant}_L{depth}_CA.npy')
-        # data_areas = np.hstack([tr_cts, areas.reshape(-1, 1)])
-        # np.save(cache, data_areas)
         t_num = len(c_areas)
         t_sum = np.sum(c_areas)
         t_avg = t_sum / t_num

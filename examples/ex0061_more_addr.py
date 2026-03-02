@@ -9,11 +9,13 @@ reporting to console.
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
 
 Last Tested
+02 March 2026 0.1.1a1 (passed; found and fixed a warp bug)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed; after rewriting formatter)
 25 November 2025 (passed)
 """
 import json
+
 import numpy as np
 from hhg9 import Registrar, Points
 from hhg9.formats import OctahedralH9, DMS
@@ -31,6 +33,14 @@ def json_load(path):
     return obj
 
 
+def test(pts, pl):
+    out = reg.project(pts, pl)
+    ret = reg.project(out, pl[::-1])
+    err = np.max(np.abs(ret.coords - pts.coords))
+    journey = '->'.join([p.name for p in pl])
+    print(f'max error {journey}: {err:.16f}')
+
+
 if __name__ == '__main__':
     """
         Convert a set of locations into a set of h9f formats.
@@ -40,12 +50,25 @@ if __name__ == '__main__':
     dms = DMS(reg)
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
+    c_ell = reg.domain('c_ell')
+    c_oct = reg.domain('c_oct')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
 
+    lat_d = 0.000000000001
+    # lat_d = 0.00000015
     locs = {
+        'errors': {
+            "011": {"name": "Equator NE", "lat": lat_d, "lon": 45.00000000},
+            "002": {"name": "Equator SE", "lat": -lat_d, "lon": 45.00000000},
+            "003": {"name": "Equator NW", "lat": lat_d, "lon": -45.00000000},
+            "004": {"name": "Equator SW", "lat": -lat_d, "lon": -45.00000000},
+            "005": {"name": "Equator NFE", "lat": lat_d, "lon": 135.00000000},
+            "006": {"name": "Equator SFE", "lat": -lat_d, "lon": 135.00000000},
+            "007": {"name": "Equator NFW", "lat": lat_d, "lon": -135.00000000},
+            "008": {"name": "Equator SFW", "lat": -lat_d, "lon": -135.00000000}
+        },
         'centroids': {
-            "bad": {"name": "poor", "lat": -71.7856153167678000,	"lon": 0.4539945781898160},
             "EAV": {"name": "centroid", "lat": 1.860751, "lon": 43.328763},
             "NAV": {"name": "centroid", "lat": 35.952813, "lon": 18.328413},
             "NEV": {"name": "centroid", "lat": 36.477125, "lon": 66.347867},
@@ -193,6 +216,7 @@ if __name__ == '__main__':
     print('Selection points, projected forwards and backwards, showing deviation ∂ in nanometres.')
     names = []
     ll = []
+
     locs2 = json_load('../assets/locations.json')
     for region in locs2:
         for spot in locs2[region]:
@@ -205,8 +229,15 @@ if __name__ == '__main__':
 
     pos = Points(np.array(ll), g_gcd)
     bry = reg.project(pos, [g_gcd, b_oct])  # spherical cart
-    bel = reg.project(pos, [g_gcd, 'c_ell'])
-    boc = reg.project(pos, ['c_ell', 'c_oct'])
+
+    # Round trip each projection.
+    test(pos, [g_gcd, c_ell])
+    test(pos, [g_gcd, c_ell, c_oct])
+    test(pos, [g_gcd, c_ell, c_oct, b_oct])
+    pxy = reg.project(pos, [g_gcd, c_ell])
+    test(pxy, [c_ell, g_gcd])
+    test(pxy, [c_ell, c_oct])
+    test(pxy, [c_ell, c_oct, b_oct])
 
     rtp = reg.project(bry, [b_oct, g_gcd])  # sph rt..
     dif = wgs84(pos.coords, rtp.coords) * 1e+9
@@ -247,12 +278,13 @@ if __name__ == '__main__':
         print(f'{name:<24} {ci}, mode:{mode}')
         print(f'Regions {cxx[idx]}')
         print(f'{nm} {pos[idx]:dms} (Reference Coordinates)')
+        print(f'{nm} {rtp[idx]:dms} (Reverted Coordinates)')
         print(f'{nm} {l36[idx]} (H9 Layer 36)')
         print(f'{nm} {l64a[idx]} (U64A Address)')
         print(f'{nm} {l64k[idx]} (U64K Identity)')
 
         print(f'∂{dif[idx]:.6f}nm (roundtrip via GCD<->Barycentric)')
-        # print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->Bary Regions)')
+        print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->Bary Regions)')
         print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->H9 Layer 36)')
         print(f'∂{dmf[idx]:.6f}nm (roundtrip via GCD<->H9 U64 36)')
         print(f'∂{daf[idx]:.6f}m (roundtrip via GCD<->H9 U64 Reversible)')
@@ -262,8 +294,8 @@ if __name__ == '__main__':
         # print(f'H9.u64k:{bry[i]:h9.uk}')
         # print(f'H9.u64a:{bry[i]:h9.ua}')
         if name == 'NWA: Stonehenge':
-            print(f'ECEF: {bel.coords[oid][0]:.8f},{bel.coords[oid][1]:.8f},{bel.coords[oid][2]:.8f}')
-            print(f'OCTA: {boc.coords[oid][0]:.8f},{boc.coords[oid][1]:.8f},{boc.coords[oid][2]:.8f}')
+            # print(f'ECEF: {bel.coords[oid][0]:.8f},{bel.coords[oid][1]:.8f},{bel.coords[oid][2]:.8f}')
+            # print(f'OCTA: {boc.coords[oid][0]:.8f},{boc.coords[oid][1]:.8f},{boc.coords[oid][2]:.8f}')
             print(f'BARY: {bry.coords[oid][0]:.8f},{bry.coords[oid][1]:.8f}')
             for layer in range(35):
                 print(f'H9.key; layer {layer}:{bry[oid]:h9.k{layer}}')

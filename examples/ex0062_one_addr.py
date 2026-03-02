@@ -4,6 +4,7 @@
 
 """
 uses single address and walks through it.
+02 March 2026 0.1.1a1 (passed)
 26 December 2025 0.1.0a4 (passed)
 21 December 2025 0.1.0a3 (passed; after rewriting formatter)
 
@@ -26,18 +27,15 @@ if __name__ == '__main__':
     h9f = OctahedralH9(reg)  # formatter.
     dms = DMS(reg)
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = reg.domain('g_gcd')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
 
     name = 'School of Informatics'
-    ll = np.atleast_2d([[55.94480923423753, -3.187282666241978], [48.85850068658495, 2.294497393253196]])
+    ll = np.atleast_2d([
+        [55.94480923423753, -3.187282666241978]
+    ])
 
-    # print(f'ECEF: {bel.coords[0]:.8f},{bel.coords[1]:.8f},{bel.coords[2]:.8f}')
-    # print(f'OCTA: {boc.coords[0]:.8f},{boc.coords[1]:.8f},{boc.coords[2]:.8f}')
-    # print(f'BARY: {bry.coords[0]:.8f},{bry.coords[1]:.8f}')
-    #
     pos = Points(np.array(ll), g_gcd)
     print(name)
     print(f'{pos:dms} (Reference Coordinate)')

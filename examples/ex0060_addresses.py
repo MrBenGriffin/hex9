@@ -16,6 +16,7 @@ This:
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
 
 Last Tested
+02 March 2026 0.1.1a1 (passed; tidied somewhat.)
 26 December 2025 0.1.0a4 (passed; accuracy has changed to area m^2)
 16 December 2025 0.1.0a3 (passed; after rewriting formatter)
 25 November 2025 (passed)
@@ -79,24 +80,33 @@ def run(reg, logger, refs, layers=36):
     lat = refs.coords[:, 0]
     lon = refs.coords[:, 1]
     # b_rys = reg.project(refs, ['g_gcd', 'c_ell', 'c_oct', 'b_oct'])  # components filled
+    print('100k is likely to take about 30s')
 
+    print('projecting g_gcd->b_oct')
     b_rys = reg.project(refs, ['g_gcd', 'b_oct'])  # components filled
     b_rys.domain.register_format(h9f)
+    print('projecting b_oct->g_gcd')
     b_rtp = reg.project(b_rys, ['b_oct', 'g_gcd'])
     # Get the octant id and mode of each point (discarding mode here).
     oc, mo = b_rys.cm()
     locs = pt_loc(b_rys.coords, mo)
     # Now generate the set of h9f labels for each point, and convert to np.array
+    print('generating b_oct (h9) labels')
     labels = f'{b_rys:h9.{layers}}'  # This is reversible addresses.
     label_vec = np.array(labels.splitlines())
     # the h9f formatter h9f is used to revert this array back to barycentric.
+    print('converting (h9) labels to b_oct ')
     h9_r = h9f.revert(labels)  # Convert from addresses.
     # we now take these and project them back to GCD.
+    print('projecting converted labels in b_oct->g_gcd ')
     l_rtp = reg.project(h9_r, ['b_oct', 'g_gcd'])
     # We will use the GeographicLib Inverse to find ∂-distances (metres)
     # and multiply the values by 1e+9 such that our ∂-distances are in nanometres.
+    print('calculating ∂-distances wgs84 distances between reference and reverted b_oct in nm (nanometres)')
     b_deltas = wgs84(refs.coords, b_rtp.coords) * 1e+9
+    print('calculating ∂-distances wgs84 distances between reference and reverted label b_oct in nm (nanometres)')
     l_deltas = wgs84(refs.coords, l_rtp.coords) * 1e+9
+    print('storing results in csv')
     for i in range(refs.coords.shape[0]):
         # Now write to the logger.
         logger.write({
@@ -127,14 +137,12 @@ def run(reg, logger, refs, layers=36):
 if __name__ == '__main__':
     accuracy = 1e-22  # in meters^2
     reg = Registrar()  # Manage Domains & Projections
-    seed = 1234512
+    seed = 4007
     samples = 100_000
     ake = reg.projection('oct_ell')
     layers = ake.set_accuracy(accuracy)
     np.random.seed(seed)
     base = Path(__file__).parent
-    b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
     log_file = base.joinpath(f'logs/L{layers}_{samples}_{seed}.csv')
     main_logger = CSVLogger(log_file)

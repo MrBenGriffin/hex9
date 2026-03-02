@@ -60,9 +60,10 @@ def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
 
         # Distances to targets
         d = distance_func(proj, target_rll[:, None, :])  # (hex_layer,k*9)
+        bw = min(k * 9, beam_width)
 
         # Top-k via arg-partition, then stable tie-break by URI
-        idx_k = np.argpartition(d, beam_width - 1, axis=1)[:, :beam_width]  # (hex_layer,k)
+        idx_k = np.argpartition(d, bw - 1, axis=1)[:, :bw]  # (hex_layer,k)
         # Gather those distances/uris for stable sort
         d_k = np.take_along_axis(d, idx_k, axis=1)  # (hex_layer,k)
         u_k = np.take_along_axis(cand_uris, idx_k, axis=1)  # (hex_layer,k)

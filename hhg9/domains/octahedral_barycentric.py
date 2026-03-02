@@ -25,18 +25,70 @@ class AuthalicWarp:
         self.src = repo['source_pts']  # Regular Grid (a_p)
         self.dst = repo['target_pts']  # Deformed Grid (x_prime)
 
+        # --- GHOST ROW PADDING (Equator Stabilization) ---
+        diff = self.dst - self.src
+        Y_EQ = np.sqrt(6.0) / 6.0
+
+        # Grab points within a small margin of the equator (e.g., top 5% of the triangle)
+        # Adjust 0.05 if your grid spacing is wider/narrower.
+        eq_band_mask = (Y_EQ - self.src[:, 1]) < 0.05
+
+        if np.any(eq_band_mask):
+            ghost_src = self.src[eq_band_mask].copy()
+            # Mirror Y-coordinate across the equator line
+            ghost_src[:, 1] = 2.0 * Y_EQ - ghost_src[:, 1]
+
+            ghost_diff = diff[eq_band_mask].copy()
+            # Mirror the Y-displacement (if it stretches North on one side,
+            # it stretches South on the other)
+            ghost_diff[:, 1] *= -1.0
+
+            # Note: X-displacement (longitudinal shift) remains identical
+            # across the equator, so we don't flip diff[:, 0]
+
+            padded_src = np.vstack([self.src, ghost_src])
+            padded_diff = np.vstack([diff, ghost_diff])
+        else:
+            padded_src = self.src
+            padded_diff = diff
+        # --------------------------------------------------
+
         # 1. Forward Engine (Cubic / Smooth)
         # We model the *displacement* (diff) rather than absolute position for better stability
         diff = self.dst - self.src
+        # Nearest-neighbour fallbacks are useful even for Clough-Tocher:
+        # CT returns NaN outside the convex hull, and the inverse solver may
+        # step infinitesimally outside near seams/boundaries.
+        nn_dx = NearestNDInterpolator(self.src, diff[:, 0])
+        nn_dy = NearestNDInterpolator(self.src, diff[:, 1])
+
         if interp != 'linear':
-            self.fwd_dx = CloughTocher2DInterpolator(self.src, diff[:, 0])
-            self.fwd_dy = CloughTocher2DInterpolator(self.src, diff[:, 1])
+            # 1. FEED THE PADDED DATA HERE
+            ct_dx = CloughTocher2DInterpolator(padded_src, padded_diff[:, 0])
+            ct_dy = CloughTocher2DInterpolator(padded_src, padded_diff[:, 1])
+
+            # 2. RESTORE THE NAN WRAPPERS
+            def fwd_dx(xy):
+                d = ct_dx(xy)
+                m = np.isnan(d)
+                if np.any(m):
+                    d[m] = nn_dx(xy[m])
+                return d
+
+            def fwd_dy(xy):
+                d = ct_dy(xy)
+                m = np.isnan(d)
+                if np.any(m):
+                    d[m] = nn_dy(xy[m])
+                return d
+
+            self.fwd_dx = fwd_dx
+            self.fwd_dy = fwd_dy
 
         else:
+            # Linear fallback (does not use padding)
             lin_dx = LinearNDInterpolator(self.src, diff[:, 0])
             lin_dy = LinearNDInterpolator(self.src, diff[:, 1])
-            nn_dx = NearestNDInterpolator(self.src, diff[:, 0])
-            nn_dy = NearestNDInterpolator(self.src, diff[:, 1])
 
             def fwd_dx(xy):
                 d = lin_dx(xy)
