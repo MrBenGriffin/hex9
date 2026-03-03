@@ -11,7 +11,7 @@ Vertices are, like seams, special edge cases.
 Looks at radii of 3,000km, 10,000km, and 5m.
 
 Last Tested
-02 March 2026 0.1.1a1 (passed)
+02 March 2026 0.1.1a1 (passed, fixed measurement issue.)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
@@ -29,7 +29,25 @@ from geographiclib.geodesic import Geodesic
 import cartopy.crs as ccrs
 from scipy.stats import gaussian_kde, binned_statistic_2d
 
+
 WGS84 = Geodesic.WGS84  # or custom ellipsoid
+
+
+def geodesic_distance_nm(lat1, lon1, lat2, lon2):
+    """Ellipsoidal geodesic distance on WGS84, returned in nanometres."""
+    lat1 = np.asarray(lat1, dtype=float).ravel()
+    lon1 = np.asarray(lon1, dtype=float).ravel()
+    lat2 = np.asarray(lat2, dtype=float).ravel()
+    lon2 = np.asarray(lon2, dtype=float).ravel()
+    if not (lat1.size == lon1.size == lat2.size == lon2.size):
+        raise ValueError('lat/lon arrays must have the same size')
+
+    s_m = np.fromiter(
+        (WGS84.Inverse(a, b, c, d)['s12'] for a, b, c, d in zip(lat1, lon1, lat2, lon2)),
+        dtype=float,
+        count=lat1.size,
+    )
+    return (s_m * 1e9).reshape((-1,))
 
 
 def slug(s: str) -> str:
@@ -140,18 +158,28 @@ def _compute_nw_grid(u_coords, v_coords, values, *,
 def plot_cartesian_kde(u_coords, v_coords, values, *,
                        grid_resolution=200j, bw_method=None,
                        title="Heatmap", cmap='viridis',
-                       clip_percentile=100.0, den_floor_rel=1e-15,
-                       mask_edge=True, name='base'
+                       clip_percentile=99.0, den_floor_rel=1e-3,
+                       mask_edge=True, name='base',
+                       boundary_correction='reflect',
+                       reflect_margin_frac=0.075,
+                       taper_start_frac=None,
                        ):
     """
     Plots a 2D heatmap directly from Cartesian coordinates
     using a Nadaraya–Watson smoothed mean.
     Masked areas are set to NaN so the colorbar reflects only valid data.
     """
-    res = _compute_nw_grid(u_coords, v_coords, values,
-                           grid_resolution=grid_resolution, bw_method=bw_method,
-                           clip_percentile=clip_percentile, den_floor_rel=den_floor_rel,
-                           mask_edge=mask_edge)
+    res = _compute_nw_grid(
+        u_coords, v_coords, values,
+        grid_resolution=grid_resolution,
+        bw_method=bw_method,
+        clip_percentile=clip_percentile,
+        den_floor_rel=den_floor_rel,
+        mask_edge=mask_edge,
+        boundary_correction=boundary_correction,
+        reflect_margin_frac=reflect_margin_frac,
+        taper_start_frac=taper_start_frac,
+    )
 
     grid_u, grid_v, grid_z = res['grid_u'], res['grid_v'], res['nw']
 
@@ -168,14 +196,31 @@ def plot_cartesian_kde(u_coords, v_coords, values, *,
     print(f'file saved at output/ex0064_{f_name}_kde.png')
 
 
-def plot_cartesian_kde_diagnostics(u_coords, v_coords, values, **kwargs):
+def plot_cartesian_kde_diagnostics(u_coords, v_coords, values, *,
+                                   grid_resolution=200j, bw_method=None,
+                                   clip_percentile=99.0, den_floor_rel=1e-3,
+                                   mask_edge=True, name='base',
+                                   boundary_correction='reflect',
+                                   reflect_margin_frac=0.075,
+                                   taper_start_frac=None,
+                                   ):
     """Four-panel diagnostics: NW mean, denominator (ESS proxy), numerator, and binned mean; plus a radial edge profile."""
-    res = _compute_nw_grid(u_coords, v_coords, values, **kwargs)
+    res = _compute_nw_grid(
+        u_coords, v_coords, values,
+        grid_resolution=grid_resolution,
+        bw_method=bw_method,
+        clip_percentile=clip_percentile,
+        den_floor_rel=den_floor_rel,
+        mask_edge=mask_edge,
+        boundary_correction=boundary_correction,
+        reflect_margin_frac=reflect_margin_frac,
+        taper_start_frac=taper_start_frac,
+    )
     gu, gv = res['grid_u'], res['grid_v']
     nw, num, den, ess = res['nw'], res['num'], res['den'], res['ess_rel']
     Hm = res['binned_mean']
     ue, ve = res['u_edges'], res['v_edges']
-    f_name = slug(kwargs['name'])
+    f_name = slug(name)
 
     fig, axs = plt.subplots(2, 2, figsize=(14, 12), constrained_layout=True)
 
@@ -222,7 +267,11 @@ def plot_cartesian_kde_diagnostics(u_coords, v_coords, values, **kwargs):
     print(f'file saved at output/ex0064_{f_name}_kde_diag.png')
 
 
-def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title, name):
+def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title, name, *,
+                          c_clip=(0.5, 99.5),
+                          force_vmin=None,
+                          force_vmax=None,
+                          ):
     """
     Plots error data on a globe using an Orthographic projection.
     Good for large radii.
@@ -232,14 +281,46 @@ def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title, 
     # Create a map projection centered on our test point
     projection = ccrs.LambertAzimuthalEqualArea(central_longitude=center_lon, central_latitude=center_lat)
     ax = fig.add_subplot(1, 1, 1, projection=projection)
-    img = plt.imread('../experimental/world1350x675_dark.png')
+    img = plt.imread('src/bm3600x1800.jpg')
     ax.imshow(img, origin='upper', transform=ccrs.PlateCarree(), extent=[-180, 180, -90, 90])
     ax.coastlines(resolution='50m', color='white', alpha=0.25)
     ax.set_global()  # Zoom out to see the whole globe
-    scatter = ax.scatter(lons, lats, c=errors_nm, cmap='viridis', ec='none', s=5,
-                         transform=ccrs.PlateCarree())
+
+    errors_nm = np.asarray(errors_nm, dtype=float)
+    finite = np.isfinite(errors_nm)
+    if not np.any(finite):
+        raise ValueError('errors_nm contains no finite values')
+
+    if force_vmin is None or force_vmax is None:
+        lo_p, hi_p = c_clip
+        vmin = np.percentile(errors_nm[finite], lo_p) if force_vmin is None else float(force_vmin)
+        vmax = np.percentile(errors_nm[finite], hi_p) if force_vmax is None else float(force_vmax)
+    else:
+        vmin, vmax = float(force_vmin), float(force_vmax)
+
+    # Guard against degenerate ranges
+    if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+        vmin = np.nanmin(errors_nm[finite])
+        vmax = np.nanmax(errors_nm[finite])
+
+    scatter = ax.scatter(
+        lons, lats,
+        c=errors_nm,
+        cmap='viridis',
+        ec='none', s=5,
+        transform=ccrs.PlateCarree(),
+        vmin=vmin, vmax=vmax,
+    )
     cbar = plt.colorbar(scatter, ax=ax, orientation='vertical', pad=0.05, shrink=0.7)
-    cbar.set_label('Round-trip Error (nm)')
+    cbar.set_label(f'Round-trip Error (nm)  [color scale {vmin:.3g}–{vmax:.3g} nm]')
+
+    # Helpful console stats for sanity
+    mn = float(np.nanmin(errors_nm[finite]))
+    mx = float(np.nanmax(errors_nm[finite]))
+    p50 = float(np.percentile(errors_nm[finite], 50))
+    p99 = float(np.percentile(errors_nm[finite], 99))
+    print(f'errors_nm stats: min={mn:.6g}  p50={p50:.6g}  p99={p99:.6g}  max={mx:.6g}')
+
     ax.set_title(f'LAEA: {title}')
     f_name = slug(name)
     plt.savefig(f"output/ex0064_{f_name}_laea.png", dpi=400)
@@ -259,8 +340,8 @@ def run():
 
     # Projections/Transforms. Bary and Net are loaded by the domains.
     # EllipsoidGCD(reg)  # g_sph <=> c_sph
-    ak = AKOctahedralEllipsoid(reg)  # c_sph <=> (c_oct <=> b_oct)
-    ak.set_accuracy(1e-9)  # 1nm area
+    # ak = AKOctahedralEllipsoid(reg)  # c_sph <=> (c_oct <=> b_oct)
+    # ak.set_accuracy(1e-9)  # 1nm area
     # GCDBary(reg)
 
     vertices = {
@@ -276,6 +357,7 @@ def run():
     # elliptical axes
     a = c_ell.a
     b = c_ell.b
+    print(f"c_ell axes: a={a:.3f}  b={b:.3f};  WGS84 a={WGS84.a:.3f}  f={WGS84.f:.12g}")
     # 3_000_000 =  local
     # 10_000_000 = hemisphere.
     # 20_000_000 = global. , 3_000_000, 10_000_000.0, 5.0
@@ -285,12 +367,53 @@ def run():
             centre = Points(np.array([[lat, lon]]), g_gcd)
             ll_pts = geodesic_cap_rnd_ecef(reg, lat, lon, 100_000, radius, seed=4325325)
             ref = reg.project(ll_pts, [g_gcd, c_ell])
-            pll = reg.project(ll_pts, [g_gcd, b_oct, c_oct, c_ell])
+
+            # Round-trip back to lat/lon (so we can inspect the worst offenders)
+            pll_ll = reg.project(ll_pts, [g_gcd, b_oct, g_gcd]).coords
+
+            # And round-trip back to ECEF for a robust 3D distance metric
+            pll = Points(pll_ll, g_gcd)
+            pll = reg.project(pll, [g_gcd, c_ell])
+
             d_m = np.linalg.norm(pll.coords - ref.coords, axis=1)
             nm_pt = d_m * 1e9  # nanometre
 
+            # Also compute geodesic distance between original and round-tripped lat/lon (WGS84)
+            lat1, lon1 = ll_pts.coords[:, 0], ll_pts.coords[:, 1]
+            lat2, lon2 = pll_ll[:, 0], pll_ll[:, 1]
+            nm_geod = geodesic_distance_nm(lat1, lon1, lat2, lon2)
+
+            # Sanity: at micron scale, chord and geodesic should agree extremely closely.
+            finite = np.isfinite(nm_geod) & np.isfinite(nm_pt)
+            if np.any(finite):
+                diff = nm_geod[finite] - nm_pt[finite]
+                print(
+                    f"distance sanity (nm): chord p50={np.percentile(nm_pt[finite], 50):.6g}  "
+                    f"geod p50={np.percentile(nm_geod[finite], 50):.6g}  "
+                    f"(geod-chord) p50={np.percentile(diff, 50):.6g}  maxabs={np.max(np.abs(diff)):.6g}"
+                )
+
+            # Prefer geodesic for reporting/plots to match ex0061
+            nm_pt = nm_geod
+
+            # Print the worst round-trips for inspection/debugging
+            top_k = 10
+            worst = np.argsort(nm_pt)[-top_k:][::-1]
+            print(f"\nWorst {top_k} round-trips for {name} (radius={radius} m):")
+            for i in worst:
+                lat1, lon1 = ll_pts.coords[i, 0], ll_pts.coords[i, 1]
+                lat2, lon2 = pll_ll[i, 0], pll_ll[i, 1]
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                print(
+                    f"  i={int(i):6d}  err_nm={nm_pt[i]:10.6f}  "
+                    f"orig=({lat1: .16f}, {lon1: .16f})  "
+                    f"rt=({lat2: .16f}, {lon2: .16f})  "
+                    f"d=({dlat:+.3e}°, {dlon:+.3e}°)"
+                )
+
             if radius > 200.0:
-                la, lo,  = ll_pts.coords[:, 0], ll_pts.coords[:, 1]
+                la, lo = ll_pts.coords[:, 0], ll_pts.coords[:, 1]
                 sort_indices = np.argsort(nm_pt)
                 lo_s = lo[sort_indices]
                 la_s = la[sort_indices]
@@ -298,7 +421,8 @@ def run():
                 f_name = f'{name}_{radius/1000}km'
                 plot_global_error_map(
                     lo_s, la_s, errs, center_lon=lon, center_lat=lat,
-                    title=f"c_ell/b_oct Projection ∂nm at '{name}'; over radius {radius}", name=f_name
+                    title=f"c_ell/b_oct Projection ∂nm at '{name}'; over radius {radius}", name=f_name,
+                    c_clip=(0.5, 99.5),
                 )
             else:
                 # do small.

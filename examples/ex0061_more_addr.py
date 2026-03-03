@@ -98,6 +98,8 @@ if __name__ == '__main__':
             "SWΛ": {"name": "centroid", "lat": -33.093812, "lon": -115.138392}
         },
         'places': {
+            "odd": {"name": "Ex ECEF NE", "lat": -32.13561916, "lon": 47.14912943},
+
             "EAV": {
                 "name": "Mogadishu, Somalia",
                 "lat": 2.0469, "lon": 45.3354
@@ -230,14 +232,9 @@ if __name__ == '__main__':
     pos = Points(np.array(ll), g_gcd)
     bry = reg.project(pos, [g_gcd, b_oct])  # spherical cart
 
-    # Round trip each projection.
-    test(pos, [g_gcd, c_ell])
-    test(pos, [g_gcd, c_ell, c_oct])
-    test(pos, [g_gcd, c_ell, c_oct, b_oct])
-    pxy = reg.project(pos, [g_gcd, c_ell])
-    test(pxy, [c_ell, g_gcd])
-    test(pxy, [c_ell, c_oct])
-    test(pxy, [c_ell, c_oct, b_oct])
+    p1 = reg.project(pos, [g_gcd, b_oct])
+    p2 = reg.project(bry, [b_oct, g_gcd])
+    dxr = wgs84(pos.coords, p2.coords) * 1e+9
 
     rtp = reg.project(bry, [b_oct, g_gcd])  # sph rt..
     dif = wgs84(pos.coords, rtp.coords) * 1e+9
@@ -283,6 +280,7 @@ if __name__ == '__main__':
         print(f'{nm} {l64a[idx]} (U64A Address)')
         print(f'{nm} {l64k[idx]} (U64K Identity)')
 
+        print(f'∂{dxr[idx]:.6f}nm (roundtrip via GCD<->Barycentric<->GCD)')
         print(f'∂{dif[idx]:.6f}nm (roundtrip via GCD<->Barycentric)')
         print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->Bary Regions)')
         print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->H9 Layer 36)')

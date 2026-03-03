@@ -63,21 +63,20 @@ class AuthalicWarp:
         nn_dy = NearestNDInterpolator(self.src, diff[:, 1])
 
         if interp != 'linear':
-            # 1. FEED THE PADDED DATA HERE
             ct_dx = CloughTocher2DInterpolator(padded_src, padded_diff[:, 0])
             ct_dy = CloughTocher2DInterpolator(padded_src, padded_diff[:, 1])
 
-            # 2. RESTORE THE NAN WRAPPERS
             def fwd_dx(xy):
                 d = ct_dx(xy)
-                m = np.isnan(d)
+                # Only fallback if the output is NaN AND the input was a valid coordinate
+                m = np.isnan(d) & np.isfinite(xy).all(axis=1)
                 if np.any(m):
                     d[m] = nn_dx(xy[m])
                 return d
 
             def fwd_dy(xy):
                 d = ct_dy(xy)
-                m = np.isnan(d)
+                m = np.isnan(d) & np.isfinite(xy).all(axis=1)
                 if np.any(m):
                     d[m] = nn_dy(xy[m])
                 return d
@@ -86,20 +85,19 @@ class AuthalicWarp:
             self.fwd_dy = fwd_dy
 
         else:
-            # Linear fallback (does not use padding)
             lin_dx = LinearNDInterpolator(self.src, diff[:, 0])
             lin_dy = LinearNDInterpolator(self.src, diff[:, 1])
 
             def fwd_dx(xy):
                 d = lin_dx(xy)
-                m = np.isnan(d)
+                m = np.isnan(d) & np.isfinite(xy).all(axis=1)
                 if np.any(m):
                     d[m] = nn_dx(xy[m])
                 return d
 
             def fwd_dy(xy):
                 d = lin_dy(xy)
-                m = np.isnan(d)
+                m = np.isnan(d) & np.isfinite(xy).all(axis=1)
                 if np.any(m):
                     d[m] = nn_dy(xy[m])
                 return d
