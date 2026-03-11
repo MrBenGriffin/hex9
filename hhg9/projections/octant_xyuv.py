@@ -6,7 +6,6 @@
 Part of the H9 project
 """
 import numpy as np
-from hhg9 import Points
 from hhg9.base.projection import Projection
 
 

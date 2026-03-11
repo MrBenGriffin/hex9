@@ -8,6 +8,8 @@ This grabs rectangle boundaries from which we sample the octahedral.
 The actual octahedral render series is found in 0076.
 
 Last Tested
+
+02 March 2026 0.1.1a1 (passed - BUT to be written using hexagons)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (passed)
 25 November 2025 (passed)
@@ -34,7 +36,6 @@ def json_load(path):
 if __name__ == '__main__':
     reg = Registrar()  # Manage Domains & Projections
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = reg.domain('g_gcd')
     h9 = OctahedralH9(reg)            # formatter.
     b_oct.register_format(h9)

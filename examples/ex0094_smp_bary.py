@@ -12,6 +12,7 @@ Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
 
 Last Tested
+02 March 2026 0.1.1a1 (passed)
 26 December 2025 0.1.0a4 (passed)
 16 December 2025 0.1.0a3 (?passed)
 08 October 2025 (passed)
@@ -20,19 +21,18 @@ import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
-from hhg9.algorithms.grid import sq_grid_vx, fit
+from hhg9.h9.grid import sq_grid_vx, fit
 from PIL import Image  # image saving
 
 
-def run(scale=2003):
+def run(scale=1201):
     """Runner"""
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
-    # Load in plate carrée - will use 2700x1350 Blue Marble here.
-    img = image.imread(f'src/world5400x2700.png', 'png')
+    # Load in plate carrée - will use Blue Marble here.
+    img = image.imread(f'src/tissot_3600x1800.png', 'png')
     pc_px = p_pix.adopt(img)
     pc_el = reg.project(pc_px, [p_pix, 'g_gcd', 'c_ell'])
     src = KDTree(pc_el.coords)  # KDTree of plate_carrée projected onto unit sphere.
@@ -42,8 +42,9 @@ def run(scale=2003):
     grid_bits_d = sq_grid_vx(scale, 0)
     # These are the pixel grids we will use
 
-    for side in ["NWA", "NEA"]:
-        octant = b_oct.sides[side]
+    # for side in ["NWA", "NEA"]:
+    #     octant = b_oct.sides[side]
+    for side, octant in b_oct.sides.items():
         if octant.mode == 1:
             wid, hgt, rec, msk, _, _ = grid_bits_u
         else:

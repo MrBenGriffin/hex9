@@ -7,7 +7,9 @@ Grid Methods - eg for composing rectilinear pixel grids for projected sampling.
 """
 from functools import cache
 import numpy as np
-from hhg9.h9 import H9K
+
+from hhg9.algorithms.geometry import inside_convex_polygon_cw
+from hhg9.h9 import H9K, H9P
 from hhg9.h9.classifier import in_scope
 
 
@@ -188,89 +190,117 @@ def sq_grid_vx(scale: float = 1000, mode: int = 0):
     trx = in_scope(tx, rec[:, 1], mo)  # ~half a pixel in coord space
     return wid, hgt, rec, trx, pix_x, pix_y
 
-
-def _cross2d(ab, ap):
-    """in_convex_poly Helper: 2D cross for batched points vs one edge"""
-    return ap[..., 0] * ab[1] - ap[..., 1] * ab[0]
-
-
-def in_convex_poly(points, poly):
-    """
-    Vectorized check if each point in `points` is inside the convex polygon.
-
-    Parameters:
-        points: (n, 2) NumPy array of n points to test.
-        poly:   (m, 2) array-like of vertices in CW or CCW order.
-
-    Returns:
-        Boolean mask of length n indicating whether each point is inside.
-    """
-    poly = np.asarray(poly, dtype=float)
-    points = np.atleast_2d(points).astype(float)
-    npts = points.shape[0]
-    m = poly.shape[0]
-    if m < 3:
-        return np.zeros(npts, dtype=bool)
-
-    # Use polygon centroid to determine the interior side relative to edges.
-    # This avoids ambiguity from winding (CW vs CCW) and axis conventions.
-    ref = poly.mean(axis=0)
-    a0 = poly[0]
-    b0 = poly[1 % m]
-    ab0 = b0 - a0
-    s = np.sign(_cross2d(ab0, ref - a0))
-    if s == 0:
-        s = 1.0
-
-    inside = np.ones(npts, dtype=bool)
-    eps = 1e-12
-    for i in range(m):
-        a = poly[i]
-        b = poly[(i + 1) % m]
-        ab = b - a
-        cp = _cross2d(ab, points - a)  # (hex_layer,)
-        # Keep points on the same side as the centroid (within tolerance)
-        inside &= (s * cp >= -eps)
-        if not inside.any():
-            # early exit if all points are already outside
-            return inside
-    return inside
-
-
-def qa_grid(quad, scale: float = 1000):
+def qa_grid(quad, scale: float = 200, affine=None):
     """
     Return a rectilinear grid of points within a quadrilateral.
     Also returns the mask and scales.
 
-    Notes:
-        - Y is sampled from max→min so row 0 corresponds to the top of the quad (image-like).
-        - The returned scales are (sx, sy) in pixels-per-unit for X and Y respectively,
-          derived from the chosen integer width/height and the quad spans.
+    Parameters
+    ----------
+    quad : array-like, shape (4, 2)
+        Quadrilateral vertices in barycentric coordinate space.
+    scale : float
+        Pixels per coordinate unit (e.g. 200 → 200 px over a 1-unit span).
+        Grid dimensions are derived from the placed bounding box:
+            wid = round(scale * bbox_width)
+            hgt = round(scale * bbox_height)
+    affine : tuple (matrix, offset) or None
+        Affine transform mapping quad from barycentric to net space.
+        grid and mask are both computed in the post-transform space.
+
+    Returns
+    -------
+    wid, hgt : int
+        Pixel dimensions of the bounding-rectangle grid.
+    grid : ndarray (wid*hgt, 2)
+        Coordinates of all grid points in placed space (Y top→bottom).
+    trx : ndarray bool (wid*hgt,)
+        Interior mask — True where the point lies inside the placed quad.
+    (bbox, (sx, sy)) : tuple
+        bbox = [cminx, cminy, cmaxx, cmaxy]; sx/sy are pixels-per-unit.
     """
     quad = np.asarray(quad, dtype=float)
-    minx = float(quad[..., 0].min())
-    maxx = float(quad[..., 0].max())
-    miny = float(quad[..., 1].min())
-    maxy = float(quad[..., 1].max())
-    w = maxx - minx
-    h = maxy - miny
-    if w <= 0 or h <= 0:
-        # Degenerate quad; return empty structures
-        return 0, 0, np.zeros((0, 2), dtype=float), np.zeros((0,), dtype=bool), (
-        np.array([minx, miny, maxx, maxy]), (1.0, 1.0))
-
-    wid = int(scale)
-    if wid < 1:
-        wid = 1
-    hgt = max(1, int(round((h / w) * wid)))
-
-    yl = np.linspace(maxy, miny, num=hgt)
-    xl = np.linspace(minx, maxx, num=wid)
+    if affine is not None:
+        matrix, offset = affine
+        placed = quad @ matrix + np.asarray(offset, dtype=float)
+    else:
+        placed = quad
+    cminx, cmaxx = placed[:, 0].min(), placed[:, 0].max()
+    cminy, cmaxy = placed[:, 1].min(), placed[:, 1].max()
+    cw = cmaxx - cminx
+    ch = cmaxy - cminy
+    wid = max(1, int(np.rint(scale * cw)))
+    hgt = max(1, int(np.rint(scale * ch)))
+    yl = np.linspace(cmaxy, cminy, num=hgt)
+    xl = np.linspace(cminx, cmaxx, num=wid)
     xx, yy = np.meshgrid(xl, yl)
-    rec = np.stack((xx.ravel(), yy.ravel()), axis=1)
-    trx = in_convex_poly(rec, quad)
+    grid = np.stack((xx.ravel(), yy.ravel()), axis=1)
+    trx = inside_convex_polygon_cw(grid, placed)
+    sx = (wid - 1) / cw if wid > 1 else 1.0
+    sy = (hgt - 1) / ch if hgt > 1 else 1.0
+    return wid, hgt, grid, trx, (np.array([cminx, cminy, cmaxx, cmaxy]), (sx, sy))
 
-    # Pixel-per-unit scales for X and Y
-    sx = (wid - 1) / w if wid > 1 else 1.0
-    sy = (hgt - 1) / h if hgt > 1 else 1.0
-    return wid, hgt, rec, trx, (np.array([minx, miny, maxx, maxy]), (sx, sy))
+def enmesh(pts, levels: int = 35, shape=None):
+    """
+    Builds the half-hex polygons for a batch of points up to `levels` depth.
+    Walks the hierarchy for each point and generates the geometry for every hex_layer.
+
+    Returns:
+        tuple: (uniques, refs)
+            uniques: (U, 4, 2) Unique polygons in global coordinates.
+            refs: (hex_layer, depth) Indices into `uniques` for each input point/hex_layer.
+    """
+    from hhg9.h9 import H9C
+    from hhg9.h9.region import H9R, xy_regions_iter
+
+    # Modes per point
+    oc, mo = pts.cm()
+    coords = pts.coords
+    num_pts = len(pts)
+    depth = levels + 1
+
+    # Offsets and shapes (float64)
+    offs = H9C.off_xy.astype(np.float64, copy=False)  # (R,2)
+    hh = H9P.hh  # (2,3,4,2)
+
+    # Accumulators
+    parent_xy = np.zeros((num_pts, 2), dtype=np.float64)
+    scale = 1.0
+
+    # We'll collect per-hex_layer polygons flattened as (hex_layer*D, 4, 2)
+    polys = np.empty((num_pts * depth, 4, 2), dtype=np.float64)
+    flat_idx = np.empty((num_pts, depth), dtype=np.int64)  # indices into `polys`
+
+    for ev in xy_regions_iter(coords, mode=mo, depth=levels):
+        if ev.phase != 'pre':
+            continue
+        i = ev.i  # 0..D-1
+
+        # Child c2 for each row under the parent mode
+        c2 = H9R.mcc2[ev.pmo, ev.cid]  # (hex_layer,)
+        hh_shape = hh[ev.pmo, c2]  # pmo
+
+        # Translate/scale each triangle to global coords
+        polygon = parent_xy[:, None, :] + hh_shape * scale  # (hex_layer,4,2)
+
+        # Store flattened by hex_layer, keeping a stable mapping back to rows
+        start = i * num_pts
+        polys[start:start + num_pts] = polygon
+        flat_idx[:, i] = np.arange(start, start + num_pts, dtype=np.int64)
+
+        # Step parent origin for next hex_layer
+        parent_xy = parent_xy + offs[ev.cid] * scale
+        scale /= 3.0
+
+    if num_pts > 1:
+        # Deduplicate exactly: reshape to (M, 8) and unique over rows
+        mass = num_pts * depth
+        flat = polys.reshape(mass, 8)
+        uniq, first_idx, inv = np.unique(flat, axis=0, return_index=True, return_inverse=True)
+        uniques = uniq.reshape(-1, 4, 2)
+
+        # Map each (address, hex_layer) to its unique polygon index
+        refs = inv[flat_idx]
+        return uniques, refs
+    else:
+        return polys, np.array([range(num_pts)])

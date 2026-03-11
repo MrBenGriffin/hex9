@@ -179,7 +179,6 @@ if __name__ == '__main__':
     rg = Registrar()  # Manage Domains & Projections
     g_gcd = rg.domain('g_gcd')
     b_oct = rg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     pts = Points(start, g_gcd)
     pt = min_authalic(rg, pts, 3)
 

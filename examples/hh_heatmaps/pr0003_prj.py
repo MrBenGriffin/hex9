@@ -71,7 +71,6 @@ def stage(file: str,
     reg = Registrar()
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
 
     mm_gcd = Points(np.vstack((min_lat_lon, max_lat_lon)), g_gcd)
     mm_data = reg.project(mm_gcd, [g_gcd, b_oct])

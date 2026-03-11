@@ -360,7 +360,6 @@ if __name__ == '__main__':
     g_gcd = rg.domain('g_gcd')
     c_ell = rg.domain('c_ell')  # EPSG:4978
     b_oct = rg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
     c_oct = rg.domain('c_oct')
     # 57.1255027778, -156.8763111111 APNP (alaska national park)

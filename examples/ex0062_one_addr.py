@@ -31,8 +31,10 @@ if __name__ == '__main__':
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
 
+    # name = 'Null Antipodes'
     name = 'School of Informatics'
     ll = np.atleast_2d([
+        # [0.0, 180.0]
         [55.94480923423753, -3.187282666241978]
     ])
 
@@ -60,8 +62,8 @@ if __name__ == '__main__':
     cl = [f'{i:01X}' for i in list(rxx[0])]
     print(f'Regions: {cl}')
 
-    # rtp = reg.project(bry, [b_oct, g_gcd])  # sph rt..
-    # dif = wgs84(pos.coords, rtp.coords) * 1e+9
+    rtp = reg.project(bry, [b_oct, g_gcd])  # sph rt..
+    dif = wgs84(pos.coords, rtp.coords) * 1e+9
     # oc, mo = bry.cm()
     cxx = rg.xy_regions(bry.coords, mo)
     xym = rg.regions_xy(cxx)
@@ -78,10 +80,9 @@ if __name__ == '__main__':
 
     print(f'Regions {cxx}')
     print(f'{pos:dms} (Reference Coordinates)')
-    print(f'{ltp:dms} (Label RT Coordinates)')
     print(f'{ltp:dms} (Label GCD Coordinates)')
 
-    # print(f'∂{dif:.6f}nm (roundtrip via GCD<->Barycentric)')
+    print(f'∂{dif[0]:.6f}nm (roundtrip via GCD<->Barycentric)')
     print(f'∂{rif[0]:.6f}nm (roundtrip via GCD<->Bary Regions)')
     print(f'∂{lif[0]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
     print(f'H9.adr:{bry:h9}')
@@ -92,6 +93,6 @@ if __name__ == '__main__':
         print(f'H9.key; layer {layer}:{bry:h9.k{layer}}')
     for layer in range(35):
         print(f'H9.adr; layer {layer}:{bry:h9.{layer}}')
-    # print(f'Reference BRY: {bry.coords[0]:.18f},{bry.coords[1]:.18f}')
-    # print(f'Label RT  BRY: {uvr.coords[0]:.18f},{uvr.coords[1]:.18f}')
+    print(f'Reference BRY: {bry.coords[0, 0]:.18f},{bry.coords[0, 1]:.18f}')
+    print(f'Label RT  BRY: {uvr.coords[0, 0]:.18f},{uvr.coords[0, 1]:.18f}')
     print()

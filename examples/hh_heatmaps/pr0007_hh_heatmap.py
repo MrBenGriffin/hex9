@@ -3,16 +3,14 @@ Part of the H9 project - Preparation 0007
 Hex-hex heatmap overlay in barycentric space
 Last Tested 16 August 2025 √
 """
-import io
-import os
 import numpy as np
-import pandas as pd
 from PIL import Image
 from matplotlib.colors import Normalize, LogNorm
 from hhg9 import Registrar, Points
-from hhg9.h9.polygon import enmesh
-from hhg9.h9.region import xy_regions
-from matplotlib import pyplot as plt, image, patches
+from hhg9.h9 import H9P
+from hhg9.h9.polygon import hex_reduce, hex_parents, ctr_from_pars
+from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
+from matplotlib import pyplot as plt, image
 from matplotlib.collections import PolyCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.ticker import FuncFormatter
@@ -20,102 +18,9 @@ from pathlib import Path
 from bounds_utils import load_presets, resolve_bounds, needs_run
 
 
-def heatmap(df, addresses, polys, layers, weights: dict | None = None):
-    """
-    Generates a hexbin heatmap from binned addresses data in barycentric space.
-    If `weights` is provided (mapping address tuple -> value), those values are
-    used for the final hex_layer instead of counting rows.
-    """
-    if df.empty:
-        print("Heatmap data is empty. Nothing to plot.")
-        return [], []
-
-    layers_to_plot = range(*layers)
-    final_layer = layers[1] - 1
-    polygons_to_plot: list[np.ndarray] = []
-    final_pops: list[int] = []
-
-    # Precompute row-wise address tuples once to avoid repeated pandas ops
-    cols = [c for c in df.columns if c.startswith('L')]
-    addr_tuples = [tuple(int(x) for x in row if pd.notna(x)) for row in df[cols].to_numpy()]
-
-    for layer in layers_to_plot:
-        last_col = f'L{layer-1}'
-        next_col = f'L{layer}'
-        if last_col not in df.columns:
-            continue
-        if next_col not in df.columns:  # deepest possible hex_layer
-            mask = df[last_col].notna().to_numpy()
-        else:
-            mask = (df[last_col].notna() & df[next_col].isna()).to_numpy()
-        if not np.any(mask):
-            continue
-
-        # Collect polygons in this hex_layer
-        polys_for_layer = []
-        # Iterate only over selected rows, but use precomputed tuples
-        for i, ok in enumerate(mask):
-            if not ok:
-                continue
-            address_tuple = addr_tuples[i][:layer]
-            if layer == final_layer:
-                if weights is not None:
-                    final_pops.append(float(weights.get(address_tuple, 0.0)))
-                else:
-                    # fallback: count occurrences of this prefix in addr_tuples
-                    cnt = sum(1 for t in addr_tuples if t[:layer] == address_tuple)
-                    final_pops.append(float(cnt))
-            poly_indices = addresses[address_tuple]
-            polys_for_layer.append(polys[poly_indices])
-
-        if polys_for_layer:
-            polygons_to_plot.append(np.array(polys_for_layer))
-
-    return polygons_to_plot, final_pops
-
-
-class AddressCounter:
-    """Count things"""
-    def __init__(self, unique_polygons, shape_array):
-        self.unique_polygons = unique_polygons
-        max_depth = max(len(key) for key in unique_polygons)
-        self.df = pd.DataFrame(unique_polygons.keys(),
-                               columns=[f'L{i}' for i in range(max_depth)])
-
-    def prefix_mask(self, prefix_key):
-        """
-        Performs a fast, vectorized match of addresses matching a prefix,
-        Returning the mask of those which match the prefix.
-        This returns a `pandas` mask, so use to_numpy() to convert for numpy array filtering.
-        """
-        mask = pd.Series(True, index=self.df.index)
-        for k, prefix_val in enumerate(prefix_key):
-            mask &= (self.df[f'L{k}'] == prefix_val)
-        return mask
-
-    def count_children(self, prefix_key):
-        """
-        Performs a fast, vectorized count of addresses matching a prefix.
-        """
-        mask = self.prefix_mask(prefix_key)
-        return mask.sum()
-
-    def count_by_length(self, n):
-        """
-        Counts the number of addresses that have a specific length n.
-        """
-        if n == 0:
-            return 0
-
-        if f'L{n}' not in self.df.columns:
-            return 0  # Or handle as an error
-
-        last_col = f'L{n - 1}'
-        next_col = f'L{n}'
-
-        # Create the boolean mask and return the sum
-        mask = self.df[last_col].notna() & self.df[next_col].isna()
-        return mask.sum()
+def _hex_verts_b(hex_par, xpm, xc2, scale):
+    """Full-hex vertices in b_oct barycentric space. Returns (N, 6, 2)."""
+    return (hex_par[:, None, :] + H9P.hx[xpm, xc2] * scale).reshape(-1, 6, 2)
 
 
 def stage(file: str,
@@ -210,7 +115,6 @@ def stage(file: str,
     c_ell = reg.domain('c_ell')
     c_oct = reg.domain('c_oct')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
     ak = reg.projection('oct_ell')
     ak.set_accuracy(0.0000000001)
 
@@ -249,68 +153,54 @@ def stage(file: str,
         if debug:
             print(f"[pr0007] projected bary points: {pop_pts_b.coords.shape}")
 
-    # URIs at requested hex depth
-    _, mo_pop = pop_pts_b.cm()
-    uri_pop   = xy_regions(pop_pts_b.coords, mo_pop, hex_layers)
-
-    # Build per‑cell weights for the final hex_layer (count of children or sum of weights)
+    # Bin population points to the final hex layer
     L_final = layer_range[1] - 1
     if L_final <= 0:
         raise ValueError(f"[pr0007] invalid layer_range {layer_range}")
-    weights_by_addr: dict[tuple, float] = {}
-    if pop_weights is not None and len(pop_weights) == uri_pop.shape[0]:
-        for i, row in enumerate(uri_pop):
-            key = tuple(int(x) for x in row[:L_final])
-            weights_by_addr[key] = weights_by_addr.get(key, 0.0) + float(pop_weights[i])
+
+    hex_num, hex_v, hex_inv, _ = hex_reduce(pop_pts_b, L_final)
+
+    # Aggregate population per hex (weighted sum or point count)
+    if pop_weights is not None and len(pop_weights) == len(pop_pts_b):
+        hex_pop = np.zeros(hex_num, dtype=float)
+        np.add.at(hex_pop, hex_inv, pop_weights)
     else:
-        for row in uri_pop:
-            key = tuple(int(x) for x in row[:L_final])
-            weights_by_addr[key] = weights_by_addr.get(key, 0.0) + 1.0
+        hex_pop = np.bincount(hex_inv, minlength=hex_num).astype(float)
 
-    # Enmesh population URIs
-    shapes_mesh, ums_mesh = enmesh(uri_pop)
-
-    # Build AddressCounter and produce polygons + final pops (weighted)
-    counter = AddressCounter(ums_mesh, shapes_mesh)
-    layers = layer_range
     if show_stats:
-        try:
-            max_depth = len(counter.df.columns)
-            start, stop = layers
-            start = max(1, start)
-            stop = min(stop, max_depth + 1)
-            layer_counts = []
-            for n in range(start, stop):
-                c = counter.count_by_length(n)
-                layer_counts.append((n, int(c)))
-            if layer_counts:
-                msg = ", ".join([f"L{n}:{c}" for (n, c) in layer_counts])
-                total = int(counter.df.shape[0])
-                print(f"[pr0007] address counts by hex_layer [{start},{stop}): {msg}  | total={total}")
-        except Exception as e:
-            print(f"[pr0007] hex_layer-count report failed: {e}")
+        print(f"[pr0007] L{L_final}: {hex_num} hexes, "
+              f"pop range [{hex_pop.min():.0f}, {hex_pop.max():.0f}], "
+              f"total {hex_pop.sum():.0f}")
 
-    layer_polys, final_pops = heatmap(counter.df, ums_mesh, shapes_mesh, layers, weights=weights_by_addr)
-    if not layer_polys:
+    # Hex parents + centroids
+    tails = tail_key_from_reversible(hex_v[:, -1])
+    hex_par, hex_oid, scale = hex_parents(b_oct, hex_v, hex_num)
+    ctr_pts = ctr_from_pars(b_oct, hex_par, hex_oid, scale, tails)
+
+    # Build polygon layers: ancestor outlines then final colored layer
+    final_polys = []
+    for anc_level in range(layer_range[0], L_final):
+        anc_num, anc_v, _, _ = hex_reduce(ctr_pts, anc_level)
+        anc_par, anc_oid, anc_scale = hex_parents(b_oct, anc_v, anc_num, anc_level)
+        anc_xpm, anc_xc2, _, _ = tail_unpack_reversible(anc_v[:, -1])
+        verts = _hex_verts_b(anc_par, anc_xpm, anc_xc2, anc_scale)
+        # Rotate into aligned frame
+        flat = (verts.reshape(-1, 2) - centroid) @ matrix + centroid
+        final_polys.append(flat.reshape(verts.shape))
+        if show_stats:
+            print(f"[pr0007] L{anc_level}: {anc_num} ancestor hexes")
+
+    # Final (population) layer
+    xpm, xc2, _, _ = tail_unpack_reversible(hex_v[:, -1])
+    verts = _hex_verts_b(hex_par, xpm, xc2, scale)
+    flat = (verts.reshape(-1, 2) - centroid) @ matrix + centroid
+    final_polys.append(flat.reshape(verts.shape))
+
+    final_pops = hex_pop
+
+    if not final_polys:
         print("[pr0007] nothing to draw (population)")
         return out_png
-
-    lengths = [len(arr) for arr in layer_polys]
-    split_indices = np.cumsum(lengths)[:-1]
-    points = np.concatenate(layer_polys).reshape(-1, 2)
-
-    # Rotate polygons into the rotated frame for overlay with the stage‑5 PNG
-    squared = (points - centroid) @ matrix + centroid
-    n_polys = sum(lengths)
-    n_points = squared.shape[0]
-    if n_polys == 0 or n_points % n_polys != 0:
-        raise ValueError(f"[pr0007] cannot infer verts-per-poly: points={n_points}, polys={n_polys}")
-    verts_per_poly = n_points // n_polys
-    if debug:
-        print(f"[pr0007] verts_per_poly={verts_per_poly} (points={n_points}, polys={n_polys})")
-    final_polys = np.split(squared.reshape(-1, verts_per_poly, 2), split_indices)
-    if verts_per_poly == 5:
-        final_polys = [arr[:, :4, :] for arr in final_polys]
 
     # Figure size using rotated extent
     ratio = (maxy - miny) / max(1e-12, (maxx - minx))
@@ -402,16 +292,16 @@ def stage(file: str,
 
     if final_polys is not None:
         for level, polys in enumerate(final_polys):
-            layer = level + layers[0]
+            is_final = (level == len(final_polys) - 1)
             if debug:
                 collection = PolyCollection(
                     polys,
-                    ec=(1,0,0,0.8),
+                    ec=(1, 0, 0, 0.8),
                     fc='none',
                     linewidth=0.8,
                     antialiaseds=True,
                 )
-            elif layer == layers[1] - 1:
+            elif is_final:
                 collection = PolyCollection(
                     polys,
                     facecolors=colors,
@@ -559,7 +449,7 @@ if __name__ == '__main__':
           force=args.force,
           show_legend=args.legend,
           save_mask=args.mask,
-          scale=args.scale,
+          scale=args.pixels,
           log_eps=args.log_eps,
           show_stats=not args.no_stats,
           debug=args.debug)

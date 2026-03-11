@@ -12,6 +12,7 @@ from .lattice import H9C, H9Cell
 from .region import H9R, H9Region
 from .addressing import H9_RA, HEX_LUTS
 from .polygon import H9P, H9Polygon
+from .tail import TailStyle
 
 __all__ = [
     "H9K", "H9Const", "H9O",

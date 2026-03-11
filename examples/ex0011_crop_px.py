@@ -21,7 +21,7 @@ def run():
     """
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')
-    base = np.array(Image.open("src/bm3600x1800.jpg").convert("RGBA"))
+    base = np.array(Image.open("src/bm_3600x1800.jpg").convert("RGBA"))
     height, width, channels = base.shape
     fs = PlatePixelCarree.full_sphere(reg, width, height)
     zone = [-11, 49.5, 2.5, 61]  # Rough UK boundary box

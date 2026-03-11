@@ -14,7 +14,7 @@ import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
-from hhg9.algorithms.grid import sq_grid, fit
+from hhg9.h9.grid import sq_grid, fit
 from PIL import Image  # image saving
 
 from experimental.algorithms.warp import Warper

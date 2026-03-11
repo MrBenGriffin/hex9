@@ -4,11 +4,11 @@
 
 """
 Given a polygon in Latitude/Longitude points,
-and a hex_layer, generate the hex-grid for that hex_layer, along with ancestry.
-It will extract any common prefix, and plot the hex-grid and ancestry along with hex labels.
+and a hex_layer, generate the hex-grid for that hex_layer
+and draw it in b_oct.
 
 Last Tested
-11 Mar 2026 0.1.1a1 (better)
+06 Mar 2026 0.1.1a1 (better)
 26 Dec 2025 0.1.0a4 (working well)
 """
 import time
@@ -18,8 +18,8 @@ from matplotlib.collections import PolyCollection
 import numpy as np
 from hhg9 import Points, Registrar
 from hhg9.h9 import H9K
-from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
-from hhg9.h9.polygon import hex_reduce, hex_parents, H9P, ctr_from_pars
+from hhg9.h9.addressing import hex_str_encode, TailStyle
+from hhg9.h9.polygon import hex_poly_layer
 from geographiclib.geodesic import Geodesic
 from contextlib import contextmanager
 from hhg9.formats import OctahedralH9
@@ -40,22 +40,30 @@ def time_block(label):
 
 def plot_pts(pts, layer):
     """Draw points and save"""
-    xmin, ymin, xmax, ymax = (2.401, 1.906, 2.463, 1.941)
+    xmax = 2.4443197374349794
+    xmin = 2.3977612662457415
+    ymax = 1.9353993029397951
+    ymin = 1.9101987911827665
     ratio = np.abs(xmax - xmin) / np.abs(ymax - ymin)
     fig = plt.figure(figsize=(ratio * 10, 10), dpi=200, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_subplot(111)  #
+
+    # xmin = float(np.min(pts.coords[:, 0]))
+    # xmax = float(np.max(pts.coords[:, 0]))
+    # ymin = float(np.min(pts.coords[:, 1]))
+    # ymax = float(np.max(pts.coords[:, 1]))
     pad_x = 0.01 * (xmax - xmin) if xmax > xmin else 1.0
     pad_y = 0.01 * (ymax - ymin) if ymax > ymin else 1.0
     ax.set_xlim(xmin - pad_x, xmax + pad_x)
     ax.set_ylim(ymin - pad_y, ymax + pad_y)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    ax.scatter(pts.coords[:, 0], pts.coords[:, 1], ec='none', marker='.', s=20)
+    ax.scatter(pts.coords[:, 0], pts.coords[:, 1], ec='none', marker='.', s=10)
     fig.savefig(f"output/ex0260_pts_{layer}.png", dpi=200)
 
 
-def plot_hex(pts_list, prefix='', name='hex', ctrs=None, labels=None, values=None, lut=None, nodata=0):
+def plot_hex(pts, name='hex', ctrs=None, labels=None, values=None, lut=None, nodata=0):
     """Plot hex polygons.
     Args:
         pts: Points containing hex vertices, shaped (H*6,2) in `pts.coords`.
@@ -64,7 +72,12 @@ def plot_hex(pts_list, prefix='', name='hex', ctrs=None, labels=None, values=Non
         lut: optional uint8 LUT of shape (256,3) mapping class -> RGB.
         nodata: class code treated as nodata (alpha=0). Set to None to disable.
     """
-    xmin, ymin, xmax, ymax = (2.401, 1.906, 2.463, 1.941)
+    # xmax = 2.4443197374349794
+    # xmin = 2.3977612662457415
+    # ymax = 1.9353993029397951
+    # ymin = 1.9101987911827665
+    xmin, ymin = float(np.min(pts.coords[:, 0])), float(np.min(pts.coords[:, 1]))
+    xmax, ymax = float(np.max(pts.coords[:, 0])), float(np.max(pts.coords[:, 1]))
     ratio = np.abs(xmax - xmin) / np.abs(ymax - ymin)
     fig = plt.figure(figsize=(ratio * 10, 10), dpi=400, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
@@ -75,17 +88,29 @@ def plot_hex(pts_list, prefix='', name='hex', ctrs=None, labels=None, values=Non
     ax.set_ylim(ymin - pad_y, ymax + pad_y)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    ax.text(xmax-pad_x, ymin+pad_y, f'Prefix:{prefix}', color='k', fontsize=40, ha='right', va='center')
-    layers = len(pts_list) - 1
-    for i, pts in enumerate(pts_list):
-        lw = 0.2 * ((layers-i)+1)
-        polys = np.asarray(pts.coords, dtype=np.float64).reshape(-1, 6, 2)
-        h = polys.shape[0]
-        if h == 0:
-            continue
-        face_colors = '#33994420'
-        edge_colors = 'black' if i == layers else '#ffffffa0'
-        ax.add_collection(PolyCollection(polys, linewidths=lw, facecolors=face_colors, edgecolors=edge_colors))
+    polys = np.asarray(pts.coords, dtype=np.float64).reshape(-1, 6, 2)
+    h = polys.shape[0]
+    if h == 0:
+        print(f"plot_hex: no polygons for {name}")
+        return
+
+    face_colors = '#33994422'
+    edge_colors = 'black'
+    if (values is not None) and (lut is not None):
+        v = np.asarray(values)
+        if v.shape != (h,):
+            raise ValueError(f"plot_hex: values must have shape ({h},), got {v.shape}")
+        # Map class codes -> RGBA in [0,1]
+        codes = v.astype(np.int32, copy=False)
+        codes = np.clip(codes, 0, lut.shape[0] - 1)
+        rgb = lut[codes].astype(np.float64) / 255.0  # (H,3)
+        alpha = np.ones((h, 1), dtype=np.float64)
+        if nodata is not None:
+            alpha[codes == int(nodata)] = 0.0
+        face_colors = np.concatenate([rgb, alpha], axis=1)  # (H,4)
+        edge_colors = 'none'  # cleaner for categorical fills; change to 'black' if you want outlines
+
+    ax.add_collection(PolyCollection(polys, linewidths=0.2, facecolors=face_colors, edgecolors=edge_colors))
     if ctrs is not None:
         ctrs = ctrs.coords if isinstance(ctrs, Points) else ctrs
         if labels is None:
@@ -95,32 +120,8 @@ def plot_hex(pts_list, prefix='', name='hex', ctrs=None, labels=None, values=Non
                 ax.text(pt[0], pt[1], label, color='k', fontsize=4, ha='center', va='center')
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    fig.savefig(f"output/ex0260_hx_{name}.png", dpi=200)
-    print(f"fig saved at output/ex0260_hx_{name}.png")
-
-
-def plot_ctr(pts, name='hex', labels=None):
-    """Plot hex centroids as dots with optional text labels."""
-    ctrs = pts.coords
-    xmin, ymin = float(np.min(ctrs[:, 0])), float(np.min(ctrs[:, 1]))
-    xmax, ymax = float(np.max(ctrs[:, 0])), float(np.max(ctrs[:, 1]))
-    ratio = np.abs(xmax - xmin) / np.abs(ymax - ymin) if ymax > ymin else 1.0
-    fig = plt.figure(figsize=(ratio * 10, 10), dpi=400, frameon=False)
-    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
-    ax = fig.add_subplot(111)
-    pad_x = 0.01 * (xmax - xmin) if xmax > xmin else 1.0
-    pad_y = 0.01 * (ymax - ymin) if ymax > ymin else 1.0
-    ax.set_xlim(xmin - pad_x, xmax + pad_x)
-    ax.set_ylim(ymin - pad_y, ymax + pad_y)
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_axis_off()
-    if labels is None:
-        ax.scatter(ctrs[:, 0], ctrs[:, 1], ec='none', marker='.', s=30)
-    else:
-        for pt, label in zip(ctrs, labels):
-            ax.text(pt[0], pt[1], label, color='k', fontsize=4, ha='center', va='center')
-    fig.savefig(f"output/ex0260_ctr_{name}.png", dpi=200)
-    print(f"fig saved at output/ex0260_ctr_{name}.png")
+    fig.savefig(f"output/ex0261_hx_{name}.png", dpi=200)
+    print(f"fig saved at output/ex0261_hx_{name}.png")
 
 
 def calculate_intersections(poly_grid, v):
@@ -170,6 +171,7 @@ def scanline_h9_sheet(poly_n, level):
     # 2. Get Row Range
     v_min = int(np.floor(poly_grid[:, 1].min()))
     v_max = int(np.ceil(poly_grid[:, 1].max()))
+
     u_acc, v_acc = [], []
 
     for v in range(v_min, v_max + 1):
@@ -204,33 +206,9 @@ def scanline_h9_sheet(poly_n, level):
 
     uv = np.stack([x_n, y_n], axis=1)
     pts = Points(uv, domain=poly_n.domain)
-    plot_pts(pts, level)
-
     result = poly_n.domain.filter(pts)
     print(f'Layer: {level}; Points: {len(result)}')
     return result
-
-
-def hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct):
-    """Return a set of hexagons for this layer"""
-    hex_verts_n = np.zeros((len(hex_par), 6, 2))
-    for side, proj in n_oct.projs.items():
-        oid = n_oct.sides[side].oid
-        fm = (hex_oid == oid)
-        if not np.any(fm):
-            continue
-        if proj.c2trans is None:
-            par_n = hex_par[fm] @ proj.matrix + proj.offset
-            hex_verts_n[fm] = par_n[:, None, :] + H9P.hx[xpm[fm], xc2[fm]] * scale @ proj.matrix
-        else:
-            for c2v in range(3):
-                c2m = fm & (xc2 == c2v)
-                if not np.any(c2m):
-                    continue
-                matr, off_c2 = proj.c2_affine(c2v)
-                par_n = hex_par[c2m] @ matr + off_c2 + proj.offset
-                hex_verts_n[c2m] = par_n[:, None, :] + H9P.hx[xpm[c2m], c2v] * scale @ matr
-    return Points(hex_verts_n.reshape(-1, 2), n_oct)
 
 
 if __name__ == '__main__':
@@ -244,11 +222,11 @@ if __name__ == '__main__':
     b_oct.register_format(h9f)
 
     c_oct = rg.domain('c_oct')
-    n_oct = rg.domain(f'n_oct:butterfly')
+    n_oct = rg.domain(f'n_oct:rhombus')
 
-    # [birmingham-bristol-london-belgium] polygon in gcd
+    # birmingham-[bristol-london]-dover motorway polygon in gcd
     b_dll = np.array([
-        [51.084464524954795, -3.4462861844929585],
+        [51.484464524954795, -3.0462861844929585],
         [52.68223344923537, -2.189458562294672],
         [52.60858425701964, -1.432594162686184],
         [51.648685168766754, -2.0537941887799422],
@@ -257,50 +235,28 @@ if __name__ == '__main__':
         [51.684114370958646, 0.5309691381848917],
         [51.40435883726121, 0.47384729670500597],
         [51.29190823165293, 5.4859054058927266],
-        [50.72448838777691, 5.4044368907702074],
+        [50.95448838777691, 5.4044368907702074],
     ])
     pll = Points(b_dll, g_gcd)
-    # pnt = rg.project(pll, [g_gcd, b_oct])
-    ntt = rg.project(pll, [g_gcd, b_oct, n_oct])
+    pnt = rg.project(pll, [g_gcd, b_oct])
+    ntt = rg.project(pnt, [b_oct, n_oct])
 
-    # threshold = 2  # min L+1 subsamples inside polygon (1..3); 1=include edge hexes
-    for layer in [6]:  # range(6, 8):
-        scn = scanline_h9_sheet(ntt, layer)
-        b_pts = rg.project(scn, [n_oct, b_oct])
+    for layer in [5]:  # range(6, 8):
+        with time_block(f"{layer} scanline_h9_sheet"):
+            scn = scanline_h9_sheet(ntt, layer)
+            plot_pts(scn, layer)
+            b_pts = rg.project(scn, [n_oct, b_oct])
 
-        # Drop points that landed outside all net faces
-        valid = np.any(b_pts.components != 0, axis=-1)
-        b_pts = Points(b_pts.coords[valid], domain=b_oct, components=b_pts.components[valid])
-        # Bin to L-level parents, apply a threshold, compute centroids directly
-        hex_num, hex_v, hex_inv, _ = hex_reduce(b_pts, layer)
-        counts = np.bincount(hex_inv, minlength=hex_num)
-        for threshold in [1, 2, 3]:
-            # Oversample at L+1 to get candidates inside the polygon
-            keep = counts >= threshold
-            print(f'Layer {layer}: {keep.sum()} hexes (threshold={threshold})')
-            hex_v_k = hex_v[keep]
-            tails = tail_key_from_reversible(hex_v_k[:, -1])
-            hex_par, hex_oid, scale = hex_parents(b_oct, hex_v_k, int(keep.sum()))  # owners of the points.
-            ctr = ctr_from_pars(b_oct, hex_par, hex_oid, scale, tails)
+            # Drop points that landed outside all net faces: pt_face() returns (0,0,0) for them,
+            # which _project_composites silently maps to octant 0 with wrong coordinates.
+            valid = np.any(b_pts.components != 0, axis=-1)
+            b_pts = Points(b_pts.coords[valid], domain=b_oct, components=b_pts.components[valid])
 
-            hex_adr = hex_v_k.copy()
-            hex_adr[:, -1] = tails >> 4
-            matches = np.all(hex_adr == hex_adr[0, :], axis=0)
-            prefix_len = np.argmin(matches) if not np.all(matches) else hex_adr.shape[1]
-            prefix_str = ''.join([f'{a:0x}' for a in hex_adr[0, :prefix_len]])
-            sub_adr = hex_adr[:, prefix_len:]
-            anc_levels = range(prefix_len, layer)  # or range(max(k, layer-2), layer) if too many
-            verts = []
-            for anc_level in anc_levels:
-                anc_num, anc_v, _, _ = hex_reduce(ctr, anc_level)
-                anc_par, anc_oid, anc_scale = hex_parents(b_oct, anc_v, anc_num, anc_level)
-                anc_xpm, anc_xc2, _, _ = tail_unpack_reversible(anc_v[:, -1])
-                verts.append(hex_verts_in_noct(anc_par, anc_oid, anc_xpm, anc_xc2, anc_scale, n_oct))
-
-            hd = np.array(list(''.join([f'{a:0x}' for a in sub_adr[i]]) for i in range(sub_adr.shape[0])))
-
-            # Build hex vertices directly in n_oct via per-face rigid transform.
-            xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
-            verts.append(hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct))
-            ctr_n = rg.project(ctr, [b_oct, n_oct])
-            plot_hex(verts, prefix_str, f'{layer}_{threshold}', ctrs=ctr_n.coords, labels=hd)
+            hx_pts, _ = hex_poly_layer(b_pts, layers=layer)
+            h_pts = rg.project(hx_pts, [b_oct, n_oct])
+            # do labels.
+            n_ctr = np.mean(h_pts.coords.reshape(-1, 6, 2), axis=1)
+            npts = Points(n_ctr, n_oct)
+            c_pt = rg.project(npts, [n_oct, b_oct])
+            hd = hex_str_encode(c_pt, layer, tail_style=TailStyle.key)
+            plot_hex(h_pts, f'{layer}', ctrs=n_ctr, labels=hd)

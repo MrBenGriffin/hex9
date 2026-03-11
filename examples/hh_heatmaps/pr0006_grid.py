@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
-from hhg9.algorithms.grid import qa_grid
+from hhg9.h9.grid import qa_grid
 from hhg9.projections import PlatePixelGCD
 from support import Util
 from PIL import Image  # Pillow for clean image saving
@@ -98,7 +98,6 @@ def stage(file: str,
             c_ell = reg.domain('c_ell')
             c_oct = reg.domain('c_oct')
             b_oct = reg.domain('b_oct')
-            b_oct.set_warp('../src/l4_polished.npz')
             ak = reg.projection('oct_ell')
             ak.set_accuracy(0.0000000001)
             b_gcd = Points(gcd_r, g_gcd)
@@ -130,7 +129,6 @@ def stage(file: str,
     c_ell = reg.domain('c_ell')
     c_oct = reg.domain('c_oct')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
     ak = reg.projection('oct_ell')
     ak.set_accuracy(0.0000000001)
 

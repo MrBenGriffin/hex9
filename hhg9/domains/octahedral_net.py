@@ -13,7 +13,7 @@ from hhg9.base.point_format import PointFormat
 from hhg9.projections import BaryNet
 from hhg9.domains.nets import net_layouts
 from hhg9.h9 import H9K, H9P, H9O
-from hhg9.algorithms.geometry import inside_triangle_cw
+from hhg9.algorithms.geometry import inside_convex_polygon_cw
 
 
 class OctantNet(ComponentDomain):
@@ -52,85 +52,105 @@ class OctahedralNet(CompositeDomain):
             layout = 'mortar'
         super().__init__(registrar, f'n_oct:{layout}', 2)
         tp = H9P.sv  # mode vertices
-        self.face_tris = {}
+        self.face_polys = {}
         self.c_oct = c_oct
         self.b_oct = b_oct
+        self.tri_w = H9K.derived.W / H9K.lattice.U
+        self.tri_h = H9K.derived.H / H9K.lattice.V
         self.layout = net_layouts[layout]
-        grid_xy = np.array(list(self.layout['grid'].values()))[:, :2]
+        vals = list(self.layout['grid'].values())
 
-        # Each placed face contributes [x_off, x_off + 2*GW] and [y_off, y_off + 3*GH]
-        # So total width/height is span of gx,gy plus the single-face width/height
-        # self.wi = (gx_max - gx_min + 2) * self.GW
-        # self.he = (gy_max - gy_min + 3) * self.GH
-        self.wi = self.layout['width'] * H9K.derived.W
-        self.he = self.layout['height'] * H9K.derived.H
+        self.wi = self.layout['width'] * H9K.lattice.U
+        self.he = self.layout['height'] * H9K.lattice.V
 
         self.oid_mo = np.zeros((8,), dtype=np.uint8)
         for sign, val in self.layout['grid'].items():
+            c2 = None
             oid = H9O.cmp_oid[sign]
             side = H9O.oid_str[oid]
             bary = b_oct.sides[side]
+            if isinstance(val, list) and isinstance(val[0], tuple):
+                c2 = val[1:]
+                val = val[0]
             gx, gy, th = val
             x_off = gx * self.GW
             y_off = gy * self.GH
             n_theta = (th % 6) * self.RT
-            flipped = th % 2
-            mode = {0: 1, 1: 0}[bary.mode] if flipped else bary.mode
+            mode = int(bary.mode + th) % 2
             n_sig = f'{self.name}:{side}'
             b_sig = f'{b_oct.name}:{side}'
             self.oid_mo[oid] = mode
             self.sides[side] = OctantNet(registrar, self, n_sig, oid, mode)
             face = BaryNet(registrar, side, b_sig, n_sig, n_theta, (x_off, y_off))
             self.projs[side] = face
-            tri = H9P.sv[bary.mode]  # triangle from H9P. Use bary.mo b/c will transform!
-            tri_rt = tri @ face.matrix + face.offset  # bary->net
-            # Map sign→triangle and sign→side for fast lookup
-            self.face_tris[sign] = tri_rt
-            # self.sign_to_side[sign] = side
-            if 'c2' in self.layout:
-                c2f = self.layout['c2'][sign]
-                c2x = [(x * self.GW, y * self.GH, (t % 6) * self.RT) for (x, y, t) in c2f]
-                face.c2trans = c2x
+            if c2 is None:
+                tri = H9P.sv[bary.mode]  # triangle from H9P. Use bary.mo b/c will transform!
+                tri_rt = tri @ face.matrix + face.offset  # bary->net
+                # Map sign→triangle and sign→side for fast lookup
+                self.face_polys[sign] = [tri_rt]
+            else:  # if c2 is not None:
+                c2x = []
+                polys = []
+                for (x, y, t) in c2:  # calculate adjusted mode, theta units, x offset, y offset, theta-radians.
+                    m = int(mode + t) % 2
+                    t = int(t % 6)
+                    ox = x * self.GW
+                    oy = y * self.GH
+                    r = t * self.RT
+                    c2x.append((m, t, ox, oy, r))
+                face.set_c2trans(c2x)
+                for c2 in [0, 1, 2]:  # calculate adjusted mode, theta units, x offset, y offset, theta-radians.
+                    matr, off = face.c2_affine(c2)
+                    hh = H9P.hh[bary.mode, c2]
+                    polys.append((hh @ matr) + off + face.offset)
+                self.face_polys[sign] = polys
 
-    def ratio(self):
-        """Return width/height ratio"""
-        return self.wi/self.he
 
-    def img_adj(self):
-        """
-        :return: w,h adjustment to pixels (subtracted when outputting to image)
-        """
-        return self.layout['width'] + 0.51, self.layout['height'] + 0.51
+    def ratio(self) -> float:
+        """Return width/height ratio. Use NetPixel.ratio() for new code."""
+        return self.wi / self.he
 
-    def image_dims(self, pixels: int):
-        """Given the side of a triangle in pixels, return the image dimensions."""
-        tri_w = pixels
+    def img_adj(self) -> tuple:
+        """Pixel trim adjustment. Use NetPixel.img_adj() for new code."""
+        l_width = self.layout['width'] / self.tri_w
+        l_height = self.layout['height'] / self.tri_h
+        return l_width + 0.51, l_height + 0.51
+
+    def image_dims(self, pixels: int) -> tuple[int, int]:
+        """Triangle side in pixels → image (W, H). Use NetPixel.image_dims() for new code."""
         tri_h = pixels * self.R3 * 0.5
-        l_width = self.layout['width']
-        l_height = self.layout['height']
+        l_width = self.layout['width'] / self.tri_w
+        l_height = self.layout['height'] / self.tri_h
         w_a, h_a = self.img_adj()
-        img_w = l_width * tri_w - w_a
-        img_h = l_height * tri_h - h_a
-        pix_w = int(img_w)
-        pix_h = int(img_h)
-        return pix_w, pix_h
+        return int(l_width * pixels - w_a), int(l_height * tri_h - h_a)
 
-    def dim_from_image(self, pix_w: int, pix_h: int):
-        """given the image dimensions, return the side of a triangle in pixels"""
-        img_w = float(pix_w)
-        img_h = float(pix_h)
+    def dim_from_image(self, pix_w: int, pix_h: int) -> float:
+        """Image (W, H) → triangle side in pixels. Use NetPixel.dim_from_image() for new code."""
         tri_h = self.R3 * 0.5
-        tri_w = 1.0
-        l_width = self.layout['width']
-        l_height = self.layout['height']
+        l_width = self.layout['width'] / self.tri_w
+        l_height = self.layout['height'] / self.tri_h
         w_a, h_a = self.img_adj()
-        img_w += w_a
-        img_h += h_a
-        img_w /= l_width * tri_w
-        img_h /= l_height * tri_h
+        img_w = (float(pix_w) + w_a) / l_width
+        img_h = (float(pix_h) + h_a) / (l_height * tri_h)
         return np.rint((img_w + img_h) / 2.0)
 
-    def valid(self, pts: NDArray) -> NDArray:
+    def filter(self, pts):
+        """
+        Test that points are valid
+        """
+        from hhg9 import Points
+        if not isinstance(pts, Points):
+            raise TypeError('pts must be Points')
+        if pts.domain != self:
+            raise ValueError('pts must be in this domain')
+        signs = self.pt_face(pts.coords)
+        good = np.any(np.all(signs[:, None] == H9O.oid_cmp, axis=2), axis=1)
+        result = self.Points(pts.coords[good], domain=self, components=signs[good])
+        if pts.samples is not None:
+            result.samples = pts.samples[good]
+        return result
+
+    def valid(self, pts: NDArray, return_signs=False) -> NDArray:
         """
         Test that points are valid
         """
@@ -145,30 +165,13 @@ class OctahedralNet(CompositeDomain):
         """
         num_points = pts.shape[0]
         out = np.zeros((num_points, 3), dtype=np.int8)
-        for sign, tri in self.face_tris.items():
-            mask = inside_triangle_cw(pts, tri)
-            if not np.any(mask):
-                continue
-            out[mask] = np.array(sign, dtype=np.int8)
+        for sign, polys in self.face_polys.items():
+            for poly in polys:
+                mask = inside_convex_polygon_cw(pts, poly)
+                if not np.any(mask):
+                    continue
+                out[mask] = np.array(sign, dtype=np.int8)
         return out
-
-    def px_pt(self, x, y, pix):
-        """
-        Given a pixel coordinate and the side of a
-        triangle in pixels return the pt in this domain
-        tri_w = pixels
-        tri_h = pixels * self.R3 * 0.5
-        """
-        l_width = self.layout['width']
-        l_height = self.layout['height']
-        tri_w = pix
-        tri_h = pix * H9K.derived.RH
-        img_w = l_width * tri_w - (l_width + 0.51)
-        img_h = l_height * tri_h - (l_height + 0.51)
-        ux = self.wi * x/img_w
-        uy = self.he * y/img_h
-        oc = self.pt_face(np.array([ux, uy]))
-        return oc, ux, uy
 
     def binning(self, pts: Points, sig: tuple = None):
         """Identify the components of the points"""

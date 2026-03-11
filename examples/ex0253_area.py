@@ -5,12 +5,14 @@
 """
 Showing 2 layers of hexagons:  land-usage, hill-shading
 Last Tested
+28 February 2026 0.1.1a1 (passed)
 26 December 2026 0.1.0a4 (passed)
 """
 
 import numpy as np
 from hhg9 import Points, Registrar
 from hhg9.algorithms.distance import wgs84_area
+from hhg9.h9 import H9K
 from hhg9.h9.addressing import hex_layer, TailStyle
 from geographiclib.geodesic import Geodesic
 
@@ -67,11 +69,11 @@ def calculate_intersections(poly_grid, v):
     poly_grid: (m, 2) array of polygon vertices in scaled UV space.
     v: The current scanline (integer row index).
     """
-    # 1. Define segments (p1 to p2)
+    # Define segments (p1 to p2)
     p1 = poly_grid
     p2 = np.roll(poly_grid, -1, axis=0)
 
-    # 2. Find edges that cross the scanline v
+    # Find edges that cross the scanline v
     # We use (p1y <= v < p2y) or (p2y <= v < p1y) to handle vertices correctly
     # and avoid double-counting horizontal edges.
     mask = ((p1[:, 1] <= v) & (p2[:, 1] > v)) | ((p2[:, 1] <= v) & (p1[:, 1] > v))
@@ -79,26 +81,27 @@ def calculate_intersections(poly_grid, v):
     if not np.any(mask):
         return np.array([])
 
-    # 3. Filter segments
+    # Filter segments
     e1 = p1[mask]
     e2 = p2[mask]
 
-    # 4. Linear Interpolation to find the u-coordinate
+    # Linear Interpolation to find the u-coordinate
     # u = x1 + (v - y1) * (x2 - x1) / (y2 - y1)
     u_ints = e1[:, 0] + (v - e1[:, 1]) * (e2[:, 0] - e1[:, 0]) / (e2[:, 1] - e1[:, 1])
 
-    # 5. Return sorted intersections for pairing
+    # Return sorted intersections for pairing
     return np.sort(u_ints)
 
 
 def scanline_h9_sheet(poly_n, level):
     # sn is grid spacing factor
-    sn = np.sqrt(2) * (3 ** -(level + 1))
+    sn = H9K.radical.W * (3 ** -(level + 1))
+    third = 1/3
 
     # 1. Scale polygon to integer grid space (UV Skew Space)
     x, y = poly_n.coords[:, 0], poly_n.coords[:, 1]
     # Standard Axial/Skew transform for hexagonal grids
-    v_skew = (y * 2 / np.sqrt(3)) / sn
+    v_skew = (y * 2 / H9K.radical.R3) / sn
     u_skew = (x / sn) - (v_skew / 2)
 
     poly_grid = np.stack([u_skew, v_skew], axis=1)
@@ -114,7 +117,8 @@ def scanline_h9_sheet(poly_n, level):
 
         # Standard even-odd fill pairing
         for i in range(0, len(u_ints), 2):
-            if i + 1 >= len(u_ints): break
+            if i + 1 >= len(u_ints):
+                break
             u_start = int(np.ceil(u_ints[i]))
             u_end = int(np.floor(u_ints[i + 1]))
 
@@ -131,7 +135,7 @@ def scanline_h9_sheet(poly_n, level):
         u_final = np.concatenate(u_acc)
         v_final = np.concatenate(v_acc)
 
-    y_n = (v_final - 0.333) * sn * (np.sqrt(3) / 2)
+    y_n = (v_final - third) * sn * H9K.derived.RH
     x_n = (u_final + (v_final / 2)) * sn
 
     uv = np.stack([x_n, y_n], axis=1)
@@ -166,20 +170,10 @@ if __name__ == '__main__':
             [-156.738405700945009, 71.285082525709299],
             [-156.738405694211991, 71.284672766744194]
          ],
-        'North Pole':
-        [
-            [1, 89.9],
-            [1.15, 89.9],
-            [1.15, 89.85],
-            [1, 89.85],
-        ]
     }
 
     rg = Registrar()
     b_oct = rg.domain('b_oct')
-    # b_oct.set_warp('src/eb2_model_L5.npz')  # GPT
-    # b_oct.set_warp('src/l4_polished.npz')   # Ghosts
-
     g_gcd = rg.domain('g_gcd')
 
     for name, values in tests.items():
@@ -187,7 +181,7 @@ if __name__ == '__main__':
         gcd_pts = Points(coords, g_gcd)  # expects (lat,lon) in g_gcd
         gcd_area = wgs84_area(rg, gcd_pts, coords.shape[0])
         print(f'\n{name}: WGS84 area: {float(gcd_area[0])}m²')
-        h9_pts = rg.project(gcd_pts, [g_gcd, b_oct])  # or your chosen path
+        h9_pts = rg.project(gcd_pts, [g_gcd, b_oct])  #
         for layer in range(9, 16):
             b_pts = scanline_h9_sheet(h9_pts, layer)
             h_key = hex_layer(b_pts, layer=layer, tail_style=TailStyle.key)

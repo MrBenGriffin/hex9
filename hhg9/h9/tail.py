@@ -1,0 +1,88 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+"""
+H9 Hex Address Tail class and helper functions.
+There  are two main tail styles - reversible and key
+They serve two separate purposes:
+1.  **Reversible** tail is used to encode the geometry of the hex.
+    It is invertible and can be used to reconstruct the geometry of the hex.
+    One can convert a reversible address to latitude/longitude coordinates.
+    However, there are multiple ways to encode the same geometry.
+2.  **Key** tail is used to encode the geometry of the hex.
+    It is not invertible and cannot be used to reconstruct the geometry of the hex.
+    Key tails are used to guarantee uniqueness of the hex, for binning.
+    This is needed because the reversible tail is not unique enough for some applications.
+"""
+from __future__ import annotations
+from enum import unique, Enum
+import numpy as np
+from numpy.typing import NDArray
+
+
+# --- Hex Address TailStyle enum and helper ---
+@unique
+class TailStyle(Enum):
+    """How the final tail byte is encoded."""
+    reversible = 0  # full metadata tail (invertible)
+    key = 1  # short tail (binning/grouping)
+    none = 2  # omit tail entirely
+
+
+# ---------- Hex Address Tail packing helpers ----------------------------------------
+
+def tail_pack_reversible(
+        p_mo: NDArray[np.uint8] | np.uint8,
+        p_c2: NDArray[np.uint8] | np.uint8,
+        r_mo: NDArray[np.uint8] | np.uint8,
+        h: NDArray[np.uint8] | np.uint8,
+) -> NDArray[np.uint8]:
+    """Pack reversible tail metadata into one uint8 byte."""
+    p_mo = np.asarray(p_mo, dtype=np.uint8)  # [0,1]   terminating hex mode of parent region
+    p_c2 = np.asarray(p_c2, dtype=np.uint8)  # [0,1,2] terminating hex c2 of parent region
+    # assert len(p_c2 > 2) == 0, "bad c2 in tail_pack_reversible"
+    r_mo = np.asarray(r_mo, dtype=np.uint8)  # [0,1]   root region mode
+    h = np.asarray(h, dtype=np.uint8)  # [0..11] terminating region (under hex)
+    return (((p_mo << 7) & 0x80) | ((p_c2 << 5) & 0x60) | ((r_mo << 4) & 0x10) | (h & 0x0F)).astype(np.uint8)
+
+def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
+    """Unpack reversible tail metadata (par_mode, p_c2, r_mo, h) from one uint8 byte."""
+    tail_ids = np.asarray(tail_ids, dtype=np.uint8)
+    p_mo = ((tail_ids & 0x80) >> 7).astype(np.uint8)  # terminating mode of parent region
+    p_c2 = ((tail_ids & 0x60) >> 5).astype(np.uint8)  # terminating hex c2 of parent region
+    r_mo = ((tail_ids & 0x10) >> 4).astype(np.uint8)  # root region mode
+    h = (tail_ids & 0x0F).astype(np.uint8)  # terminating region
+    return p_mo, p_c2, r_mo, h
+
+
+def tail_pack_key(
+        p_c2: NDArray[np.uint8] | np.uint8,  # terminating hex c2 of parent region
+        r_mo: NDArray[np.uint8] | np.uint8,  # root region mode
+) -> NDArray[np.uint8]:
+    """Pack key tail (binning-safe) into one uint8 byte."""
+    p_c2 = np.asarray(p_c2, dtype=np.uint8)
+    r_mo = np.asarray(r_mo, dtype=np.uint8)
+    return (((p_c2 & 0x03) << 5) | (r_mo & 0x01) << 4 | 0xF).astype(np.uint8)
+
+
+def tail_unpack_key(short_tail: NDArray[np.uint8] | np.uint8):
+    """Unpack key tail into (p_c2, r_mo).
+
+    Layout must match `tail_pack_key`:
+      bits6..5: p_c2
+      bit4:     r_mo
+      bits3..0: sentinel (0xF)
+    """
+    short_tail = np.asarray(short_tail, dtype=np.uint8)
+    p_c2 = ((short_tail >> 5) & 0x03).astype(np.uint8)
+    r_mo = ((short_tail >> 4) & 0x01).astype(np.uint8)
+    return p_c2, r_mo
+
+
+def tail_key_from_reversible(tail_ids: NDArray[np.uint8] | np.uint8) -> NDArray[np.uint8]:
+    """Derive key tail from reversible tail without recomputing geometry."""
+    tail_ids = np.asarray(tail_ids, dtype=np.uint8)
+    # p_c2 = (tail_ids & 0x60) >> 5
+    # r_mo = (tail_ids & 0x10) >> 4
+    return (tail_ids & 0x70 | 0xF).astype(np.uint8)
+    # return tail_pack_key(p_c2.astype(np.uint8), r_mo.astype(np.uint8))

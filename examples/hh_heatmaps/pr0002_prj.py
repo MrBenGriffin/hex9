@@ -75,7 +75,6 @@ def stage(file: str,
     cmp_file.parent.mkdir(parents=True, exist_ok=True)
     reg = Registrar()
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
 
     g_gcd = reg.domain('g_gcd')
     pts = Points(lat_lon, g_gcd)

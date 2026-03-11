@@ -8,21 +8,34 @@ Useful Geometry functions
 import numpy as np
 
 
-def inside_triangle_cw(pts: np.ndarray, tri: np.ndarray) -> np.ndarray:
-    """Vectorised point-in-triangle test.
-    points: (hex_layer,2), tri: (3,2) in CW order. Returns mask bool."""
-    # Edges
-    a, b, c = tri[0], tri[1], tri[2]
-    ab = b - a
-    bc = c - b
-    ca = a - c
-    ap = pts - a
-    bp = pts - b
-    cp = pts - c
-    cross1 = ab[0] * ap[:, 1] - ab[1] * ap[:, 0]
-    cross2 = bc[0] * bp[:, 1] - bc[1] * bp[:, 0]
-    cross3 = ca[0] * cp[:, 1] - ca[1] * cp[:, 0]
-    return (cross1 <= 0) & (cross2 <= 0) & (cross3 <= 0)
+def inside_convex_polygon_cw(pts: np.ndarray, poly: np.ndarray) -> np.ndarray:
+    """Vectorised point-in-convex-polygon test.
+    pts: (N,2), poly: (M,2) in CW order. Returns bool mask."""
+    mask = np.ones(len(pts), dtype=bool)
+    n = len(poly)
+    for i in range(n):
+        a, b = poly[i], poly[(i + 1) % n]
+        ab = b - a
+        ap = pts - a
+        mask &= (ab[0] * ap[:, 1] - ab[1] * ap[:, 0]) <= 0
+    return mask
+
+
+# def inside_triangle_cw(pts: np.ndarray, tri: np.ndarray) -> np.ndarray:
+#     """Vectorised point-in-triangle test.
+#     points: (hex_layer,2), tri: (3,2) in CW order. Returns mask bool."""
+#     # Edges
+#     a, b, c = tri[0], tri[1], tri[2]
+#     ab = b - a
+#     bc = c - b
+#     ca = a - c
+#     ap = pts - a
+#     bp = pts - b
+#     cp = pts - c
+#     cross1 = ab[0] * ap[:, 1] - ab[1] * ap[:, 0]
+#     cross2 = bc[0] * bp[:, 1] - bc[1] * bp[:, 0]
+#     cross3 = ca[0] * cp[:, 1] - ca[1] * cp[:, 0]
+#     return (cross1 <= 0) & (cross2 <= 0) & (cross3 <= 0)
 
 
 def ortho_basis_from_normal(n):

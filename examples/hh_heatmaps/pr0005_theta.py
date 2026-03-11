@@ -340,7 +340,6 @@ def stage(file: str,
     c_ell = reg.domain('c_ell')
     c_oct = reg.domain('c_oct')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
     ak = reg.projection('oct_ell')
     ak.set_accuracy(0.0000000001)
 

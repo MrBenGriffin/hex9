@@ -5,6 +5,3 @@
 """
 This is the algorithms package. It is far more intuitive to import the algorithm files to be used directly.
 """
-from .root_finding import find_coords
-
-__all__ = ["find_coords"]

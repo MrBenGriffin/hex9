@@ -19,8 +19,6 @@ from pathlib import Path
 import numpy as np
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar, Points
-from hhg9.domains.nets import net_layouts
-from hhg9.h9 import H9K
 
 
 def load_cache(reg, pc_map: str = 'tissot_3600x1800'):
@@ -74,10 +72,7 @@ def run():
         # so 3600 = meta['width'] * tpx / H9K.radical.W
         n_oct = reg.domain(f'n_oct:{layout}')
         wid, hgt = n_oct.image_dims(tpx)
-        meta = net_layouts[layout]
-        bw = meta['width'] * H9K.radical.W
-        bh = meta['height'] * H9K.derived.H
-        bounds = (0, bw, 0, bh)
+        bounds = (0, n_oct.wi, 0, n_oct.he)
         o_net = reg.project(bb_px, ['b_oct', n_oct])
         show_pts_2d(o_net, w=wid, h=hgt, bounds=bounds, name=layout)  # net.
 

@@ -57,11 +57,12 @@ def poc_region_encode():
 def poc_stonehenge_h9():
     """hex9 address of stonehenge."""
     reg = Registrar()
+    b_oct = reg.domain('b_oct')
     ref = Points(np.array([[51.1787980000210725, -1.8261898473293335]]), 'g_gcd')
     b_ref = reg.project(ref, ['g_gcd', 'b_oct'])  # components filled
     ad = hex_str_encode(b_ref)
     print(ad[0])
-    ptb = hex_str_decode(ad, reg)
+    ptb = hex_str_decode(ad, b_oct)
     #  reference value (from above)                      51.1787980000210725, -1.8261898473293335
     b_bak = reg.project(ptb, ['b_oct', 'g_gcd'])  # 51.17879800002107,   -1.8261898473293454
     rx = wgs84(ref.coords, b_bak.coords) * 1e+9
@@ -71,9 +72,11 @@ def poc_stonehenge_h9():
 def poc_hex_str_rnd():
     """hex9 address of rnd."""
     reg = Registrar()
+    b_oct = reg.domain('b_oct')
+    g_gcd = reg.domain('g_gcd')
     locr = gcd_rnd(1)
-    ref = Points(locr, 'g_gcd')
-    b_ref = reg.project(ref, ['g_gcd', 'b_oct'])  # components filled
+    ref = Points(locr, g_gcd)
+    b_ref = reg.project(ref, [g_gcd, b_oct])  # components filled
     depth = 8
     h9x = hex_str_encode(b_ref, depth)
     print(f'{h9x}')
@@ -83,8 +86,8 @@ def poc_hex_str_rnd():
     h9k = hex_str_encode(k_ref, depth)
     for (o, n, k, p, c) in zip(h9x, h9n, h9k, b_ref.coords, b_ref.components):
         print(f'{o}={k} via {n}, ({p}):{c}')
-    pbk = hex_str_decode(h9x, reg)
-    b_bak = reg.project(pbk, ['b_oct', 'g_gcd'])  # 51.17879800002107,   -1.8261898473293454
+    pbk = hex_str_decode(h9x, b_oct)
+    b_bak = reg.project(pbk, [b_oct, g_gcd])  # 51.17879800002107,   -1.8261898473293454
     rx = wgs84(ref.coords, b_bak.coords) * 1e+9
     print(f'{rx}')  #
 
@@ -105,7 +108,6 @@ def poc_hex_pak():
 if __name__ == "__main__":
     reg = Registrar()
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
     exm = np.array([[0x16, 0x39, 0x3A, 0x35]])
     oid = 4

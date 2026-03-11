@@ -25,12 +25,9 @@ All polygons are defined in **Clockwise** order.
 from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
-from typing import Tuple, List, Optional, Callable, Protocol
+from typing import Tuple, List, Optional
 
 from hhg9.h9 import H9C, H9K
-from hhg9.h9.addressing import reg_hex_digits, hex_digits_reg, HEX_LUTS, TailStyle, hex_layer, tail_unpack_reversible, \
-    hex_key
-from hhg9.h9.classifier import location
 from hhg9.h9.protocols import H9ConstLike, H9PolygonLike
 
 
@@ -61,6 +58,7 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
 
     Defines the relative vertices for all standard grid shapes (clockwise order).
     """
+    poly_eps = 1 - 1e-16
     pts = {
         # Clockwise.
         (0, 0): [  # c2 half-hexagons mode 0
@@ -155,7 +153,9 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
     gd = np.zeros((6, 2), dtype=np.float64)
     for (kind, mode), c2s in pts.items():
         for c2, poly in enumerate(c2s):
-            arr = np.asarray(poly, dtype=np.float64) * uv
+            bas = np.asarray(poly, dtype=np.float64) * uv
+            ctr = np.mean(bas, axis=0)
+            arr = ((bas - ctr) * poly_eps) + ctr
             match kind:
                 case 0:
                     hh[mode, c2] = arr
@@ -172,7 +172,7 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
     return H9Polygon(hh=hh, hx=hx, tx=tx, se=te, sv=sr, gd=gd)
 
 
-H9P = _h9_polygon()
+H9P: H9Polygon = _h9_polygon()
 
 
 def region_grid(levels: int = 3, mode: int = 0, h9p: H9Polygon = H9P) -> List[Tuple]:
@@ -292,248 +292,14 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
     return verts, edges, tris
 
 
-def enmesh(pts, levels: int = 35, shape=None):
-    """
-    Builds the half-hex polygons for a batch of points up to `levels` depth.
-
-    Walks the hierarchy for each point and generates the geometry for every hex_layer.
-
-    Returns:
-        tuple: (uniques, refs)
-            uniques: (U, 4, 2) Unique polygons in global coordinates.
-            refs: (hex_layer, depth) Indices into `uniques` for each input point/hex_layer.
-    """
-    from hhg9.h9 import H9C
-    from hhg9.h9.region import H9R, xy_regions_iter
-
-    # Modes per point
-    oc, mo = pts.cm()
-    coords = pts.coords
-    num_pts = len(pts)
-    depth = levels + 1
-
-    # Offsets and shapes (float64)
-    offs = H9C.off_xy.astype(np.float64, copy=False)  # (R,2)
-    hh = H9P.hh  # (2,3,4,2)
-
-    # Accumulators
-    parent_xy = np.zeros((num_pts, 2), dtype=np.float64)
-    scale = 1.0
-
-    # We'll collect per-hex_layer polygons flattened as (hex_layer*D, 4, 2)
-    polys = np.empty((num_pts * depth, 4, 2), dtype=np.float64)
-    flat_idx = np.empty((num_pts, depth), dtype=np.int64)  # indices into `polys`
-
-    for ev in xy_regions_iter(coords, mode=mo, depth=levels):
-        if ev.phase != 'pre':
-            continue
-        i = ev.i  # 0..D-1
-
-        # Child c2 for each row under the parent mode
-        c2 = H9R.mcc2[ev.pmo, ev.cid]  # (hex_layer,)
-        hh_shape = hh[ev.pmo, c2]  # pmo
-
-        # Translate/scale each triangle to global coords
-        polygon = parent_xy[:, None, :] + hh_shape * scale  # (hex_layer,4,2)
-
-        # Store flattened by hex_layer, keeping a stable mapping back to rows
-        start = i * num_pts
-        polys[start:start + num_pts] = polygon
-        flat_idx[:, i] = np.arange(start, start + num_pts, dtype=np.int64)
-
-        # Step parent origin for next hex_layer
-        parent_xy = parent_xy + offs[ev.cid] * scale
-        scale /= 3.0
-
-    if num_pts > 1:
-        # Deduplicate exactly: reshape to (M, 8) and unique over rows
-        mass = num_pts * depth
-        flat = polys.reshape(mass, 8)
-        uniq, first_idx, inv = np.unique(flat, axis=0, return_index=True, return_inverse=True)
-        uniques = uniq.reshape(-1, 4, 2)
-
-        # Map each (address, hex_layer) to its unique polygon index
-        refs = inv[flat_idx]
-        return uniques, refs
-    else:
-        return polys, np.array(list[range(num_pts)])
-
-
-class HexReducer(Protocol):
-    """Callable signature for aggregating per-point data into per-hex values."""
-
-    def __call__(
-        self,
-        inv_hex: NDArray[np.int64],
-        counts: NDArray[np.int64],
-        pts,
-    ) -> NDArray[np.float64]:
-        ...
-
-
-def hex_reduce(pts, layer):
-    """Given a set of points, find the hex"""
-    h_val = hex_layer(pts, layer=layer, tail_style=TailStyle.reversible)
-    h_key = hex_key(h_val)
-    hex_k, hex_idx, hex_inv = np.unique(h_key, axis=0, return_index=True, return_inverse=True)
-    hex_num = hex_k.shape[0]
-    hex_v = h_val[hex_idx]
-    return hex_num, hex_v, hex_inv, hex_idx
-
-
-def hex_parents(dom, hex_v, hex_num, layer):
-    """Hex parent centroids - return the b_oct points, octants, and remaining scale"""
-    hex_xy = np.zeros((hex_num, 2), dtype=float)
-    hex_oid, hex_rgn = hex_digits_reg(dom, hex_v)
-    scale = 1.0
-    for i in range(1, layer + 1):
-        hex_xy += H9C.off_xy[hex_rgn[:, i]] * scale
-        scale /= 3.0
-    return hex_xy, hex_oid, scale
-
-
-def ctr_from_pars(dom, hex_par, hex_oid, scale, tail):
-    """Build hex polygons, return Points (hex_layer)"""
-    from hhg9 import Points
-    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
-    hex_all = H9P.hx[xpm, xc2]  # given the parent, and modes, c2 of hexes we want...
-    hex_pts = hex_par[:, None, :] + hex_all * scale  # (H,6,2)
-    hex_ctr = np.mean(hex_pts, axis=1)
-    hx_pts = Points(hex_ctr, dom, components=hex_oid)
-    return hx_pts
-
-
-def hex_from_pars(dom, hex_par, hex_oid, scale, tail):
-    """Build hex polygons, return Points (hex_layer*6)"""
-    from hhg9 import Points
-    from hhg9.h9 import H9O
-    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
-    hex_all = H9P.hx[xpm, xc2]  # given the parent, and modes, c2 of hexes we want...
-    hex_pts = hex_par[:, None, :] + hex_all * scale  # (H,6,2)
-
-    # Set the basic octant id for each hexagon
-    oc_poly6 = np.repeat(hex_oid[:, None], 6, axis=1)  # (H, 6)
-    nbr_oid = H9O.oid_nb[hex_oid, xc2]
-
-    hex_ẋ = H9K.R3 * hex_pts[..., 0].ravel()  # Classifier ẋ
-    hex_y = hex_pts[..., 1].ravel()           # Classifier y
-    oc_mo = np.repeat(xrm, 6)          # Set the octant mode for each hexagon
-    types = location(hex_ẋ, hex_y, oc_mo)
-    locs = types.reshape(-1, 6)
-
-    ex4 = locs[:, 4] == 1
-    ex5 = locs[:, 5] == 1
-    ext_hex = (ex4 & ex5)
-
-    # Stitch exterior vertices across face boundaries
-    hex_pts[ext_hex, 4] = hex_pts[ext_hex, 2] * [1, -1]
-    hex_pts[ext_hex, 5] = hex_pts[ext_hex, 1] * [1, -1]
-
-    n_oct = nbr_oid[ext_hex]
-    oc_poly6[ext_hex, 4] = n_oct
-    oc_poly6[ext_hex, 5] = n_oct
-
-    hx_coords = hex_pts.reshape([-1, 2])
-    hx_oc = oc_poly6.reshape([-1])
-    hx_pts = Points(hx_coords, dom, components=hx_oc)
-    return hx_pts
-
-
-def hex_poly_groups(pts, layers: int = 10):
-    """Return hex polygons plus the grouping needed to aggregate arbitrary per-point data.
-
-    Returns:
-        tuple: (hx_pts, inv_hex, counts, idx)
-            hx_pts: Points of hex polygon vertices (H*6,2) with per-vertex octant components.
-            inv_hex: (hex_layer,) mapping each input point -> hex index in [0, H)
-            counts: (H,) population count per hex
-            idx: (H,) indices of representative points for each hex (as returned by np.unique)
-
-    Notes:
-        - This function does NOT aggregate values; callers can compute means/sums/modes/medians etc.
-        - `idx` can be used to recover per-hex address metadata from the representative point.
-    """
-
-    dom = pts.domain
-    if dom.name[1:5] != '_oct':
-        raise ValueError('hex_poly_groups requires pts to be in b_oct/n_oct domain')
-
-    # reduce all points to hex ids, preserving reversible (needed for pts construction)
-    hex_num, hex_v, hex_inv, hex_idx = hex_reduce(pts, layers)
-    hex_xy, hex_oid, scale = hex_parents(dom, hex_v, hex_num, layers)   # (HP,2)
-    hx_pts = hex_from_pars(dom, hex_xy, hex_oid, scale, hex_v[:, -1])
-
-    counts = np.bincount(hex_inv, minlength=hex_num).astype(np.int64, copy=False)
-    return hx_pts, hex_inv.astype(np.int64, copy=False), counts, hex_idx
-
-
-def hex_poly_layer(pts, layers: int = 10, reducer: Optional[HexReducer] = None):
-    """Return hex polygons and an aggregated value per hex.
-    By default, this reproduces the previous behaviour: mean of `pts.samples` per hex.
-
-    Args:
-        pts: Input points in b_oct.
-        layers: Hex hex_layer.
-        reducer: Optional callable to aggregate per-point data into per-hex values.
-            Signature: reducer(inv_hex, counts, pts) -> (H,) float array.
-
-    Returns:
-        tuple: (hx_pts, values)
-            hx_pts: Points of hex polygon vertices (H*6,2)
-            values: (H,) aggregated value per hex (float64)
-    """
-    hx_pts, inv_hex, counts, idx = hex_poly_groups(pts, layers=layers)
-
-    if reducer is None:
-        # Default: mean of pts.samples per hex (previous behaviour)
-        sum_wt = np.bincount(inv_hex, weights=pts.samples, minlength=counts.shape[0])
-        values = np.divide(sum_wt, counts, out=np.zeros_like(sum_wt, dtype=float), where=counts > 0)
-    else:
-        values = reducer(inv_hex, counts, pts)
-        values = np.asarray(values, dtype=np.float64)
-        if values.shape != (counts.shape[0],):
-            raise ValueError(f"reducer must return shape ({counts.shape[0]},), got {values.shape}")
-
-    return hx_pts, values
-
-
-def hh_layer(pts, layer: int = 10):
-    """
-    Calculates Half-Hexagon polygons for a batch of points.
-
-    Returns:
-        tuple: (polygon, pops, inv, oc_poly4)
-            polygon: (H, 4, 2) Half-hex vertices.
-            pops: Population count per half-hex.
-            inv: Inverse mapping.
-            oc_poly4: Octant IDs for the 4 vertices.
-    """
-    from hhg9.h9.region import xy_regions
-    from hhg9.h9 import H9C, H9R
-    num_pts = len(pts)
-    if num_pts == 0:
-        return
-
-    ocf, mode_f = pts.cm()  # return the octant/mode
-    rgx = xy_regions(pts.coords, mode_f, layer)
-    poi = rgx[:, -2]
-    smo = H9C.mode[poi]  # We will need it's mode (smo=self_mode)
-    c2i = rgx[:, -1]
-    c2 = H9R.mcc2[smo, c2i]  # Now grab the c2 of the current region - which neighbour?!
-    key = np.concatenate([ocf[:, None], rgx[:, 1:layer + 1], c2[:, None]], axis=1)
-    uniq, first_idx, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
-    pops = np.bincount(inv)
-    rgs = rgx[first_idx]  # This gives us the indicative regions.
-    oc = ocf[first_idx]  # and the indicative octants for each region.
-    c2 = c2[first_idx]
-    num_hh = rgs.shape[0]  # and the number of half-hexagons found.
-    acc_xy = np.zeros((num_hh, 2), dtype=np.float64)
-    scale = 1.0
-    for i in range(1, layer + 1):
-        acc_xy += (H9C.off_xy[rgs[:, i]] * scale)
-        scale /= 3.0
-    poi = rgs[:, -2]
-    smo = H9C.mode[poi]  # We will need its mode (smo=self_mode)
-    polygon = scale * H9P.hh[smo, c2] + acc_xy[:, None]
-    oc_poly4 = np.repeat(oc[:, None], 4, axis=1)  # 4 points of half-hex
-    return polygon, pops, inv, oc_poly4
+# Binning functions have moved to binning.py; re-exported here for backward compatibility.
+from hhg9.h9.binning import (
+    HexReducer,
+    hex_reduce,
+    hex_parents,
+    ctr_from_pars,
+    hex_from_pars,
+    hex_poly_groups,
+    hex_poly_layer,
+    hh_layer,
+)

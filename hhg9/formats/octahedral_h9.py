@@ -65,7 +65,8 @@ class OctahedralH9(PointFormat):
                 arr = np.array(arr)
         match style:
             case adr.Style.HEX:
-                result = adr.hex_str_decode(arr, self.registrar, self.scheme)
+                b_oct = self.registrar.domain('b_oct')
+                result = adr.hex_str_decode(arr, b_oct)
             case adr.Style.UH64A:
                 result = adr.hex_unpack(arr, adr.TailStyle.reversible, self.registrar, self.scheme)
             case adr.Style.UH64K:

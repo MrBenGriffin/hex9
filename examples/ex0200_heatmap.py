@@ -85,7 +85,6 @@ def run(layers):
     reg = Registrar()
     # g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     n_oct = reg.domain('n_oct:c_butterfly')
     ak = reg.projection('oct_ell')
     ha, ta = ak.get_accuracy(layers)

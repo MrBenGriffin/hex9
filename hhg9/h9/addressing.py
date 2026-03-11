@@ -61,6 +61,8 @@ import numpy as np
 from numpy.typing import NDArray
 from hhg9.h9 import H9R, H9C, H9K
 from hhg9.h9.protocols import RegionAddressLike, AddressPackerLike, H9CellLike, HexLUTLike, H9RegionLike, BaryLoc
+from hhg9.h9.tail import TailStyle, tail_pack_reversible, tail_pack_key, tail_unpack_reversible, \
+    tail_key_from_reversible
 
 
 @unique
@@ -78,88 +80,6 @@ class Style(Enum):
     UH64K = 7  # identifying uint64 address
     UH64A = 8  # reversible uint64 address
     UR64 = 9
-
-
-# --- Hex Address TailStyle enum and helper ---
-@unique
-class TailStyle(Enum):
-    """How the final tail byte is encoded."""
-    reversible = 0  # full metadata tail (invertible)
-    key = 1         # short tail (binning/grouping)
-    none = 2        # omit tail entirely
-
-# ---------- Hex Address Tail packing helpers ----------------------------------------
-
-# Reversible tail byte layout (one byte):
-# bit7: parent-mode of terminating region (par_mode)
-# bits6..5: terminating c2
-# bit4: root mode (r_mo)
-# bits3..0: terminating region id (h)
-
-
-def tail_pack_reversible(
-    p_mo: NDArray[np.uint8] | np.uint8,
-    p_c2: NDArray[np.uint8] | np.uint8,
-    r_mo: NDArray[np.uint8] | np.uint8,
-    h: NDArray[np.uint8] | np.uint8,
-) -> NDArray[np.uint8]:
-
-    """Pack reversible tail metadata into one uint8 byte."""
-    p_mo = np.asarray(p_mo, dtype=np.uint8)  # [0,1]   terminating hex mode of parent region
-    p_c2 = np.asarray(p_c2, dtype=np.uint8)  # [0,1,2] terminating hex c2 of parent region
-    # assert len(p_c2 > 2) == 0, "bad c2 in tail_pack_reversible"
-    r_mo = np.asarray(r_mo, dtype=np.uint8)  # [0,1]   root region mode
-    h = np.asarray(h, dtype=np.uint8)        # [0..11] terminating region (under hex)
-    return (((p_mo << 7) & 0x80) | ((p_c2 << 5) & 0x60) | ((r_mo << 4) & 0x10) | (h & 0x0F)).astype(np.uint8)
-#   00000001 pmo
-#   10000000 pmo   <<7
-#   00000011 c2
-#   01100000 c2    <<5
-#   00000001 r_mo
-#   00010000 r_mo  <<4
-
-
-def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
-    """Unpack reversible tail metadata (par_mode, p_c2, r_mo, h) from one uint8 byte."""
-    tail_ids = np.asarray(tail_ids, dtype=np.uint8)
-    p_mo = ((tail_ids & 0x80) >> 7).astype(np.uint8)  # terminating mode of parent region
-    p_c2 = ((tail_ids & 0x60) >> 5).astype(np.uint8)  # terminating hex c2 of parent region
-    r_mo = ((tail_ids & 0x10) >> 4).astype(np.uint8)  # root region mode
-    h = (tail_ids & 0x0F).astype(np.uint8)            # terminating region
-    return p_mo, p_c2, r_mo, h
-
-
-def tail_pack_key(
-    p_c2: NDArray[np.uint8] | np.uint8,   # terminating hex c2 of parent region
-    r_mo: NDArray[np.uint8] | np.uint8,   # root region mode
-) -> NDArray[np.uint8]:
-    """Pack key tail (binning-safe) into one uint8 byte."""
-    p_c2 = np.asarray(p_c2, dtype=np.uint8)
-    r_mo = np.asarray(r_mo, dtype=np.uint8)
-    return (((p_c2 & 0x03) << 5) | (r_mo & 0x01) << 4 | 0xF).astype(np.uint8)
-
-
-def tail_unpack_key(short_tail: NDArray[np.uint8] | np.uint8):
-    """Unpack key tail into (p_c2, r_mo).
-
-    Layout must match `tail_pack_key`:
-      bits6..5: p_c2
-      bit4:     r_mo
-      bits3..0: sentinel (0xF)
-    """
-    short_tail = np.asarray(short_tail, dtype=np.uint8)
-    p_c2 = ((short_tail >> 5) & 0x03).astype(np.uint8)
-    r_mo = ((short_tail >> 4) & 0x01).astype(np.uint8)
-    return p_c2, r_mo
-
-
-def tail_key_from_reversible(tail_ids: NDArray[np.uint8] | np.uint8) -> NDArray[np.uint8]:
-    """Derive key tail from reversible tail without recomputing geometry."""
-    tail_ids = np.asarray(tail_ids, dtype=np.uint8)
-    # p_c2 = (tail_ids & 0x60) >> 5
-    # r_mo = (tail_ids & 0x10) >> 4
-    return (tail_ids & 0x70 | 0xF).astype(np.uint8)
-    # return tail_pack_key(p_c2.astype(np.uint8), r_mo.astype(np.uint8))
 
 
 # ---------- Region-ID scheme (even → mode 0, odd → mode 1) ----------
@@ -209,10 +129,10 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
 
     mo_c2 = np.array([
         [  # mode 0
-           # s, s, u    s,  s, u    s, s,  u   Shared/unshared
+            # s, s, u    s,  s, u    s, s,  u   Shared/unshared
             [6, 9, 2], [10, 7, 0], [8, 11, 4]  # c2=0,1,2
         ], [  # mode 1
-          #  s, s, u    s,  s, u    s, s,  u   Shared/unshared
+            #  s, s, u    s,  s, u    s, s,  u   Shared/unshared
             [7, 10, 5], [11, 8, 3], [9, 6, 1]  # c2=0,1,2
         ]
     ], dtype=np.uint8)
@@ -239,7 +159,8 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
     valid = rid2cell != oob_cell
     assert np.all(parity[valid] == h9c.mode[rid2cell[valid]]), "rid parity must match cell mode (excluding OOB)"
     proto = cell2rid[h9r.proto]
-    return RegionIdScheme(rid2cell=rid2cell, cell2rid=cell2rid, modes=parity, props=mo_c2, c2=mc_c2, proto=proto, r_size=r_size)
+    return RegionIdScheme(rid2cell=rid2cell, cell2rid=cell2rid, modes=parity, props=mo_c2, c2=mc_c2, proto=proto,
+                          r_size=r_size)
 
 
 # ---------- Packer (Pack Regions) -----------------
@@ -524,51 +445,6 @@ class HexLUT(HexLUTLike):
     hex_reg: NDArray[np.uint8]
     reg_hex: NDArray[np.uint8]
 
-
-_m_c2_hx_v2024 = [
-    # This is the early-version (2024/2025):
-    # - mode 0 has a cluster of 3 '4' hexes around its origin.
-    # - mode 1 has a cluster of 3 '5' hexes around its origin.
-    # This dict is the ground-truth for all hexagon digits.
-    # given sc.mode, sc.c2, region, region.c2 => hex-digit.
-    # ROOT super-regions mark hex digits as 0,1,2 for each c2 (the hex ID is face-dependant)
-    [  # super-region mode down (V)
-        [  # cells of c2=0 of V super-region
-            # (Each region has 3 hex digits - one in each c2)
-            # regions 692 of each down are in c2=0. Their order does not represent c2
-            [6, [0, 4, 7]],  # shared,   same mode as super-region 0x26 (pL=:3)
-            [9, [7, 4, 2]],  # shared,   diff mode to super-region 0x2a
-            [2, [3, 6, 2]],  # unshared, same mode as super-region 0x2B
-        ],
-        [  # cells of c2=1 of V supercell
-            [10, [7, 0, 4]],  # shared,  same mode as super-region 0x3a
-            [7, [2, 7, 4]],  # shared,   diff mode to super-region 0x39
-            [0, [2, 3, 6]],  # unshared, same mode as super-region 0x49
-        ],
-        [  # cells of c2=2 of V supercell
-            [8, [4, 7, 0]],  # shared,   same mode as super-region 0x35
-            [11, [4, 2, 7]],  # shared,  diff mode to super-region 0x25
-            [4, [6, 2, 3]],  # unshared, same mode as super-region 0x21
-        ],
-    ],
-    [  # super-region mode up (Λ)
-        [  # regions of c2=0 of Λ super-region
-            [7, [0, 8, 5]],  # shared,   same mode as super-region 0x39
-            [10, [8, 1, 5]],  # shared,  diff mode to super-region 0x3a
-            [5, [3, 1, 6]],  # unshared, same mode as super-region 0x3E
-        ],
-        [  # regions of c2=1 of Λ supercell
-            [11, [5, 0, 8]],  # shared,  same mode as super-region 0x25
-            [8, [5, 8, 1]],  # shared,   diff mode to super-region 0x35
-            [3, [6, 3, 1]],  # unshared, same mode as super-region 0x34
-        ],
-        [  # regions of c2=2 of Λ supercell
-            [9, [8, 5, 0]],  # shared,   same mode as super-region 0x2a
-            [6, [1, 5, 8]],  # shared,   diff mode to super-region 0x26
-            [1, [1, 6, 3]],  # unshared, same mode as super-region 0x16
-        ]
-    ]
-]
 
 _m_c2_hx_v2025 = [
     # This is the late-version (2025/2026):
@@ -938,7 +814,8 @@ def hex_layer(vals, layer: int = 18, tail_style: TailStyle = TailStyle.key):
     return hex_digits(pts, layer, tail_style)
 
 
-def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
+def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversible,
+                   scheme: RegionAddressLike = H9_RA):
     """Convert Points (barycentric) to canonical hex string representation.
 
     Format: <body hex digits><tail byte>
@@ -969,36 +846,35 @@ def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.rever
     return np.char.add(body_str, tail_str)
 
 
-def hex_str_decode(adr, reg=None, scheme: RegionAddressLike = H9_RA):
+def hex_str_decode(adr, dom=None):
     """
     Convert hex strings back to Points (barycentric).
-
     Args:
         adr (List[str]): Input hex strings.
-
     Returns:
         Points: Reconstructed coordinates.
     """
-    from hhg9 import Points, Registrar
-    import hhg9.h9.region as rg
-    if reg is None:
-        reg = Registrar()
-    dom = reg.domain('b_oct')
-
-    if len(adr) == 0:
-        return Points(np.zeros((0, 2), dtype=float), domain=dom, components=np.zeros((0,), dtype=np.uint8))
-
-    # Parse: last two hex chars are the reversible tail byte.
     tail = np.array([int(s[-2:], 16) for s in adr], dtype=np.uint8)
     body_strs = [s[:-2] for s in adr]
     body_len = len(body_strs[0])
     if any(len(s) != body_len for s in body_strs):
         raise ValueError("all addresses must have the same body length")
-
     body = np.array([[int(ch, 16) for ch in s] for s in body_strs], dtype=np.uint8)
     hx = np.column_stack([body, tail])
+    return hex_decode(hx, dom)
 
-    oc, cells = hex_digits_reg(dom, hx, scheme=scheme)
+
+def hex_decode(adr, dom, scheme: RegionAddressLike = H9_RA):
+    """
+    Convert hex key array back to Points (barycentric).
+    Args:
+        adr ndarray of digits.
+    Returns:
+        Points: Reconstructed coordinates.
+    """
+    from hhg9 import Points
+    import hhg9.h9.region as rg
+    oc, cells = hex_digits_reg(dom, adr, scheme=scheme)
     xy_m = rg.regions_xy(cells)
     return Points(xy_m[:, :2], domain=dom, components=oc)
 
@@ -1162,3 +1038,4 @@ def reg_unpack(nibs, reg=None, scheme: RegionAddressLike = H9_RA):
     reg_rt = reg_mo_rt[:, :2]  # just want the x,y.
     pts = Points(reg_rt, b_oct, components=ocr)
     return pts
+

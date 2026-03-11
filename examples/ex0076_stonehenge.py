@@ -15,11 +15,11 @@ Last Tested
 import os
 import json
 import numpy as np
-from matplotlib import image, pyplot as plt
+from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_angular_ratio
-from hhg9.algorithms.grid import qa_grid
+from hhg9.h9.grid import qa_grid
 from PIL import Image  # Pillow for clean image saving
 from hhg9.h9.polygon import enmesh
 from hhg9.h9.region import xy_regions
@@ -40,7 +40,6 @@ if __name__ == '__main__':
     reg = Registrar()  # Manage Domains & Projections
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     p_pix = reg.domain('p_pix')
     pix_gcd = reg.projection('pix_gcd')
 

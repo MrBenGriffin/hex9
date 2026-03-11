@@ -11,8 +11,8 @@ from numpy.typing import NDArray
 from hhg9 import Points
 from hhg9.base.projection import Projection
 from hhg9.algorithms.distance import haversine_rad
-from hhg9.algorithms import find_coords
-from pyproj import CRS
+from hhg9.h9.root_finding import find_coords
+from hhg9.algorithms.wgs84 import A, B
 from hhg9.h9 import H9C, H9K, H9O
 
 
@@ -26,10 +26,8 @@ class AKOctahedralEllipsoid(Projection):
     def __init__(self, registrar, name='oct_ell'):
         self.reg = registrar
         super().__init__(self.reg, name, 'c_oct', 'c_ell')
-        crs_ecef = CRS.from_epsg(4978)  # WGS84 ECEF (x, y, z)
-        ecef_e = crs_ecef.ellipsoid
-        self.ab = ecef_e.semi_major_metre, ecef_e.semi_minor_metre
-        self.ab2 = 1., (self.ab[1] / self.ab[0]) ** 2
+        self.ab = A, B
+        self.ab2 = 1., (B / A) ** 2
 
         self.b_oct = self.reg.domain('b_oct')
         self.c_oct = self.reg.domain('c_oct')

@@ -22,7 +22,7 @@ from typing import Literal, Optional, Generator
 from dataclasses import dataclass
 
 from hhg9.h9.classifier import location
-from hhg9.h9.protocols import H9ConstLike, H9ClassifierLike, H9CellLike, H9RegionLike, BaryPlc as L
+from hhg9.h9.protocols import H9ConstLike, H9ClassifierLike, H9CellLike, H9RegionLike, BaryPlc as L, BaryLoc
 
 
 @dataclass(frozen=True, slots=True)
@@ -604,6 +604,19 @@ Generator[StepEventXY, None, NDArray[np.uint8]]:
     p_mo = np.asarray(mode, dtype=np.uint8)
 
     bad = ~clf.in_scope(ẋ, y, p_mo, h9cl)
+    in_sc = ~bad
+    if np.any(in_sc):
+        on_vtx = np.zeros(len(ẋ), dtype=bool)
+        on_vtx[in_sc] = location(ẋ[in_sc], y[in_sc], p_mo[in_sc]) == BaryLoc.VTX
+        if np.any(on_vtx):
+            # TODO: replace nudge with a vertex-address LUT for hardware-portable
+            # canonical addresses. Vertex address pattern = [proto] [corner]×depth.
+            # c2 order = largest-x first, clockwise:
+            #   pmo=0: proto=0x49, corners [0x2B, 0x49, 0x21] for c2 = 0, 1, 2
+            #   pmo=1: proto=0x16, corners [0x3E, 0x34, 0x16] for c2 = 0, 1, 2
+            vtx_eps = np.float64(1 - 1e-15)
+            ẋ[on_vtx] *= vtx_eps
+            y[on_vtx] *= vtx_eps
 
     if np.any(bad):
         # Pre-amble adjustment: clamp/snap only rows that are out-of-scope

@@ -24,7 +24,7 @@ from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.h9 import H9O
-from hhg9.algorithms.grid import sq_grid, fit
+from hhg9.h9.grid import sq_grid, fit
 from PIL import Image  # image saving
 
 
@@ -54,7 +54,6 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
         reg.domain(f'n_oct:{flavour}')  # or 'butterfly', etc.
 
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('output/l4_polished.npz')
 
     # Load in plate carrée - will use 2700x1350 Blue Marble here.
     img = image.imread(file, 'png')

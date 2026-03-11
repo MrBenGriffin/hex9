@@ -71,7 +71,6 @@ def layer_hex_roundtrip(depth: int = 0):
     """
     reg = Registrar()
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
     globe = get_data(reg, depth)
     hxd = hex_layer(globe, layer=depth)

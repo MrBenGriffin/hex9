@@ -36,7 +36,6 @@ if __name__ == '__main__':
     locs = json_load('../assets/locations.json')
     decimal = DecimalDegrees(reg)
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = reg.domain('g_gcd')
     g_gcd.register_format(decimal)
 

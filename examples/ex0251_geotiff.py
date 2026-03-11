@@ -442,7 +442,6 @@ if __name__ == '__main__':
     gdal.UseExceptions()
     rg = Registrar()
     b_oct = rg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     # Example Usage with the vectorized grid:
     # nlcd_values: a numpy array of NLCD digits retrieved from raster
     # colors: the resulting array of RGB values for every triangle/point
@@ -467,8 +466,6 @@ if __name__ == '__main__':
     b_oct = rg.domain('b_oct')
     c_oct = rg.domain('c_oct')
     n_oct = rg.domain(f'n_oct:diamonds')  # Keep north pole north.
-    b_oct.set_warp('src/l4_polished.npz')
-
 
     # 57.13330344238441, -156.98699788901348 APNP Volcano
     # 70.1500, -148.4500 Tundra Mosaic NEEDS Alaska!

@@ -448,7 +448,6 @@ if __name__ == '__main__':
     gdal.UseExceptions()
     rg = Registrar()
     b_oct = rg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
     g_gcd = rg.domain('g_gcd')
     c_ell = rg.domain('c_ell')  # EPSG:4978
     b_oct = rg.domain('b_oct')

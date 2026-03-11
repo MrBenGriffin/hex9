@@ -13,7 +13,6 @@ from hhg9.h9.classifier import location, in_scope, H9CL
 if __name__ == '__main__':
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
-    b_oct.set_warp('src/l4_polished.npz')
 
     hex_layer = 3  # 0,...5 √
     oct_id = 0

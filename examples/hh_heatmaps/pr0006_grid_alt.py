@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
-from hhg9.algorithms.grid import qa_grid
+from hhg9.h9.grid import qa_grid
 from PIL import Image  # Pillow for clean image saving
 from pathlib import Path
 from bounds_utils import load_presets, resolve_bounds, needs_run
@@ -102,7 +102,6 @@ def stage(file: str,
     g_gcd = reg.domain('g_gcd')  # latitude longitude
     p_pix = reg.domain('p_pix')  # plate carrée pixel
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
 
     n_oct = reg.domain(f'n_oct:{net_name}')
     pix_gcd = reg.projection('pix_gcd')  # convert plate carrée to gcd

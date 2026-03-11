@@ -216,7 +216,6 @@ def stage(file: str,
     reg = Registrar()
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
-    b_oct.set_warp('../src/l4_polished.npz')
     n_oct = reg.domain(f'n_oct:{net_name}')
 
     # Build GCD rectangle and project to n_oct
