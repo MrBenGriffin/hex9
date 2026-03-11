@@ -9,6 +9,8 @@ dist/
 *.egg
 .pytest_cache/
 .coverage
+.claude
+.idea
 htmlcov/
 
 /output/
