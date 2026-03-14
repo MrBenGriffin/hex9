@@ -1,6 +1,16 @@
 ## Hex9.
 `Hex9` is an **ongoing project** exploring (and developing) a novel 
 *hierarchical hexagonal grid* (`HHG`) system for global projections.
+What makes it possibly unique is that it's a CRS, an HHG, and offering 
+deterministic hierarchical spatial addresses whose geometry are 
+derivable and whose hierarchy is globally exact.
+
+Hex9 is a hierarchical spatial addressing scheme built on an 
+octahedral triangular subdivision. 
+Each additional digit subdivides space by a factor of nine, 
+producing a hexagonal region hierarchy whose geometry and 
+lineage are deterministically derivable from the address.
+
 It is well-suited to population mapping, environmental modeling, heat-mapping, 
 hex-binning, and other geospatial analyses.
 
@@ -20,18 +30,13 @@ hex-binning, and other geospatial analyses.
     * Needing precomputed databases of fixed points.
     * Requiring additional polygon types (commonly pentagons) for closure
 * **Hex9** presents a *new* approach to the “holy grail” of HHG; It aims to 
-  reduce  some of these constraints while remaining early-stage and not yet  
+  reduce some of these constraints while remaining early-stage and not yet  
   production-ready (Winter 2025).
 
 ### Why Hex9
 #### Grid-Projection Decoupling
-The Hex9 grid is *fully decoupled from the underlying global projection*. 
-The logical hex grid exists independently of any coordinate reference system and
-can be applied within any octahedral global projection.
-While Hex9 comes with a derived projection for this project, the grid itself is 
-projection-agnostic, while the derived projection relies on the Hex9 grid
- for root-finding operations.
-
+The Hex9 grid approach is *fully decoupled from any underlying global 
+projection*.
 This separation ensures:
  * The grid can be reused across projections without loss of structure.
  * Analyses and visualizations remain consistent, regardless of map 
@@ -119,45 +124,46 @@ b501888670665528318830382731266380195 (L35 Grid Address)
 Hex9 supports various `uint64` addresses in a directly intuitive manner.
 
 For example, one of the Nazca Spirals - at `14.679806S, 75.101925W` has the
-uint64 address `0xb404124850835306` (in hexadecimal).
-'b' here represents hexagon 11
+uint64 address `0x8515044362475050` (in hexadecimal).
 This is (by default) a 'Layer 13' Address; The hexagons are in bytes 0..13
-The final 2 bytes are the meta, used to convert the address back to another location.
-To convert the address to an identifying hex key, this can be done by masking the final
-byte with 0x70 (or using a far more reliable internal method).
+The final byte is meta, used to convert the address back to another 
+location.
 
 ```
-0x40412...
+0x85150...
   ↑↑↑↑↑
-  ||||└─── Layer 4, hexagon 1
-  |||└──── Layer 3, hexagon 4
-  ||└───── Layer 2, hexagon 0
-  |└────── Layer 1, hexagon 4
-  └─────── Hexagon 'B'
+  ||||└─── Layer 4, hexagon 0
+  |||└──── Layer 3, hexagon 5
+  ||└───── Layer 2, hexagon 1
+  |└────── Layer 1, hexagon 5
+  └─────── Layer 1, hexagon 8
 ```
 When the uint64 address is depicted in hexadecimal, the global address is
 revealed and may be readily eye-balled with a crib - see the following image
-that traces the first 5 regions 8,2,5,4,A - each one covering 1/9th the area of
+that traces the first 5 regions 8,5,1,5,0 - each one covering 1/9th the area of
 the preceding layer.
 
-When working with greater accuracy, a subfix format can be used augments the 
-accuracy of the address to sub-micron levels.  This is equivalent to the 
-addresses at layer 35 (as shown above).
+The layer area formula is straightforward: For The surface area of the Earth 
+E, the area covered by a hexagon at layer L is E/(12*9^N)
 
-
-#### Performance
-Hex9 efficiently handles large datasets. For example, *25 million sparse 
-GCD points can be mapped in under 20 minutes* on standard desktop hardware. 
-Non-sparse datasets are processed much faster.
+Hex9 is highly comprehensive, natively supporting uint128 addresses (32 
+nibbles) (as strings) and uint64 addresses (16 nibbles) (as integers). 
+The former can index the globe down to Layer 30 or more. While Layer 30 is not 
+the mathematical limit (going deeper merely requires specific hardware 
+architecture) its resolution is staggering. By Layer 30, the area of a single 
+hex is roughly 1,000 square nanometers (1,000 nm²)
+This ensures Hex9 should be sufficient for most conceivable global 
+mapping use cases.
 
 #### Summary
 Thanks to its decoupled, fractal-based structure, 
 Hex9 allows direct projection of spatial data onto hexagonal grids. 
 This enables visualizations where hexagons remain undistorted regardless 
-of the underlying map projection, as shown in this Tokyo population heatmap 
-at Layer 8 (approx 1km²)
+of the underlying map projection, as shown in this Lake Tahoe Land Usage 
+at Layers 10 (3 acres) and 11 (addressing), 12 (land usage), and 13 (DEM 
+hillshading)
 
-![](images/tokyo_l8.jpg)(*1km² Tokyo population heatmap*)
+![](images/tahoe.jpg)(*Lake Tahoe Land Usage*)
 
 #### What can I find here?
 This project includes:
@@ -176,6 +182,8 @@ This project includes:
    * [Examples](examples/examples.md) — updated for 0.1.1a1
      - heatmap examples (hh_heatmaps) have not been re-tested.
 
+![Octahedral Projection as Hexgrid](images/rhombus.jpg)
+
 #### What can I do?
  * Explore the grid and have fun experimenting with it.
  * Mention this project with your buddies!
@@ -186,13 +194,10 @@ This project includes:
   Needless to say, Hex9 is a self-funded solo project which is written as a 
   proof-of-concept and demonstrator, to show that there are still many new 
   approaches to the HHG question.
-  The current Hex9 octahedral projection (AK) has improved authalicity
-  (equal-area), especially across a global level.  However, it's hexagons are (for the main part)
-  pretty round, and the area is pretty stable (±0.01% or so, globally), however local variation is
-  far more stable - other than about 100km areound the poles..  
-  The authalicity example reveals global variation very clearly.
+  Hex9 is not trying to compete with other HHG systems - it only aims to 
+  offer another approach, which works really well for grid layer transitions.
 
 
-![Octahedral Projection](images/net_2700.jpg)
+![Octahedral Projection](images/butterfly.jpg)
 
 
