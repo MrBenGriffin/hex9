@@ -104,22 +104,6 @@ For the first 11 layers, the pyramid address key is as follows.
 ∂1.314516nm delta (Geodesic.DISTANCE)
 ```
 
-**Moai on Rapa Nui**
-```
-27°7'32.827199567155"S, 109°16'36.740870832014"W (Reference Coordinates)
-27°7'32.827199567142"S, 109°16'36.740870832014"W (Roundtrip via Grid Address)
-b501888670665528318830382731266380195 (L35 Grid Address)  
-0.352774nm  delta (Geodesic.DISTANCE)
-```
-
-**North Pole** (edge case)
-```
-90°0'0.000000000000"N, 0°0'0.000000000000"E (Reference Coordinates)
-89°59'59.999999999898"N, 12°16'35.957736079345"E (Roundtrip via Grid Address)
-422222222222222222222222222222224832a (Grid Address)
-∂3.174534nm  delta (Geodesic.DISTANCE)
-```
-
 #### Intuitive uint64 Addresses
 Hex9 supports various `uint64` addresses in a directly intuitive manner.
 
@@ -160,7 +144,7 @@ Thanks to its decoupled, fractal-based structure,
 Hex9 allows direct projection of spatial data onto hexagonal grids. 
 This enables visualizations where hexagons remain undistorted regardless 
 of the underlying map projection, as shown in this Lake Tahoe Land Usage 
-at Layers 10 (3 acres) and 11 (addressing), 12 (land usage), and 13 (DEM 
+at Layers 10 (3 acres) and 11 (addressing), 12 (land usage), and 14 (DEM 
 hillshading)
 
 ![](images/tahoe.jpg)(*Lake Tahoe Land Usage*)
