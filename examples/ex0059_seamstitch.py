@@ -4,15 +4,16 @@
 
 """
 Part of the H9 project - uses H9 addresses and round-trips them.
-This is a processor intensive analysis of all edge-cases, measuring behaviour
+This is a processor-intensive analysis of all edge-cases, measuring behaviour
 on each seam, and alongside it. These are then depicted as graphs and summarised
 in console messages. Seams are important edge cases (literally!)
 This is a bit of a dogs dinner, thanks to AI assistance.
-02 March 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
-# ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES. These values represent SUB-MILLIMETRE projection fidelity checks.
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
+⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
+These values represent SUB-MILLIMETRE projection fidelity checks.
 """
 import matplotlib.pyplot as plt
 import numpy as np

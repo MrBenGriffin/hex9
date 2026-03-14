@@ -173,9 +173,8 @@ This project includes:
    * [Early thoughts](assets/docs/past.md) (even more out of date!)
 
  * Step-by-step guides for the included examples.
-   * [Examples](examples/examples.md) The documentation is up to date 
-     - the examples have been tested on 0.1.0a3
-     - heatmap examples have not (!).
+   * [Examples](examples/examples.md) — updated for 0.1.1a1
+     - heatmap examples (hh_heatmaps) have not been re-tested.
 
 #### What can I do?
  * Explore the grid and have fun experimenting with it.

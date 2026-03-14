@@ -43,18 +43,26 @@ class OctahedralNet(CompositeDomain):
     R3 = H9K.R3
     GW = H9K.lattice.U * 3  # grid unit width U = H9GC.U H9GC.W/6
     GH = H9K.lattice.V * 3  # grid unit height
-    RT = np.pi / 3.      # grid rotation in 60º
+    RT = np.pi / 3.         # grid rotation in 60º
+    GT = np.pi / 12.        # base for net theta 15º
 
-    def __init__(self, registrar, *, layout='mortar'):
+    def __init__(self, registrar, *, layout='mortar', theta=None):
         c_oct = registrar.domain('c_oct')
         b_oct = registrar.domain('b_oct')
+        self.base_theta = 0.0
         if layout not in net_layouts:
             layout = 'mortar'
-        super().__init__(registrar, f'n_oct:{layout}', 2)
+        if theta in [None, 0, '0000']:
+            net_name = f'n_oct:{layout}'
+        else:
+            self.base_theta = float(theta) / 1000
+            net_name = f'n_oct:{layout}:{int(self.base_theta * 1000):04d}'
+        super().__init__(registrar, net_name, 2)
         tp = H9P.sv  # mode vertices
         self.face_polys = {}
         self.c_oct = c_oct
         self.b_oct = b_oct
+        self.global_theta = self.base_theta * self.GT
         self.tri_w = H9K.derived.W / H9K.lattice.U
         self.tri_h = H9K.derived.H / H9K.lattice.V
         self.layout = net_layouts[layout]
@@ -105,6 +113,48 @@ class OctahedralNet(CompositeDomain):
                     polys.append((hh @ matr) + off + face.offset)
                 self.face_polys[sign] = polys
 
+        # Apply global 2D rotation around net centroid if theta != 0.
+        # The rotation is baked into the per-face BaryNet affines and face_polys so that
+        # all existing projection machinery (BaryNet.forward/backward, pt_face) remains
+        # unchanged.  b_oct addressing and the H9 grid are completely unaffected.
+        if self.global_theta != 0.0:
+            theta = self.global_theta
+            R = np.array([[np.cos(theta), -np.sin(theta)],
+                          [np.sin(theta),  np.cos(theta)]])
+            c = np.array([self.wi / 2.0, self.he / 2.0])
+            for face in self.projs.values():
+                face.offset = np.array(face.offset)
+                face.offset = (face.offset - c) @ R + c
+                if face.c2trans is None:
+                    # Non-c2: update combined rotation matrix.
+                    # forward: xn = xy @ M + off  →  xy @ (M @ R) + (off - c) @ R + c
+                    face.matrix = face.matrix @ R
+                else:
+                    # C2: c2_affine returns (M @ C2m, c2_off).  Leave M alone; rotate each
+                    # C2m → C2m @ R and c2_off → c2_off @ R so that the combined becomes
+                    # M @ C2m @ R, and the full output lands in the rotated frame.
+                    face.c2trans = [
+                        [mo, rt, offs @ R, matr @ R]
+                        for mo, rt, offs, matr in face.c2trans
+                    ]
+            # Rotate face_polys so pt_face hit-testing works in the rotated frame.
+            self.face_polys = {
+                sign: [(poly - c) @ R + c for poly in polys]
+                for sign, polys in self.face_polys.items()
+            }
+            # Recompute tight bounding box from rotated face vertices and shift
+            # everything to origin so wi/he reflect the actual rotated net extent.
+            all_verts = np.vstack([v for polys in self.face_polys.values() for v in polys])
+            xy_min = all_verts.min(axis=0)
+            xy_max = all_verts.max(axis=0)
+            shift = -xy_min
+            for face in self.projs.values():
+                face.offset = face.offset + shift
+            self.face_polys = {
+                sign: [poly + shift for poly in polys]
+                for sign, polys in self.face_polys.items()
+            }
+            self.wi, self.he = xy_max - xy_min
 
     def ratio(self) -> float:
         """Return width/height ratio. Use NetPixel.ratio() for new code."""
@@ -112,27 +162,28 @@ class OctahedralNet(CompositeDomain):
 
     def img_adj(self) -> tuple:
         """Pixel trim adjustment. Use NetPixel.img_adj() for new code."""
-        l_width = self.layout['width'] / self.tri_w
-        l_height = self.layout['height'] / self.tri_h
+        # wi = layout['width'] * U  →  wi / W = layout['width'] / tri_w  (same as before)
+        l_width = self.wi / H9K.derived.W
+        l_height = self.he / H9K.derived.H
         return l_width + 0.51, l_height + 0.51
 
     def image_dims(self, pixels: int) -> tuple[int, int]:
         """Triangle side in pixels → image (W, H). Use NetPixel.image_dims() for new code."""
         tri_h = pixels * self.R3 * 0.5
-        l_width = self.layout['width'] / self.tri_w
-        l_height = self.layout['height'] / self.tri_h
+        l_width = self.wi / H9K.derived.W
+        l_height = self.he / H9K.derived.H
         w_a, h_a = self.img_adj()
         return int(l_width * pixels - w_a), int(l_height * tri_h - h_a)
 
-    def dim_from_image(self, pix_w: int, pix_h: int) -> float:
-        """Image (W, H) → triangle side in pixels. Use NetPixel.dim_from_image() for new code."""
-        tri_h = self.R3 * 0.5
-        l_width = self.layout['width'] / self.tri_w
-        l_height = self.layout['height'] / self.tri_h
-        w_a, h_a = self.img_adj()
-        img_w = (float(pix_w) + w_a) / l_width
-        img_h = (float(pix_h) + h_a) / (l_height * tri_h)
-        return np.rint((img_w + img_h) / 2.0)
+    # def dim_from_image(self, pix_w: int, pix_h: int) -> float:
+    #     """Image (W, H) → triangle side in pixels. Use NetPixel.dim_from_image() for new code."""
+    #     tri_h = self.R3 * 0.5
+    #     l_width = self.layout['width'] / self.tri_w
+    #     l_height = self.layout['height'] / self.tri_h
+    #     w_a, h_a = self.img_adj()
+    #     img_w = (float(pix_w) + w_a) / l_width
+    #     img_h = (float(pix_h) + h_a) / (l_height * tri_h)
+    #     return np.rint((img_w + img_h) / 2.0)
 
     def filter(self, pts):
         """

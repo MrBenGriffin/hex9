@@ -107,7 +107,7 @@ class AKOctahedralEllipsoid(Projection):
 
     def get_accuracy(self, layer):
         """
-        Get accuracy in m2 from a given level.
+        Get accuracy in m2 from a given layer.
         """
         if layer < 0:
             raise ValueError("get_accuracy: hex_layer must be >= 0")
@@ -121,7 +121,7 @@ class AKOctahedralEllipsoid(Projection):
 
     def set_accuracy(self, m2):
         """
-        Set the level such that the hex area is ≤ desired accuracy in m2.
+        Set the layer such that the hex area is ≤ desired accuracy in m2.
         """
         idx = np.searchsorted(self.h_areas[::-1], m2, side='right')
         self.accuracy = len(self.h_areas) - idx

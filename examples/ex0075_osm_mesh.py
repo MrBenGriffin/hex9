@@ -3,26 +3,22 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-Compose a set of zooms into stonehenge vi cartopy and OSM.
-This grabs rectangle boundaries from which we sample the octahedral.
-The actual octahedral render series is found in 0076.
-
+Compose a plate carree of UK vi cartopy and OSM.
 Last Tested
 
-02 March 2026 0.1.1a1 (passed - BUT to be written using hexagons)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed - complete rewrite/repurpose)
+02 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 import json
+import os
 import numpy as np
 import cartopy.crs as ccrs
 from cartopy.io.img_tiles import OSM
 from matplotlib import pyplot as plt
-from hhg9 import Registrar, Points
-from hhg9.formats import OctahedralH9
-from hhg9.h9.polygon import enmesh
-from hhg9.h9.region import xy_regions
+from hhg9 import Registrar
 
 
 def json_load(path):
@@ -34,61 +30,33 @@ def json_load(path):
 
 
 if __name__ == '__main__':
-    reg = Registrar()  # Manage Domains & Projections
-    b_oct = reg.domain('b_oct')
-    g_gcd = reg.domain('g_gcd')
-    h9 = OctahedralH9(reg)            # formatter.
-    b_oct.register_format(h9)
-
-    # Support Classes
     imagery = OSM()
-    layers = 12
 
-    locs = json_load('../assets/locations.json')
-    region = locs['NWA']
-    spot = region['Stonehenge']
-    ll0 = g_gcd.adopt(np.array([spot]))
-    bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
-    co, mo = bc0.cm()
-    comp = bc0.invert_octant_ids(co)
-    uri = xy_regions(bc0.coords, mo, layers)
-    poly, msh = enmesh(bc0, layers)
-    bnd = Points(poly.reshape([-1, 2]), b_oct, components=comp[0])
-    gel = reg.project(bnd, [b_oct, g_gcd])
-    gpy = gel.coords.reshape([-1, 4, 2])
-    detail = [4, 5, 8, 10, 11, 13, 14, 15, 16, 17, 18, 18, 18, 18, 18, 18]
-    BASE_SIZE_METERS = 10000000.0  # 10000 km (example value)
-    IMG_PIXELS = 3000
-    extents = []
+    reg = Registrar()  # Manage Domains & Projections
+    g_gcd = reg.domain('g_gcd')
+    zone = [-11, 2.5, 49.5, 61]  # Rough UK boundary box lon_min/lon_max/lat_min/lat_max
+    lon_min, lon_max, lat_min, lat_max = zone
+    pw, ph = lon_max-lon_min, lat_max-lat_min
+    size, dpi, zoom = 8, 100, 8   # zoom 8 → ~2400×2100 px of tile data for UK
+    img_w = int(pw * size * dpi)   # output pixel width  — matches regrid_shape
+    img_h = int(ph * size * dpi)   # output pixel height — matches regrid_shape
 
-    for i in range(layers+1):  # We need the layer_depth
-        hh_vertices = gpy[i]
-        layer_depth = i
-        current_size_meters = BASE_SIZE_METERS / (3 ** layer_depth)
-        center_lat, center_lon = np.mean(hh_vertices, axis=0)
-        meters_per_deg_lat = 111132.954
-        meters_per_deg_lon = 111320.0 * np.cos(np.radians(center_lat))
-        extent_height_deg = current_size_meters / meters_per_deg_lat
-        extent_width_deg = current_size_meters / meters_per_deg_lon
-        final_extent = [
-            center_lon - (extent_width_deg / 2),  # lon_min
-            center_lon + (extent_width_deg / 2),  # lon_max
-            center_lat - (extent_height_deg / 2),  # lat_min
-            center_lat + (extent_height_deg / 2)  # lat_max
-        ]
-        extents.append(final_extent)
-        w, h, dpi = IMG_PIXELS / 100, IMG_PIXELS / 100, 100
-        fig = plt.figure(figsize=(w, h), dpi=dpi, frameon=False)
-        fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
-        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-        ax.set_extent(final_extent, ccrs.PlateCarree())
-        print(f'Layer {layer_depth}, detail:{detail[layer_depth]}')
-        ax.add_image(imagery, detail[layer_depth], regrid_shape=(2*IMG_PIXELS, 2*IMG_PIXELS))
-        fig.savefig(f'output/ex0075_{i:02}.png',
-                    dpi=dpi,
-                    format='png', bbox_inches='tight',
-                    pad_inches=0, transparent=True)
-        plt.close(fig)
-        print(f'file saved at output/ex0075_{i:02}.png')
-    np.save('output/ex0075_extents.npy', np.array([extents]))
+    out_img = 'output/ex0075.png'
+    out_ext = 'output/ex0075_extents.npy'
+    if os.path.exists(out_img) and os.path.exists(out_ext):
+        print(f'Cached: {out_img} — delete to regenerate')
+        raise SystemExit(0)
+
+    fig = plt.figure(figsize=(img_w/dpi, img_h/dpi), dpi=dpi, frameon=False)
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
+    ax.set_extent(zone, ccrs.PlateCarree())
+    ax.add_image(imagery, zoom, regrid_shape=(img_w, img_h))
+    fig.savefig(f'output/ex0075.png',
+                dpi=dpi,
+                format='png', bbox_inches='tight',
+                pad_inches=0, transparent=True)
+    plt.close(fig)
+    print(f'file saved at output/ex0075.png')
+    np.save('output/ex0075_extents.npy', np.array(zone))
     print(f'extents file saved at output/ex0075_extents.npy')

@@ -8,7 +8,7 @@ and a hex_layer, generate the hex-grid for that hex_layer, along with ancestry.
 It will extract any common prefix, and plot the hex-grid and ancestry along with hex labels.
 
 Last Tested
-11 Mar 2026 0.1.1a1 (better)
+13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (working well)
 """
 import time
@@ -17,16 +17,13 @@ from matplotlib import pyplot as plt
 from matplotlib.collections import PolyCollection
 import numpy as np
 from hhg9 import Points, Registrar
-from hhg9.h9 import H9K
 from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
-from hhg9.h9.polygon import hex_reduce, hex_parents, H9P, ctr_from_pars
+from hhg9.h9.polygon import hex_reduce, hex_parents, ctr_from_pars
+from hhg9.h9.grid import poly_net_field, hex_verts_in_noct
 from geographiclib.geodesic import Geodesic
 from contextlib import contextmanager
 from hhg9.formats import OctahedralH9
-
-
 geod = Geodesic.WGS84
-
 
 @contextmanager
 def time_block(label):
@@ -36,24 +33,6 @@ def time_block(label):
     finally:
         end = time.perf_counter()
         print(f"{label}: {end - start:.4f}s")
-
-
-def plot_pts(pts, layer):
-    """Draw points and save"""
-    xmin, ymin, xmax, ymax = (2.401, 1.906, 2.463, 1.941)
-    ratio = np.abs(xmax - xmin) / np.abs(ymax - ymin)
-    fig = plt.figure(figsize=(ratio * 10, 10), dpi=200, frameon=False)
-    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
-    ax = fig.add_subplot(111)  #
-    pad_x = 0.01 * (xmax - xmin) if xmax > xmin else 1.0
-    pad_y = 0.01 * (ymax - ymin) if ymax > ymin else 1.0
-    ax.set_xlim(xmin - pad_x, xmax + pad_x)
-    ax.set_ylim(ymin - pad_y, ymax + pad_y)
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_axis_off()
-    ax.scatter(pts.coords[:, 0], pts.coords[:, 1], ec='none', marker='.', s=20)
-    fig.savefig(f"output/ex0260_pts_{layer}.png", dpi=200)
-
 
 def plot_hex(pts_list, prefix='', name='hex', ctrs=None, labels=None, values=None, lut=None, nodata=0):
     """Plot hex polygons.
@@ -123,115 +102,6 @@ def plot_ctr(pts, name='hex', labels=None):
     print(f"fig saved at output/ex0260_ctr_{name}.png")
 
 
-def calculate_intersections(poly_grid, v):
-    """
-    Finds u-coordinates where the horizontal line at v crosses polygon edges.
-    poly_grid: (m, 2) array of polygon vertices in scaled UV space.
-    v: The current scanline (integer row index).
-    """
-    # 1. Define segments (p1 to p2)
-    p1 = poly_grid
-    p2 = np.roll(poly_grid, -1, axis=0)
-
-    # 2. Find edges that cross the scanline v
-    # We use (p1y <= v < p2y) or (p2y <= v < p1y) to handle vertices correctly
-    # and avoid double-counting horizontal edges.
-    mask = ((p1[:, 1] <= v) & (p2[:, 1] > v)) | ((p2[:, 1] <= v) & (p1[:, 1] > v))
-
-    if not np.any(mask):
-        return np.array([])
-
-    # 3. Filter segments
-    e1 = p1[mask]
-    e2 = p2[mask]
-
-    # 4. Linear Interpolation to find the u-coordinate
-    # u = x1 + (v - y1) * (x2 - x1) / (y2 - y1)
-    u_ints = e1[:, 0] + (v - e1[:, 1]) * (e2[:, 0] - e1[:, 0]) / (e2[:, 1] - e1[:, 1])
-
-    # 5. Return sorted intersections for pairing
-    return np.sort(u_ints)
-
-
-def scanline_h9_sheet(poly_n, level):
-    # sn is the grid spacing factor
-    # level + 1 will generate 9 points per, which helps with polygon edges.
-
-    sn = H9K.radical.W * (3 ** -(level + 1))
-
-    # 1. Scale polygon to integer grid space (UV Skew Space)
-    x, y = poly_n.coords[:, 0], poly_n.coords[:, 1]
-    # Standard Axial/Skew transform for hexagonal grids
-    v_skew = (y * 2 / np.sqrt(3)) / sn
-    u_skew = (x / sn) - (v_skew / 2)
-
-    poly_grid = np.stack([u_skew, v_skew], axis=1)
-
-    # 2. Get Row Range
-    v_min = int(np.floor(poly_grid[:, 1].min()))
-    v_max = int(np.ceil(poly_grid[:, 1].max()))
-    u_acc, v_acc = [], []
-
-    for v in range(v_min, v_max + 1):
-        u_ints = calculate_intersections(poly_grid, v)
-
-        # Standard even-odd fill pairing
-        for i in range(0, len(u_ints), 2):
-            if i + 1 >= len(u_ints): break
-            u_start = int(np.ceil(u_ints[i]))
-            u_end = int(np.floor(u_ints[i + 1]))
-
-            if u_end >= u_start:
-                u_range = np.arange(u_start, u_end + 1)
-                u_acc.append(u_range)
-                v_acc.append(np.full_like(u_range, v))
-
-    if not u_acc:
-        # Fallback to centroid if no points found
-        avg = np.mean(poly_grid, axis=0)
-        u_final, v_final = np.array([np.round(avg[0])]), np.array([np.round(avg[1])])
-    else:
-        u_final = np.concatenate(u_acc)
-        v_final = np.concatenate(v_acc)
-
-    # 3. CONVERT BACK TO N_OCT (The Critical Part)
-    # Using the inverse of the skew transform:
-    # y = v * sn * sqrt(3) / 2
-    # x = (u + v/2) * sn
-
-    y_n = (v_final - 0.333) * sn * (np.sqrt(3) / 2)
-    x_n = (u_final + (v_final / 2)) * sn
-
-    uv = np.stack([x_n, y_n], axis=1)
-    pts = Points(uv, domain=poly_n.domain)
-    plot_pts(pts, level)
-
-    result = poly_n.domain.filter(pts)
-    print(f'Layer: {level}; Points: {len(result)}')
-    return result
-
-
-def hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct):
-    """Return a set of hexagons for this layer"""
-    hex_verts_n = np.zeros((len(hex_par), 6, 2))
-    for side, proj in n_oct.projs.items():
-        oid = n_oct.sides[side].oid
-        fm = (hex_oid == oid)
-        if not np.any(fm):
-            continue
-        if proj.c2trans is None:
-            par_n = hex_par[fm] @ proj.matrix + proj.offset
-            hex_verts_n[fm] = par_n[:, None, :] + H9P.hx[xpm[fm], xc2[fm]] * scale @ proj.matrix
-        else:
-            for c2v in range(3):
-                c2m = fm & (xc2 == c2v)
-                if not np.any(c2m):
-                    continue
-                matr, off_c2 = proj.c2_affine(c2v)
-                par_n = hex_par[c2m] @ matr + off_c2 + proj.offset
-                hex_verts_n[c2m] = par_n[:, None, :] + H9P.hx[xpm[c2m], c2v] * scale @ matr
-    return Points(hex_verts_n.reshape(-1, 2), n_oct)
-
 
 if __name__ == '__main__':
     rg = Registrar()
@@ -265,13 +135,13 @@ if __name__ == '__main__':
 
     # threshold = 2  # min L+1 subsamples inside polygon (1..3); 1=include edge hexes
     for layer in [6]:  # range(6, 8):
-        scn = scanline_h9_sheet(ntt, layer)
+        scn = poly_net_field(ntt, layer)
         b_pts = rg.project(scn, [n_oct, b_oct])
 
         # Drop points that landed outside all net faces
         valid = np.any(b_pts.components != 0, axis=-1)
         b_pts = Points(b_pts.coords[valid], domain=b_oct, components=b_pts.components[valid])
-        # Bin to L-level parents, apply a threshold, compute centroids directly
+        # Bin to L-layer parents, apply a threshold, compute centroids directly
         hex_num, hex_v, hex_inv, _ = hex_reduce(b_pts, layer)
         counts = np.bincount(hex_inv, minlength=hex_num)
         for threshold in [1, 2, 3]:

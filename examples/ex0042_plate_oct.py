@@ -8,15 +8,18 @@ This follows ex0030_plate_glb.py (which loaded the png and displayed it as a uni
 This loads a Plate Carrée png image, converts it to Unit Octahedron, via latitude/longitude and sphere and displays it.
 As the inverse of the AK projection is slow we use the cache from ex0041_cache.py
 Added chain registration example.
-28 February 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+28 Feb 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 from pathlib import Path
 import numpy as np
+from PIL import Image
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar, Points
+from hhg9.domains import PlatePixelCarree
 
 
 def show_octahedron(arr: Points, x_lim=None, y_lim=None, z_lim=None, label=None, clip=False):
@@ -42,38 +45,28 @@ def run():
         Load a Plate Carrée png image, project onto Unit Octahedron, and display.
     """
     reg = Registrar()  # Manage Domains & Projections
-    p_pix = reg.domain('p_pix')           # Pixel Plate Carrée
-    c_oct = reg.domain('c_oct')
-
+    b_oct = reg.domain('b_oct')
+    g_gcd = reg.domain('g_gcd')
+    # Create the output raster FIRST so PlatePixelGCD captures it as rev_cs (extent-aware).
+    fs = PlatePixelCarree.full_sphere(reg, 3600, 1800, center=False)
 
     # Load cached octahedral and colours from original.
     pc_map = 'tissot_3600x1800'
-    cache = Path(f'src/{pc_map}.npy')
+    cache = Path(f'src/{pc_map}.npz')
     if not cache.exists():
-        raise ValueError('Far better to load a cache. See ex_0041')
-    img = image.imread(f'src/{pc_map}.png', 'png')
-    pc_extent = (-180.0, -90.0, 180.0, 90.0)
-    pc_px = p_pix.adopt(img, extent=pc_extent, y_up=True, center=False)
-
-    oc = np.load(cache)
-    c_pix = Points(oc, c_oct, samples=pc_px.samples)
+        raise ValueError('Far better to load a cache for this thing. See ex_0041')
+    repo = np.load(cache, allow_pickle=True)
+    b_pix = Points(repo['coords'], b_oct, components=repo['cmp'], samples=repo['smp'])
+    c_pix = reg.project(b_pix, [b_oct, 'c_oct'])
     show_octahedron(c_pix)
 
-    # Example Registration of a specific chain.
-    # We don't need to do this, we can be explicit in the projection.
-    # But it allows us to short-cut end-points.
-    reg.register_projection('chain', ['c_oct', 'c_ell', 'g_gcd', 'p_pix'])
-
     # Now project back to Plate Carrée and display.
-    sp_pl = reg.project(c_pix, [c_oct, p_pix])  # can use endpoints from chain.
-    rmg = p_pix.image(sp_pl, (3600, 1800))     # convert points back to an [1800, 3600,3] image.
-    fig = plt.figure(figsize=(36, 18), dpi=100, frameon=False)
-    ax = fig.add_axes([0, 0, 1, 1])  # span the whole figure
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_axis_off()
-    plt.imshow(rmg)
-    fig.savefig(f"output/ex0042_recovered.png", dpi=100)
-    plt.close(fig)
+    sp_pl = reg.project(b_pix, [b_oct, g_gcd, fs])  # can use endpoints from chain.
+    flat = fs.image(sp_pl)     # convert points back to an image.
+    if flat.dtype != np.uint8:
+        flat = (flat * 255).astype(np.uint8)
+    img = Image.fromarray(flat)  # mode auto-detected from shape: (H,W,3)→RGB, (H,W,4)→RGBA
+    img.save("output/ex0042_recovered.png")  # PNG keeps alpha
     print(f'fig saved at output/ex0042_recovered.png')
 
 

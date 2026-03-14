@@ -4,7 +4,8 @@
 
 """
 Here we load a photo of the world, and then extract a crop of it, set by a digital lat/lon extent.
-28 February 2026 0.1.1a1 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+28 Feb 2026 0.1.1a1 (passed)
 
 
 """

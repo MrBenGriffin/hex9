@@ -6,30 +6,28 @@
 Given a point in the continental US (or anywhere for which you have geotiff
 land usage that uses NLCD categories) and generate a hexgrid plot of that area.
 
-This is really good - but generates a grid in a rather inefficient manner.
-
 This example requires osgeo, gdal in order to read geotiffs
 While hhg9 does not depend upon such tools, with GIS it's not
 a bad idea to have these libraries, alongside the GIS stack it does use
 (geographiclib, proj)
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
 """
-from matplotlib import pyplot as plt, colors
+from matplotlib import pyplot as plt
 from matplotlib.collections import PolyCollection
 from matplotlib.patches import Rectangle
-from numpy.typing import NDArray
-from osgeo import gdal, osr
 import numpy as np
 import math
 from hhg9 import Points, Registrar
-from hhg9.base import Domain, Projection
-from hhg9.algorithms.distance import wgs84_offset, wgs84_area
 from hhg9.h9 import H9P
 from hhg9.h9.polygon import hex_poly_layer
 import json
 from geographiclib.geodesic import Geodesic
+from hhg9.algorithms.distance import wgs84_offset, densify_quad_geodesic_by_step
+from osgeo import gdal
+from hhg9.geo.gdal import Wkt, Wkt_4978
 
 geod = Geodesic.WGS84
 
@@ -76,18 +74,6 @@ def densify_poly_geodesic_by_step(poly_latlon: np.ndarray,
             out.append((r["lat2"], r["lon2"]))
 
     return np.array(out, dtype=np.float64)
-
-
-def densify_quad_geodesic_by_step(corners_latlon: np.ndarray,
-                                  max_step_m: float = 2_000.0,
-                                  max_per_edge: int = 512) -> np.ndarray:
-    """Convenience wrapper for densifying a 4-corner geodesic quad."""
-    return densify_poly_geodesic_by_step(
-        corners_latlon,
-        max_step_m=max_step_m,
-        max_per_edge=max_per_edge,
-        closed=True,
-    )
 
 
 def mode_u8(inv_hex, counts, pts):
@@ -158,55 +144,8 @@ def create_nlcd_lut():
     return lut
 
 
-class Wkt(Domain):
-    """
-    Custom wkt domain
-    The default name is g_wkt.
-    This is fine while one is using only one Wkt defined domain.
-    """
-
-    def valid(self, arr) -> NDArray:
-        return super().valid(arr)
-
-    def __init__(self, registrar, name='g_wkt', _wkt='', axes=3):
-        self.sr = osr.SpatialReference()
-        self.sr.ImportFromWkt(_wkt)  # here we define it via the Wkt in the file.
-        axes = self.sr.GetAxesCount()
-        super().__init__(registrar, name, axes)
-
-
-class Wkt_4978(Projection):
-    """Custom wkt projection to c_ell"""
-    def __init__(self, registrar: Registrar, _wkt: Wkt):
-        wkt_name = _wkt.name
-        name = f'ell_{wkt_name[-3:]}'
-        super().__init__(registrar, name, 'c_ell', wkt_name)
-        self.esr = osr.SpatialReference()  # spatial reference for EPSG:4978
-        self.esr.ImportFromEPSG(4978)      # WGS84 ECEF XYZ (m); equivalent to c_ell
-        self.wsr = _wkt.sr                 # Some other wtk based projection.
-        self._fwd = osr.CoordinateTransformation(self.esr, self.wsr)  # fwd ell→wkt
-        self._bak = osr.CoordinateTransformation(self.wsr, self.esr)  # bak wkt→ell
-
-    def forward(self, pts: Points) -> Points:
-        """ECEF;4978 → Wkt"""
-        # x, y, z = pts.coords[..., 0], pts.coords[..., 1], pts.coords[..., 2]
-        res = np.atleast_2d(self._fwd.TransformPoints(pts.coords))
-        if res.shape[1] > self.fwd_cs.axes:
-            res = res[:, :self.fwd_cs.axes]
-        _result = Points(coords=res, domain=self.fwd_cs, samples=pts.samples)
-        return _result
-
-    def backward(self, pts: Points) -> Points:
-        """Wkt → ECEF;4978"""
-        res = np.atleast_2d(self._bak.TransformPoints(pts.coords))
-        if res.shape[1] > self.rev_cs.axes:
-            res = res[:, :self.rev_cs.axes]
-        _result = Points(coords=res, domain=self.rev_cs, samples=pts.samples)
-        return _result
-
-
 def tri_grid_clipped(level, mode, bbox, h9p=H9P):
-    """Return a set of barycentric xy cell centroids for level hex_layer, mode M, clipped by a TLBR bounding box"""
+    """Return a set of barycentric xy cell centroids for layer hex_layer, mode M, clipped by a TLBR bounding box"""
     tp, lt, bt, rt = bbox
     from hhg9.h9 import H9C, H9R
 
@@ -258,21 +197,6 @@ def tri_grid_clipped(level, mode, bbox, h9p=H9P):
             break
 
     return origins
-
-
-def plot_pts(level, pts, bbox):
-    """Draw points in bbox"""
-    tp, lt, bt, rt = bbox
-    fig = plt.figure(figsize=(17, 10), dpi=300, frameon=False)
-    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
-    ax = fig.add_subplot(111)  # (*nrows*, *ncols*, *index*)
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_xlim(lt, rt)  #
-    ax.set_ylim(bt, tp)  #
-    ax.set_axis_off()
-    ax.scatter(pts[:, 0], pts[:, 1], ec='none', marker='.', s=10)
-    fig.savefig(f"output/ex0250_grid_{level}.jpg", dpi=200)
-
 
 def plot_hex(pts, name='hex', bbox=None, draw_bbox=True, values=None, lut=None, nodata=0):
     """Plot hex polygons.
@@ -349,7 +273,7 @@ if __name__ == '__main__':
 
     # We are going to load up a tif.  It's a proxy, so not hogging memory here.
     # 2016 Alaska
-    src_file = 'src/NLCD_2016_Land_Cover_AK_20200724.img'  # Alaska only!
+    src_file = '../experimental/personal/src/NLCD_2016_Land_Cover_AK_20200724.img'  # Alaska only!
     # 2023 Conus for the USA continent
     # src_file = 'src/USA_NLCD_LndCov_2023_CU_C1V1.tif'  # https://www.mrlc.gov/ land usage.
     ds = gdal.Open(src_file)
@@ -396,7 +320,7 @@ if __name__ == '__main__':
     if np.unique(cmp).size > 1:
         raise NotImplementedError('Need to improve the mode, and components part here.')
     bbox = (tp, lt, bt, rt)  # TLBR
-    for layer in range(9, 12):
+    for layer in range(12, 14):
         pts = tri_grid_clipped(level=layer+3, mode=int(mo[0]), bbox=bbox)
         bt = Points(pts, b_oct, components=bhx.components[0])
         smp = rg.project(bt, [b_oct, c_oct, c_ell, g_wkt])

@@ -666,6 +666,8 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
 
     """
     from hhg9.h9 import H9O
+    if dom.name[:5] != 'b_oct':
+        raise ValueError(f"reg_hex_digits: domain must be a b_oct, not {dom}")
     sz, cols = np.shape(cx)
     depth = cols - 1
 
@@ -783,7 +785,7 @@ def hex_digits(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversibl
 
     Args:
         pts (Points): Barycentric points.
-        layer (int): Layer level.
+        layer (int): Layer layer.
         tail_style (TailStyle): whether we want a key or reversible.
 
     Returns:

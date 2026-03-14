@@ -23,14 +23,14 @@ from bounds_utils import load_presets, resolve_bounds, needs_run
 
 def calculate_dpi_aware_zoom(bounds, figsize_inches, dpi):
     """
-    Calculates the zoom level needed to match a target DPI.
+    Calculates the zoom layer needed to match a target DPI.
     Args:
         bounds (list): [lon_min, lon_max, lat_min, lat_max] in WGS84 degrees.
         figsize_inches (tuple): (width, height) of the matplotlib figure in inches.
         dpi (int): The target dots per inch (DPI) of the output image.
 
     Returns:
-        int: The calculated integer zoom level.
+        int: The calculated integer zoom layer.
     """
     # 1. Calculate required output dimensions in pixels
     fig_w_px = figsize_inches[0] * dpi
@@ -156,7 +156,7 @@ def stage(file: str,
     im = data.reshape((img_h_pix, img_w_pix, -1))
     Image.fromarray(im).save(out_img)
 
-    print(f"[pr0003] Saved {out_img}  size={img_w_pix}x{img_h_pix}px  zoom≈{zoom} level={level}")
+    print(f"[pr0003] Saved {out_img}  size={img_w_pix}x{img_h_pix}px  zoom≈{zoom} layer={level}")
     return out_img
 
 

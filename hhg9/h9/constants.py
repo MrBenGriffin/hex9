@@ -264,7 +264,7 @@ class OctConst:
     oid_str: NDArray[np.uint8]
     oid_mo: NDArray[np.uint8]
     oid_nb: NDArray[np.uint8]
-    nb_c2p: NDArray[np.bool]
+    nb_c2p: NDArray[bool]
     nb_c2map: NDArray[np.uint8]
     edges_by_id: NDArray
     l0hex_by_id: NDArray[np.uint8]

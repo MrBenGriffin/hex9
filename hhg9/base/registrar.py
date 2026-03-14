@@ -77,7 +77,8 @@ class Registrar:
         domain variations are declared with a ':'
         """
         if full_key not in self._domains:
-            key, variation = full_key.split(':') if ':' in full_key else (full_key, None)
+            variation = full_key.split(':') if ':' in full_key else [full_key]
+            key = variation[0]
             match key:
                 case 'p_pix':
                     from hhg9.domains import PlatePixel
@@ -104,10 +105,22 @@ class Registrar:
                     from hhg9.domains import SphericalCartesian
                     _ = SphericalCartesian(self)
                 case 'n_oct':
-                    c_oct = self.domain('c_oct')
-                    b_oct = self.domain('b_oct')
+                    # c_oct = self.domain('c_oct')
+                    # b_oct = self.domain('b_oct')
                     from hhg9.domains import OctahedralNet
-                    _ = OctahedralNet(self, layout=variation)
+                    layout = 'mortar'
+                    theta = None
+                    match len(variation):
+                        case 1:
+                            pass
+                        case 2:
+                            layout = variation[1]
+                        case _:
+                            layout = variation[1]
+                            v2 = variation[2]
+                            if len(v2) == 4:
+                                theta = f'{int(variation[2]):04d}'
+                    _ = OctahedralNet(self, layout=layout, theta=theta)
                 case 'n_pix':
                     from hhg9.domains import NetPixel
                     _ = NetPixel(self)

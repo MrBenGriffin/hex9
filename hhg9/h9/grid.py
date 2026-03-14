@@ -11,11 +11,12 @@ import numpy as np
 from hhg9.algorithms.geometry import inside_convex_polygon_cw
 from hhg9.h9 import H9K, H9P
 from hhg9.h9.classifier import in_scope
+from hhg9 import Points
 
 
 @cache
 def _hex_areas():
-    """Return characteristic lengths for an ideal regular hexagon at each level.
+    """Return characteristic lengths for an ideal regular hexagon at each layer.
     Returns:
         np.array (max_depth, 5):
             area: area in m^2
@@ -44,7 +45,7 @@ def _hex_areas():
 
 @cache
 def _tri_areas():
-    """Return characteristic lengths for an ideal equilateral triangle at `level`.
+    """Return characteristic lengths for an ideal equilateral triangle at `layer`.
     Derived from area A = (sqrt(3)/4) * a^2.
     returns np.array (max_depth, 5):
         area: area in m^2
@@ -75,14 +76,14 @@ def _tri_areas():
 
 @cache
 def hex_props(level):
-    """return (ideal) hex_grid properties for level"""
+    """return (ideal) hex_grid properties for layer"""
     h_areas = _hex_areas()
     return h_areas[level]
 
 
 @cache
 def tri_props(level):
-    """return  (ideal)  tri_grid properties for level"""
+    """return  (ideal)  tri_grid properties for layer"""
     t_areas = _tri_areas()
     return t_areas[level]
 
@@ -190,7 +191,7 @@ def sq_grid_vx(scale: float = 1000, mode: int = 0):
     trx = in_scope(tx, rec[:, 1], mo)  # ~half a pixel in coord space
     return wid, hgt, rec, trx, pix_x, pix_y
 
-def qa_grid(quad, scale: float = 200, affine=None):
+def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5):
     """
     Return a rectilinear grid of points within a quadrilateral.
     Also returns the mask and scales.
@@ -207,6 +208,13 @@ def qa_grid(quad, scale: float = 200, affine=None):
     affine : tuple (matrix, offset) or None
         Affine transform mapping quad from barycentric to net space.
         grid and mask are both computed in the post-transform space.
+    tol : float
+        Edge-expansion tolerance in pixels (default 0.5).  Passed to
+        :func:`~hhg9.algorithms.geometry.inside_convex_polygon_cw` as
+        ``tol / scale`` (distance units), so each edge is widened by half a
+        pixel outward.  Adjacent quads therefore overlap by one pixel at
+        shared edges, eliminating tears between c2 / half-hex regions.
+        Pass ``tol=0`` to restore the original strict boundary.
 
     Returns
     -------
@@ -235,10 +243,117 @@ def qa_grid(quad, scale: float = 200, affine=None):
     xl = np.linspace(cminx, cmaxx, num=wid)
     xx, yy = np.meshgrid(xl, yl)
     grid = np.stack((xx.ravel(), yy.ravel()), axis=1)
-    trx = inside_convex_polygon_cw(grid, placed)
+    dist_tol = tol / scale if (tol > 0.0 and scale > 0.0) else 0.0
+    trx = inside_convex_polygon_cw(grid, placed, tol=dist_tol)
     sx = (wid - 1) / cw if wid > 1 else 1.0
     sy = (hgt - 1) / ch if hgt > 1 else 1.0
     return wid, hgt, grid, trx, (np.array([cminx, cminy, cmaxx, cmaxy]), (sx, sy))
+
+def _calculate_intersections(poly_grid, v):
+    """
+    Finds u-coordinates where the horizontal line at v crosses polygon edges.
+
+    Args:
+        poly_grid: (m, 2) array of polygon vertices in scaled UV space.
+        v: The current scanline (integer row index).
+    """
+    p1 = poly_grid
+    p2 = np.roll(poly_grid, -1, axis=0)
+    mask = ((p1[:, 1] <= v) & (p2[:, 1] > v)) | ((p2[:, 1] <= v) & (p1[:, 1] > v))
+    if not np.any(mask):
+        return np.array([])
+    e1 = p1[mask]
+    e2 = p2[mask]
+    u_ints = e1[:, 0] + (v - e1[:, 1]) * (e2[:, 0] - e1[:, 0]) / (e2[:, 1] - e1[:, 1])
+    return np.sort(u_ints)
+
+
+def poly_net_field(poly_n, layer: int):
+    """
+    Generate a dense set of H9 axial grid points (in n_oct space) covering a polygon.
+
+    Uses a scanline fill in hex axial (skew UV) coordinates to enumerate every
+    grid point at the given layer that falls inside ``poly_n``.
+
+    Args:
+        poly_n: Points in n_oct whose convex hull defines the region of interest.
+        layer:  H9 hex layer; controls grid spacing (sn = W * 3^-(layer+1)).
+
+    Returns:
+        Points in n_oct, filtered to those inside the domain.
+    """
+    sn = H9K.radical.W * (3 ** -(layer + 1))
+
+    x, y = poly_n.coords[:, 0], poly_n.coords[:, 1]
+    v_skew = (y * 2 / H9K.R3) / sn
+    u_skew = (x / sn) - (v_skew / 2)
+    poly_grid = np.stack([u_skew, v_skew], axis=1)
+
+    v_min = int(np.floor(poly_grid[:, 1].min()))
+    v_max = int(np.ceil(poly_grid[:, 1].max()))
+    u_acc, v_acc = [], []
+
+    for v in range(v_min, v_max + 1):
+        u_ints = _calculate_intersections(poly_grid, v)
+        for i in range(0, len(u_ints), 2):
+            if i + 1 >= len(u_ints):
+                break
+            u_start = int(np.ceil(u_ints[i]))
+            u_end = int(np.floor(u_ints[i + 1]))
+            if u_end >= u_start:
+                u_range = np.arange(u_start, u_end + 1)
+                u_acc.append(u_range)
+                v_acc.append(np.full_like(u_range, v))
+
+    if not u_acc:
+        avg = np.mean(poly_grid, axis=0)
+        u_final = np.array([np.round(avg[0])])
+        v_final = np.array([np.round(avg[1])])
+    else:
+        u_final = np.concatenate(u_acc)
+        v_final = np.concatenate(v_acc)
+
+    y_n = (v_final - (1 / 3)) * sn * (H9K.R3 / 2)
+    x_n = (u_final + (v_final / 2)) * sn
+    uv = np.stack([x_n, y_n], axis=1)
+    pts = Points(uv, domain=poly_n.domain)
+    return poly_n.domain.filter(pts)
+
+
+def hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct):
+    """
+    Build hex polygon vertices directly in n_oct space using per-face rigid transforms.
+
+    Args:
+        hex_par:  (H, 2) hex parent centre coordinates in b_oct.
+        hex_oid:  (H,)   octant face id for each hex (from hex_parents).
+        xpm:      (H,)   mode index (0 or 1).
+        xc2:      (H,)   c2 index (0, 1, or 2).
+        scale:    scalar scale factor for this layer (from hex_parents).
+        n_oct:    OctahedralNet domain instance.
+
+    Returns:
+        Points of shape (H*6, 2) in n_oct.
+    """
+    hex_verts_n = np.zeros((len(hex_par), 6, 2))
+    for side, proj in n_oct.projs.items():
+        oid = n_oct.sides[side].oid
+        fm = (hex_oid == oid)
+        if not np.any(fm):
+            continue
+        if proj.c2trans is None:
+            par_n = hex_par[fm] @ proj.matrix + proj.offset
+            hex_verts_n[fm] = par_n[:, None, :] + H9P.hx[xpm[fm], xc2[fm]] * scale @ proj.matrix
+        else:
+            for c2v in range(3):
+                c2m = fm & (xc2 == c2v)
+                if not np.any(c2m):
+                    continue
+                matr, off_c2 = proj.c2_affine(c2v)
+                par_n = hex_par[c2m] @ matr + off_c2 + proj.offset
+                hex_verts_n[c2m] = par_n[:, None, :] + H9P.hx[xpm[c2m], c2v] * scale @ matr
+    return Points(hex_verts_n.reshape(-1, 2), n_oct)
+
 
 def enmesh(pts, levels: int = 35, shape=None):
     """

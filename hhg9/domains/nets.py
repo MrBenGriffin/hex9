@@ -118,6 +118,7 @@ net_layouts = {
         'flipped': False,
         'width': 18,   # number of full triangles across
         'height': 27,  # number of full triangles up.
+        # 'theta': 2000, # global rotation in 15
         'grid': {
             (-1, -1, +1): (2., 5., 4),  # left wing
             (-1, -1, -1): (1., 4., 4),  #

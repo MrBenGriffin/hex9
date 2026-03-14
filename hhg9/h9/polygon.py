@@ -246,7 +246,7 @@ def _unique_rows_tol(xy: np.ndarray, tol: float = 1e-12):
 
 def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
     """
-    Return unique vertices and edges for the triangular mesh at a given level.
+    Return unique vertices and edges for the triangular mesh at a given layer.
     Useful for creating Matplotlib Triangulations.
 
     Args:

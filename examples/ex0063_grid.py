@@ -3,15 +3,15 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-This is a warp testing render - which is currently a closed line of research.
+This is a warp testing render
 It saves a colouring of the authalic score (deviation from mean) of an octant of the hex9 grid after
 it has been projected onto WGS84.
 All renders follow the triangular sub-grid.
 Another way of calculating this has been used with hexagons in ex0080_authalics
-06 March 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt, colors

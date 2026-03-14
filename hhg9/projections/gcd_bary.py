@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 
 
-# --- WORKER FUNCTIONS (Must be top-level for pickling) ---
+# --- WORKER FUNCTIONS (Must be top-layer for pickling) ---
 
 def _worker_project_gcd_to_bary(chunk_ll: np.ndarray, warp_file: str = None, accuracy: int = 38):
     """

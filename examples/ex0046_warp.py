@@ -2,14 +2,10 @@
 # Copyright ©2025, Ben Griffin
 # Licensed under the Apache License, Version 2.0
 
-
-# Part of the Hex9 (H9) Project
-# Copyright ©2025, Ben Griffin
-# Licensed under the Apache License, Version 2.0
-
 """
 Display warp matrix
-28 February 2026 0.1.1a1 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+28 Feb 2026 0.1.1a1 (passed)
 
 """
 import numpy as np
@@ -20,10 +16,8 @@ from hhg9.h9 import H9K
 
 def run():
     """
-    Load a photo, adopt into PlatePixel points, transform to XYZ via GCD.
-    Then display it as the unit sphere.
+        Display the b_oct warp matrix src/destination
     """
-
     reg = Registrar()  # Manage Domains & Projections
     b_oct = reg.domain('b_oct')  # Barycentric Octahedral
     src = b_oct.warp.src

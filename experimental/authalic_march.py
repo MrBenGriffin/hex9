@@ -386,7 +386,7 @@ class EllipsoidalGridGenerator:
         self.origin = LatLon(90, 0)  # Pole
         self.geod = self.origin.geodesic
         # Number of triangles for 1/8 the global grid will be
-        # 9**level.
+        # 9**layer.
         self.octant_area = self.area([(90, 0), (0, 0), (0, 90)])
         self.target = self.octant_area
         for i in range(self.layer):

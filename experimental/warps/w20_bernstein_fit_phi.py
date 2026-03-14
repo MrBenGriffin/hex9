@@ -49,7 +49,7 @@ def make_vertex_taper_weights(
 
 # --- Equilateral face geometry / metric for Laplacian ---
 # We derive the XY triangle for a given octant mode from the H9P simplex vertices
-# and expose the inverse metric entries g11,g12,g22 as module-level globals
+# and expose the inverse metric entries g11,g12,g22 as module-layer globals
 # so that laplacian_uv can use them.
 
 # g11 = 2.0 / 3.0  # sensible defaults for an equilateral reference face

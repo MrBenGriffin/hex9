@@ -8,9 +8,10 @@ hexagon in that layer - generate the set of hexagons at that layer
 and display on the globe.
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt, colors

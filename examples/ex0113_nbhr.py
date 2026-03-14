@@ -8,9 +8,10 @@ Test and report the neighbours, showing deviation from original.
 There is normally a least-hex_layer accuracy error
 
 Last Tested
-26 December 2025 0.1.0a4 (passed - but questionable)
-16 December 2025 0.1.0a3 (passed - but of questionable value)
-12 October 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed - but questionable)
+16 Dec 2025 0.1.0a3 (passed - but of questionable value)
+12 Oct 2025 (passed)
 
 """
 import json

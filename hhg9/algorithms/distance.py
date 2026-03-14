@@ -137,6 +137,54 @@ def wgs84_offset(p1, theta, dist):
     return np.atleast_2d(result).T
 
 
+def densify_poly_geodesic_by_step(poly_latlon: np.ndarray,
+                                  max_step_m: float = 2_000.0,
+                                  max_per_edge: int = 512,
+                                  closed: bool = True) -> np.ndarray:
+    """
+    Densify a polygon boundary by geodesic interpolation.
+
+    Args:
+        poly_latlon:  (m, 2) array of (lat, lon) degrees, ordered along the boundary.
+        max_step_m:   Maximum geodesic step length in metres.
+        max_per_edge: Maximum number of samples per edge.
+        closed:       If True, treat the polygon as closed (last edge wraps to first).
+
+    Returns:
+        (N, 2) array of (lat, lon) degrees — start of each segment included,
+        end excluded, so the polygon is not closed by a duplicate vertex.
+    """
+    poly = np.asarray(poly_latlon, dtype=np.float64)
+    if poly.ndim != 2 or poly.shape[1] != 2:
+        raise ValueError(f"poly_latlon must have shape (m,2); got {poly.shape}")
+    if poly.shape[0] < 2:
+        return poly.copy()
+    if closed and np.allclose(poly[0], poly[-1]):
+        poly = poly[:-1]
+    geo = geodesic_wgs84()
+    m = poly.shape[0]
+    last = m if closed else (m - 1)
+    out = []
+    for i in range(last):
+        lat1, lon1 = poly[i]
+        lat2, lon2 = poly[(i + 1) % m]
+        inv = geo.Inverse(float(lat1), float(lon1), float(lat2), float(lon2))
+        s12 = float(inv["s12"])
+        line = geo.Line(float(lat1), float(lon1), float(inv["azi1"]))
+        nseg = max(1, min(int(np.ceil(s12 / max_step_m)) if max_step_m > 0 else 1, max_per_edge))
+        for si in np.linspace(0.0, s12, nseg, endpoint=False):
+            r = line.Position(float(si))
+            out.append((r["lat2"], r["lon2"]))
+    return np.array(out, dtype=np.float64)
+
+
+def densify_quad_geodesic_by_step(corners_latlon: np.ndarray,
+                                  max_step_m: float = 2_000.0,
+                                  max_per_edge: int = 512) -> np.ndarray:
+    """Convenience wrapper: densify a 4-corner geodesic quad."""
+    return densify_poly_geodesic_by_step(corners_latlon, max_step_m, max_per_edge, closed=True)
+
+
 def wgs84_ratio(bounds):
     """
     Calculates the precise geographic aspect ratio for a bounding box

@@ -103,7 +103,22 @@ class Points:
             return self.class_mode(self.components)
         return None, None
 
+    def bbox(self, *, return_diff=False, trbl=False):
+        """Return bounding box of points"""
+        if self.coords is not None:
+            if self.domain.name in ['g_gcd']:
+                (y_min, x_min), (y_max, x_max) = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
+            else:
+                (x_min, y_min), (x_max, y_max) = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
+            bbox = (x_min, y_min, x_max, y_max) if not trbl else (y_max, x_max, y_min, x_min)
+            if not return_diff:
+                return bbox
+            else:
+                return bbox, (x_max - x_min, y_max - y_min)
+        return None
+
     def __getitem__(self, idx):
+        """Constructs new Points instance from single indexed element"""
         if isinstance(idx, tuple):
             raise TypeError(
                 f"2D indexing like Points[{idx}] is not supported.\n"

@@ -28,24 +28,6 @@ from hhg9.h9.classifier import location
 import matplotlib as mpl
 
 
-# def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
-#     """
-#     Find hexagons for data, and display on a 'globe'.
-#     """
-#     pts, pops = hex_poly_layer(b_pts, layers)
-#
-#     # Now calculate their area as a metric. (ignore pops).
-#     gm2 = 510_065_621_724_154.6  # total surface area of WGS-84 (m²)
-#     bins = 12*9**layers          # number of hexes at this hex_layer
-#     w_area_m2_mean = gm2/bins    # ideal equal-area per hex
-#
-#     c_pts = reg.project(pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.
-#     g_pts = reg.project(pts, ['b_oct', 'g_gcd'])
-#     w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
-#     w_adj = np.abs(w_area_m2 / w_area_m2_mean) + 1e-12
-#     score = np.log(w_adj)  # authalic log-density ℓ
-#     # snow_globe(c_pts, 6, score, f'{layers}')
-
 def get_tri_data(reg: Registrar, layer=3, octant_id=None):
     """Load up global sample data"""
     tg0 = tri_grid(layer, 0).reshape([-1, 2])  # triangle polygons.
@@ -153,7 +135,7 @@ def min_authalic(reg, gxd, depth):
         density = np.log(area_clip)  # authalic log-density ℓ
         gxd = mid_select(g3d, density, log_ref)
     gpx = rg.project(ref, ['b_oct', 'g_gcd'])
-    x45 = (gpx.coords[:, 1] == 45.0)
+    x45 = (np.abs(gpx.coords[:, 1] - 45.0) < 4e-9)
     o45 = gpx.select(x45)
     a45 = np.abs(o45.samples - 1.0)
     o10 = np.argmin(a45)

@@ -6,10 +6,11 @@
 Supporting System Test - No octahedral projection or H9
 This follows ex0020_plate_glb.py (which loaded the png and displayed it on a globe).
 Converts PlateCarree to ECEF via GCD and displays it
-28 February 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+28 Feb 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 import numpy as np
 from matplotlib import image, pyplot as plt

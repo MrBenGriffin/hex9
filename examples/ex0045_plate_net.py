@@ -10,30 +10,28 @@ displays it as an octahedron net, under different layouts.
 Normally I do not project maps this way, but use grid sampling instead.
 Because without sampling, one gets a bit patchy.
 And also the ECEF=>COCT=>BOCT is slow. (upstream)
-28 February 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+28 Feb 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 from pathlib import Path
 import numpy as np
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar, Points
+from hhg9.domains import NetPixel
 
 
 def load_cache(reg, pc_map: str = 'tissot_3600x1800'):
     """Load cache from ex_0041"""
-    cache = Path(f'src/{pc_map}.npy')
-    p_pix = reg.domain('p_pix')
-    c_oct = reg.domain('c_oct')
+    cache = Path(f'src/{pc_map}.npz')
     if not cache.exists():
         raise ValueError('You need to generate the map cache. See ex_0041_cache')
-    oc_px = Points(np.load(cache), c_oct)
-    pc_img = image.imread(f'src/{pc_map}.png', 'png')
-    pc_extent = (-180.0, -90.0, 180.0, 90.0)
-    pc_pix = p_pix.adopt(pc_img, extent=pc_extent, y_up=True, center=False)
-    oc_px.samples = pc_pix.samples
-    return oc_px
+    b_oct = reg.domain('b_oct')
+    repo = np.load(cache, allow_pickle=True)
+    b_pix = Points(repo['coords'], b_oct, components=repo['cmp'], samples=repo['smp'])
+    return b_pix
 
 
 def show_pts_2d(arr: Points, w=360, h=180, bounds=None, name='base'):
@@ -62,17 +60,14 @@ def run():
     Then display it as various nets.
     """
     reg = Registrar()  # Manage Domains & Projections
-    oc_px = load_cache(reg, 'tissot_3600x1800')  # 'world3600x1800' on octahedral, with samples.
-    bb_px = reg.project(oc_px, ['c_oct', 'b_oct'])
+    bb_px = load_cache(reg, 'tissot_3600x1800')  # 'world3600x1800' on octahedral, with samples.
     tpx = 900  # pixels in 90 degrees:  90*3600/360
+
     for layout in ['butterfly', 'diamonds', 'mortar']:  # 'diamonds', 'mortar', 'butterfly', 'turbine'
-        # if width = 4, px should be 3600 4x2=3818×3306  0.867278287461774 0.866025403784439
-        # so 360/4 = 90
-        # width of t = √2
-        # so 3600 = meta['width'] * tpx / H9K.radical.W
         n_oct = reg.domain(f'n_oct:{layout}')
-        wid, hgt = n_oct.image_dims(tpx)
-        bounds = (0, n_oct.wi, 0, n_oct.he)
+        n_pix = NetPixel(reg, n_oct)
+        wid, hgt = n_pix.image_dims(tpx)
+        bounds = (0, n_pix.width, 0, n_pix.height)
         o_net = reg.project(bb_px, ['b_oct', n_oct])
         show_pts_2d(o_net, w=wid, h=hgt, bounds=bounds, name=layout)  # net.
 

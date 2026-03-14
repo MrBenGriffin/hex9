@@ -10,9 +10,10 @@ The region list would be better expressed as a set of legal regions (rather than
 and use the correct semantics for neighbour management (which are now resolved).
 
 Last Tested
-26 December 2025 0.1.0a4 (passed - but meaningless)
-16 December 2025 0.1.0a3 (passed - but meaningless)
-29 August 2025 (failed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed - but meaningless)
+16 Dec 2025 0.1.0a3 (passed - but meaningless)
+29 Aug 2025 (failed)
 """
 import numpy as np
 from matplotlib import pyplot as plt

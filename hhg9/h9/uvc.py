@@ -96,7 +96,7 @@ def hex_digits_to_uvc(
     c_mo, c2, _r_mo, _tail_h = tail_unpack_reversible(tail)
 
     hr = HEX_LUTS.hex_reg
-    # Walk leaf -> root, collecting mode-0 UV at each level.
+    # Walk leaf -> root, collecting mode-0 UV at each layer.
     uv_stack = []
     c_mo_t = c_mo.copy()
     c2_t = c2.copy()

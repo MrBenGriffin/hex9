@@ -858,7 +858,7 @@ import warnings
 
 # --- Configuration ---
 SEARCH_EPOCHS = 10  # How many times to "zoom in"
-SAMPLES_PER_EPOCH = 10  # How many solves per zoom level
+SAMPLES_PER_EPOCH = 10  # How many solves per zoom layer
 START_LOW = 0.00004    # 4e-5 (Very aggressive lower bound)
 START_HIGH = 0.00040  # 2e-4 (Safe upper bound)
 

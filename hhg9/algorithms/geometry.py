@@ -8,16 +8,25 @@ Useful Geometry functions
 import numpy as np
 
 
-def inside_convex_polygon_cw(pts: np.ndarray, poly: np.ndarray) -> np.ndarray:
+def inside_convex_polygon_cw(pts: np.ndarray, poly: np.ndarray,
+                             tol: float = 0.0) -> np.ndarray:
     """Vectorised point-in-convex-polygon test.
-    pts: (N,2), poly: (M,2) in CW order. Returns bool mask."""
+
+    pts:  (N, 2), poly: (M, 2) in CW order. Returns bool mask.
+    tol:  Tolerance in distance units.  When > 0, each edge is expanded
+          outward by *tol*, so boundary pixels are claimed by both adjacent
+          polygons, eliminating 1-pixel tears at shared edges.  The
+          cross-product threshold per edge becomes ``tol * |ab|``.
+    """
     mask = np.ones(len(pts), dtype=bool)
     n = len(poly)
     for i in range(n):
         a, b = poly[i], poly[(i + 1) % n]
         ab = b - a
         ap = pts - a
-        mask &= (ab[0] * ap[:, 1] - ab[1] * ap[:, 0]) <= 0
+        cross = ab[0] * ap[:, 1] - ab[1] * ap[:, 0]
+        threshold = tol * np.sqrt(ab[0] ** 2 + ab[1] ** 2) if tol > 0.0 else 0.0
+        mask &= cross <= threshold
     return mask
 
 

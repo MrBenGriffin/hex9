@@ -112,7 +112,7 @@ class PlatePixel(Domain):
                 xmin, ymin, xmax, ymax = extent_eff
                 if xmax <= xmin or ymax <= ymin:
                     raise ValueError(
-                        f'Invalid extent (expected xmin<xmax and ymin<ymax): {extent_eff}'
+                        f'Invalid extent (xmin, ymin, xmax, ymax) (expected xmin<xmax and ymin<ymax): {extent_eff}'
                     )
                 ox, oy = xmin, ymin
                 sx, sy = (xmax - xmin) / w, (ymax - ymin) / h

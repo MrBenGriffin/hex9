@@ -6,8 +6,9 @@
 Proof of concepts taken from AKOctahedral, demonstrating jacobian
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed - with rewrite)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed - with rewrite)
 """
 
 import numpy as np

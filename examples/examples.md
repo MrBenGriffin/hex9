@@ -1,27 +1,27 @@
 # The Python Project
-The current set of python files in this repo are a set of (mainly) 
-self-contained classes that have acted as a testbed for the `hex9` grid system. 
-While not particularly suitable for production systems, it should be good 
+The current set of python files in this repo are a set of (mainly)
+self-contained classes that have acted as a testbed for the `hex9` grid system.
+While not particularly suitable for production systems, it should be good
 enough for playing with, or evaluating the grid system itself.
 
-While much of the work involves providing suitable GIS operations for 
-manipulating addresses and coordinates, there are two areas that are likely 
+While much of the work involves providing suitable GIS operations for
+manipulating addresses and coordinates, there are two areas that are likely
 to be of some interest.
 
 * The Hex9 Grid itself
 * The Octahedral Projection of the Ellipsoid (and/or Sphere).
 
-The latter exploits the Hex9 grid for conversion of ellipsoidal to octahedral 
-addresses. 
+The latter exploits the Hex9 grid for conversion of ellipsoidal to octahedral
+addresses.
 
 ## Examples
-The example files `ex0000_` each represent a stage of functionality from the 
-most simple (load a Plate Carrée for projection) to the more complex. This 
-has helped determine where there may be any bugs or flaws in the overarching 
-system.  While I could have used any number of GIS libraries to do the heavy 
-lifting, the process of development was quite fluid, and it seemed sensible 
+The example files `ex0000_` each represent a stage of functionality from the
+most simple (load a Plate Carrée for projection) to the more complex. This
+has helped determine where there may be any bugs or flaws in the overarching
+system.  While I could have used any number of GIS libraries to do the heavy
+lifting, the process of development was quite fluid, and it seemed sensible
 to provide a flexible abstract layer between any GIS libraries used.
-Some of these examples do use libraries.  Much of the existing codebase 
+Some of these examples do use libraries.  Much of the existing codebase
 rests upon `geographiclib` - an awesome craft in itself.
 
 *Up to example ex0040, there are **no** octahedral nor hex grid calculations.*
@@ -38,15 +38,20 @@ Roundtrip Load/Save of a Plate Carrée Image. Display via matplotlib.
 | X | OctahedralBarycentric | b_oct | OctantBarycentric |
 | X | OctahedralNet         | n_oct | OctantNet         |
 
-| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
+| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  |
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
 | PlatePixelGCD         | pix_gcd | p_pix |  X  | g_gcd |  X  |
 | EllipsoidGCD          | ell_gcd | c_ell |  X  | g_gcd |  X  |
 | AKOctahedralEllipsoid | oct_ell | c_oct |  X  | c_ell |  X  |
 
 
+### ex0011_crop_px
+Load a photo of the world, extract a crop set by a digital lat/lon extent,
+and save it. Demonstrates coordinate-bounded image slicing in Plate Carrée.
+
+
 ### ex0020_plate_glb
-Roundtrip Conversion of a Plate Carrée Image to GCD. 
+Roundtrip Conversion of a Plate Carrée Image to GCD.
 Display via matplotlib Basemap and 2D.
 
 | √ | Domain                | Sig   | Octant Domain     |
@@ -58,7 +63,7 @@ Display via matplotlib Basemap and 2D.
 | X | OctahedralBarycentric | b_oct | OctantBarycentric |
 | X | OctahedralNet         | n_oct | OctantNet         |
 
-| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
+| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  |
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
 | PlatePixelGCD         | pix_gcd | p_pix |  √  | g_gcd |  √  |
 | EllipsoidGCD          | ell_gcd | c_ell |  X  | g_gcd |  X  |
@@ -78,7 +83,7 @@ Display via matplotlib 2D and 3D.
 | X | OctahedralNet         | n_oct | OctantNet         |
 
 
-| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
+| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  |
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
 | PlatePixelGCD         | pix_gcd | p_pix |  √  | g_gcd |  √  |
 | EllipsoidGCD          | ell_gcd | c_ell |  √  | g_gcd |  √  |
@@ -86,39 +91,39 @@ Display via matplotlib 2D and 3D.
 
 
 ### ex0041_cache
-The AKOctahedralEllipsoid forward is c_oct->c_ell, which is rapid and easily 
-vectorised.  However, it does not lend itself well to a simple backward 
-method, and so some form of root-finding must be deployed.  
+The AKOctahedralEllipsoid forward is c_oct->c_ell, which is rapid and easily
+vectorised.  However, it does not lend itself well to a simple backward
+method, and so some form of root-finding must be deployed.
 
-There are general purpose root-finders (such as offered by scipy, etc.) and 
-likewise it is not too hard to train a neural network for good estimates. 
-However, for precision, neither are particularly strong, and they tend to 
-end up mashing around when dealing with some of the more fragile areas of 
+There are general purpose root-finders (such as offered by scipy, etc.) and
+likewise it is not too hard to train a neural network for good estimates.
+However, for precision, neither are particularly strong, and they tend to
+end up mashing around when dealing with some of the more fragile areas of
 the forward function.
 
-This is where domain specialisation really helps, and as the grid system 
-itself offers a thorough subdivision of the octahedron down to numerical 
-limits we can exploit it, via a branch-and-bound scheme, to do the heavy 
-lifting for us.  
+This is where domain specialisation really helps, and as the grid system
+itself offers a thorough subdivision of the octahedron down to numerical
+limits we can exploit it, via a branch-and-bound scheme, to do the heavy
+lifting for us.
 
-While the current code has not been optimised, it follows this strategy 
-of exploiting the strength of the h9 grid system behind the scenes. 
+While the current code has not been optimised, it follows this strategy
+of exploiting the strength of the h9 grid system behind the scenes.
 
-Needless to say, due to this dependency, there's an innate fragility during 
+Needless to say, due to this dependency, there's an innate fragility during
 development, which requires a degree of robustness to the h9 grid.
 
-Also, (and as this was a recent development), the AKOctahedralEllipsoid 
-projection works directly from GeneralGCD to OctahedralBarycentric, 
-but currently I have force-fitted it (via internal transforms) to act as the 
+Also, (and as this was a recent development), the AKOctahedralEllipsoid
+projection works directly from GeneralGCD to OctahedralBarycentric,
+but currently I have force-fitted it (via internal transforms) to act as the
 c_ell-c_oct projection.
 
-As the process is quite slow, the best strategy for 'projecting' is to use 
-an image as a sample, and then query the sample for each point of the 
-octahedron. However, for the purposes of test that the ellipsoid->octahedron 
+As the process is quite slow, the best strategy for 'projecting' is to use
+an image as a sample, and then query the sample for each point of the
+octahedron. However, for the purposes of test that the ellipsoid->octahedron
 projection works, it is useful demonstrate that. Because the process is slow,
-it is a good idea to generate a cache of the projection. 
+it is a good idea to generate a cache of the projection.
 
-This is what this example does.  *(OctahedralBarycentric is implicitly used 
+This is what this example does.  *(OctahedralBarycentric is implicitly used
  by AKOctahedralEllipsoid)
 
 | √ | Domain                 | Sig   | Octant Domain     |
@@ -131,7 +136,7 @@ This is what this example does.  *(OctahedralBarycentric is implicitly used
 | X | OctahedralNet          | n_oct | OctantNet         |
 
 
-| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  | 
+| Domain Projections    |   Sig   |  Fwd  |  √  |  Rev  |  √  |
 |-----------------------|:-------:|:-----:|:---:|:-----:|:---:|
 | PlatePixelGCD         | pix_gcd | p_pix |  √  | g_gcd |  √  |
 | EllipsoidGCD          | ell_gcd | c_ell |  √  | g_gcd |  √  |
@@ -139,11 +144,11 @@ This is what this example does.  *(OctahedralBarycentric is implicitly used
 
 
 ### ex0042_plate_oct
-This example displays the cache from ex0041, and demonstrates the forward 
+This example displays the cache from ex0041, and demonstrates the forward
 operation (octahedral to ellipsoid).
 It also reads the source image, converts the colours to samples,
 In both cases, it implements the 'adopt' method of their respective domain.
-The octahedron is displayed, and then the points are projected back to Plate 
+The octahedron is displayed, and then the points are projected back to Plate
 Carree, and displayed once more.
 
 | √ | Domain                 | Sig   | Octant Domain     |
@@ -156,7 +161,7 @@ Carree, and displayed once more.
 | X | OctahedralNet          | n_oct | OctantNet         |
 
 
-| Domain Projections    |   Sig   |  Fwd  | √ |  Rev  | √ | 
+| Domain Projections    |   Sig   |  Fwd  | √ |  Rev  | √ |
 |-----------------------|:-------:|:-----:|:-:|:-----:|:-:|
 | PlatePixelGCD         | pix_gcd | p_pix | X | g_gcd | X |
 | EllipsoidGCD          | ell_gcd | c_ell | X | g_gcd | X |
@@ -164,10 +169,10 @@ Carree, and displayed once more.
 
 
 ### ex0045_plate_net
-Similar to 42, this loads the cache from ex0041, and demonstrates the forward 
+Similar to 42, this loads the cache from ex0041, and demonstrates the forward
 operation (octahedral to octahedral net) using the plate carree pixels.
-This shows holes / dots, because of distortion difference between 
-plate carree and barycentric. For surface mapping, we will henceforth use a 
+This shows holes / dots, because of distortion difference between
+plate carree and barycentric. For surface mapping, we will henceforth use a
 back-projection and sampling technique from the destination field.
 
 | √ | Domain                 | Sig   | Octant Domain     |
@@ -180,38 +185,51 @@ back-projection and sampling technique from the destination field.
 | √ | OctahedralNet          | n_oct | OctantNet         |
 
 
-| Domain Projections    |   Sig   |  Fwd  | √ |  Rev  | √ | 
+| Domain Projections    |   Sig   |  Fwd  | √ |  Rev  | √ |
 |-----------------------|:-------:|:-----:|:-:|:-----:|:-:|
 | PlatePixelGCD         | pix_gcd | p_pix | X | g_gcd | X |
 | EllipsoidGCD          | ell_gcd | c_ell | X | g_gcd | X |
 | AKOctahedralEllipsoid | oct_ell | c_oct | √ | c_ell | X |
 
+
+### ex0046_warp
+Displays the warp matrix used in the octahedral net projection. Useful for
+visualising how barycentric coordinates deform across the net faces.
+
+
 ### ex0051_subregions
 This is a visual demonstrator showing how an address is repeatedly
 broken down into one of 9 sub-regions at each layer.
 
+### ex0059_seamstitch
+Uses H9 addresses and round-trips them across all seam edge-cases; a
+processor-intensive analysis measuring behaviour on each seam and alongside
+it. Results are depicted as graphs and summarised on the console.
+Seams are important edge cases for verifying address continuity at octant
+boundaries, poles, and special-region borders.
+
 ### ex0060_addresses
 This is a non-graphical example which chooses a seeded random collection of
-100,000 GCD addresses across the globe, projects them to barycentric octahedral 
-(hex 9), and back-projects them to GCD. It then measures the round-trip 
-distance via GeographicLib, and stores the result in a CSV file.  
-Typically results are under 7 nanometres.  It also converts to the 
-hex-variation address format, reverts that, and then 
+100,000 GCD addresses across the globe, projects them to barycentric octahedral
+(hex 9), and back-projects them to GCD. It then measures the round-trip
+distance via GeographicLib, and stores the result in a CSV file.
+Typically results are under 7 nanometres.  It also converts to the
+hex-variation address format, reverts that, and then
 back-projects that value also - which typically might add about 1 nanometre
-noise.  If one's purpose is to measure global positions accurately to less than 
+noise.  If one's purpose is to measure global positions accurately to less than
 1µm, I would strongly recommend using 96 or 128-bit maths.
 
 ### ex0061_more_addr
-This is a non-graphical example which chooses a selection of landmarks 
-(categorised by Octant) across the globe, for which there are 
-well-known co-ordinates, and which can be found easily via online mapping services.  
+This is a non-graphical example which chooses a selection of landmarks
+(categorised by Octant) across the globe, for which there are
+well-known co-ordinates, and which can be found easily via online mapping services.
 
-Having set the AKOctahedralEllipsoid accuracy to 1nm, (maximum) this then 
-converts each GCD address into it's hexagon grid reference, then 
+Having set the AKOctahedralEllipsoid accuracy to 1nm, (maximum) this then
+converts each GCD address into it's hexagon grid reference, then
 roundtrip reverts to the original address using that grid reference only.
 
-Projection differences are reported along the projection chain, and the 
-geographic difference is then reported in nanometres, via 
+Projection differences are reported along the projection chain, and the
+geographic difference is then reported in nanometres, via
 geographiclib's `Geodesic.WGS84` inverse.
 
 An example landmark is Greenwich Park East:
@@ -232,62 +250,74 @@ Label RT  BRY: 0.304133195545653323,-0.289722433974214599
 
 ```
 
-Needless to say, nobody will be seriously expecting to use this toolchain to 
-geolocate distances as small as a few nanometres, but it provides an 
+Needless to say, nobody will be seriously expecting to use this toolchain to
+geolocate distances as small as a few nanometres, but it provides an
 idea of where noise can be found creeping in.
 
-### ex0062_seamstitch
-Various metrics and investigations to ensure that borders, seams, and poles
-behave well under stress.
+### ex0062_one_addr
+Uses a single H9 address and walks through it step by step, displaying
+intermediate representations and roundtrip values at each layer. Useful
+for understanding how address digits map to sub-regions.
 
 ### ex0063_grid
 Examining local authalicity (equal-area) constraints on a single octant.
 This uses the underlying triangular grid.  For the hexgrid variant, check
-out ex0080
+out ex0080.
+
+### ex0063_gridb
+Further breakdown for warp analysis. All renders follow the triangular
+sub-grid, using an alternative calculation method to ex0063_grid.
+Currently experimental; the hexagon equivalent is in ex0080_authalics.
 
 ### ex0064_vertices
 Various metrics and visualisations to map address roundtrip deviation.
 There are tools for analysis that may be useful here.
 
 ### ex0075_osm_mesh
-The osm mesh example relies upon OpenStreetMap and cartopy to retrieve and 
-store a series of images based upon a single address. The purpose of which 
-is to demonstrate how each level of the Grid address reduces the land area 
-being addressed, and these are then used in ex0076. 
+The osm mesh example relies upon OpenStreetMap and cartopy to retrieve and
+store a series of images based upon a single address. The purpose of which
+is to demonstrate how each level of the Grid address reduces the land area
+being addressed, and these are then used in ex0076.
 
-The meshes being stored are mere boundary sets in plate carree, from which 
+The meshes being stored are mere boundary sets in plate carree, from which
 we can later use as sample sources to depict the relevant half-hexagon.
 
-While Stonehenge has been used as a reference, any geographic location may 
+While Stonehenge has been used as a reference, any geographic location may
 be similarly used.
 
 This was all managed via half-hexagons and is now less ... interesting.
 
-### ex0076_stonehenge.
-Using the series of plate carree images retrieved in ex0075, this example 
-now generates the relevant half-hexagon for each address, then using the 
-relevant image as a sample source, generates the half-tile represented by 
-the hexagon and it's mode. This could be authored better, but is reasonably 
+### ex0076_stonehenge
+Using the series of plate carree images retrieved in ex0075, this example
+now generates the relevant half-hexagon for each address, then using the
+relevant image as a sample source, generates the half-tile represented by
+the hexagon and it's mode. This could be authored better, but is reasonably
 straightforward to understand.
 
 This was all managed via half-hexagons and is now less ... interesting.
 The population examples (pr000) are probably more useful now.
 
 ### ex0080_authalics
-This draws a hexagonal grid across the sphere, demonstrating the variation 
-in area (from ideal) that any given hexagon has.  It's easily notable that 
-there is far more variety at each of the six poles - but it's also very 
+This draws a hexagonal grid across the sphere, demonstrating the variation
+in area (from ideal) that any given hexagon has.  It's easily notable that
+there is far more variety at each of the six poles - but it's also very
 predictable. Tools have been developed for identifying degree of deviation.
 
+### ex0080w / ex0081w / ex0082w — warped authalics
+Three variants that compose a reference address for each hexagon in a given
+layer and display it on the globe, using different warp configurations.
+These explore how warp transforms affect the authalicity measurement across
+the octahedral net.
+
 ### ex0081_areas
-This uses two separate means to identify points on the sphere which ideally 
-authalic. Finding acceptable authalic reference points is useful only for 
-referencing at a given layer. This is ongoing work - but is reliable up to 
+This uses two separate means to identify points on the sphere which ideally
+authalic. Finding acceptable authalic reference points is useful only for
+referencing at a given layer. This is ongoing work - but is reliable up to
 around layer 18 (small).
 
 ### ex0094_smp_bary
 Compose pixel grids of a selection of octahedral faces.
-Load a Plate Carrée colour map for sampling, project onto Cartesian Unit Sphere 
+Load a Plate Carrée colour map for sampling, project onto Cartesian Unit Sphere
 and assign KDTree for sample queries.
 Project each point of the grid onto Cartesian Unit Sphere and sample them.
 The octahedral→spherical projection is relatively fast, so we can handle larger images this way.
@@ -300,34 +330,34 @@ Though it *does* do a roundtrip to simplex.
 
 ### ex0095_smp_grid
 This demonstrates using a plate carree image as a sample source.
-The source image is loaded and projected onto WGS84 Ellipsoid, and 
+The source image is loaded and projected onto WGS84 Ellipsoid, and
 registered into a KDTree.
-The octahedral net pixels are identified then a copy is projected to 
-EllipsoidGCD, and query the KDTree for a sample value. 
+The octahedral net pixels are identified then a copy is projected to
+EllipsoidGCD, and query the KDTree for a sample value.
 These samples may then be used to display the Octahedral Net.
 This is useful for authoring new nets.
 There is another version of this in pr0005.
 
-### ex0101_h9
-This example renders each pixel into it's hexgrid address, and then colours 
-the pixel according to a digit location, for the first 5 hexagon layers, for 
+### ex0101_h9_grid
+This example renders each pixel into it's hexgrid address, and then colours
+the pixel according to a digit location, for the first 5 hexagon layers, for
 various nets. It demonstrates how the grid address maps onto the octahedron.
 
 ### ex0110_poly_neighbours
-Here we take the reference location of Stonehenge, convert it to its region 
-list format, and then test each layer for it's neighbour, generating the 
+Here we take the reference location of Stonehenge, convert it to its region
+list format, and then test each layer for it's neighbour, generating the
 neighbour in a subplot.
 
 ### ex0111_covr
-Here we attempt to demonstrate that every combination of neighbour correctly 
+Here we attempt to demonstrate that every combination of neighbour correctly
 finds it's neighbour. (There are 18 to show).
 
 ### ex0112_nbhr
-We go through a series of short addresses, and test the neighbour 
+We go through a series of short addresses, and test the neighbour
 calculation for roundtrip errors.
 
 ### ex0113_nbhr
-We test our reference addresses and test the neighbour 
+We test our reference addresses and test the neighbour
 calculation for roundtrip errors, with a different printout.
 (Neighbour finding was a bit complex at first)
 
@@ -340,11 +370,46 @@ This depends upon running the hh_heatmaps scripts beforehand!
 This is a nice toy that takes the CONUS land usage dataset,
 and, given a location in the US, generates the land usage
 as a hex-grid. It's stand-alone, and uses several tricks,
-including implementing an ad-hoc domain/projection. 
+including implementing an ad-hoc domain/projection.
 However, you will need osgeo and gdal to use it.
 This is still a toy - I have cut corners when it comes to octant seams,
 so New Orleans (at -90) is likely to fail, but it's not so hard to fix.
+See ex0251 and ex0252 for the updated Compositor-based approach.
 
+### ex0251_geotiff
+Chiginagak volcano (Alaska) — 3 hex layers: land-usage (NLCD Alaska),
+hill-shading, and geology with text labels.
+Uses the `Compositor` / `LayerSpec` pipeline from `hhg9.rendering.composition`.
+Source callables sample GeoTIFFs at hex centroids (single lookup per hex).
+Requires osgeo/gdal.
+
+### ex0252_geotiff
+Sierra Nevada area — 3 hex layers: land-usage (NLCD 2024), hill-shading,
+and coarse outline grid with address labels.
+Uses the `Compositor` / `LayerSpec` pipeline from `hhg9.rendering.composition`.
+Demonstrates the AABB rectangle fill approach for clean rectangular renders.
+Requires osgeo/gdal.
+
+### ex0253_area
+Two hex layers: land-usage and hill-shading. An intermediate example
+exploring area-based rendering before the full Compositor refactor.
+
+### ex0254_region10
+Two hex layers: land-usage and hill-shading, focused on a specific region
+at layer 10. Demonstrates region-scoped hex rendering.
+
+### ex0260_polygrid
+Given a polygon in Latitude/Longitude points and a hex layer, generates the
+hex-grid for that layer along with ancestor outline overlays.
+Extracts any common address prefix, shortens per-hex labels to the suffix
+beyond the prefix, and renders the prefix as a plot annotation. Ancestor
+hexes at intermediate levels are drawn as overlay rings to visually group
+child hexes.
+
+### ex0261_polygrid
+Given a polygon in Latitude/Longitude points and a hex layer, generates
+the hex-grid and draws it in barycentric octahedral (`b_oct`) space rather
+than the octahedral net. Useful for inspecting geometry before net projection.
 
 
 ## ex4***
@@ -359,8 +424,11 @@ These are some sanity checks for AKOctahedral projection
 ### ex4002_h9_addressing
 These are some sanity checks for h9/addressing
 
-### ex4002_h9_addressing
-These are some sanity checks for h9/addressing
+### ex4003_pp_gcd
+Measures round-trip pixel errors between the PlatePixel and GCD projections.
+Useful for verifying that the coordinate chain introduces minimal positional
+noise across the plate-carrée domain.
+
 
 ## ex10***
 Typically short, validation scenarios.
@@ -378,7 +446,35 @@ Validate various features and settings of the region/cell grid.
 Validate various features and settings of the c2 tables.
 
 ### ex_10007_hex_grid
-hex address roundtrip feature validation.
+Hex address roundtrip feature validation.
+
+### ex_10008_size
+Calculates hex and triangle area hierarchies with nanometre-level accuracy.
+Reports area scaling per layer for both hexagonal and triangular sub-grids.
+
+### ex_10009_mesh
+Mesh generation and classification for the barycentric octahedral domain.
+Tests that mesh vertices are correctly assigned to octant faces.
+
+### ex_10010_grid
+Pixel grid generation for half-hexagon (c2) sub-regions. Provides two
+entry points for generating tight pixel grids for octant face sub-regions;
+validates the `hh_grid` utility.
+
+### ex_10011_rhp
+Defines and validates the `RHOMBUS_LAYOUT` configuration for rhombus
+octahedral net rendering. Checks that affine parameters are consistent
+across all 24 half-hex (8 faces × 3 c2) slots.
+
+### ex_10012_rhp_map
+Renders a world map onto the rhombus octahedral net using per-c2 affines,
+net-space quad, `qa_grid`, and KDTree sampling. Demonstrates the full
+pipeline for projecting a Plate Carrée image onto the rhombus net layout.
+
+### ex_10013_rhp_polygons
+Tests the rhombus net forward projection by rendering all 24 half-hex
+polygons (8 faces × 3 c2) directly from `H9P.hh` via per-c2 affines, then
+round-tripping back to barycentric space and reporting max error.
 
 
 ##  hh_heatmaps
@@ -387,9 +483,9 @@ This converts a CSV into a np file.
 The CSV may be downloaded from https://data.humdata.org/organization/meta
 and consists of 3 values: longitude/latitude/populaton.
 They represent sparse grid values at 30m.
-* Input  
-   * src/{file}_general_2020.csv 
-* Output 
+* Input
+   * src/{file}_general_2020.csv
+* Output
    * src/{file}_lon_lat_pop.npy
 
 ### hh_heatmaps/pr0002_prj
@@ -406,7 +502,7 @@ This uses root-finding, and is batch-processed across multiple cores.
 ### hh_heatmaps/pr0003_prj
 (1) Load the population numpy data file
 (2) Derive or resolve a boundary and project it onto the Barycentric Octahedral Net.
-find the boundaries of the gcd, project and store, both as gcd and as 
+find the boundaries of the gcd, project and store, both as gcd and as
 barycentric, having added padding of 2.5% border.
 
 * Input
@@ -428,9 +524,9 @@ Display it, and store it as a single value, along with
 the octahedral rectangle coordinates.
 
 ### hh_heatmaps/pr0005_theta
-Using gcd_bounds saved at pr0003; project the bounds onto barycentric, 
-calculate the optimal rotation angle and centroid of the grid to represent 
-the area. Draw (for visualisation) the barycentric area before and after 
+Using gcd_bounds saved at pr0003; project the bounds onto barycentric,
+calculate the optimal rotation angle and centroid of the grid to represent
+the area. Draw (for visualisation) the barycentric area before and after
 rotation.
 * Input
     * src/{file}_lat_lon_bounds.npy
@@ -451,14 +547,14 @@ Store the final grid, and it's extent for placing as a backdrop for a heatmap.
    * src/{file}_centroid.npy
    * src/{file}_rot_bry_border.npy
    * src/{file}_gcd.png
-* Output 
+* Output
    * src/{file}_bg_extent.npy
    * src/{file}_grid.png
 
 ### hh_heatmaps/pr0007_hh_heatmap
 Finally, we can generate the heatmap over the top of the grid image.
 This may need fixing!
-* Input      
+* Input
    * src/{file}_theta.npy
    * src/{file}_centroid.npy
    * src/{file}_pop_data.npy

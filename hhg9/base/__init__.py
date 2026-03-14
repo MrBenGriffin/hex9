@@ -5,8 +5,6 @@
 """
 The two general management classes for hex9 are Points and the Registrar.
 """
-from plotly.graph_objs.funnelarea import Domain
-
 from .points import Points
 from .registrar import Registrar
 from .domain import Domain

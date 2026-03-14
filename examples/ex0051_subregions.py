@@ -7,10 +7,11 @@ Part of the H9 project
 Use an address to resolve the region list and show the
 region identity for each of the first 36 layers.
 This helps to identify if/where any issues may arise.
-28 February 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+28 Feb 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 import numpy as np
 from matplotlib import pyplot as plt

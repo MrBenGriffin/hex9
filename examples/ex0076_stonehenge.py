@@ -5,12 +5,12 @@
 """
 This reads in the GCD for Stonehenge, then converts it into a set of nested half-hexagons,
 each of which represents a single Stage of the H9 Journey.
-This is a much earlier proof of concept, but still gives a good idea of layers 0-12 of the H9 grid.
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+-13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 import os
 import json
@@ -19,9 +19,8 @@ from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_angular_ratio
-from hhg9.h9.grid import qa_grid
+from hhg9.h9.grid import qa_grid, enmesh
 from PIL import Image  # Pillow for clean image saving
-from hhg9.h9.polygon import enmesh
 from hhg9.h9.region import xy_regions
 
 

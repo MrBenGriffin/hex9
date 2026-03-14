@@ -9,10 +9,11 @@ reporting to console.
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
 
 Last Tested
-02 March 2026 0.1.1a1 (passed; found and fixed a warp bug)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed; after rewriting formatter)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+02 Mar 2026 0.1.1a1 (passed; found and fixed a warp bug)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed; after rewriting formatter)
+25 Nov 2025 (passed)
 """
 import json
 

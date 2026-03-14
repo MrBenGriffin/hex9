@@ -13,14 +13,17 @@ Using a pixel grid provides us the ability to map colours to the pixels we need.
 Notable feature is that, once adopted, points maintain their position.
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (?passed)
-12 October 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (?passed)
+12 Oct 2025 (passed)
 """
 import numpy as np
 from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
+from hhg9.base import registrar
+from hhg9.domains.nets import net_layouts
 from hhg9.h9 import H9O, H9P
 from hhg9.h9.grid import fit, qa_grid
 from PIL import Image  # image saving
@@ -76,5 +79,6 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 
 if __name__ == '__main__':
-    flavours = ['rhombus', 'statue'] #, 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
-    run(flavours=flavours, scale=600, file='src/bm_3600x1800.png')
+    flavours = ['rhombus', 'butterfly:2000'] #, 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    # flavours = net_layouts
+    run(flavours=flavours, scale=601, file='src/bm_3600x1800.png')

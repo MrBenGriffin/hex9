@@ -249,7 +249,10 @@ class PlatePixelCarree(PlatePixel):
         out: list[tuple[np.ndarray, tuple[float, float, float, float]]] = []
         for win in windows:
             i0, i1, j0, j1 = win
-            img_crop = img[i0:i1, j0:j1].copy()
+            if img is not None:
+                img_crop = img[i0:i1, j0:j1].copy()
+            else :
+                img_crop = None
             extent = self.window_to_extent(win)
             out.append((img_crop, extent))
         return out

@@ -7,9 +7,10 @@ Part of the H9 project - Visualisation of hexagons as a heatmap (using Tokyo det
 This could be better - the sampling isn't ideal, and I have modified the approach.
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed - with rewrite)
-23 October 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed - with rewrite)
+23 Oct 2025 (passed)
 """
 import os
 from pathlib import Path
@@ -137,5 +138,5 @@ def run(layers):
 
 
 if __name__ == '__main__':
-    for layer in range(5, 11):
+    for layer in range(5, 10):
         run(layer)  # 3=2, 4=3, 5=3, 6=21 - 10 is over sampling.

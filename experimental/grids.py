@@ -37,7 +37,7 @@ def _unique_rows_tol(xy: np.ndarray, tol: float = 1e-12):
 
 def tri_mesh(levels: int = 5, mode: int = 0):
     """
-    Return unique vertices and edges for the triangular mesh at a given level.
+    Return unique vertices and edges for the triangular mesh at a given layer.
     Useful for creating Matplotlib Triangulations.
 
     Args:
@@ -51,7 +51,7 @@ def tri_mesh(levels: int = 5, mode: int = 0):
             edges: (E, 2) Edge indices into verts.
             tris: (T, 3) Triangle indices into verts.
     """
-    # Use existing tri_grid to get all triangle vertices at this level
+    # Use existing tri_grid to get all triangle vertices at this layer
     h9p = H9P
     tris_xy = tri_grid(levels=levels, mode=mode, h9p=h9p)  # (T, 3, 2)
     num_tris = tris_xy.shape[0]

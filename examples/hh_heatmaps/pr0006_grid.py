@@ -10,7 +10,7 @@ from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.h9.grid import qa_grid
 from hhg9.projections import PlatePixelGCD
-from support import Util
+from experimental.support import Util
 from PIL import Image  # Pillow for clean image saving
 
 from pathlib import Path
@@ -224,17 +224,15 @@ def stage(file: str,
         comps = np.repeat(comp_row[None, :], coords_subset.shape[0], axis=0)
         return Points(coords_subset, subdomain, components=comps)
 
-    # Project triangle subsets with their own subdomain
+    # Project triangle subsets back to GCD via b_oct with their component (octant) assigned
     out_coords = np.empty_like(bary)
     if np.any(t1_mask):
-        sdo1 = b_oct.components[cmp_t1]
-        refs1 = _pts_with_cmp(bary[t1_mask], cmp_t1, sdo1)
+        refs1 = _pts_with_cmp(bary[t1_mask], cmp_t1, b_oct)
         if refs1 is not None:
             sp1a = reg.project(refs1, [b_oct, c_oct, c_ell, g_gcd])
             out_coords[t1_mask] = sp1a.coords
     if np.any(t2_mask):
-        sdo2 = b_oct.components[cmp_t2]
-        refs2 = _pts_with_cmp(bary[t2_mask], cmp_t2, sdo2)
+        refs2 = _pts_with_cmp(bary[t2_mask], cmp_t2, b_oct)
         if refs2 is not None:
             sp1b = reg.project(refs2, [b_oct, c_oct, c_ell, g_gcd])
             out_coords[t2_mask] = sp1b.coords

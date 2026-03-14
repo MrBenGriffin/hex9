@@ -9,9 +9,10 @@ It also shows how we can tell if the neighbour is outside the region's
 own parent region (as a supercell). Values are shown as cell-ids (hex)
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-20 October 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+20 Oct 2025 (passed)
 """
 import json
 import numpy as np
@@ -78,7 +79,7 @@ def run():
     it = rgn.xy_regions_iter(bc0.coords, mode=mode, depth=35)
     for ev in it:
         if ev.phase == 'pre' and ev.i > 0:
-            level = ev.i                # current iteration (>0) level will start at 2.
+            level = ev.i                # current iteration (>0) layer will start at 2.
             ax = set_axis(fig, level)
             c2i = int(ev.cid[0])         # c2 indicator (next region).
             rgx = [int(a) for a in ev.addresses[:, ev.i-1: ev.i+1][0]]

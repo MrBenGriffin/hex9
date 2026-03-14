@@ -6,8 +6,9 @@
 Proof of concepts taken from AKOctahedral
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
 """
 import numpy as np
 from hhg9 import Registrar, Points
@@ -135,16 +136,3 @@ if __name__ == "__main__":
 
     exit(0)
 
-    vx_m = regions_xy(exm)
-
-    print("\npoc_hex_str_rnd")
-    poc_hex_str_rnd()
-
-    print("\npoc_hex_pak")
-    poc_hex_pak()
-
-    print("\npoc_stonehenge_h9")
-    poc_stonehenge_h9()
-
-    print("\npoc_region_encode")
-    poc_region_encode()

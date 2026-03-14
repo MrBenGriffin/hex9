@@ -6,9 +6,10 @@
 Test Reference Neighbours.
 
 Last Tested
-26 December 2025 0.1.0a4 (passed - but questionable)
-16 December 2025 0.1.0a3 (passed - but of questionable value)
-12 October 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed - but questionable)
+16 Dec 2025 0.1.0a3 (passed - but of questionable value)
+12 Oct 2025 (passed)
 """
 import numpy as np
 from hhg9 import Registrar

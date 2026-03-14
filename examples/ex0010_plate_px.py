@@ -6,10 +6,10 @@
 Supporting System Test - No octahedral projection or H9
 Roundtrip of a Plate Carrée <=> PlatePixel
 Note that it converts pixel coordinates to (x,y) cartesian coordinates.
-26 February 2026 0.1.1a1 (passed)
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed)
-25 November 2025 (passed)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed)
+25 Nov 2025 (passed)
 """
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar

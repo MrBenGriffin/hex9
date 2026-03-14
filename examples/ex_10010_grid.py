@@ -10,7 +10,7 @@ Provides two entry points:
 ``hh_grid(mode, c2, scale)``
     Generate a tight pixel grid for one half-hexagon sub-region (c2=0,1,2)
     of an octant face.  Returns a subset of the global face lattice, so pixel
-    indices are face-level and compositing is index-exact.
+    indices are face-layer and compositing is index-exact.
 
 ``hh_grid_face(mode, scale)``
     Generate all three c2 sub-grids for a full octant face in one call.
@@ -144,9 +144,9 @@ class HHGridResult(NamedTuple):
     mask : NDArray[bool], shape (wid * hgt,)
         Half-hex interior mask over the flat bounding-rectangle grid.
     px_idx : NDArray[int], shape (N,)
-        **Face-level** column index for each valid pixel (0 = leftmost).
+        **Face-layer** column index for each valid pixel (0 = leftmost).
     py_idx : NDArray[int], shape (N,)
-        **Face-level** row index for each valid pixel (0 = bottom row).
+        **Face-layer** row index for each valid pixel (0 = bottom row).
     px_off : int
         Column offset of the bounding rectangle's left edge in the face.
     py_off : int
@@ -187,7 +187,7 @@ def hh_grid(
     -------
     HHGridResult
         Named tuple — see class docstring for field descriptions.
-        ``px_idx``/``py_idx`` are **face-level** and index directly into a
+        ``px_idx``/``py_idx`` are **face-layer** and index directly into a
         buffer of size ``face_image_dims(scale)``.
     """
     U  = H9K.lattice.U
@@ -227,10 +227,10 @@ def hh_grid(
     xx, yy = np.meshgrid(xi, yi, indexing='xy')          # (hgt, wid)
     rec    = np.stack([xx.ravel(), yy.ravel()], axis=1)  # (wid*hgt, 2)
 
-    # Face-level pixel indices for every point in the bounding rectangle.
+    # Face-layer pixel indices for every point in the bounding rectangle.
     # px_face = i_face[ii_local]  (global column)
     # py_face = (face_hgt - 1) - j_face[jj_local]  (image-convention flip applied once,
-    #           at the global level so that sub-grids sharing rows agree).
+    #           at the global layer so that sub-grids sharing rows agree).
     jj_loc, ii_loc = np.meshgrid(np.arange(hgt), np.arange(wid), indexing='ij')
     px_face = i_face[ii_loc.ravel()].astype(np.int32)
     py_face = (face_hgt - 1 - j_face[jj_loc.ravel()]).astype(np.int32)
@@ -259,7 +259,7 @@ def hh_grid_face(
     All three c2 half-hex grids for one octant face.
 
     Returns a 3-tuple of ``HHGridResult`` (c2=0, c2=1, c2=2).  All pixel
-    indices are face-level and the three pixel sets are exactly disjoint.
+    indices are face-layer and the three pixel sets are exactly disjoint.
     """
     return (
         hh_grid(mode, 0, scale),
@@ -277,7 +277,7 @@ def hh_grid_from_triangle(
 
     Calls ``sq_grid_vx`` once (identical lattice to ``hh_grid``), then masks
     each c2 quadrilateral via ``in_convex_poly``.  Pixel indices are
-    face-level and match those from ``hh_grid_face`` exactly.
+    face-layer and match those from ``hh_grid_face`` exactly.
 
     This is less efficient than ``hh_grid_face`` (allocates the full face
     grid) but is useful as a correctness cross-check.
@@ -324,7 +324,7 @@ def face_image_dims(scale: float) -> Tuple[int, int]:
     """
     ``(wid, hgt)`` of the face image, consistent with ``sq_grid_vx``.
 
-    Face-level pixel indices from ``hh_grid`` / ``hh_grid_face`` index
+    Face-layer pixel indices from ``hh_grid`` / ``hh_grid_face`` index
     directly into a buffer of this size.
     """
     w, h, _, _ = _face_dims(scale)

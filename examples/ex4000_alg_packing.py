@@ -6,8 +6,9 @@
 Part of the H9 project - This is proof-of-concept for uint64 packing.
 
 Last Tested
-26 December 2025 0.1.0a4 (passed)
-16 December 2025 0.1.0a3 (passed - with rewrite)
+13 Mar 2026 0.1.1a1 (passed)
+26 Dec 2025 0.1.0a4 (passed)
+16 Dec 2025 0.1.0a3 (passed - with rewrite)
 """
 import numpy as np
 import hhg9.algorithms.packing as pk
