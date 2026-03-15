@@ -132,7 +132,7 @@ E, the area covered by a hexagon at layer L is E/(12*9^N)
 
 Hex9 is highly comprehensive, natively supporting uint128 addresses (32 
 nibbles) (as strings) and uint64 addresses (16 nibbles) (as integers). 
-The former can index the globe down to Layer 30 or more. While Layer 30 is not 
+The former can index the globe down to Layer 28 or more. While Layer 36 is not 
 the mathematical limit (going deeper merely requires specific hardware 
 architecture) its resolution is staggering. By Layer 30, the area of a single 
 hex is roughly 1,000 square nanometers (1,000 nm²)
