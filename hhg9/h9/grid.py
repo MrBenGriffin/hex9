@@ -419,3 +419,116 @@ def enmesh(pts, levels: int = 35, shape=None):
         return uniques, refs
     else:
         return polys, np.array([range(num_pts)])
+
+
+# ---------- PostGIS hexagon fill -------------------------------------------
+
+def h9_postgis_hexagons(
+        min_lon: float,
+        min_lat: float,
+        max_lon: float,
+        max_lat: float,
+        layer: int,
+        max_samples: int = 1_000_000,
+        reg=None,
+) -> list[tuple[str, str, str]]:
+    """
+    Generate H9 hexagon polygons covering a bounding box at the given layer.
+
+    Intended as the Python backend for the PostGIS ``h9_bbox_hexagons`` function.
+    The SQL wrapper ``h9_fill_polygon`` then clips the results to an exact polygon
+    using ``ST_Intersects``, so no geometry library is required here.
+
+    Parameters
+    ----------
+    min_lon, min_lat, max_lon, max_lat : float
+        Bounding box in WGS84 degrees.
+    layer : int
+        H9 hex layer (0..UUID_DEPTH).  Determines hexagon size.
+    max_samples : int
+        Safety cap on the number of grid sample points.  If the bbox/layer
+        combination would require more, the step is coarsened automatically.
+        Default 1_000_000.
+    reg : Registrar, optional
+
+    Returns
+    -------
+    list of (bin_uuid_str, wkt_polygon) tuples.
+        hex9_uuid_str  : canonical UUID for the H9 Point
+        bin_uuid_str  : canonical UUID string for the H9 bin at ``layer``.
+        wkt_polygon   : WKT POLYGON with (lon lat) vertex order, ring closed.
+    """
+    from hhg9 import Registrar, Points
+    from hhg9.h9.binning import hex_reduce, hex_parents, hex_from_pars
+    from hhg9.h9.uuid_address import h9_encode, batch_nibbles_to_int
+    import uuid as uuid_mod
+
+    if reg is None:
+        reg = Registrar()
+
+    g_gcd = reg.domain('g_gcd')
+    b_oct = reg.domain('b_oct')
+
+    # Sampling step: hex inradius converted to degrees (equatorial approximation,
+    # intentionally conservative — finer grid than needed at low latitudes).
+    inradius_m = float(hex_props(layer)[2])
+    step_deg = inradius_m / 111_320.0
+
+    # Coarsen step if it would exceed the sample cap.
+    lat_span = max_lat - min_lat
+    lon_span = max_lon - min_lon
+    n_lat = max(1, int(np.ceil(lat_span / step_deg)))
+    n_lon = max(1, int(np.ceil(lon_span / step_deg)))
+    if n_lat * n_lon > max_samples:
+        step_deg = max(lat_span, lon_span) / int(max_samples ** 0.5)
+        n_lat = max(1, int(np.ceil(lat_span / step_deg)))
+        n_lon = max(1, int(np.ceil(lon_span / step_deg)))
+
+    # Regular lat/lon sample grid.
+    lats = np.linspace(min_lat, max_lat, n_lat)
+    lons = np.linspace(min_lon, max_lon, n_lon)
+    lon_g, lat_g = np.meshgrid(lons, lats)
+    sample_lats = lat_g.ravel()
+    sample_lons = lon_g.ravel()
+
+    # Project to b_oct and bin into hexagons.
+    coords = np.column_stack([sample_lats, sample_lons])
+    b_pts = reg.project(Points(coords, g_gcd), [g_gcd, b_oct])
+
+    # Use the lower-level binning steps so we can access hex_v directly.
+    # hex_v shape: (H, layer+2) — H unique hexes, each with reversible address.
+    hex_num, hex_v, _inv, _idx = hex_reduce(b_pts, layer)
+    hx = int(hex_num)
+
+    hex_xy, hex_oid, scale = hex_parents(b_oct, hex_v, hx, layer)
+    hx_pts = hex_from_pars(b_oct, hex_xy, hex_oid, scale, hex_v[:, -1])
+
+    # Derive bin UUIDs directly from hex_v — no approximation, no round-trip.
+    # hex_v[:, :-1] = body (L+1 nibble cols), hex_v[:, -1] = reversible tail byte.
+    body_l = hex_v[:, :-1].astype(np.uint8)          # (H, layer+1)
+    tail_bytes = hex_v[:, -1].astype(np.uint8)        # (H,)
+    key_tail = ((tail_bytes >> 4) & 0x0F)             # (p_c2 << 1) | r_mo
+
+    uuid_nibs = np.zeros((hx, 32), dtype=np.uint8)
+    uuid_nibs[:, :layer + 1] = body_l
+    uuid_nibs[:, layer + 1] = key_tail
+    bin_uuids = [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)]
+
+    # Full depth-30 UUID: encode the representative sample for each unique hex.
+    # hex_v only covers layer+2 nibbles so we re-encode from lat/lon.
+    full_uuids, _ = h9_encode(sample_lats[_idx], sample_lons[_idx], reg=reg)
+
+    # Project hexagon vertices (H*6 points) back to lon/lat.
+    g_hex = reg.project(hx_pts, [b_oct, g_gcd])
+    # g_gcd coords: column 0 = lat, column 1 = lon.
+    hex_latlons = g_hex.coords.reshape(hx, 6, 2)
+
+    results = []
+    for i in range(hx):
+        verts = hex_latlons[i]           # (6, 2): [lat, lon]
+        ring = ', '.join(f'{v[1]:.9f} {v[0]:.9f}' for v in verts)
+        closing = f'{verts[0, 1]:.9f} {verts[0, 0]:.9f}'
+        wkt = f'POLYGON(({ring}, {closing}))'
+        results.append((str(full_uuids[i]), str(bin_uuids[i]), wkt))
+    return results
+
