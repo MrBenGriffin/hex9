@@ -102,15 +102,14 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
     if octant_id is None:
         repo = []
         for octant in b_oct.signs.keys():
-            o_id = b_oct.sign_to_id[octant]
+            o_id = octant_id
             mode = b_oct.oid_mo[o_id]
             repo.append(Points(tgx[mode].copy(), b_oct, components=octant))
         return Points.concat(repo)
     else:
         o_id = octant_id
         mode = H9O.oid_mo[o_id]
-        cmp = H9O.oid_cmp[o_id]
-        return Points(tgx[mode], b_oct, components=cmp)
+        return Points(tgx[mode], b_oct, oid=o_id)
 
 
 def octa_layer_stats(l: int, r=6371000.0):

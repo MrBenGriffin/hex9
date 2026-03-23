@@ -39,7 +39,7 @@ def run():
     # Great Pyramid.
     poi = [29.979189320439783, 31.134207865680587]
     ll0 = Points(np.array([poi]), 'g_gcd')
-    bc0 = reg.project(ll0, ['b_oct'])  # spherical cart
+    bc0 = reg.project(ll0, ['g_gcd', 'b_oct'])  # spherical cart
     co_, mode = bc0.cm()
     erg = rgn.xy_regions(bc0.coords, mode, depth=36)[0][1:]
     hxe = [f'{e:02x}' for e in erg]

@@ -8,11 +8,15 @@ They are domain-associated. For example, while GCD (latitude/longitude) and Simp
 both are identical in the sense that they are both 2D, they are different in the sense that
 GCD coordinates are associated with WGS84, whereas Simplex coordinates are associated
 with a domain that is a triangle.
-They have a `component` array which indicates which octant each point is in, for those domains that use them.
-The components are passed as metadata for those domains that don't need them - but can be then used by later projections
-as a reliable octant indicator.
+
+Each point carries an `oid` (octant id, uint8, 0-7) that identifies which octant it belongs to
+for domains that use the octahedral decomposition.  255 is the sentinel for "unset / invalid".
+`oid` is passed as metadata through domains that don't need it so later projections can
+use it as a reliable octant indicator without re-binning.
 """
 import numpy as np
+
+OID_INVALID: np.uint8 = np.uint8(255)
 
 
 class Points:
@@ -21,52 +25,58 @@ class Points:
     Each coordinate has a domain, and associated sample data.
     Each 'point' represents a location that may be approximate,
     depending on its Domain and formatting resolution.
-    component may be passed as a template for all the coords.
+    oid may be passed as a scalar uint8 (broadcast to all points) or
+    as a (N,) uint8 array.
     """
-    def __init__(self, coords: np.ndarray, domain=None, components=None, samples=None):
+    def __init__(self, coords: np.ndarray, domain=None, oid=None, samples=None):
         self.coords = coords
-        self.domain = domain  # This is the composite domain, if the
-        if components is not None:
-            components = np.asarray(components)
-            if components.ndim == 1:
-                if components.shape[0] != 3:
-                    components = self.invert_octant_ids(components)
-                # Broadcast single 3-element tuple to match coords
-                else:
-                    components = np.broadcast_to(components, (self.coords.shape[0], 3))
-            elif components.shape != (self.coords.shape[0], 3):
+        self.domain = domain
+        if oid is not None:
+            oid = np.asarray(oid, dtype=np.uint8)
+            if oid.ndim == 0:
+                # scalar — broadcast to every point
+                oid = np.full(len(self.coords), int(oid), dtype=np.uint8)
+            elif oid.ndim == 1 and oid.shape[0] == len(self.coords):
+                oid = np.ascontiguousarray(oid, dtype=np.uint8)
+            else:
                 raise ValueError(
-                    f"Invalid component shape: expected {(self.coords.shape[0], 3)} or (3,), got {components.shape}")
-        self.components = components
+                    f"Invalid oid shape: expected ({len(self.coords)},) or scalar, got {oid.shape}")
+        self.oid = oid
         from hhg9.base.composite import CompositeDomain
-        if self.components is None and self.domain is not None and isinstance(self.domain, CompositeDomain):
+        if self.oid is None and self.domain is not None and isinstance(self.domain, CompositeDomain):
             self.domain.binning(self)
         self.samples = samples
 
     def binning(self, sig: tuple = None):
-        """Return points with domain set by composite set_domain"""
-        # caller('Points: binning')
-        if self.components is None and self.domain is not None:
+        """Return points with oid set by composite domain binning."""
+        if self.oid is None and self.domain is not None:
             from hhg9.base.composite import CompositeDomain
             if isinstance(self.domain, CompositeDomain):
                 self.domain.binning(self)
         return self
 
-    @classmethod
-    def calc_octant_ids(cls, components):
-        """Definitive utility to calculate octant IDs from sign components."""
-        return ((components[:, 2] < 0) << 2) | \
-               ((components[:, 1] < 0) << 1) | \
-               ((components[:, 0] < 0) << 0).astype(np.uint8)
+    # ------------------------------------------------------------------
+    # Octant id utilities (static — useful for working with H9O tables)
+    # ------------------------------------------------------------------
 
-    def oids(self):
-        """calculate octant IDs from sign components."""
-        return self.calc_octant_ids(self.components)
-
-    @classmethod
-    def invert_octant_ids(cls, octants_):
+    @staticmethod
+    def calc_octant_ids(components) -> np.ndarray:
         """
-        Given octant IDs (0..7), return array of components
+        Convert (N, 3) int8 sign-component array to (N,) uint8 octant ids.
+        Kept as a utility for code that works with H9O sign tables.
+        """
+        c = np.asarray(components)
+        return (
+            ((c[:, 2] < 0).astype(np.uint8) << 2) |
+            ((c[:, 1] < 0).astype(np.uint8) << 1) |
+            (c[:, 0] < 0).astype(np.uint8)
+        )
+
+    @staticmethod
+    def invert_octant_ids(octants_) -> np.ndarray:
+        """
+        Convert (N,) uint8 octant ids back to (N, 3) int8 sign-component array.
+        Kept as a utility for code that works with H9O sign tables.
         """
         octants = np.asarray(octants_, dtype=np.uint8)
         return 1 - 2 * np.stack([
@@ -74,33 +84,23 @@ class Points:
             (octants >> 1) & 1,  # Y
             (octants >> 2) & 1   # Z
         ], axis=-1).astype(np.int8)
-        # return signs.astype(np.int8)  # Extract bits and map {0,1} → {1,-1} using 1 - 2*b
 
-    # @classmethod
-    # def mode(self, cmp):
-    #     """
-    #     :param cmp:
-    #     :return mode based on component.
-    #     """
-    #     side = self.calc_octant_ids(cmp).astype(np.uint8)
-    #     bits = np.bitwise_count(side)
-    #     return np.array(bits % 2, dtype=np.uint8)
+    def oids(self) -> np.ndarray:
+        """Return the octant id array (alias for self.oid)."""
+        return self.oid
+
     @classmethod
-    def class_mode(cls, cmp):
-        """Given array of components, return octant IDs and mode."""
-        cmp = np.atleast_2d(cmp)
-        side = cls.calc_octant_ids(cmp).astype(np.uint8)
-        bits = np.bitwise_count(side)
+    def class_mode(cls, oid):
+        """Given (N,) uint8 oid array, return (oid, mode) where mode = popcount(oid) % 2."""
+        oid = np.asarray(oid, dtype=np.uint8)
+        bits = np.bitwise_count(oid)
         mode = np.ascontiguousarray(bits % 2, dtype=np.uint8)
-        side = np.ascontiguousarray(side, dtype=np.uint8)
-        return side, mode
+        return np.ascontiguousarray(oid, dtype=np.uint8), mode
 
     def cm(self):
-        """
-            Shortened variation of component with mode.
-        """
-        if self.components is not None:
-            return self.class_mode(self.components)
+        """Return (oid_array, mode_array), or (None, None) if oid is not set."""
+        if self.oid is not None:
+            return self.class_mode(self.oid)
         return None, None
 
     def bbox(self, *, return_diff=False, trbl=False):
@@ -126,22 +126,12 @@ class Points:
             )
         coords = np.array([self.coords[idx]])
         domain = self.domain
-        components = np.array([self.components[idx]]) if self.components is not None and idx < len(self.components) else None
+        oid = np.array([self.oid[idx]]) if self.oid is not None and idx < len(self.oid) else None
         samples = np.array([self.samples[idx]]) if self.samples is not None and idx < len(self.samples) else None
-        return Points(coords, domain, components, samples)
+        return Points(coords, domain, oid, samples)
 
     def __len__(self):
         return len(self.coords)
-
-    # def _scalar(self, name, format_spec, idx=0):
-    #     pt = np.atleast_2d(self.coords)[idx]
-    #     cp = np.atleast_2d(self.components)[idx]
-    #     dom = self.domain
-    #     composite = dom.components[tuple(cp)] if dom is not None and cp is not None else None
-    #     if name not in dom.address_formats:
-    #         return self.coords.__format__(format_spec)
-    #     formatter = dom.address_formats[name]
-    #     return formatter.format(pt, composite, format_spec)
 
     def __format__(self, format_spec):
         """Allow f-string formatting."""
@@ -149,7 +139,6 @@ class Points:
             return ''
         if self.domain is None:
             return self.coords.__format__(format_spec)
-        # Identify the format and subtype or length.
         main_sub = format_spec.split('.')
         name = main_sub[0]
         sub = main_sub[1] if len(main_sub) > 1 else ''
@@ -163,17 +152,17 @@ class Points:
         return formatter.format(self, None, sub)
 
     def __repr__(self):
-        cmp_str = f'{self.components.shape}' if self.components is not None else 'None'
+        oid_str = f'{self.oid.shape}' if self.oid is not None else 'None'
         smp_str = f'{self.samples.shape}' if self.samples is not None else 'None'
         pts_str = f'{self.coords.shape}' if self.coords is not None else 'None'
-        return f"Points(coords={pts_str}, domain={self.domain}, components={cmp_str}, samples={smp_str})"
+        return f"Points(coords={pts_str}, domain={self.domain}, oid={oid_str}, samples={smp_str})"
 
     def copy(self):
         """Copy points"""
         return Points(
-            coords=self.coords.copy(),  # Defensive deep copy
-            domain=self.domain,  # Immutable or shared as needed
-            components=self.components.copy() if self.components is not None else None,  # Safe if immutable or reference-shared
+            coords=self.coords.copy(),
+            domain=self.domain,
+            oid=self.oid.copy() if self.oid is not None else None,
             samples=self.samples.copy() if self.samples is not None else None
         )
 
@@ -183,30 +172,25 @@ class Points:
         if not points_list:
             raise ValueError('No points provided')
 
-        # Check all are Points
         for p in points_list:
             if not isinstance(p, cls):
                 raise TypeError(f"Expected Points, got {type(p)}")
 
-        # Check all share the same domain
         domains = {id(p.domain) for p in points_list}
         if len(domains) > 1:
             raise ValueError("Cannot concatenate Points with different domains")
 
         domain = points_list[0].domain
-
-        # Concatenate coords
         coords = np.concatenate([p.coords for p in points_list], axis=0)
 
-        # Concatenate components if present
-        has_components = any(p.components is not None for p in points_list)
-        if has_components:
-            components = np.concatenate([
-                p.components if p.components is not None else np.zeros(len(p.coords), dtype=int)
+        has_oid = any(p.oid is not None for p in points_list)
+        if has_oid:
+            oid = np.concatenate([
+                p.oid if p.oid is not None else np.full(len(p.coords), OID_INVALID, dtype=np.uint8)
                 for p in points_list
             ])
         else:
-            components = None
+            oid = None
 
         has_samples = any(p.samples is not None for p in points_list)
         if has_samples:
@@ -217,7 +201,7 @@ class Points:
         else:
             samples = None
 
-        return cls(coords, domain=domain, components=components, samples=samples)
+        return cls(coords, domain=domain, oid=oid, samples=samples)
 
     def image(self, dim, flip=True):
         """
@@ -233,7 +217,7 @@ class Points:
         xx = np.floor(x_adj*(xs-x0)).astype(np.uint64)
         ch = self.samples
         if flip:
-            y = (h - 1) - yy.astype(np.uint64)  # still in cartesian (ie, 0 is bottom left).
+            y = (h - 1) - yy.astype(np.uint64)
         else:
             y = yy.astype(np.uint64)
         x = xx.astype(np.uint64)
@@ -247,6 +231,6 @@ class Points:
         """Return only those for which good is true"""
         if len(self.coords) != len(good):
             raise ValueError('Number of coordinates does not match boolean array')
-        sel_c = self.components[good] if self.components is not None else None
+        sel_oid = self.oid[good] if self.oid is not None else None
         smp_c = self.samples[good] if self.samples is not None else None
-        return Points(self.coords[good], domain=self.domain, components=sel_c, samples=smp_c)
+        return Points(self.coords[good], domain=self.domain, oid=sel_oid, samples=smp_c)

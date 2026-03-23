@@ -190,13 +190,14 @@ class OctahedralNet(CompositeDomain):
         Test that points are valid
         """
         from hhg9 import Points
+        from hhg9.base.points import OID_INVALID
         if not isinstance(pts, Points):
             raise TypeError('pts must be Points')
         if pts.domain != self:
             raise ValueError('pts must be in this domain')
-        signs = self.pt_face(pts.coords)
-        good = np.any(np.all(signs[:, None] == H9O.oid_cmp, axis=2), axis=1)
-        result = self.Points(pts.coords[good], domain=self, components=signs[good])
+        oids = self.pt_face(pts.coords)
+        good = oids != OID_INVALID
+        result = self.Points(pts.coords[good], domain=self, oid=oids[good])
         if pts.samples is not None:
             result.samples = pts.samples[good]
         return result
@@ -207,27 +208,28 @@ class OctahedralNet(CompositeDomain):
         """
         if pts.shape[-1] < 2:
             raise ValueError('Points must have 2 dimensions')
-        signs = self.pt_face(pts)
-        return np.any(signs != 0, axis=1)
+        from hhg9.base.points import OID_INVALID
+        return self.pt_face(pts) != OID_INVALID
 
-    def pt_face(self, pts: NDArray) -> NDArray:
-        """Vectorised: identify octant sign for each point in net coordinates.
-        Returns (hex_layer,3) int8 array of signs (±1), or (0,0,0) for invalid.
+    def pt_face(self, pts: NDArray) -> np.ndarray:
+        """Vectorised: identify octant for each point in net coordinates.
+        Returns (N,) uint8 oid array; OID_INVALID (255) for points outside all faces.
         """
+        from hhg9.base.points import OID_INVALID
         num_points = pts.shape[0]
-        out = np.zeros((num_points, 3), dtype=np.int8)
+        out = np.full(num_points, OID_INVALID, dtype=np.uint8)
         for sign, polys in self.face_polys.items():
+            oid = H9O.cmp_oid[sign]
             for poly in polys:
                 mask = inside_convex_polygon_cw(pts, poly)
                 if not np.any(mask):
                     continue
-                out[mask] = np.array(sign, dtype=np.int8)
+                out[mask] = oid
         return out
 
     def binning(self, pts: Points, sig: tuple = None):
-        """Identify the components of the points"""
-        cmp = self.pt_face(pts.coords)
-        pts.components = np.array(cmp)
+        """Identify the octant id of each point."""
+        pts.oid = self.pt_face(pts.coords)
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""

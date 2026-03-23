@@ -46,7 +46,7 @@ if __name__ == '__main__':
     print(f'ECEF: {bel.coords[0,0]:.8f},{bel.coords[0,1]:.8f},{bel.coords[0,2]:.8f}')
 
     boc = reg.project(pos, ['c_ell', 'c_oct'])
-    print(f'OCTA: {boc.coords[0, 0]:.8f},{boc.coords[0, 1]:.8f},{boc.coords[0, 2]:.8f}, face:{boc.components[0]} (via AK)')
+    print(f'OCTA: {boc.coords[0, 0]:.8f},{boc.coords[0, 1]:.8f},{boc.coords[0, 2]:.8f}, face:{boc.oid[0]} (via AK)')
 
     bro = reg.project(boc, ['c_oct', 'b_oct'])
     oc, mo = bro.cm()
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     # oc, mo = bry.cm()
     cxx = rg.xy_regions(bry.coords, mo)
     xym = rg.regions_xy(cxx)
-    uvr = Points(xym[:, :2], components=oc, domain=b_oct)
+    uvr = Points(xym[:, :2], oid=oc, domain=b_oct)
     rgx = [H9_RA.cell2rid[i] for i in cxx]
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r35')

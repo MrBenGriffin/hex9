@@ -153,13 +153,12 @@ def get_data(reg: Registrar, depth, mode=None):
     sides = []
     for oc in range(8):  # all octants
         mo = H9O.oid_mo[oc]
-        cmp = H9O.oid_cmp[oc]
         if mode is not None and mo != mode:
             continue
         rgc = rgn[mo]
         xym = regions_xy(rgc)
         xy = xym[:, :-1]
-        sides.append(Points(xy, b_oct, cmp))
+        sides.append(Points(xy, b_oct, oc))
     result = Points.concat(sides)
     return result
 

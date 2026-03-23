@@ -49,14 +49,13 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
         for name, sdom in n_oct.sides.items():
             oid = sdom.oid
             mo = H9O.oid_mo[oid]
-            cmp = H9O.oid_cmp[oid]
             prj = n_oct.projs[name]
             for c2 in [0, 1, 2]:
                 hhp = H9P.hh[mo, c2]
                 grid = qa_grid(hhp, scale, affine=prj.c2_affine(c2))
                 pix, msk = grid[2], grid[3]
                 if np.any(msk):
-                    pix = Points(pix[msk] + prj.offset, n_oct, cmp)
+                    pix = Points(pix[msk] + prj.offset, n_oct, oid)
                     pt_list.append(pix)
                 else:
                     print(f'No points for {name} {c2}')
@@ -79,6 +78,6 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 
 if __name__ == '__main__':
-    flavours = ['rhombus', 'butterfly:2000'] #, 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    flavours = ['diamonds']  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
     # flavours = net_layouts
     run(flavours=flavours, scale=601, file='src/bm_3600x1800.png')

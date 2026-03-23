@@ -164,8 +164,8 @@ if __name__ == '__main__':
 
             # Drop points that landed outside all net faces: pt_face() returns (0,0,0) for them,
             # which _project_composites silently maps to octant 0 with wrong coordinates.
-            valid = np.any(b_pts.components != 0, axis=-1)
-            b_pts = Points(b_pts.coords[valid], domain=b_oct, components=b_pts.components[valid])
+            valid = b_pts.oid != 255
+            b_pts = Points(b_pts.coords[valid], domain=b_oct, oid=b_pts.oid[valid])
 
             hx_pts, _ = hex_poly_layer(b_pts, layers=layer)
             h_pts = rg.project(hx_pts, [b_oct, n_oct])
@@ -173,5 +173,6 @@ if __name__ == '__main__':
             n_ctr = np.mean(h_pts.coords.reshape(-1, 6, 2), axis=1)
             npts = Points(n_ctr, n_oct)
             c_pt = rg.project(npts, [n_oct, b_oct])
-            hd = hex_str_encode(c_pt, layer, tail_style=TailStyle.key)
-            plot_hex(h_pts, f'{layer}', ctrs=n_ctr, labels=hd)
+            valid_c = c_pt.oid != 255
+            hd = hex_str_encode(c_pt.select(valid_c), layer, tail_style=TailStyle.key)
+            plot_hex(h_pts, f'{layer}', ctrs=n_ctr[valid_c], labels=hd)

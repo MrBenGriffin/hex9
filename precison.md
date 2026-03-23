@@ -1,4 +1,8 @@
 
+> **This file has been superseded by [precision.md](precision.md)** — which
+> contains the updated domain table (including `b_raw` and `r_gcd`), the
+> corrected projection table, and clarified root-finder documentation.
+
 # Domains, Projections, and Chains
 The Hex9 framework uses a hierarchical triangular grid built on an octahedral 
 base. Internally, we work with several coordinate `domains`, each with its own 

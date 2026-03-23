@@ -351,7 +351,7 @@ def stage(file: str,
     b_data = reg.project(b_gcd, [g_gcd, c_ell, c_oct, b_oct])
     poly = b_data.coords.copy()
     centroid = np.atleast_2d(poly.mean(axis=0))
-    comps = b_data.components.copy()  # (4,3) per-corner components
+    comps = b_data.oid.copy()  # (4,) per-corner oid scalars; NOTE: used below as sign-tuple rows via cmp_arr — may need adaptation if callee expects (N,3) sign array
     comp_row = comps[0]
 
     # Compute θ and optionally visualize

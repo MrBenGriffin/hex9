@@ -56,7 +56,7 @@ def run():
     if not cache.exists():
         raise ValueError('Far better to load a cache for this thing. See ex_0041')
     repo = np.load(cache, allow_pickle=True)
-    b_pix = Points(repo['coords'], b_oct, components=repo['cmp'], samples=repo['smp'])
+    b_pix = Points(repo['coords'], b_oct, oid=repo['cmp'], samples=repo['smp'])
     c_pix = reg.project(b_pix, [b_oct, 'c_oct'])
     show_octahedron(c_pix)
 

@@ -3,11 +3,11 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-This reads in the GCD for Stonehenge, then converts it into a set of nested half-hexagons,
-each of which represents a single Stage of the H9 Journey.
+This reads in the GCD for Stonehenge.
 
 Last Tested
--13 Mar 2026 0.1.1a1 (passed)
+20 Mar 2026 0.1.1a2 (passed - rewritten)
+13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
 16 Dec 2025 0.1.0a3 (passed)
 25 Nov 2025 (passed)
@@ -19,6 +19,8 @@ from matplotlib import image
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_angular_ratio
+from hhg9.h9 import H9O
+from hhg9.h9.binning import hex_poly_layer
 from hhg9.h9.grid import qa_grid, enmesh
 from PIL import Image  # Pillow for clean image saving
 from hhg9.h9.region import xy_regions
@@ -39,6 +41,7 @@ if __name__ == '__main__':
     reg = Registrar()  # Manage Domains & Projections
     g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
+    n_oct = reg.domain('n_oct:butterfly:2000')
     p_pix = reg.domain('p_pix')
     pix_gcd = reg.projection('pix_gcd')
 
@@ -47,29 +50,23 @@ if __name__ == '__main__':
     region = locs['NWA']
     spot = region['Stonehenge']
     ll0 = Points(np.array([spot]), g_gcd)
-    bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
+    bc0 = reg.project(ll0, [g_gcd, b_oct])
     co, mo = bc0.cm()
-    cmp = bc0.invert_octant_ids(co)[0]
+    oid = co[0]  # This is one point.
     uri = xy_regions(bc0.coords, mo)
-    polys, mesh = enmesh(bc0, 11)
-
-    # We don't need to tile here as all share the same component in this case.
-    verts = polys.reshape(-1, 2)                  # (U*4, 2)
-    # co_row = np.atleast_2d(cmp)                 # (1, C)
-    # co_tiled = np.repeat(co_row, verts.shape[0], axis=0)  # (U*4, C)
-    bnd = Points(verts, b_oct, components=cmp)
-    gel = reg.project(bnd, [b_oct, g_gcd])
-    gpy = gel.coords.reshape([-1, 4, 2])
+    hx_pts, _ = hex_poly_layer(bc0, layers=3)
+    hx_npt = reg.project(hx_pts, [b_oct, n_oct])
+    gpy = hx_npt.coords.reshape([6, 2])
     # This depends upon ex0075 outputs!
     extents = np.load('output/ex0075_extents.npy')
-    for i, extent in enumerate(extents[0]):
+    for i, extent in enumerate([extents]):
         ratio = wgs84_angular_ratio(extent)
-        b_poly = polys[i]
-        g_poly = gpy[i]
+        n_poly = hx_npt
+        g_poly = gpy
         lon_min, lon_max, lat_min, lat_max = extent
         lw = lon_max - lon_min
         lh = lat_max - lat_min
-        img_file = f'output/ex0075_{i:02}.png'
+        img_file = f'output/ex0075.png'
         if os.path.isfile(img_file):
             img = image.imread(img_file, 'png')
         else:
@@ -77,19 +74,19 @@ if __name__ == '__main__':
         pc_px = p_pix.adopt(img)
         pix_gcd.set_dim(pc_px, extent)
         pc_sp = reg.project(pc_px, [p_pix, g_gcd])
+        (x_min, y_min, x_max, y_max) = n_poly.bbox()
+        crn = np.array(
+            [[x_min, y_min], [x_min, y_max],
+             [x_max, y_max], [x_max, y_min]]
+        )
 
         # KDTree sample
-        src = KDTree(pc_sp.coords)
-        bpx, bpy = b_poly[:, 0], b_poly[:, 1]
-        min_bx, max_bx = np.min(bpx), np.max(bpx)
-        min_by, max_by = np.min(bpy), np.max(bpy)
-        bxr = max_bx - min_bx
-        byr = max_by - min_by
-        grid_w = 2000 if bxr > byr else 4000
-        gw, gh, pxl, msk, (grid_org, (sx, sy)) = qa_grid(b_poly, grid_w)
+        grid_w = 20000
+        gw, gh, pxl, msk, (grid_org, (sx, sy)) = qa_grid(crn, grid_w)
         in_scope = pxl[msk]
-        pts = Points(in_scope, b_oct, components=cmp)
-        sp1 = reg.project(pts, [b_oct, g_gcd])
+        pts = Points(in_scope, n_oct)
+        sp1 = reg.project(pts, [n_oct, b_oct, g_gcd])
+        src = KDTree(pc_sp.coords)
         _, idx = src.query(sp1.coords, workers=-1)  # query KDTree and return indices of pc_sp
         samples = pc_sp.samples[idx]
         if samples.shape[1] == 3:
@@ -107,4 +104,4 @@ if __name__ == '__main__':
         valid = (vx >= 0) & (vx <= gw) & (vy >= 0) & (vy <= gh)
         out[vy[valid], vx[valid]] = rgba[valid]
         image_uint8 = (out * 255).astype(np.uint8)
-        Image.fromarray(image_uint8).save(f'output/ex0076_sh{i:02}.png')
+        Image.fromarray(image_uint8).save(f'output/ex0076_sh.png')

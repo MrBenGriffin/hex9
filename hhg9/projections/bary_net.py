@@ -16,8 +16,10 @@ from hhg9.h9.region import H9R
 class BaryNet(Projection):
     """
     This is the 2D-Barycentric to 2D-Net projection.
+
     """
     def __init__(self, registrar, base, o_name, n_name, theta, offset):
+        # print(f'> BaryNet: {base}_bn; {o_name} -> {n_name}')
         super().__init__(registrar, f'{base}_bn', o_name, n_name)
         self.offset = offset
         self.theta = theta
@@ -72,7 +74,7 @@ class BaryNet(Projection):
             xn = xy @ self.matrix  # rotation is in net space.
         xn += self.offset
         if isinstance(arr, Points):
-            return Points(xn, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
+            return Points(xn, domain=self.fwd_cs, samples=arr.samples, oid=arr.oid)
         else:
             return xn
 
@@ -98,6 +100,6 @@ class BaryNet(Projection):
         else:
             xb = xo @ self.matrix.T
         if isinstance(arr, Points):
-            return Points(xb, domain=self.rev_cs, samples=arr.samples, components=arr.components)
+            return Points(xb, domain=self.rev_cs, samples=arr.samples, oid=arr.oid)
         else:
             return xb

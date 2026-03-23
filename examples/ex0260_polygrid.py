@@ -102,7 +102,6 @@ def plot_ctr(pts, name='hex', labels=None):
     print(f"fig saved at output/ex0260_ctr_{name}.png")
 
 
-
 if __name__ == '__main__':
     rg = Registrar()
     h9f = OctahedralH9(rg)  # formatter.
@@ -139,8 +138,8 @@ if __name__ == '__main__':
         b_pts = rg.project(scn, [n_oct, b_oct])
 
         # Drop points that landed outside all net faces
-        valid = np.any(b_pts.components != 0, axis=-1)
-        b_pts = Points(b_pts.coords[valid], domain=b_oct, components=b_pts.components[valid])
+        valid = b_pts.oid != 255
+        b_pts = Points(b_pts.coords[valid], domain=b_oct, oid=b_pts.oid[valid])
         # Bin to L-layer parents, apply a threshold, compute centroids directly
         hex_num, hex_v, hex_inv, _ = hex_reduce(b_pts, layer)
         counts = np.bincount(hex_inv, minlength=hex_num)

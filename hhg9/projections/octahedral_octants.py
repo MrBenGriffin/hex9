@@ -29,7 +29,7 @@ class OctahedralOctants(Projection):
         xyo = xyz @ (self.matrix.T @ self.orient)  # These are now in barycentric 3D.
         xy = np.delete(xyo, 2, -1)  # These are now in barycentric 2D.
         if isinstance(arr, Points):
-            return Points(xy, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
+            return Points(xy, domain=self.fwd_cs, samples=arr.samples, oid=arr.oid)
         else:
             return xy
 
@@ -42,6 +42,6 @@ class OctahedralOctants(Projection):
         xyz = np.insert(xy, xy.shape[1], self.z_off, axis=1)
         xyo = xyz @ (self.matrix.T @ self.orient).T  # These are now in barycentric 3D.
         if isinstance(arr, Points):
-            return Points(xyo, domain=self.rev_cs, samples=arr.samples, components=arr.components)
+            return Points(xyo, domain=self.rev_cs, samples=arr.samples, oid=arr.oid)
         else:
             return xyo

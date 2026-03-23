@@ -102,7 +102,7 @@ def stage(file: str,
             ak.set_accuracy(0.0000000001)
             b_gcd = Points(gcd_r, g_gcd)
             b_data = reg.project(b_gcd, [g_gcd, c_ell, c_oct, b_oct])
-            cmp_arr = b_data.components.copy()
+            cmp_arr = b_data.oid.copy()
         except Exception:
             cmp_arr = np.load(src_dir / f"{base}_bounds_bry_cmp.npy")  # last resort: (2,3) min/max only
 

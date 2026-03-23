@@ -75,7 +75,7 @@ def stage(file: str,
     mm_gcd = Points(np.vstack((min_lat_lon, max_lat_lon)), g_gcd)
     mm_data = reg.project(mm_gcd, [g_gcd, b_oct])
     mm_bry = mm_data.coords.T.reshape(-1)
-    mm_bry_c = mm_data.components
+    mm_bry_c = mm_data.oid
     np.save(br_file, mm_bry)
     np.save(brc_file, mm_bry_c)
 

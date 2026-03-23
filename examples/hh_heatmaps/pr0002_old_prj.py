@@ -40,7 +40,7 @@ def _process_batch(args):
     start_idx, lat_lon_batch = args
     p_gcd = Points(lat_lon_batch, g_gcd)
     result = reg.project(p_gcd, [g_gcd, c_ell, c_oct, b_oct])
-    return start_idx, result.coords, result.components
+    return start_idx, result.coords, result.oid
 
 
 def stage(file: str,

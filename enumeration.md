@@ -1,8 +1,15 @@
-# `H9` An hierarchic hexagonal grid
+# `H9` — Mathematical Foundations of the Half-Hexagon Hierarchy
 
-These notes are founded on the initial planar system, which has now been 
-re-factored to a more intuitive and less fragile global system, but they may 
-serve as good backgrounding.
+> **Note:** This document covers the *mathematical foundations* of the H9
+> hexagonal grid — the half-hexagon tiling theory, enumeration of candidate
+> tilings, and the address system's structural properties.  It is **not** a
+> description of the current implementation.  For domain definitions,
+> projection details, and accuracy benchmarks see [precision.md](precision.md).
+> For an architecture overview see [introduction.md](introduction.md).
+
+These notes are founded on the initial planar system, which has since been
+re-factored into a more robust global system, but they serve as enduring
+mathematical background.
 
 # Why hierarchic hexagonal grids?
 

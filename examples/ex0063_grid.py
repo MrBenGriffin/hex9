@@ -146,24 +146,22 @@ def snow_globe(arr: Points, poly_len: int = 6, pop=None):
     print(f'file saved at output/ex0063_o{octant}_l{depth}.png')
 
 
-def get_data(reg: Registrar, layer=3, octant_id=None):
+def get_data(reg: Registrar, layer=3, o_id=None):
     """Load up global sample data"""
     tg0 = tri_grid(layer, 0).reshape([-1, 2])  # triangle polygons.
     tg1 = tri_grid(layer, 1).reshape([-1, 2])  # triangle polygons.
     tgx = [tg0, tg1]
     b_oct = reg.domain('b_oct')
-    if octant_id is None:
+    if o_id is None:
         repo = []
-        for octant in b_oct.signs.keys():
-            o_id = b_oct.sign_to_id[octant]
+        for octant in b_oct.signs.values():
+            o_id = octant.oid
             mode = b_oct.oid_mo[o_id]
-            repo.append(Points(tgx[mode].copy(), b_oct, components=octant))
+            repo.append(Points(tgx[mode].copy(), b_oct, oid=o_id))
         return Points.concat(repo)
     else:
-        o_id = octant_id
         mode = H9O.oid_mo[o_id]
-        cmp = H9O.oid_cmp[o_id]
-        return Points(tgx[mode], b_oct, components=cmp)
+        return Points(tgx[mode], b_oct, oid=o_id)
 
 
 def octa_layer_stats(l: int, r=6371000.0):
@@ -218,7 +216,7 @@ if __name__ == '__main__':
     b_oct = rg.domain('b_oct')
     for depth in [4]:  # range(6):
         l_stats = octa_layer_stats(depth)
-        b_pts = get_data(rg, layer=depth, octant_id=octant)
+        b_pts = get_data(rg, layer=depth, o_id=octant)
         u, v = b_pts.coords[:, 0], b_pts.coords[:, 1]
         g_pts = rg.project(b_pts, ['b_oct', 'g_gcd'])
         c_pts = rg.project(b_pts, ['b_oct', 'c_oct', 'c_ell'])

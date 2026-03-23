@@ -85,7 +85,7 @@ def poc_hex_str_rnd():
     h9n = hex_str_encode(n_ref, depth)
     k_ref = neighbours(n_ref, depth)
     h9k = hex_str_encode(k_ref, depth)
-    for (o, n, k, p, c) in zip(h9x, h9n, h9k, b_ref.coords, b_ref.components):
+    for (o, n, k, p, c) in zip(h9x, h9n, h9k, b_ref.coords, b_ref.oid):
         print(f'{o}={k} via {n}, ({p}):{c}')
     pbk = hex_str_decode(h9x, b_oct)
     b_bak = reg.project(pbk, [b_oct, g_gcd])  # 51.17879800002107,   -1.8261898473293454
@@ -114,8 +114,7 @@ if __name__ == "__main__":
     oid = 4
     vx_m = regions_xy(exm)
     vx = vx_m[:, :-1]
-    cmp = H9O.oid_cmp[oid]
-    pts = Points(vx, b_oct, cmp)
+    pts = Points(vx, b_oct, oid)
     o_id, mode = pts.cm()
     ggg = reg.project(pts, ['b_oct', 'g_gcd'])
 

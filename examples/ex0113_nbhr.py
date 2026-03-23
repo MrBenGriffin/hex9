@@ -49,7 +49,7 @@ if __name__ == '__main__':
         names = np.array(list(region.keys()))
         ll0 = Points(spots, g_gcd)
         bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
-        cmp = tuple(bc0.components[0])
+        cmp = bc0.oid[0]
         co, mo = bc0.cm()
         uri = xy_regions(bc0.coords, mo, accuracy)
         nbr, nmo = region_neighbours(uri)

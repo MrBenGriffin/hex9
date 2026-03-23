@@ -53,7 +53,7 @@ def run(scale=1201):
 
         rec_in = rec[msk]  # (M,2)
 
-        pts = Points(rec_in, b_oct, components=octant.sig())
+        pts = Points(rec_in, b_oct, oid=octant.oid)
         px, py = fit(pts, wid, hgt)
         ref = reg.project(pts, [b_oct, 'c_oct', 'c_ell'])
 

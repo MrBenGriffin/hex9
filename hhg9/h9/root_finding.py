@@ -11,18 +11,31 @@ from hhg9.h9.protocols import H9CellLike
 
 
 def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
-                projector_func, distance_func, depth=34, beam_width=5):
+                projector_func, distance_func, depth=34, beam_width=5, chunk=8_000):
     """
     Vectorised beam search in barycentric xy space.
     target_rll: (hex_layer,2) lat/lon (or whatever the projector uses)
     initial_mode: (hex_layer,) int {0,1}
-    target_octants: (hex_layer,3) face-signs for projection
+    target_octants: (hex_layer,) uint8 oid per point
     h9c: H9Cell instance providing mode, offsets, and child region info
     projector_func: (XY,(...))->(M,2) projects bary XY to target space
     distance_func: ((M,2),(M,2))->(M,) distances in target space
-    offset_kind: which offset flavour to use ("xy", "xbar_y"/"ẋy"/"xby", or "uv")
+    chunk: max points per beam-search batch (limits peak array size to
+           chunk*beam_width*9 rows per projector call; 8k keeps it in L3 cache)
     """
     num_pts = target_rll.shape[0]  # hex_layer
+
+    if num_pts > chunk:
+        xy_parts, path_parts = [], []
+        for i in range(0, num_pts, chunk):
+            sl = slice(i, i + chunk)
+            xy, paths = find_coords(
+                target_rll[sl], initial_mode[sl], target_octants[sl],
+                h9c, projector_func, distance_func, depth, beam_width, chunk)
+            xy_parts.append(xy)
+            path_parts.append(paths)
+        return np.vstack(xy_parts), np.vstack(path_parts)
+
     off = h9c.off_xy
 
     # child region id lists per supercell mode (shape (9,))
@@ -55,7 +68,7 @@ def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
         # Project once: flatten → project → reshape
         nk9 = num_pts * (k * 9)
         flat_xy = cand_xy.reshape(nk9, 2)
-        flat_oct = np.repeat(target_octants, k * 9, axis=0)  # (nk9,3)
+        flat_oct = np.repeat(target_octants, k * 9, axis=0)  # (nk9,)
         proj = projector_func(flat_xy, flat_oct).reshape(num_pts, k * 9, 2)
 
         # Distances to targets
@@ -80,6 +93,10 @@ def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
         parent_paths = np.take_along_axis(best_paths, parent_sel[..., None], axis=1)  # (hex_layer,k,depth_so_far)
         best_paths = np.concatenate([parent_paths, win_uris[..., None]], axis=2)  # (hex_layer,k,depth_so_far+1)
         best_xy = win_xy
+
+        # Early exit: all points have converged to numerical precision
+        if d_k.min(axis=1).max() < 3e-31:
+            break
 
     # Take the first beam entry as the result
     return best_xy[:, 0, :], best_paths[:, 0, :]

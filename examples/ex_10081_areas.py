@@ -39,13 +39,12 @@ def get_tri_data(reg: Registrar, layer=3, octant_id=None):
         for octant in b_oct.signs.keys():
             o_id = b_oct.sign_to_id[octant]
             mode = b_oct.oid_mo[o_id]
-            repo.append(Points(tgx[mode].copy(), b_oct, components=octant))
+            repo.append(Points(tgx[mode].copy(), b_oct, oid=o_id))
         return Points.concat(repo)
     else:
         o_id = octant_id
         mode = H9O.oid_mo[o_id]
-        cmp = H9O.oid_cmp[o_id]
-        return Points(tgx[mode], b_oct, components=cmp)
+        return Points(tgx[mode], b_oct, oid=o_id)
 
 
 def mid_lat(gxd: Points):
@@ -93,8 +92,9 @@ def min_authalic(reg, gxd, depth):
     """Given 2 points in gcd, discover a midpoint of least authalic"""
     xy = reg.project(gxd, ['g_gcd', 'b_oct'])
     b_oct = reg.domain('b_oct')
-    cmp = tuple(list(xy.components[0]))
-    oid = H9O.cmp_oid[cmp]  # NEA
+    b_raw = reg.domain('b_raw')
+    oid = xy.oid[0]
+    # oid = H9O.cmp_oid[cmp]  # NEA
     ref_data = get_tri_data(reg, layer=depth, octant_id=oid)
     o_ref = rg.project(ref_data, ['b_oct', 'c_oct'])
     ref_areas = enu_planar_polygon_area(rg, o_ref, 3)
@@ -106,10 +106,10 @@ def min_authalic(reg, gxd, depth):
     ref_areas *= rf_adj
     tr_pts = ref_data.coords.reshape([-1, 3, 2])
     tr_cts = tr_pts.mean(axis=1)
-    ref = Points(tr_cts, b_oct, components=cmp, samples=ref_areas / ideal_tri)
+    ref = Points(tr_cts, b_oct, oid=oid, samples=ref_areas / ideal_tri)
     ref_o = rg.project(ref, ['b_oct', 'c_oct'])
     face = H9O.oid_str[oid]  # NEA
-    prj = b_oct.projs[face]  # NEA matrices etc.
+    prj = b_raw.projs[face]  # NEA matrices etc.
     q = prj.matrix.T @ prj.orient
     e1_xyz = q[:, 0]  # 3-vector
     e2_xyz = q[:, 1]  # 3-vector

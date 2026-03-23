@@ -32,22 +32,23 @@ class CompositeDomain(Domain, ABC):
         self.sides = {}  # component domains
 
     def binning(self, pts: Points, sig: tuple = None):
-        """Identify the components of the points"""
+        """Identify the octant id of each point."""
         if self.axes == 3:
-            c = pts.coords.copy()  # don't mess with the coords.
-
-            # Robustness: NaN in coords would make np.sign return NaN, which then warns on cast.
-            # We leave components as 0 for any non-finite rows.
+            from hhg9.base.points import OID_INVALID
+            c = pts.coords.copy()
             finite_mask = np.isfinite(c).all(axis=1)
-            comps = np.zeros((c.shape[0], 3), dtype=np.int8)
+            oids = np.full(c.shape[0], OID_INVALID, dtype=np.uint8)
 
             if np.any(finite_mask):
                 cf = c[finite_mask]
-                # Avoid zeros landing in the "0" sign bucket; preserve octant semantics.
                 cf[cf == 0] = np.finfo(cf.dtype).tiny
-                comps[finite_mask] = np.sign(cf).astype(np.int8)
-
-            pts.components = np.atleast_2d(comps)
+                s = np.sign(cf)
+                oids[finite_mask] = (
+                    ((s[:, 2] < 0).astype(np.uint8) << 2) |
+                    ((s[:, 1] < 0).astype(np.uint8) << 1) |
+                    (s[:, 0] < 0).astype(np.uint8)
+                )
+            pts.oid = oids
         else:
             raise NotImplementedError(f'{self.name} needs to bin {self.axes} axes')
 
@@ -55,26 +56,21 @@ class CompositeDomain(Domain, ABC):
     @cache
     def handlers(self):
         """
-        Return the composite handlers in 'cm' order (see Points)
-        While this might be a bit round-about it guarantees integrity with the cm values.
+        Return the composite handlers indexed by oid (0-7).
         """
         _handlers = np.empty(8, dtype=object)
-        for sign_tuple, handler_instance in self.projs.items():
-            components_arr = np.array([sign_tuple])
-            octant_id = Points.calc_octant_ids(components_arr)[0]
-            _handlers[octant_id] = handler_instance
+        for handler_instance in self.projs.values():
+            _handlers[handler_instance.oid] = handler_instance
         return _handlers
 
     @cache
     def oc_c2(self):
         """
-        Return array of c2 values in 'c2' order (see Points)
+        Return array of c2 values indexed by oid (0-7).
         """
         data = np.empty((8, 3), dtype='<U3')
-        for sign_tuple, handler_instance in self.projs.items():
-            components_arr = np.array([sign_tuple])
-            octant_id = Points.calc_octant_ids(components_arr)[0]
-            data[octant_id] = handler_instance.oc
+        for handler_instance in self.projs.values():
+            data[handler_instance.oid] = handler_instance.oc
         return data
 
     def register_format(self, af: PointFormat):
@@ -95,9 +91,8 @@ class CompositeDomain(Domain, ABC):
         Take an array and adopt as this domain.
         """
         good = self.where_valid(pts)
-        pts = Points(good, self)
-        pts.components = np.zeros((good.shape[0], 3), dtype='b')  # signed byte.  was using <U9 but seems crazy.
-        return self.binning(pts)
+        # Points(good, self) auto-calls binning via __init__
+        return Points(good, self)
 
 
 class ComponentDomain(Domain):
@@ -126,12 +121,5 @@ class ComponentDomain(Domain):
         This is almost always not the right method to use.
         Far better to bin and then instantiate Points correctly.
         """
-        if only_valid:
-            good = self.where_valid(pta)
-            pts = Points(good, domain=self.dom)
-            pts.components = np.zeros((good.shape[0], 3), dtype='b')  # signed byte.  was using <U9 but seems crazy.
-        else:
-            pts = Points(pta, domain=self.dom)
-            pts.components = np.zeros((len(pts), 3), dtype='b')
-        pts.components += self.sig()
-        return pts
+        coords = self.where_valid(pta) if only_valid else pta
+        return Points(coords, domain=self.dom, oid=np.uint8(self.oid))

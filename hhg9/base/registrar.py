@@ -7,7 +7,6 @@ Registrar is the central registry of the Hex9 coordinate domains, point-formats,
 It exposes a uniform API for discovering domains, instantiating them on demand,
  and composing projection chains between them. It acts as dependency-resolver and orchestration hex_layer.
 """
-from functools import cache
 from itertools import pairwise
 
 import numpy as np
@@ -19,6 +18,19 @@ from .composite import ComponentDomain, CompositeDomain
 from .projection import Projection
 
 
+# Maps frozenset({domain_a, domain_b}) -> projection name for inter-domain projections
+# that neither domain self-registers on init.
+_PAIR_TO_PROJ: dict[frozenset, str] = {
+    frozenset(['p_pix', 'g_gcd']): 'pix_gcd',
+    frozenset(['r_gcd', 'g_gcd']): 'rxd_gcd',
+    frozenset(['c_ell', 'g_gcd']): 'ell_gcd',
+    # frozenset(['g_gcd', 'b_oct']): 'gcd_bry',
+    frozenset(['g_gcd', 'b_raw']): 'gcd_brw',
+    frozenset(['b_raw', 'b_oct']): 'brw_bct',
+    frozenset(['c_oct', 'c_ell']): 'oct_ell',
+}
+
+
 class Registrar:
     """
     Registrar manages the registers of
@@ -26,12 +38,22 @@ class Registrar:
     • projections (as classes)
     """
 
-    @cache
     def __init__(self):
         self._domains = {}
         self._projections = {}
         self._domain_projections = {}
         self._formats = {}
+        self._bridges = {}
+
+    def register_bridge(self, _chain: list):
+        """Register a projection chain."""
+        chain = [self._dom(a) for a in _chain]
+        # chain = self._check_chain(chain)
+        ch = [chain[0].name, chain[-1].name]  # these are the endpoints.
+        if tuple(ch) in self._bridges or ch[0] == ch[-1]:
+            return
+        self._bridges[tuple(ch)] = chain
+        self._bridges[tuple(ch[::-1])] = chain[::-1]
 
     def register_projection(self, obj, chain: NDArray):
         """Register a projection. Normally managed in the Projection init class."""
@@ -45,23 +67,6 @@ class Registrar:
             if bak not in self._domain_projections:
                 self._domain_projections[bak] = {}
             self._domain_projections[bak][obj.name] = obj.backward
-        elif isinstance(obj, str) and obj == 'chain':
-            # Ensure all domains in the chain are registered
-            for csys in chain:
-                if isinstance(csys, Domain):
-                    if csys.name not in self._domains:
-                        self.register_domain(csys)
-                elif isinstance(csys, str):
-                    dom = self.domain(csys)
-                    # if csys not in self._domains:
-                    #     raise ValueError(f"{csys} Unregistered domain")
-            # Materialise names for the chain
-            ch = [val if isinstance(val, str) else val.name for val in chain]
-
-            # Register the full chain from first→last and its reverse
-            fwd, bak = (ch[0], ch[-1]), (ch[-1], ch[0])
-            self._domain_projections.setdefault(fwd, {})['chain'] = ch
-            self._domain_projections.setdefault(bak, {})['chain'] = list(reversed(ch))
 
     def register_format(self, fmt: PointFormat):
         """Register set_format."""
@@ -98,6 +103,9 @@ class Registrar:
                 case 'b_oct':
                     from hhg9.domains import OctahedralBarycentric
                     _ = OctahedralBarycentric(self)
+                case 'b_raw':
+                    from hhg9.domains import OctahedralBaryRaw
+                    _ = OctahedralBaryRaw(self)
                 case 's_oct':
                     from hhg9.domains import OctahedralSimplex
                     _ = OctahedralSimplex(self)
@@ -105,8 +113,6 @@ class Registrar:
                     from hhg9.domains import SphericalCartesian
                     _ = SphericalCartesian(self)
                 case 'n_oct':
-                    # c_oct = self.domain('c_oct')
-                    # b_oct = self.domain('b_oct')
                     from hhg9.domains import OctahedralNet
                     layout = 'mortar'
                     theta = None
@@ -130,9 +136,11 @@ class Registrar:
 
     def projection(self, full_key):
         """return projection by key"""
-        if full_key not in self._domains:
-            key, variation = full_key.split(':') if ':' in full_key else (full_key, None)
-        # if key not in self._projections:
+        key, variation = full_key.split(':') if ':' in full_key else (full_key, None)
+        if key not in self._projections:
+            if key in self._bridges:
+                chain = self._bridges[key]
+                return chain
             match key:
                 case 'pix_gcd':
                     from hhg9.projections import PlatePixelGCD
@@ -147,18 +155,23 @@ class Registrar:
                     from hhg9.projections import AKOctahedralEllipsoid
                     _ = AKOctahedralEllipsoid(self)
                 case 'ell_gcd':
-                    # EllipsoidGCD(registrar, 'ell_gcd', 'c_ell', 'g_gcd')
                     from hhg9.projections import EllipsoidGCD
                     _ = EllipsoidGCD(self)
                 case 'ell_gcr':
                     from hhg9.projections import EllipsoidGCDRad
                     _ = EllipsoidGCDRad(self)
+                case 'rxd_gcd':
+                    from hhg9.projections import RGCD_GCD
+                    _ = RGCD_GCD(self)
                 case 'gcd_bry':
                     from hhg9.projections import GCDBary
                     _ = GCDBary(self)
-                # case 'g2b_par':
-                #     from hhg9.algorithms.ak_parallel import GCDToBOctParallel
-                #     _ = GCDToBOctParallel(self)
+                case 'gcd_brw':
+                    from hhg9.projections import GCDBraw
+                    _ = GCDBraw(self)
+                case 'brw_bct':
+                    from hhg9.projections import BrawBoct
+                    _ = BrawBoct(self)
                 case _:
                     raise KeyError(key)
         return self._projections[key]
@@ -219,28 +232,67 @@ class Registrar:
 
     def _check_chain(self, chain_):
         chain = []
-        for dom in chain_:
-            chain.append(self._dom(dom))
+        if not chain_:
+            return chain
+
+        # Extract the actual domain objects first to simplify logic
+        doms = [self._dom(p) for p in chain_]
+
+        for i, (a, b) in enumerate(pairwise(doms)):
+            key = a.name, b.name
+            pair = frozenset(key)
+
+            # Handle direct projections
+            if key in self._domain_projections:
+                # Only add 'a' if it's the start or isn't a duplicate of the last entry
+                if i == 0:
+                    chain.append(a)
+                chain.append(b)
+            elif pair in _PAIR_TO_PROJ:
+                if i == 0:
+                    chain.append(a)
+                chain.append(b)
+
+            elif key in self._bridges:
+                links = self._bridges[key]
+                for j, (c, d) in enumerate(pairwise(links)):
+                    # Avoid adding 'c' if it's already the end of the chain
+                    if not chain or chain[-1] != c:
+                        chain.append(c)
+                    chain.append(d)
+
+            elif isinstance(a, CompositeDomain) and isinstance(b, CompositeDomain):
+                # Composite-composite: validated and dispatched per-component in project()
+                shared = a.sides.keys() & b.sides.keys()
+                if not (shared and len(shared) == len(a.sides)):
+                    raise ValueError(f'A projection {key} is not registered.')
+                if i == 0:
+                    chain.append(a)
+                chain.append(b)
+
+            else:
+                raise ValueError(f'A projection {key} is not registered.')
+
         return chain
 
     def _project_composites(self, pts: Points, a, a2b):
-        if pts.components is None:
+        if pts.oid is None:
             a.binning(pts)
-        # pts.coords = np.atleast_2d(pts.coords)
-        res = np.zeros_like(pts.coords)
-        # uvw = (pts.components >= 0) @ (4, 2, 1)
-        uvw = pts.oids()  # grab the octant ids.
+        uvw = pts.oid
+        res = None
         for sig, cmp in a.sides.items():
             key = (cmp.name, a2b[cmp].name)
             facilitator = next(iter(self._domain_projections[key]))
-            ref = cmp.oid
-            crds = pts.coords[uvw == ref]  # these are the coordinates for this projection.
+            mask = uvw == cmp.oid
+            crds = pts.coords[mask]
             if crds.size > 0:
                 rex = self._domain_projections[key][facilitator](crds)
-                if rex.shape[-1] != res.shape[-1]:
+                if res is None:
                     res = np.zeros([pts.coords.shape[0], rex.shape[-1]])
-                res[uvw == ref] = rex
-        return Points(res, samples=pts.samples, components=pts.components)
+                res[mask] = rex
+        if res is None:
+            res = np.zeros_like(pts.coords)
+        return Points(res, samples=pts.samples, oid=pts.oid)
 
     def project(self, coords: Points, chain: NDArray | list) -> Points:
         """
@@ -252,71 +304,28 @@ class Registrar:
             chain = [coords.domain] + chain
         for (a, b) in pairwise(chain):
             key = a.name, b.name
-            if key not in self._domain_projections:
-                # Composite fallback: if both domains are composite and have matching components,
-                # project component-wise without requiring a pairwise registration.
-                if isinstance(a, CompositeDomain) and isinstance(b, CompositeDomain):
-                    a_components = a.sides
-                    b_components = b.sides
-                    shared = a_components.keys() & b_components.keys()
-                    # Require a one-to-one mapping for all a's components
-                    if shared and len(shared) == len(a_components):
-                        a2b = {a_components[k]: b_components[k] for k in shared}
-                        coords = self._project_composites(coords, a, a2b)
-                        coords.domain = b
-                        continue
-                else:
-                    if ':' in key[0]:
-                        k0, variation = key[0].split(':')
-                        key = k0, key[1]
-                    match key:
-                        case ('p_pix', 'g_gcd') | ('g_gcd', 'p_pix'):
-                            from hhg9.projections import PlatePixelGCD
-                            prj = PlatePixelGCD(self)
-                        case ('r_gcd', 'g_gcd') | ('g_gcd', 'r_gcd'):
-                            from hhg9.projections import RGCD_GCD
-                            prj = RGCD_GCD(self)
-                        case ('c_ell', 'g_gcd') | ('g_gcd', 'c_ell'):
-                            from hhg9.projections import EllipsoidGCD
-                            prj = EllipsoidGCD(self)
-                        case ('g_gcd', 'b_oct') | ('b_oct', 'g_gcd'):
-                            from hhg9.projections import GCDBary
-                            prj = GCDBary(self)
-                        case ('c_oct', 'c_ell') | ('c_ell', 'c_oct'):
-                            from hhg9.projections import AKOctahedralEllipsoid
-                            prj = AKOctahedralEllipsoid(self)
-                        case _:
-                            raise ValueError(f'A projection {key} is not registered.')
-                    coords = self._domain_projections[key][prj.name](coords)
-                    continue
-            else:
-                # we could have alternatives, if there was a way of passing a key for it.
+            if key in self._domain_projections:
                 alts = self._domain_projections[key]
-                name = next(iter(alts))  # *currently* grab the first projection.
-                if name == 'chain':
-                    if (
-                        isinstance(a, CompositeDomain) and isinstance(b, CompositeDomain)
-                        and alts['chain'] == [a.name, b.name]
-                    ):
-                        a_components = a.sides
-                        b_components = b.sides
-                        ab = a_components.keys() & b_components.keys()
-                        if len(ab) == len(a_components):
-                            a2b = {a_components[k]: b_components[k] for k in ab}
-                            coords = self._project_composites(coords, a, a2b)
-                            coords.domain = b
-                            continue
-                        else:
-                            raise ValueError(f"A projection {(a.name, b.name)} is not registered (component mismatch).")
-                    else:  # non-composite..
-                        sub_chain = self._domain_projections[key][name]
-                        try:
-                            sub_ch = self._check_chain(sub_chain)
-                        except ValueError as err:
-                            raise ValueError(
-                                f"Degenerate chain registered for ({a.name}, {b.name}) at {str(err)} with no concrete projection."
-                            )
-                        coords = self.project(coords, sub_ch)
-                else:
-                    coords = self._domain_projections[key][name](coords)
+                coords = alts[next(iter(alts))](coords)
+                continue
+            # Check _PAIR_TO_PROJ before composite dispatch (works for any pair type).
+            k0 = key[0].split(':')[0] if ':' in key[0] else key[0]
+            lookup_key = (k0, key[1])
+            pair = frozenset(lookup_key)
+            if pair in _PAIR_TO_PROJ:
+                self.projection(_PAIR_TO_PROJ[pair])
+                alts = self._domain_projections.get(key) or self._domain_projections[lookup_key]
+                coords = alts[next(iter(alts))](coords)
+                continue
+            # Composite fallback: project component-wise without a pairwise registration.
+            if isinstance(a, CompositeDomain) and isinstance(b, CompositeDomain):
+                a_components = a.sides
+                b_components = b.sides
+                shared = a_components.keys() & b_components.keys()
+                if shared and len(shared) == len(a_components):
+                    a2b = {a_components[k]: b_components[k] for k in shared}
+                    coords = self._project_composites(coords, a, a2b)
+                    coords.domain = b
+                    continue
+            raise ValueError(f'A projection {key} is not registered.')
         return coords

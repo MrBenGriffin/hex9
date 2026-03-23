@@ -75,17 +75,15 @@ def stage(file: str,
     cmp_file.parent.mkdir(parents=True, exist_ok=True)
     reg = Registrar()
     b_oct = reg.domain('b_oct')
-
     g_gcd = reg.domain('g_gcd')
     pts = Points(lat_lon, g_gcd)
     del lat_lon
-    # reg.projection('gcd_bry').set_accuracy(accuracy)
     start_time = time.perf_counter()
     bry = reg.project(pts, [g_gcd, b_oct])
     seconds = time.perf_counter() - start_time
     print(f'{seconds:.6f} seconds to process {len(bry)} points at {accuracy}m accuracy.')
     np.save(bry_file, bry.coords)
-    np.save(cmp_file, bry.components)
+    np.save(cmp_file, bry.oid)
     return bry_file, cmp_file
 
 

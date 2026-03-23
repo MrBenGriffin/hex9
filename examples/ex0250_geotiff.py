@@ -322,7 +322,7 @@ if __name__ == '__main__':
     bbox = (tp, lt, bt, rt)  # TLBR
     for layer in range(12, 14):
         pts = tri_grid_clipped(level=layer+3, mode=int(mo[0]), bbox=bbox)
-        bt = Points(pts, b_oct, components=bhx.components[0])
+        bt = Points(pts, b_oct, oid=bhx.oid[0])
         smp = rg.project(bt, [b_oct, c_oct, c_ell, g_wkt])
         bt.samples, px_id = sample_nlcd_gdal(ds, smp.coords)
         bt.px_id = px_id   # de-dupes

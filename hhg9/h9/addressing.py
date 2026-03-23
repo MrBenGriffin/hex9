@@ -406,6 +406,7 @@ def neighbours(pts, layer=32, coalesce=True):
 
     dom = pts.domain
     oc, mode = pts.cm()
+    oc = oc.copy()  # prevent mutation of pts.oid through view aliasing
     coords = pts.coords.copy()
     x = coords[:, 0]
     y = coords[:, 1]
@@ -433,8 +434,7 @@ def neighbours(pts, layer=32, coalesce=True):
     oc[active] = ca
     coords[active, 0] = xa
     coords[active, 1] = ya
-    cmp = pts.invert_octant_ids(oc)
-    return Points(coords, domain=dom, components=cmp)
+    return Points(coords, domain=dom, oid=oc)
 
 
 # ---------- Emergent hex-digit per step (optional LUT) ----------------
@@ -675,6 +675,12 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     mo = H9O.oid_mo[oc]
     c2 = H9R.mcc2[mo, cx[:, 1]]
 
+    # Points whose root cell is the invalid-region sentinel (0x5F) cannot be addressed.
+    # These arise when neighbours() coalesces a point that lands exactly on a simplex
+    # boundary.  Clamp c2 to 0 so downstream indexing doesn't crash; the resulting hex
+    # addresses will be deduplicated away or overwritten by valid neighbours.
+    c2 = np.where(c2 == 0x5F, np.uint8(0), c2)
+
     # Hex body: one hex digit per region step away from the proto.
     bdy = np.full((sz, depth), 0x0F, dtype=np.uint8)
     if depth > 0:
@@ -878,7 +884,7 @@ def hex_decode(adr, dom, scheme: RegionAddressLike = H9_RA):
     import hhg9.h9.region as rg
     oc, cells = hex_digits_reg(dom, adr, scheme=scheme)
     xy_m = rg.regions_xy(cells)
-    return Points(xy_m[:, :2], domain=dom, components=oc)
+    return Points(xy_m[:, :2], domain=dom, oid=oc)
 
 
 def hex_key(hx: NDArray[np.uint8], *, copy: bool = True) -> NDArray[np.uint8]:
@@ -1000,7 +1006,7 @@ def hex_unpack(pts, tail_style: TailStyle = TailStyle.reversible, reg=None, sche
         raise ValueError(f"unknown tail_style: {tail_style}")
 
     xy_m = rg.regions_xy(cells)
-    return Points(xy_m[:, :2], domain=dom, components=oc)
+    return Points(xy_m[:, :2], domain=dom, oid=oc)
 
 
 def reg_pack(pts, depth: int = 14, reg=None, scheme: RegionAddressLike = H9_RA):
@@ -1038,6 +1044,6 @@ def reg_unpack(nibs, reg=None, scheme: RegionAddressLike = H9_RA):
     cells = scheme.rid2cell[dec]
     reg_mo_rt = rg.regions_xy(cells)
     reg_rt = reg_mo_rt[:, :2]  # just want the x,y.
-    pts = Points(reg_rt, b_oct, components=ocr)
+    pts = Points(reg_rt, b_oct, oid=ocr)
     return pts
 

@@ -12,8 +12,7 @@ Needless to say, in this case, we could just use Basemap - but the point is to d
 16 Dec 2025 0.1.0a3 (passed)
 25 Nov 2025 (passed)
 """
-from matplotlib import image, pyplot as plt
-from mpl_toolkits.basemap import Basemap
+from matplotlib import pyplot as plt
 from hhg9 import Registrar, Points
 from PIL import Image  # Pillow for clean image saving
 import numpy as np
@@ -21,13 +20,13 @@ import numpy as np
 
 def show_global(pts: Points, proj='ortho', alpha=1.0):
     """Display GCD points on the globe"""
-    lat, lon = pts.coords[:, 0], pts.coords[:, 1]
+    x, y, z = pts.coords[:, 0], pts.coords[:, 1], pts.coords[:, 2]
     cols = pts.samples
     cols = cols.astype(np.float64) / 255 # matplotlib wants RGBA within 0..1
     """Project GCD points onto global space."""
     fig = plt.figure(figsize=(12, 12), dpi=150, frameon=False)
-    m = Basemap(projection=proj, lon_0=22.5, lat_0=40)
-    m.scatter(x=lon, y=lat, latlon=True, c=cols, s=2, alpha=alpha)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(x, y, z, c=cols, s=2, alpha=alpha)
     fig.savefig(f"output/ex0020_global.png", dpi=100)
     print(f'fig saved at output/ex0020_global.png')
 
@@ -52,7 +51,7 @@ def run():
     pc_px = p_pix.adopt(img, extent=pc_extent, y_up=True, center=True)
 
     print(f'img adopted to Points')
-    sp_ll = reg.project(pc_px, ['p_pix', 'g_gcd'])  # project image as GCD
+    sp_ll = reg.project(pc_px, ['p_pix', 'g_gcd', 'c_ell'])  # project image as ECEF
     print(f'img projected to g_gcd')
     show_global(sp_ll)  # Display it as an overlay on the globe.
     sp_pl = reg.project(sp_ll, ['g_gcd', 'p_pix'])  # Roundtrip back to Pixels

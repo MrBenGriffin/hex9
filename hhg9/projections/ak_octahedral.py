@@ -30,6 +30,7 @@ class AKOctahedralEllipsoid(Projection):
         self.ab2 = 1., (B / A) ** 2
 
         self.b_oct = self.reg.domain('b_oct')
+        self.b_raw = self.reg.domain('b_raw')
         self.c_oct = self.reg.domain('c_oct')
         self.c_ell = self.reg.domain('c_ell')
         self.g_gcd = self.reg.domain('g_gcd')
@@ -156,31 +157,30 @@ class AKOctahedralEllipsoid(Projection):
         core_abs = np.abs(uvw)
         # Apply signs: components with sign==0 remain exactly 0
         res = self.ab[0] * (core_abs * sgn)
-        return Points(res, domain=self.fwd_cs, samples=arr.samples, components=arr.components)
+        return Points(res, domain=self.fwd_cs, samples=arr.samples, oid=arr.oid)
 
     def backward(self, arr: Points) -> Points:
         """
         c_ell->c_oct projection using find_coords rootfinding algorithm.
         """
         r_gcd = self.rad_gcd()
-        if arr.components is None:
+        if arr.oid is None:
             self.rev_cs.binning(arr)  # We need the octant identity for each point.
         uvw = arr.copy()
-        cmp = uvw.components
-        # cmp = uvw.components[:, np.newaxis, :]  # use this for referring to the points' octant identity.
-        rll = self.reg.project(uvw, [self.c_ell, self.g_gcd, r_gcd])  # Project to give us GCD reference values.
+        oid = uvw.oid  # (N,) uint8
+        rll = self.reg.project(uvw, [self.c_ell, self.g_gcd, r_gcd])  # Project to give us GCD reference values (radians).
         ref = rll.coords  # reference addresses
         _, oct_m = uvw.cm()  # we want their modes.
 
         def fwd(xy, octants):
-            """Project contender xy (in barycentric) to GCD"""
-            coords = Points(xy.reshape(-1, 2), self.b_oct, octants.reshape(-1, 3))
-            grx = self.reg.project(coords, [self.b_oct, self.c_oct, self.c_ell, self.g_gcd, r_gcd])
+            """Project contender xy (in b_raw) to GCD radians — no warp cost in beam search."""
+            coords = Points(xy.reshape(-1, 2), self.b_raw, octants)
+            grx = self.reg.project(coords, [self.b_raw, 'c_oct', 'c_ell', 'g_gcd', r_gcd])
             return grx.coords.reshape(xy.shape)
 
-        found, _ = find_coords(ref, oct_m, cmp, H9C, fwd, haversine_rad, self.accuracy+2, beam_width=6)
-        bpt = Points(found, self.b_oct, uvw.components)
-        return self.reg.project(bpt, [self.b_oct, self.rev_cs])  # rev_cs = c_oct
+        found, _ = find_coords(ref, oct_m, oid, H9C, fwd, haversine_rad, self.accuracy+2, beam_width=6)
+        bpt = Points(found, self.b_raw, uvw.oid)
+        return self.reg.project(bpt, [self.b_raw, self.rev_cs])  # rev_cs = c_oct
 
     def _core_jacobian(self, uvw):
         """

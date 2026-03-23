@@ -30,7 +30,7 @@ def load_cache(reg, pc_map: str = 'tissot_3600x1800'):
         raise ValueError('You need to generate the map cache. See ex_0041_cache')
     b_oct = reg.domain('b_oct')
     repo = np.load(cache, allow_pickle=True)
-    b_pix = Points(repo['coords'], b_oct, components=repo['cmp'], samples=repo['smp'])
+    b_pix = Points(repo['coords'], b_oct, oid=repo['cmp'], samples=repo['smp'])
     return b_pix
 
 
@@ -67,7 +67,7 @@ def run():
         n_oct = reg.domain(f'n_oct:{layout}')
         n_pix = NetPixel(reg, n_oct)
         wid, hgt = n_pix.image_dims(tpx)
-        bounds = (0, n_pix.width, 0, n_pix.height)
+        bounds = (0, n_oct.wi, 0, n_oct.he)
         o_net = reg.project(bb_px, ['b_oct', n_oct])
         show_pts_2d(o_net, w=wid, h=hgt, bounds=bounds, name=layout)  # net.
 

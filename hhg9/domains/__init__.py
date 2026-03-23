@@ -12,6 +12,7 @@ from .ellipsoid_cartesian import EllipsoidCartesian  # c_ell
 from .octahedral_simplex import OctantSimplex, OctahedralSimplex  # s_oct
 from .octahedral_cartesian import OctantCartesian, OctahedralCartesian  # c_oct
 from .octahedral_barycentric import OctantBarycentric, OctahedralBarycentric  # b_oct
+from .octahedral_bary_raw import OctantBaryRaw, OctahedralBaryRaw             # b_raw
 from .octahedral_net import OctantNet, OctahedralNet  # n_oct
 from .plate_pixel import PlatePixel  # p_pix
 from .net_pixel import NetPixel  # n_pix
@@ -23,6 +24,7 @@ __all__ = [
     "SphericalCartesian",
     "OctantCartesian", "OctahedralCartesian",
     "OctantBarycentric", "OctahedralBarycentric",
+    "OctantBaryRaw", "OctahedralBaryRaw",
     "OctantSimplex", "OctahedralSimplex",
     "OctantNet", "OctahedralNet",
     "PlatePixel", "NetPixel",

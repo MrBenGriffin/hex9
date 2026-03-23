@@ -38,7 +38,7 @@ def sub_sample(pts: Points):
     ])
     xy4 = np.vstack([xy + off for off in offsets])
     w4 = np.concatenate([pts.samples * 0.25] * 4)
-    cpt = np.concatenate([pts.components] * 4)
+    cpt = np.concatenate([pts.oid] * 4)
     ss_pts = Points(xy4, pts.domain, cpt, samples=w4)
     return ss_pts
 
@@ -55,6 +55,11 @@ def load_data(src_dir: Path, base: str, dom: Domain, bbox=None, rnd=False):
         pop_bary = np.load(pop_bry_f)
         if pop_cmp_f.exists():
             pop_cmp = np.load(pop_cmp_f)
+            # Legacy files store (N, 3) sign arrays; convert to (N,) uint8 oid.
+            if pop_cmp.ndim == 2:
+                pop_cmp = ((pop_cmp[:, 0] < 0).astype(np.uint8) +
+                           (pop_cmp[:, 1] < 0).astype(np.uint8) * 2 +
+                           (pop_cmp[:, 2] < 0).astype(np.uint8) * 4)
             if pop_data_f.exists():
                 pop_data = np.load(pop_data_f)
                 # Optional geographic clip: bbox = (lon_min, lon_max, lat_min, lat_max)
@@ -73,9 +78,9 @@ def load_data(src_dir: Path, base: str, dom: Domain, bbox=None, rnd=False):
                     # generate random values within gx/gy bounds
                     pop_bary[:, 0] = rng.random(pop_bary.shape[0]) * (gx_max - gx_min) + gx_min
                     pop_bary[:, 1] = rng.random(pop_bary.shape[0]) * (gy_max - gy_min) + gy_min
-                return Points(pop_bary, dom, components=pop_cmp, samples=pop_data[:, 2])
+                return Points(pop_bary, dom, oid=pop_cmp, samples=pop_data[:, 2])
             else:
-                return Points(pop_bary, dom, components=pop_cmp)
+                return Points(pop_bary, dom, oid=pop_cmp)
 
         else:
             return Points(pop_bary, dom)
@@ -138,5 +143,5 @@ def run(layers):
 
 
 if __name__ == '__main__':
-    for layer in range(5, 10):
+    for layer in range(5, 9):
         run(layer)  # 3=2, 4=3, 5=3, 6=21 - 10 is over sampling.

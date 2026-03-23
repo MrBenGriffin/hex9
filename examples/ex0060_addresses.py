@@ -27,6 +27,7 @@ import time
 import numpy as np
 from pathlib import Path
 from hhg9 import Registrar, Points
+from hhg9.domains.octahedral_barycentric import WarpTolerance
 from hhg9.formats import OctahedralH9
 from hhg9.algorithms.distance import wgs84
 from hhg9.algorithms.pickers import gcd_rnd
@@ -84,6 +85,21 @@ def run(reg, logger, refs, layers=36):
     print('100k is likely to take about 30s')
 
     print('projecting g_gcd->b_oct')
+    # ab = reg.project(refs, ['g_gcd', 'c_ell'])
+    # ba = reg.project(ab, ['c_ell', 'g_gcd'])
+    # da = np.max(np.abs(refs.coords - ba.coords))
+    # bc = reg.project(ab, ['c_ell', 'c_oct'])
+    # cb = reg.project(bc, ['c_oct', 'c_ell'])
+    # db = np.max(np.abs(ab.coords - cb.coords))
+    # ef = reg.project(bc, ['c_oct', 'b_raw'])
+    # fe = reg.project(ef, ['b_raw', 'c_oct'])
+    # dc = np.max(np.abs(bc.coords - fe.coords))
+    # gh = reg.project(ef, ['b_raw', 'b_oct'])
+    # hg = reg.project(gh, ['b_oct', 'b_raw'])
+    # dd = np.max(np.abs(ef.coords - hg.coords))
+
+    # self.reg.project(arr, ['g_gcd', 'c_ell', 'c_oct', 'b_raw'])
+
     b_rys = reg.project(refs, ['g_gcd', 'b_oct'])  # components filled
     b_rys.domain.register_format(h9f)
     print('projecting b_oct->g_gcd')
@@ -141,11 +157,15 @@ if __name__ == '__main__':
     seed = 4007
     samples = 100_000
     ake = reg.projection('oct_ell')
+    b_oct = reg.domain('b_oct')
+    # b_oct.warp.tolerance = WarpTolerance.MACH
+    b_oct.no_warp()
+
     layers = ake.set_accuracy(accuracy)
     np.random.seed(seed)
     base = Path(__file__).parent
 
-    log_file = base.joinpath(f'logs/L{layers}_{samples}_{seed}.csv')
+    log_file = base.joinpath(f'output/logs/l{layers}_{samples}_{seed}_no_warp.csv')
     main_logger = CSVLogger(log_file)
     start_time = time.perf_counter()
 
@@ -154,6 +174,7 @@ if __name__ == '__main__':
     run(reg, main_logger, gpts, layers)
     main_logger.close()
     elapsed = time.perf_counter() - start_time
+    # print(f'Warp Tolerance: {b_oct.warp.tolerance}')
     print(f'Results written to {log_file.relative_to(base)}\n'
           f'Completed {len(gpts)} points in {elapsed:.3f} seconds'
           f' ({elapsed / len(gpts):.6f} sec/pt)')

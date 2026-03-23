@@ -12,9 +12,14 @@ from .plate_pix_net import PlatePixelNet
 from .gcd_bary import GCDBary
 from .rgcd_gcd import RGCD_GCD
 from .octant_xyuv import OctantXYUV
+from .gcd_braw import GCDBraw
+from .octant_braw import OctantBraw
+from .braw_boct import BrawBoct
+
 
 __all__ = [
     "OctantBary",
+    "OctantBraw",
     "BaryNet",
     "OctahedralOctants",
     "AKOctahedralEllipsoid",
@@ -22,6 +27,8 @@ __all__ = [
     "PlatePixelNet",
     "EllipsoidGCD", "EllipsoidGCDRad",
     "GCDBary",
+    "GCDBraw",
+    "BrawBoct",
     "RGCD_GCD",
     "OctantXYUV"
 ]

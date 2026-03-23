@@ -47,16 +47,16 @@ def run(layout, scale, depths):
     xy = np.column_stack([ux, uy])
 
     # Classify to faces
-    signs = n_oct.pt_face(xy)  # (N, 3) int8
-    in_net = np.any(signs != 0, axis=1)
+    oids = n_oct.pt_face(xy)  # (N,) uint8; OID_INVALID (255) for outside net
+    in_net = oids != 255
 
     # Keep only pixels in the net
     xy = xy[in_net]
     px = px[in_net]
     py = py[in_net]
-    signs = signs[in_net]
+    oids = oids[in_net]
 
-    pts = Points(xy, domain=n_oct, components=signs)
+    pts = Points(xy, domain=n_oct, oid=oids)
 
     bas = reg.project(pts, [n_oct, b_oct])  # Move from net to barycentric
     good = b_oct.valid(bas)
@@ -81,4 +81,4 @@ if __name__ == "__main__":
     from hhg9.domains.nets import net_layouts
     for layout in ['rhombus']:
     # for layout in net_layouts:
-        run(layout, 1200, depths=[0,1,2,3])
+        run(layout, 1200, depths=[0])

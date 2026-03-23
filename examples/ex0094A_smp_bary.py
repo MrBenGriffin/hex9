@@ -54,12 +54,9 @@ def run(scale=800):
         octant = b_oct.sides[side]
         for c2 in [0, 1, 2]:
             wid, hgt, rec_in = grids[(octant.mode, c2)]
-            pts = Points(rec_in, b_oct, components=octant.sig())
+            pts = Points(rec_in, b_oct, oid=octant.oid)
             px, py = fit(pts, wid, hgt)
             ref = reg.project(pts, [b_oct, 'c_oct', 'c_ell'])
-            # h9h = addr.hex_layer(pts, 0, addr.TailStyle.key)
-            # groups, inv = np.unique(h9h, axis=0, return_inverse=True)
-
             _, nn = src.query(ref.coords, workers=-1)
             samples = pc_el.samples[nn]
             rgba = samples if samples.shape[1] == 4 else np.hstack(

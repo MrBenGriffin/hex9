@@ -39,35 +39,38 @@ net_layouts = {
             (-1, -1, -1): [(6., 3., 3), (0., 0., 0), (-6., 0, 0), (0, 0, 0)],   # SWP
         }
     },
+    'diamonds_native': {
+        'width': 24,  # number of full triangles across * 6
+        'height': 18,  # number of full triangles up * 9
+        'grid': {
+            (-1, -1, +1): (1., 2., 0),  # NWP
+            (-1, -1, -1): (1., 4., 0),  # SWP
+
+            (+1, -1, +1): (3., 4., 0),  # NWA
+            (+1, -1, -1): (3., 2., 0),  # SWA
+
+            (+1, +1, +1): (5., 2., 0),  # NEA
+            (+1, +1, -1): (5., 4., 0),  # SEA
+
+            (-1, +1, +1): (7., 4., 0),  # NEP
+            (-1, +1, -1): (7., 2., 0),  # SEP
+        }
+    },
     'diamonds': {
-        'width': 24,   # number of full triangles across
-        'height': 18,  # number of full triangles up.
+        'width': 24,   # number of full triangles across * 6
+        'height': 18,  # number of full triangles up * 9
         'grid': {
             (-1, -1, +1): (1., 4., 3),  # NWP; Rotation in odd = flip mode and rotate.
             (-1, -1, -1): (1., 2., 3),  # SWP
             (+1, -1, +1): (3., 4., 0),  # NWA
-            (+1, -1, -1): (3., 2., 6),  # SWA
+            (+1, -1, -1): (3., 2., 0),  # SWA
             (+1, +1, +1): (5., 4., 3),  # NEA
             (+1, +1, -1): (5., 2., 3),  # SEA
             (-1, +1, +1): (7., 4., 0),  # NEP
-            (-1, +1, -1): (7., 2., 6),  # SEP
+            (-1, +1, -1): (7., 2., 0),  # SEP
         }
     },
-    'statue': {
-        'width': 24,  # number of full triangles across
-        'height': 18,  # number of full triangles up.
-        'grid': {
-            (-1, -1, +1): (2., 5., 4),  # NWP;
-            (-1, -1, -1): (2., 1., 2),  # SWP;
-            (+1, -1, +1): (3., 4., 0),  # NWA
-            (+1, -1, -1): (3., 2., 6),  # SWA
-            (+1, +1, +1): (4., 5., 2),  # NEA
-            (+1, +1, -1): (5., 4., 2),  # SEA;
-            (-1, +1, +1): (7., 4., 0),  # NEP
-            (-1, +1, -1): (7., 2., 6),  # SEP
-        }
-    },
-    'pacific_windmill': {
+    'windmill_pacific': {
         'width': 21,  # number of full triangles across
         'height': 27,  # number of full triangles up.
         'grid': {
@@ -81,7 +84,6 @@ net_layouts = {
             (-1, +1, -1): (3., 2., 0),  # SEP 5
         }
     },
-
     'windmill': {
         'flipped': True,
         'width': 21,   # number of full triangles across
@@ -130,7 +132,7 @@ net_layouts = {
             (-1, +1, -1): (5., 8., 4),  #
         }
     },
-    'c_butterfly': {  # Cahill butterfly (without necessary the 15º shift).
+    'butterfly_cahill': {  # Cahill butterfly (without the necessary 15º shift).
         'flipped': False,
         'width': 18,   # number of full triangles across
         'height': 27,  # number of full triangles up.

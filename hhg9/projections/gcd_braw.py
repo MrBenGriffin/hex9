@@ -7,7 +7,7 @@ GCDBary: parallel-aware direct hop g_gcd -> b_oct.
 
 Outside PostgreSQL: uses ProcessPoolExecutor so each worker runs its own Python
 interpreter and GIL, giving true CPU parallelism for the compute-heavy
-c_ell->c_oct->b_oct chain (including scipy's CT warp solver).
+c_ell->c_oct->b_raw chain
 
 Inside PostgreSQL (plpython3u): process spawning is not permitted, so the large-
 batch path falls back to in-process serial execution.  Hex-fill queries are
@@ -30,10 +30,10 @@ except ImportError:
 
 # --- WORKER (top-level for pickling) ---
 
-def _worker_project_gcd_to_bary(chunk_ll: np.ndarray, warp_file: str = None, accuracy: float = 1e-9):
+def _worker_project_gcd_to_braw(chunk_ll: np.ndarray, accuracy: float = 1e-9):
     """
-    Process worker: rebuilds the minimal projection stack, injects the warp
-    file, and projects one chunk g_gcd -> b_oct.
+    Process worker: rebuilds the minimal projection stack,
+    and projects one chunk g_gcd -> b_oct.
     Each worker runs in a separate process with its own GIL.
     """
     from hhg9 import Registrar, Points
@@ -41,17 +41,15 @@ def _worker_project_gcd_to_bary(chunk_ll: np.ndarray, warp_file: str = None, acc
     _ = reg.domain('g_gcd')
     _ = reg.domain('c_ell')
     _ = reg.domain('c_oct')
-    b_oct = reg.domain('b_oct')
+    b_raw = reg.domain('b_raw')
     reg.projection('oct_ell').accuracy = accuracy
-    if warp_file:
-        b_oct.set_warp(warp_file)
     pts = Points(np.ascontiguousarray(chunk_ll, dtype=np.float64), 'g_gcd')
-    bc = reg.project(pts, ['g_gcd', 'c_ell', 'c_oct', b_oct])
+    bc = reg.project(pts, ['g_gcd', 'c_ell', 'c_oct', b_raw])
     return (np.ascontiguousarray(bc.coords, dtype=np.float64),
             np.ascontiguousarray(bc.oid))
 
 
-def _project_gcd_to_boct_parallel(ll_array: np.ndarray, warp_file, accuracy, workers=0, chunk=8_000):
+def _project_gcd_to_braw_parallel(ll_array: np.ndarray, accuracy, workers=0, chunk=8_000):
     """Orchestrate process-parallel projection over chunks of ll_array."""
     if workers <= 0:
         import os
@@ -62,7 +60,7 @@ def _project_gcd_to_boct_parallel(ll_array: np.ndarray, warp_file, accuracy, wor
     chunks = [np.ascontiguousarray(ll_array[i:i + chunk])
               for i in range(0, len(ll_array), chunk)]
 
-    worker_func = partial(_worker_project_gcd_to_bary, warp_file=warp_file, accuracy=accuracy)
+    worker_func = partial(_worker_project_gcd_to_braw, accuracy=accuracy)
 
     out_coords, out_oids = [], []
     with ProcessPoolExecutor(max_workers=workers) as ex:
@@ -81,9 +79,9 @@ def _project_gcd_to_boct_parallel(ll_array: np.ndarray, warp_file, accuracy, wor
 
 # --- THE PROJECTION CLASS ---
 
-class GCDBary(Projection):
+class GCDBraw(Projection):
     """
-    Parallel-Aware Direct Hop: g_gcd -> b_oct
+    Parallel-Aware Direct Hop: g_gcd -> b_raw
 
     Switches between serial execution (small batches or PostgreSQL) and
     ProcessPoolExecutor (large batches outside PostgreSQL).
@@ -94,14 +92,13 @@ class GCDBary(Projection):
                  chunk: int = 8_000,
                  threshold: int = 8_000):
 
-        super().__init__(registrar, 'gcd_bry', 'g_gcd', 'b_oct')
+        super().__init__(registrar, 'gcd_brw', 'g_gcd', 'b_raw')
         self.reg = registrar
         self.workers = workers
         self.chunk = int(chunk)
         self.threshold = int(threshold)
-        self.b_oct = registrar.domain('b_oct')
+        self.b_raw = registrar.domain('b_raw')
         # Cached for process workers (they can't share the parent's objects)
-        self.warp_file = getattr(self.b_oct.warp, 'file_name', None)
         self.accuracy = registrar.projection('oct_ell').accuracy
 
     def set_parallel(self, *, workers=None, chunk=None, threshold=None):
@@ -123,12 +120,11 @@ class GCDBary(Projection):
 
         # 2. Serial: small batch, or always serial inside PostgreSQL
         if n < self.threshold or _IN_POSTGRES:
-            return self.reg.project(arr, ['g_gcd', 'c_ell', 'c_oct', 'b_oct'])
+            return self.reg.project(arr, ['g_gcd', 'c_ell', 'c_oct', 'b_raw'])
 
         # 3. Large batch outside PostgreSQL: process pool
-        xy, oid = _project_gcd_to_boct_parallel(
+        xy, oid = _project_gcd_to_braw_parallel(
             coords,
-            warp_file=self.warp_file,
             accuracy=self.accuracy,
             workers=self.workers or 0,
             chunk=self.chunk,
@@ -136,4 +132,4 @@ class GCDBary(Projection):
         return Points(xy, self.fwd_cs, oid=oid, samples=arr.samples)
 
     def backward(self, arr: Points) -> Points:
-        return self.reg.project(arr, ['b_oct', 'c_oct', 'c_ell', 'g_gcd'])
+        return self.reg.project(arr, ['b_raw', 'c_oct', 'c_ell', 'g_gcd'])

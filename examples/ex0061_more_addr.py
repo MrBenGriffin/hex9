@@ -16,8 +16,10 @@ Last Tested
 25 Nov 2025 (passed)
 """
 import json
+from pathlib import Path
 
 import numpy as np
+import csv
 from hhg9 import Registrar, Points
 from hhg9.formats import OctahedralH9, DMS
 from hhg9.algorithms.distance import wgs84
@@ -53,8 +55,10 @@ if __name__ == '__main__':
     g_gcd = reg.domain('g_gcd')
     c_ell = reg.domain('c_ell')
     c_oct = reg.domain('c_oct')
+
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
+    # b_oct.no_warp()
 
     lat_d = 0.000000000001
     # lat_d = 0.00000015
@@ -242,7 +246,7 @@ if __name__ == '__main__':
     oc, mo = bry.cm()
     cxx = rg.xy_regions(bry.coords, mo)
     xym = rg.regions_xy(cxx)
-    uvr = Points(xym[:, :2], components=oc, domain=b_oct)
+    uvr = Points(xym[:, :2], oid=oc, domain=b_oct)
     rgx = [H9_RA.cell2rid[i] for i in cxx]
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r36')
@@ -267,6 +271,21 @@ if __name__ == '__main__':
     l64k = h64k.split('\n')
 
     bcc, bmo = bry.cm()
+
+    # fn = Path(f'c_oct_nowarp.csv')
+    # if not fn.exists():
+    #
+    #     with fn.open('w', newline='') as f:
+    #         for idx, name in enumerate(names):
+    #             _lat, _lon = pos.coords[idx]
+    #             one = Points(np.array([pos.coords[idx]]), g_gcd)
+    #             po = reg.project(one, [g_gcd, c_ell, c_oct])
+    #             u, v, w = po.coords[0]
+    #             # print(f'"{name:<24}", {u:.9f}, {v:.9f}, {w:.9f}, {_lat:.9f}, {_lon:.9f}')
+    #             val = [name, u, v, w, _lat, _lon,]
+    #             csv.writer(f).writerow(val)
+    #         f.close()
+
     for idx, name in enumerate(names):
         oid = bcc[idx]        # octant id (0..5)
         mo = bmo[idx]

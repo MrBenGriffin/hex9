@@ -83,7 +83,7 @@ if __name__ == '__main__':
                 'tif': tif_name,
                 'zoom': zoom_size,
                 'hex_n_coords': hex_n.coords,
-                'hex_n_cmp': hex_n.components,
+                'hex_n_cmp': hex_n.oid,
             }
         layer_store.append(layer_meta)
     np.savez(

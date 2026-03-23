@@ -21,6 +21,7 @@ import numpy as np
 from pathlib import Path
 from matplotlib import image, pyplot as plt
 from hhg9 import Registrar, Points
+from hhg9.domains.octahedral_barycentric import WarpTolerance
 
 
 def show_octahedron(arr: Points, x_lim=None, y_lim=None, z_lim=None, label=None, clip=False):
@@ -52,6 +53,7 @@ def run(*, force=False):
     # Domains - 2D image and GCD Spherical.
     p_pix = reg.domain('p_pix')           # Pixel Plate Carrée
     b_oct = reg.domain('b_oct')
+    # b_oct.warp.tolerance = WarpTolerance.MACH
 
     # circumference of earth: 40075017m
     # 1 pix = 40075017/1350 m = about 30km
@@ -72,13 +74,13 @@ def run(*, force=False):
         print(f'{seconds:.6f} seconds to process {len(bry)} points.')
         np.savez(
             cache,
-            cmp=bry.components,  # octant-identity (3,)
+            cmp=bry.oid,  # octant-identity (3,)
             coords=bry.coords,
             smp=bry.samples
         )
 
     repo = np.load(cache, allow_pickle=True)
-    c_pix = Points(repo['coords'], b_oct, components=repo['cmp'], samples=repo['smp'])
+    c_pix = Points(repo['coords'], b_oct, oid=repo['cmp'], samples=repo['smp'])
     o_pix = reg.project(c_pix, ['b_oct', 'c_oct'])
     show_octahedron(o_pix)
 
