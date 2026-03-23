@@ -8,8 +8,12 @@ Examples and further documentation may be found on the git repository.
 
 #### Changelog
 ```
+0.1.2a0 Better PostGIS SQL functions - offering support in PostGIS and QGIS.
+        Current focus is now on PROJ9.8 - CRS and projections.
+        A few deep bug-fixes. All examples should be working.
+        However, many examples are not very interesting!
+        A Composition class has been added for overlaying layers.
 0.1.1a2 Fixed missing warp file in distro.
-0.1.1a1 PostGis function support (first steps).
 0.1.0a6 Warp in place, offering good authalicity.
 0.1.0a5 More bug-fixes - especially regarding grids.
         A new example, showing multiple hexagons over Chiginagak volcano, AK.
