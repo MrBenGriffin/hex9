@@ -13,6 +13,7 @@ Last Tested
 16 Dec 2025 0.1.0a3 (passed)
 25 Nov 2025 (passed)
 """
+import csv
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -130,10 +131,12 @@ def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
     ax.add_collection(collection)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    lil, big = np.min(scores), np.max(scores)
-    # authalic_p98 = np.quantile(np.abs(scores), 0.98)
-    # p98_frac = 100 * np.expm1(authalic_p98)
-    ax.title.set_text(f'min:{lil}, max:{big} deviation from ideal.')
+    pct = (np.exp(scores) - 1.0) * 100.0
+    ax.title.set_text(
+        f'Layer {layers}  |  area deviation from ideal: '
+        f'min {pct.min():+.2f}%  max {pct.max():+.2f}%  '
+        f'p90 {np.percentile(np.abs(pct), 90):.2f}%'
+    )
     plt.tight_layout()
     fig.savefig(f"output/ex0080w_{layers}.png", dpi=400)
     print(f'fig saved at output/ex0080w_{layers}.png')
@@ -163,25 +166,70 @@ def get_data(reg: Registrar, depth, mode=None):
 
 def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
     """
-    Find hexagons for data, and display on a 'globe'.
+    Find hexagons for data, display on a globe, and export area stats to CSV.
     """
     pts, pops = hex_poly_layer(b_pts, layers)
 
-    # Now calculate their area as a metric. (ignore pops).
-    gm2 = 510_065_621_724_154.6  # total surface area of WGS-84 (m²)
-    bins = 12*9**layers          # number of hexes at this layer
-    w_area_m2_mean = gm2/bins    # ideal equal-area per hex
+    # Calculate geodesic area per hexagon via geographiclib PolygonArea.
+    gm2 = 510_065_621_724_154.6   # WGS-84 total surface area (m²)
+    bins = 12 * 9 ** layers        # total hexagons at this layer
+    ideal_m2 = gm2 / bins          # ideal equal-area per hex
+
     h_pts = pts.copy()
-    c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.
+    c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])
     g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
-    w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
-    w_adj = np.abs(w_area_m2 / w_area_m2_mean) + 1e-12
-    score = np.log(w_adj)  # authalic log-density ℓ
+
+    w_area_m2 = wgs84_area(reg, g_pts)           # (N_hex,) actual areas
+    ratio = np.abs(w_area_m2 / ideal_m2) + 1e-12
+    score = np.log(ratio)                          # authalic log-density ℓ
+
+    # Geodesic centroids: average 6 vertex lat/lons per hexagon.
+    # Averaging in lat/lon is valid at hex scale (hexes are small).
+    latlon = g_pts.coords.reshape(-1, 6, 2)       # (N_hex, 6, [lat, lon])
+    centroid_lat = latlon[:, :, 0].mean(axis=1)   # (N_hex,)
+    centroid_lon = latlon[:, :, 1].mean(axis=1)
+
+    # ── Summary statistics ──────────────────────────────────────────────────
+    pct_dev = (ratio - 1.0) * 100.0               # % deviation from ideal
+    print(f"\nAuthalic quality — layer {layers}  ({bins} hexagons)")
+    print(f"  ideal area per hex : {ideal_m2:,.0f} m²  "
+          f"({ideal_m2 / 1e6:,.0f} km²)")
+    print(f"  area min / max     : {w_area_m2.min():,.0f} / {w_area_m2.max():,.0f} m²")
+    print(f"  % dev  min/mean/max: {pct_dev.min():+.3f}% / "
+          f"{pct_dev.mean():+.3f}% / {pct_dev.max():+.3f}%")
+    print(f"  log-ratio std dev  : {score.std():.6f}")
+    print(f"  |% dev| p50/p90/p99: "
+          f"{np.percentile(np.abs(pct_dev), 50):.3f}% / "
+          f"{np.percentile(np.abs(pct_dev), 90):.3f}% / "
+          f"{np.percentile(np.abs(pct_dev), 99):.3f}%")
+
+    # ── CSV export ──────────────────────────────────────────────────────────
+    csv_path = f"output/ex0080w_{layers}.csv"
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "hex_idx", "centroid_lat", "centroid_lon",
+            "area_m2", "ideal_m2", "ratio", "pct_deviation", "log_ratio"
+        ])
+        for i in range(len(w_area_m2)):
+            writer.writerow([
+                i,
+                f"{centroid_lat[i]:.8f}",
+                f"{centroid_lon[i]:.8f}",
+                f"{w_area_m2[i]:.3f}",
+                f"{ideal_m2:.3f}",
+                f"{ratio[i] - 1e-12:.9f}",   # strip the epsilon back out
+                f"{pct_dev[i]:.6f}",
+                f"{score[i]:.9f}",
+            ])
+    print(f"  CSV saved: {csv_path}")
+
+    # ── Globe plot ───────────────────────────────────────────────────────────
     snow_globe(c_pts, 6, score, f'{layers}')
 
 
 if __name__ == '__main__':
-    depth = 6  # 0,...5 √
+    depth = 5  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
     data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)

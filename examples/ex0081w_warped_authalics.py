@@ -181,7 +181,7 @@ def hexify(reg: Registrar, b_pts: Points, warp_m=None, layers: int = 4):
 
 
 if __name__ == '__main__':
-    depth = 5  # 0,...5 √
+    depth = 4  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
     data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
