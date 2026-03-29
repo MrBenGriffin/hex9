@@ -145,16 +145,16 @@ class H9CellLike(Protocol):
     """
     off_ẋy: NDArray[np.float64]  #: Metric scaled coordinates (:math:`\dot{x}, y`).
     count: int  #: Count of cells in classifier.
-    mode: NDArray[np.uint8]  #: Cell mode (0=down, 1=up).
+    mode: NDArray[np.uint8]  #: Cell net_mode (0=down, 1=up).
     off_uv: NDArray[np.int8]  #: Lattice (u, v) coordinates.
     off_xy: NDArray[np.float64]  #: Metric barycentric coordinates (x, y).
     in_scope: NDArray[np.uint8]  #: Array of in-scope cell IDs.
-    in_mode: NDArray[bool]  #: Boolean mask: is cell in the specified mode?
+    in_mode: NDArray[bool]  #: Boolean mask: is cell in the specified net_mode?
     in_dn: NDArray[bool]  #: Boolean mask: is cell in the Down supercell?
     in_up: NDArray[bool]  #: Boolean mask: is cell in the Up supercell?
     downs: NDArray[np.uint8]  #: Array of cells belonging to Down supercell.
     ups: NDArray[np.uint8]  #: Array of cells belonging to Up supercell.
-    c2: NDArray[np.uint8]  #: C2 cluster ID [2, 3, 3] for each mode.
+    c2: NDArray[np.uint8]  #: C2 cluster ID [2, 3, 3] for each net_mode.
 
 
 @runtime_checkable
@@ -165,7 +165,7 @@ class H9RegionLike(Protocol):
     Canonical implementation found in ``region.py``.
     """
     invalid_region: int  #: Marker for invalid regions (e.g., 0x5F).
-    proto: NDArray[np.uint8]  #: Up/Down as a mode-ordered array (0/1).
+    proto: NDArray[np.uint8]  #: Up/Down as a net_mode-ordered array (0/1).
     proto_up: int  #: Virtual Up protocol ID.
     proto_dn: int  #: Virtual Down protocol ID.
     ids: NDArray[np.uint8]  #: Array of region IDs.
@@ -222,9 +222,9 @@ class H9PolygonLike(Protocol):
     """
     Protocol for Polygon shapes defined under the Lattice.
     """
-    hh: NDArray[np.float64]  #: Half-hex (mode, c2) 4 pts (x, y).
-    hx: NDArray[np.float64]  #: Hexagon (mode, c2) 6 pts (x, y).
-    tx: NDArray[np.float64]  #: Cell triangle (mode, c2, ord) 3 pts (x, y).
-    se: NDArray[np.float64]  #: Supercell edges (mode) 9 pts (x, y).
-    sv: NDArray[np.float64]  #: Supercell vertices (mode) 3 pts (x, y).
+    hh: NDArray[np.float64]  #: Half-hex (net_mode, c2) 4 pts (x, y).
+    hx: NDArray[np.float64]  #: Hexagon (net_mode, c2) 6 pts (x, y).
+    tx: NDArray[np.float64]  #: Cell triangle (net_mode, c2, ord) 3 pts (x, y).
+    se: NDArray[np.float64]  #: Supercell edges (net_mode) 9 pts (x, y).
+    sv: NDArray[np.float64]  #: Supercell vertices (net_mode) 3 pts (x, y).
     gd: NDArray[np.float64]  #: Unshared points of a cell excluding (0, 0).

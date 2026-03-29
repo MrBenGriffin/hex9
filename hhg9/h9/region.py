@@ -74,7 +74,7 @@ class StepEvent:
     i: int  #: Current hex_layer index.
     phase: Literal['pre', 'post']  #: Phase of the step (before or after update).
     addresses: np.ndarray  #: Current address buffer.
-    pmo: np.ndarray  #: Parent mode array.
+    pmo: np.ndarray  #: Parent net_mode array.
     cid: np.ndarray  #: Current cell ID array.
     bad: np.ndarray  #: Boolean mask of invalid/bad points.
     y: np.ndarray  #: Current y coordinates.
@@ -105,17 +105,17 @@ def near_ulps(x: NDArray[np.float64], target: float, k: float = 4.0) -> NDArray[
 def _mode_child_c2_builder(cells: np.ndarray, c2: np.ndarray, mode: np.ndarray, bad: int, t_size: int = 96) -> NDArray[
     np.uint8]:
     """
-    Builds the per-mode child -> c2 map.
+    Builds the per-net_mode child -> c2 map.
 
     Returns:
-        NDArray[np.uint8]: Shape (2, t_size). For a given mode (0/1) and child cell ID,
+        NDArray[np.uint8]: Shape (2, t_size). For a given net_mode (0/1) and child cell ID,
         gives the c2 index (0, 1, 2) or 'bad'.
     """
     m_sh, c_sh, k_sh = c2.shape  # gather sizes of modes, c2s, cells.
     mo_c2_of_cell = np.full((m_sh, t_size), bad, dtype=np.uint8)  # generate full lut
     c2_ids_flat = np.repeat(np.arange(c_sh, dtype=np.uint8), k_sh)  # keep c2s tied to corresponding cells
     for m in range(m_sh):
-        cells_flat = c2[m].reshape(-1)  # flatten the cells for this mode.
+        cells_flat = c2[m].reshape(-1)  # flatten the cells for this net_mode.
         mo_c2_of_cell[m, cells_flat] = c2_ids_flat  # assign corresponding c2s to those cells.
     return mo_c2_of_cell
 
@@ -130,22 +130,22 @@ def _neighbour_builder(size: int, invalid_region: int) -> NDArray[np.uint8]:
     lut = np.full((size, 2, 3, 2), invalid_region, dtype=np.uint8)
     _ngh_dict = {
         (0x21, 0): [[0x34, 1], [0x25, 0], [0x16, 1]],  # top left vertex - 2 have another parent.  101
-        (0x25, 0): [[0x35, 0], [0x21, 0], [0x26, 0]],  # up mode - all neighbours in same parent.  000
+        (0x25, 0): [[0x35, 0], [0x21, 0], [0x26, 0]],  # up net_mode - all neighbours in same parent.  000
         (0x26, 0): [[0x39, 1], [0x2A, 0], [0x25, 0]],  # mid-edge - 1 neighbour has another parent 100
-        (0x2A, 0): [[0x3A, 0], [0x26, 0], [0x2B, 0]],  # up mode - all neighbours in same parent.  000
+        (0x2A, 0): [[0x3A, 0], [0x26, 0], [0x2B, 0]],  # up net_mode - all neighbours in same parent.  000
         (0x2B, 0): [[0x3E, 1], [0x16, 1], [0x2A, 0]],  # top right vertex - 2 have another parent. 110
         (0x35, 0): [[0x25, 0], [0x39, 0], [0x2A, 1]],  # mid-edge - 1 neighbour has another parent 001
-        (0x39, 0): [[0x49, 0], [0x35, 0], [0x3A, 0]],  # up mode - all neighbours in same parent.  000
+        (0x39, 0): [[0x49, 0], [0x35, 0], [0x3A, 0]],  # up net_mode - all neighbours in same parent.  000
         (0x3A, 0): [[0x2A, 0], [0x25, 1], [0x39, 0]],  # mid-edge - 1 neighbour has another parent 010
         (0x49, 0): [[0x39, 0], [0x34, 1], [0x3E, 1]],  # bottom vertex - 2 have another parent.    011
         (0x16, 1): [[0x26, 1], [0x2B, 0], [0x21, 0]],  # top vertex - 2 have another parent.       100
         (0x25, 1): [[0x35, 1], [0x3A, 0], [0x26, 1]],  # mid-edge - 1 neighbour has another parent 101
-        (0x26, 1): [[0x16, 1], [0x2A, 1], [0x25, 1]],  # dn mode - all neighbours in same parent.  111
+        (0x26, 1): [[0x16, 1], [0x2A, 1], [0x25, 1]],  # dn net_mode - all neighbours in same parent.  111
         (0x2A, 1): [[0x3A, 1], [0x26, 1], [0x35, 0]],  # mid-edge - 1 neighbour has another parent 110
         (0x34, 1): [[0x21, 0], [0x49, 0], [0x35, 1]],  # bot-left vertex - 2 have another parent.  001
-        (0x35, 1): [[0x25, 1], [0x39, 1], [0x34, 1]],  # dn mode - all neighbours in same parent.  111
+        (0x35, 1): [[0x25, 1], [0x39, 1], [0x34, 1]],  # dn net_mode - all neighbours in same parent.  111
         (0x39, 1): [[0x26, 0], [0x35, 1], [0x3A, 1]],  # mid-edge - 1 neighbour has another parent 011
-        (0x3A, 1): [[0x2A, 1], [0x3E, 1], [0x39, 1]],  # dn mode - all neighbours in same parent.  111
+        (0x3A, 1): [[0x2A, 1], [0x3E, 1], [0x39, 1]],  # dn net_mode - all neighbours in same parent.  111
         (0x3E, 1): [[0x2B, 0], [0x3A, 1], [0x49, 0]],  # bot-right vertex - 2 have another parent. 010
     }
     for key, c2_neighbours in _ngh_dict.items():
@@ -162,9 +162,9 @@ def _local_offset_lut_builder() -> NDArray[np.float64]:
     """
     from hhg9.h9.constants import H9K
     _lut = [
-        # self mode = 0
+        # self net_mode = 0
         #   pm c2 sib
-        (0, 0, 0, 1, (0, 2)),  # mode 0, c2:0
+        (0, 0, 0, 1, (0, 2)),  # net_mode 0, c2:0
         (0, 0, 1, 1, (1, -1)),  # k
         (0, 0, 2, 1, (-1, -1)),
         (0, 1, 0, 1, (0, 2)),
@@ -176,7 +176,7 @@ def _local_offset_lut_builder() -> NDArray[np.float64]:
         (0, 1, 0, 0, (0, 2)),
         (0, 1, 1, 0, (1, -1)),  # k
         (0, 1, 2, 0, (-1, -1)),
-        # self mode = 1
+        # self net_mode = 1
         (1, 0, 0, 1, (0, -2)),  # k
         (1, 0, 1, 1, (-1, 1)),  # k
         (1, 0, 2, 1, (1, 1)),  # k
@@ -257,7 +257,7 @@ NDArray[bool]:
     """
     Return mask for points at the barycentric supercell vertices.
 
-    There are six vertices total, with three active for any given mode (Up/Down).
+    There are six vertices total, with three active for any given net_mode (Up/Down).
     """
     ẋv = h9k.limits.TR * h9k.radical.R3
     result = np.zeros_like(mode, dtype=bool)
@@ -495,7 +495,7 @@ def _recover(cid: np.ndarray,
 
         ok_geo = in_scope(ẋ_loc, y_loc, m_sub, h9cl)
         if np.any(ok_geo):
-            # Re-classify and only accept if the resulting cid is legal for this mode.
+            # Re-classify and only accept if the resulting cid is legal for this net_mode.
             from hhg9.h9.classifier import classify_mode_cell
             cid_try = classify_mode_cell(ẋ_loc[ok_geo], y_loc[ok_geo], m_sub[ok_geo], h9cl)
             ok_lut = h9c.in_mode[m_sub[ok_geo], cid_try]
@@ -527,7 +527,7 @@ def _recover(cid: np.ndarray,
         dx = np.spacing(np.float64(lat_ü))
         dy = np.spacing(np.float64(lat_v))
 
-        # Try a small set of signed nudges; accept the first that yields a legal (mode,cid).
+        # Try a small set of signed nudges; accept the first that yields a legal (net_mode,cid).
         for dẋ, dy_ in (
                 ( dx,  0.0),
                 (-dx,  0.0),
@@ -599,7 +599,7 @@ Generator[StepEventXY, None, NDArray[np.uint8]]:
     y = np.array(xy[:, 1], copy=True)
     ẋ = x * h9k.radical.R3
 
-    # Seed parent-mode directly from the caller-provided supercell mode.
+    # Seed parent-net_mode directly from the caller-provided supercell net_mode.
     # (Do not derive it from the virtual proto IDs.)
     p_mo = np.asarray(mode, dtype=np.uint8)
 
@@ -782,16 +782,16 @@ def region_neighbours(addresses: NDArray[np.uint8], ctx: H9Context = None):
     # if cascade is still “live” at root, set proto from nb_parent_mode
     if np.any(cascading):
         active = np.where(cascading)[0]
-        # nb_parent_mode from the last iteration is the desired parent mode for the root
+        # nb_parent_mode from the last iteration is the desired parent net_mode for the root
         # easiest is to recompute it from poi=1 state:
         # cur = nb_array[active, 1]
-        par = nb_array[active, 0]  # proto; only used for mode
+        par = nb_array[active, 0]  # proto; only used for net_mode
         pmo = h9c.mode[par]
         nb_array[active, 0] = h9r.proto[1 - pmo]
         # _, nb_parent_mode = h9r.cmc2n[cur, pmo_a, c2[active]].T
         # nb_array[active, 0] = h9r.proto[nb_parent_mode]
 
-    # # Cascade up the hierarchy where parent mode changes
+    # # Cascade up the hierarchy where parent net_mode changes
     # cascading = (pmn != pmo)
     # for poi in range(layers - 3, -1, -1):
     #     if not np.any(cascading):
@@ -800,7 +800,7 @@ def region_neighbours(addresses: NDArray[np.uint8], ctx: H9Context = None):
     #     c2a = c2[active]
     #     cur = addresses[active, poi]
     #     par = addresses[active, max(0, poi - 1)]
-    #     pmo = h9c.mode[par]
+    #     pmo = h9c.net_mode[par]
     #     nb_region, nb_parent_mode = h9r.cmc2n[cur, pmo, c2a].T
     #     nb_array[active, poi] = nb_region
     #     hop = nb_parent_mode != pmo

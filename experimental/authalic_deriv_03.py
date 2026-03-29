@@ -684,7 +684,7 @@ class Lattice:
             if s_fallback > s_total:
                 s_fallback = s_total
 
-            # Avoid collapsing to an endpoint in fallback mode (prevents multiple SEAMQ points sharing seg0/seg1).
+            # Avoid collapsing to an endpoint in fallback net_mode (prevents multiple SEAMQ points sharing seg0/seg1).
             if s_total > 0.0:
                 if s_fallback <= 0.0:
                     s_fallback = float(np.nextafter(0.0, s_total))
@@ -893,7 +893,7 @@ class Lattice:
             if s_fallback > s_total:
                 s_fallback = s_total
 
-            # Avoid collapsing to an endpoint in fallback mode (prevents zero-area / duplicate-point triangles).
+            # Avoid collapsing to an endpoint in fallback net_mode (prevents zero-area / duplicate-point triangles).
             if s_total > 0.0:
                 if s_fallback <= 0.0:
                     s_fallback = float(np.nextafter(0.0, s_total))

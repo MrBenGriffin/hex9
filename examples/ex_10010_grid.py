@@ -7,12 +7,12 @@ hh_grid: Pixel grid generation for half-hexagon (c2) regions.
 
 Provides two entry points:
 
-``hh_grid(mode, c2, scale)``
+``hh_grid(net_mode, c2, scale)``
     Generate a tight pixel grid for one half-hexagon sub-region (c2=0,1,2)
     of an octant face.  Returns a subset of the global face lattice, so pixel
     indices are face-layer and compositing is index-exact.
 
-``hh_grid_face(mode, scale)``
+``hh_grid_face(net_mode, scale)``
     Generate all three c2 sub-grids for a full octant face in one call.
     Pixel sets are disjoint and together tile the face triangle exactly.
 
@@ -66,18 +66,18 @@ from hhg9.h9.grid import in_convex_poly
 # ---------------------------------------------------------------------------
 # Half-hex vertex tables  (UV integer units; origin = supercell barycentre)
 # ---------------------------------------------------------------------------
-# Shape (2, 3, 4, 2): [mode, c2, vertex_index, (x_UV, y_UV)]
+# Shape (2, 3, 4, 2): [net_mode, c2, vertex_index, (x_UV, y_UV)]
 # Clockwise order, consistent with H9P.hh and inside_triangle_cw.
 # UV units: one x-step = U_metric = sqrt(2)/6
 #           one y-step = 3V_metric = sqrt(6)/6  (= sqrt(3) * U_metric)
 
 _HH_UV: NDArray[np.int8] = np.array([
-    [   # mode 0 (V, down-pointing supercell)
+    [   # net_mode 0 (V, down-pointing supercell)
         [( 3, 1), ( 2, 0), ( 0, 0), (-1, 1)],   # c2=0
         [( 0,-2), (-1,-1), ( 0, 0), ( 2, 0)],   # c2=1
         [(-3, 1), (-1, 1), ( 0, 0), (-1,-1)],   # c2=2
     ],
-    [   # mode 1 (L, up-pointing supercell)
+    [   # net_mode 1 (L, up-pointing supercell)
         [(-1,-1), ( 0, 0), ( 2, 0), ( 3,-1)],   # c2=0
         [(-1, 1), ( 0, 0), (-1,-1), (-3,-1)],   # c2=1
         [( 2, 0), ( 0, 0), (-1, 1), ( 0, 2)],   # c2=2
@@ -86,20 +86,20 @@ _HH_UV: NDArray[np.int8] = np.array([
 
 # Bounding box (xmin, xmax, ymin, ymax) in UV integer units.
 _HH_BBOX: NDArray[np.int8] = np.array([
-    [(-1, 3,  0, 1),    # mode 0, c2=0  ->  4 x 1 UV
-     (-1, 2, -2, 0),    # mode 0, c2=1  ->  3 x 2 UV
-     (-3, 0, -1, 1)],   # mode 0, c2=2  ->  3 x 2 UV
-    [(-1, 3, -1, 0),    # mode 1, c2=0  ->  4 x 1 UV
-     (-3, 0, -1, 1),    # mode 1, c2=1  ->  3 x 2 UV
-     (-1, 2,  0, 2)],   # mode 1, c2=2  ->  3 x 2 UV
+    [(-1, 3,  0, 1),    # net_mode 0, c2=0  ->  4 x 1 UV
+     (-1, 2, -2, 0),    # net_mode 0, c2=1  ->  3 x 2 UV
+     (-3, 0, -1, 1)],   # net_mode 0, c2=2  ->  3 x 2 UV
+    [(-1, 3, -1, 0),    # net_mode 1, c2=0  ->  4 x 1 UV
+     (-3, 0, -1, 1),    # net_mode 1, c2=1  ->  3 x 2 UV
+     (-1, 2,  0, 2)],   # net_mode 1, c2=2  ->  3 x 2 UV
 ], dtype=np.int8)
 
 # Full-face bounding box (xmin, xmax, ymin, ymax) in UV integer units.
-# mode 0 (V):  x in [-3, 3],  y in [-2, 1]   (3 UV units tall)
-# mode 1 (L):  x in [-3, 3],  y in [-1, 2]   (3 UV units tall)
+# net_mode 0 (V):  x in [-3, 3],  y in [-2, 1]   (3 UV units tall)
+# net_mode 1 (L):  x in [-3, 3],  y in [-1, 2]   (3 UV units tall)
 _FACE_BBOX: NDArray[np.int8] = np.array([
-    (-3, 3, -2, 1),     # mode 0
-    (-3, 3, -1, 2),     # mode 1
+    (-3, 3, -2, 1),     # net_mode 0
+    (-3, 3, -1, 2),     # net_mode 1
 ], dtype=np.int8)
 
 
@@ -176,7 +176,7 @@ def hh_grid(
     Parameters
     ----------
     mode : int
-        Supercell mode: 0 = V (down), 1 = L (up).
+        Supercell net_mode: 0 = V (down), 1 = L (up).
     c2 : int
         C2 sector: 0, 1, or 2.
     scale : float
@@ -195,9 +195,9 @@ def hh_grid(
 
     face_wid, face_hgt, step_x, step_y = _face_dims(scale)
 
-    # Face lower-left corner in metric barycentric (mode-dependent y)
+    # Face lower-left corner in metric barycentric (net_mode-dependent y)
     fx0_UV = int(_FACE_BBOX[mode][0])   # always -3
-    fy0_UV = int(_FACE_BBOX[mode][2])   # -2 (mode 0) or -1 (mode 1)
+    fy0_UV = int(_FACE_BBOX[mode][2])   # -2 (net_mode 0) or -1 (net_mode 1)
     face_x0 = fx0_UV * U
     face_y0 = fy0_UV * V3
 
@@ -367,7 +367,7 @@ if __name__ == '__main__':
                 seen[k] = c2
         total = sum(g.coords.shape[0] for g in grids)
         status = 'OK' if len(seen) == total else f'MISMATCH {len(seen)} unique != {total} total'
-        print(f'  mode {mode}: {len(seen)} unique face pixels from {total} samples — {status}')
+        print(f'  net_mode {mode}: {len(seen)} unique face pixels from {total} samples — {status}')
     print()
 
     # Cross-check Option A vs Option B

@@ -7,7 +7,7 @@ if __name__ == '__main__':
 
     # from hhg9.h9.lattice import H9C
     #     count: int
-    #     mode: NDArray[np.uint8]
+    #     net_mode: NDArray[np.uint8]
     #     off_uv: NDArray[np.int8]
     #     off_xy: NDArray[np.float64]
     #     off_ẋy: NDArray[np.float64]
@@ -21,4 +21,4 @@ if __name__ == '__main__':
     print(H9_RA)
 
     # for c in cells:
-    #     print(f"  0x{c:02x}: mode={H9C.mode[c]}  off_xy=({H9C.off_xy[c, 0]:.4f}, {H9C.off_xy[c, 1]:.4f})")
+    #     print(f"  0x{c:02x}: net_mode={H9C.net_mode[c]}  off_xy=({H9C.off_xy[c, 0]:.4f}, {H9C.off_xy[c, 1]:.4f})")

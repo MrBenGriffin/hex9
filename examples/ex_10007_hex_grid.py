@@ -67,7 +67,7 @@ def layer_hex_roundtrip(depth: int = 0):
     But maybe that's something to consider downstream. (it serves value in the cell-chain)
     Therefore, let's ignore the first (root).
     We then have the region/cell itself, which (being one of c2) is enough to give us a hex address.
-    So, eg [0, 6] = mode 0, region 6. (c2=0)
+    So, eg [0, 6] = net_mode 0, region 6. (c2=0)
     """
     reg = Registrar()
     b_oct = reg.domain('b_oct')

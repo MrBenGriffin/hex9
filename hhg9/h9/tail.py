@@ -38,26 +38,26 @@ def tail_pack_reversible(
         h: NDArray[np.uint8] | np.uint8,
 ) -> NDArray[np.uint8]:
     """Pack reversible tail metadata into one uint8 byte."""
-    p_mo = np.asarray(p_mo, dtype=np.uint8)  # [0,1]   terminating hex mode of parent region
+    p_mo = np.asarray(p_mo, dtype=np.uint8)  # [0,1]   terminating hex net_mode of parent region
     p_c2 = np.asarray(p_c2, dtype=np.uint8)  # [0,1,2] terminating hex c2 of parent region
     # assert len(p_c2 > 2) == 0, "bad c2 in tail_pack_reversible"
-    r_mo = np.asarray(r_mo, dtype=np.uint8)  # [0,1]   root region mode
+    r_mo = np.asarray(r_mo, dtype=np.uint8)  # [0,1]   root region net_mode
     h = np.asarray(h, dtype=np.uint8)  # [0..11] terminating region (under hex)
     return (((p_mo << 7) & 0x80) | ((p_c2 << 5) & 0x60) | ((r_mo << 4) & 0x10) | (h & 0x0F)).astype(np.uint8)
 
 def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
     """Unpack reversible tail metadata (par_mode, p_c2, r_mo, h) from one uint8 byte."""
     tail_ids = np.asarray(tail_ids, dtype=np.uint8)
-    p_mo = ((tail_ids & 0x80) >> 7).astype(np.uint8)  # terminating mode of parent region
+    p_mo = ((tail_ids & 0x80) >> 7).astype(np.uint8)  # terminating net_mode of parent region
     p_c2 = ((tail_ids & 0x60) >> 5).astype(np.uint8)  # terminating hex c2 of parent region
-    r_mo = ((tail_ids & 0x10) >> 4).astype(np.uint8)  # root region mode
+    r_mo = ((tail_ids & 0x10) >> 4).astype(np.uint8)  # root region net_mode
     h = (tail_ids & 0x0F).astype(np.uint8)  # terminating region
     return p_mo, p_c2, r_mo, h
 
 
 def tail_pack_key(
         p_c2: NDArray[np.uint8] | np.uint8,  # terminating hex c2 of parent region
-        r_mo: NDArray[np.uint8] | np.uint8,  # root region mode
+        r_mo: NDArray[np.uint8] | np.uint8,  # root region net_mode
 ) -> NDArray[np.uint8]:
     """Pack key tail (binning-safe) into one uint8 byte."""
     p_c2 = np.asarray(p_c2, dtype=np.uint8)

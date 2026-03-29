@@ -44,16 +44,16 @@ if __name__ == '__main__':
     # Define the Cell/Supercell constants, modes, and membership LUTs
     # Decode has several non-geometrics (04,05,06, etc.) which we need to mask.
     # (1)√ identify the 42 valid geometric ids.
-    # (2)√ to determine the mode of each geometric cell
+    # (2)√ to determine the net_mode of each geometric cell
     # Because the H-hex_layer is downward, rather than traditional
     # upward, we invert the parity of each address accordingly.
     # (3)√ To identify the Lattice-related U,V indices of each
     # of the 42 geometrically valid cell that determine their triangle-centroids.
     # and generate luts for cell<->uv
-    # (3) To identify supercell membership for each supercell mode -
+    # (3) To identify supercell membership for each supercell net_mode -
     # (this may be done via the _in_up / _in_dn methods) for each geometric cell.
     # (4) To identify the in_scope membership - the logical OR of (3) across both modes.
-    # (5) Maybe to identify the 3 groups of 3 C2 memberships for each supercell mode.
+    # (5) Maybe to identify the 3 groups of 3 C2 memberships for each supercell net_mode.
 
     #    \     \     \    /     /     /
     #  00 \  01 \  02 \03/ 07  / 0b  / 0f

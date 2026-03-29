@@ -80,14 +80,14 @@ class GridRegions(GridConstants):
         hx3 = self.H / 3.0  # unit for ẋ offsets
         hy9 = self.H / 9.0  # unit for y offsets
 
-        # The index order is such that in_regions [0..5] are mode-shared: (found inside both modes),
-        # and index % 2 indicates the mode of that region.
-        # Mode specific regions are found in those regions which have the same mode as themselves.
+        # The index order is such that in_regions [0..5] are net_mode-shared: (found inside both modes),
+        # and index % 2 indicates the net_mode of that region.
+        # Mode specific regions are found in those regions which have the same net_mode as themselves.
         self.in_regions = [
             0x26, 0x2a, 0x3a, 0x39, 0x35, 0x25,  # Mode Shared, inner regions from V above barycentric origin, CW.
             0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e   # Mode Specific outer regions from apex of V, CW
         ]
-        self.in_up_regions = [  # 9 regions serve Λ mode
+        self.in_up_regions = [  # 9 regions serve Λ net_mode
             0x39, 0x3a, 0x3e,  # c0 ΛVΛ
             0x25, 0x35, 0x34,  # c1 ΛVΛ
             0x2a, 0x26, 0x16,  # c2 ΛVΛ
@@ -137,10 +137,10 @@ class GridRegions(GridConstants):
     @cache
     def child_lut(self):
         """
-        Return LUT which, given a mode and c1, returns the child regions there.
-        The first two children are mode-shared.
-        The middle switches mode from parent.
-        The final mode is mode-locked.
+        Return LUT which, given a net_mode and c1, returns the child regions there.
+        The first two children are net_mode-shared.
+        The middle switches net_mode from parent.
+        The final net_mode is net_mode-locked.
         Necessary feature is that a child-region-c1 is unique.
         """
         _chd = {
@@ -165,10 +165,10 @@ class GridRegions(GridConstants):
         lut = np.full((num, num), self.invalid_ugc, dtype=np.uint8)
         # lut = np.zeros((num, num), dtype=np.uint8)
 
-        ugc = self.ugc_lut  # (num_regions, 1) -> mode
+        ugc = self.ugc_lut  # (num_regions, 1) -> net_mode
         chd = self.child_lut()  # (2, 3, 3)
 
-        # For every parent region tri_points, infer its mode and fill reverse mapping.
+        # For every parent region tri_points, infer its net_mode and fill reverse mapping.
         for par in self.in_regions:
             mode = ugc[par, self.mode]
             for c1 in (0, 1, 2):
@@ -176,13 +176,13 @@ class GridRegions(GridConstants):
                     lut[par, child] = c1
         return lut
 
-    # def ugc_regions(self, x, y, mode, depth=36):
+    # def ugc_regions(self, x, y, net_mode, depth=36):
     #     """
     #     Given a vector of Point coords create a set of regions
     #     """
     #     num_points = x.size
     #     addresses = np.full((num_points, depth + 2), self.invalid_ugc, dtype=np.uint8)
-    #     addresses[:, 0] = np.where(mode == 1, 0x16, 0x49)  # These values should come from the octant set.
+    #     addresses[:, 0] = np.where(net_mode == 1, 0x16, 0x49)  # These values should come from the octant set.
     #     # history = np.zeros((num_points, depth + 2, 6))
     #     for i in range(depth + 1):
     #         ẋ = self.R3 * x
@@ -190,11 +190,11 @@ class GridRegions(GridConstants):
     #         props = self.ugc_lut[region]
     #         mode_up = props[:, self.in_up]
     #         mode_dn = props[:, self.in_dn]
-    #         in_scope = np.where(mode == 1, mode_up, mode_dn)
+    #         in_scope = np.where(net_mode == 1, mode_up, mode_dn)
     #         region_id = np.where(in_scope, region, self.invalid_ugc)  # Validated ID
     #         addresses[:, i + 1] = region_id
     #         off = self.ugc_off[region_id]
-    #         mode = self.ugc_lut[region_id, self.mode]
+    #         net_mode = self.ugc_lut[region_id, self.net_mode]
     #         x -= off[:, 0]
     #         y -= off[:, 1]
     #         x *= 3.
@@ -230,7 +230,7 @@ class GridRegions(GridConstants):
 
     def ugc_dec(self, uri_address):
         """
-        Decode back to (x,y,mode) by undoing the classifier-plane stepping.
+        Decode back to (x,y,net_mode) by undoing the classifier-plane stepping.
         """
         num_points, depth = uri_address.shape
         ẋ = np.zeros(num_points, dtype=np.float64)
@@ -262,7 +262,7 @@ class GridRegions(GridConstants):
         addresses = np.full((num_points, depth + 2), self.invalid_ugc, dtype=np.uint8)
         addresses[:, 0] = np.where(mode == 1, 0x16, 0x49)  # These values should come from the octant set.
         for i in range(depth + 1):
-            # x, y, ẋ = self.clamp(x, y, mode)
+            # x, y, ẋ = self.clamp(x, y, net_mode)
             ẋ = self.R3 * x
             region = self.region_classification(ẋ, y)  # Raw classification
             props = self.ugc_lut[region]
@@ -280,7 +280,7 @@ class GridRegions(GridConstants):
 
     def ugc_dec_w(self, uri_address):
         """
-        REVERSE: URI addresses back into (x,y) coordinates and initial mode.
+        REVERSE: URI addresses back into (x,y) coordinates and initial net_mode.
         Inverse of ugc_regions
         """
         num_points, depth = uri_address.shape
@@ -303,7 +303,7 @@ class GridRegions(GridConstants):
                 x[valid_mask] += self.ugc_off_x[valid_ids]
                 y[valid_mask] += self.ugc_off_y[valid_ids]
 
-        # After reconstructing the coordinates, find the initial mode from the root URI.
+        # After reconstructing the coordinates, find the initial net_mode from the root URI.
         initial_mode = self.ugc_lut[uri_address[:, 0], self.mode]
 
         # Stack all three results into a final (hex_layer, 3) array.
@@ -311,7 +311,7 @@ class GridRegions(GridConstants):
 
     def alt_ugc_dec(self, uri_address):
         """
-        REVERSE: Decodes a URI back into (x,y) and initial mode.
+        REVERSE: Decodes a URI back into (x,y) and initial net_mode.
         Runs backward in (ẋ, y); converts ẋ→x only at the end.
         """
         num_points, depth = uri_address.shape
@@ -345,7 +345,7 @@ class GridRegions(GridConstants):
             region = self.region_classification(xbar, y)
             props = self.ugc_lut[region]
 
-            # 2) validate region vs parent mode (in-up / in-down)
+            # 2) validate region vs parent net_mode (in-up / in-down)
             in_scope = np.where(mode == 1, props[:, self.in_up], props[:, self.in_dn])
             region_id = np.where(in_scope, region, self.invalid_ugc)
             addresses[:, i + 1] = region_id
@@ -490,22 +490,22 @@ class GridNeighbours:
     def __init__(self):
         self.invalid_ugc = 0x5f
         self.num_regions = 96
-        self.ugc_num_props = 1  # for relations, we only need mode metadata
+        self.ugc_num_props = 1  # for relations, we only need net_mode metadata
         (self.mode,) = range(self.ugc_num_props)  # indices of metadata
 
     @cache
     def ugc_lut(self):
         """
-        UGC Metadata - Here it is going to just be the mode.
+        UGC Metadata - Here it is going to just be the net_mode.
         When testing neighbours we will only need 1 child.
         """
         num_regions = self.num_regions
-        # these regions are ordered - eg, self.ugc_lut[self.in_regions, self.mode]
+        # these regions are ordered - eg, self.ugc_lut[self.in_regions, self.net_mode]
         _in_regions = [
             0x26, 0x2a, 0x3a, 0x39, 0x35, 0x25,  # Mode Shared, inner regions from V above barycentric origin, CW.
             0x49, 0x34, 0x21, 0x16, 0x2b, 0x3e   # Mode Specific outer regions from apex of V, CW
         ]
-        _in_up_regions = [  # 9 regions serve Λ mode
+        _in_up_regions = [  # 9 regions serve Λ net_mode
             0x39, 0x3a, 0x3e,  # c0 ΛVΛ
             0x25, 0x35, 0x34,  # c1 ΛVΛ
             0x2a, 0x26, 0x16,  # c2 ΛVΛ
@@ -522,7 +522,7 @@ class GridNeighbours:
     @cache
     def child_lut(self):
         """
-        Given a mode and c1, find the regions that belong there.
+        Given a net_mode and c1, find the regions that belong there.
         When testing neighbours we will only need 1 child.
         """
         _chd = {
@@ -591,8 +591,8 @@ class GridNeighbours:
     @lru_cache(maxsize=None)
     def neighbour_lut(self):
         """
-        Given a region, parent mode, region-c1, return the neighbour and parent mode.
-        If the parent mode has changed, then the region parent is a neighbour.
+        Given a region, parent net_mode, region-c1, return the neighbour and parent net_mode.
+        If the parent net_mode has changed, then the region parent is a neighbour.
         It uses @lru_cache in order to be lazy-loaded and not to clutter up the __init__
         """
         _lut = {
@@ -655,13 +655,13 @@ class GridNeighbours:
         root = np.where(nmo == 1, 0x16, 0x49)
         neighbour[:, 0] = root
         child_lut = self.child_lut()
-        mode = ugc_lut[neighbour[:, -2], self.mode]  # mode of region.
+        mode = ugc_lut[neighbour[:, -2], self.mode]  # net_mode of region.
         neighbour[:, -1] = child_lut[mode, c1, 2]
         return neighbour
 
     def encroach_to_neighbour(self, xy, mode, c1_edge, preserve):
         # xy: (hex_layer,2) local coords in source face
-        # mode: (hex_layer,) source face mode (not used in math here, but good to thread)
+        # net_mode: (hex_layer,) source face net_mode (not used in math here, but good to thread)
         # c1_edge: 0,1,2 – which edge family you crossed (on the source face)
         # preserve: bool – whether this face-to-face seam preserves or swaps C1
 
@@ -703,9 +703,9 @@ class GridNeighbours:
 #
 #     for name, (input_xy, expected_xy) in test_cases.items():
 #         # Ensure the test uses the user's clamp function name
-#         x, y, _ = grid.clamp(input_xy[:, 0], input_xy[:, 1], mode=1)
+#         x, y, _ = grid.clamp(input_xy[:, 0], input_xy[:, 1], net_mode=1)
 #         result_xy = np.array([x, y]).T
-#         # result_xy = grid.clamp(input_xy.copy(), mode=1)
+#         # result_xy = grid.clamp(input_xy.copy(), net_mode=1)
 #         assert_allclose(result_xy, expected_xy, atol=1e-5, err_msg=f"Case '{name}' failed")
 #
 #
@@ -725,14 +725,14 @@ class GridNeighbours:
 #     }
 #
 #     for name, (input_xy, expected_xy) in test_cases.items():
-#         x, y, _ = grid.clamp(input_xy[:, 0], input_xy[:, 1], mode=0)
+#         x, y, _ = grid.clamp(input_xy[:, 0], input_xy[:, 1], net_mode=0)
 #         result_xy = np.array([x, y]).T
 #         assert_allclose(result_xy, expected_xy, atol=1e-5, err_msg=f"Case '{name}' failed")
 
 
 def test_pc_c1_reverse_map(reg_grid: GridRegions):
     pc = reg_grid.pc_c1()        # (num_regions, num_regions) -> c1
-    ugc = reg_grid.ugc_lut       # (num_regions, props), only mode here
+    ugc = reg_grid.ugc_lut       # (num_regions, props), only net_mode here
     chd = reg_grid.child_lut()   # (2,3,3)
 
     for par in reg_grid.in_regions:
@@ -743,14 +743,14 @@ def test_pc_c1_reverse_map(reg_grid: GridRegions):
             for child in children:
                 assert pc[par, child] == c1, f"pc_c1 wrong: par=0x{par:02x}, child=0x{child:02x}"
 
-        # optional: children from the *other* mode should not collide to the same c1
+        # optional: children from the *other* net_mode should not collide to the same c1
         other_mode = 1 - mode
         for other_c1 in (0, 1, 2):
             for alien in chd[other_mode, other_c1]:
                 # We can’t assert a specific value (it’s undefined), but we *can* assert it’s not
                 # equal to all three c1 values at once; the safe minimal check is that it’s not
                 # erroneously identical to the first one we tested above:
-                pass  # intentionally no strict assertion — undefined outside parent’s mode
+                pass  # intentionally no strict assertion — undefined outside parent’s net_mode
 
 
 # def test_terminate_normalises_tail(reg_grid: GridRegions):
@@ -760,10 +760,10 @@ def test_pc_c1_reverse_map(reg_grid: GridRegions):
 #
 #     # Build a tiny address set with known last/child
 #     par = reg_grid.in_regions[0]
-#     mode = ugc[par, reg_grid.mode]
+#     net_mode = ugc[par, reg_grid.net_mode]
 #     c1 = 1
-#     child = chd[mode, c1, 0]           # not the mode-locked one
-#     want = chd[mode, c1, 2]            # mode-locked child
+#     child = chd[net_mode, c1, 0]           # not the net_mode-locked one
+#     want = chd[net_mode, c1, 2]            # net_mode-locked child
 #
 #     addr = np.full((1, 5), reg_grid.invalid_ugc, dtype=np.uint8)
 #     addr[0, -2] = par
@@ -936,14 +936,14 @@ def test_encode_one_step_child_is_legal(reg_grid: GridRegions):
         pmo = ugc[p, reg_grid.mode]
         c1  = pc[p, c]
         assert c1 in (0,1,2), f"row {i}: bad c1=0x{c1:x} for par=0x{p:02x}, cur=0x{c:02x}"
-        assert c in chd[pmo, c1], f"row {i}: child 0x{c:02x} not in legal children of par=0x{p:02x} mode={pmo}"
+        assert c in chd[pmo, c1], f"row {i}: child 0x{c:02x} not in legal children of par=0x{p:02x} net_mode={pmo}"
 
 def _manual_one_step(reg: GridRegions, xy, mode):
     """Replicate exactly one encoder step: clamp → classify → subtract offsets → ×3 (classifier plane)."""
     x = xy[:,0].copy()
     y = xy[:,1].copy()
 
-    # clamp per parent mode; get xbar
+    # clamp per parent net_mode; get xbar
     x, y, xbar = reg.clamp(x, y, mode)
 
     # classify
@@ -959,7 +959,7 @@ def _manual_one_step(reg: GridRegions, xy, mode):
     y2    = (y    - off_y) * 3.0
     x2    = xbar2 / reg.R3
 
-    # update mode only for valid rows
+    # update net_mode only for valid rows
     child_mode = reg.ugc_lut[rid, reg.mode]
     valid = (rid != reg.invalid_ugc)
     mode2 = np.where(valid, child_mode, mode).astype(np.uint8)
@@ -991,7 +991,7 @@ def test_shallow_roundtrip(reg_grid: GridRegions, depth):
     addr = reg_grid.ugc_regions(xy, mode, depth=depth)
     dec  = reg_grid.ugc_dec(addr)
     np.testing.assert_allclose(dec[:,:2], xy, atol=1e-15, err_msg="decode(xy) mismatch (shallow)")
-    np.testing.assert_array_equal(dec[:,2].astype(np.uint8), mode, err_msg="decode(mode) mismatch (shallow)")
+    np.testing.assert_array_equal(dec[:,2].astype(np.uint8), mode, err_msg="decode(net_mode) mismatch (shallow)")
 
     re_addr = reg_grid.ugc_regions(dec[:,:2], dec[:,2].astype(np.uint8), depth=depth)
     np.testing.assert_array_equal(re_addr, addr, "encode(decode(addr)) mismatch (shallow)")
@@ -1017,7 +1017,7 @@ def test_terminate_always_normalises_tail_simple(reg_grid: GridRegions):
     ugc = reg_grid.ugc_lut
     par = reg_grid.in_regions[0]
     mode = ugc[par, reg_grid.mode]
-    # choose the non-mode-locked child 0
+    # choose the non-net_mode-locked child 0
     child0 = chd[mode, 1, 0]
     want   = chd[mode, 1, 2]
 
@@ -1083,12 +1083,12 @@ def test_reg_valid_points(reg_grid):
         # New: structural/local correctness for first k steps
         k = 33
         addr = result_address[0, :k]
-        # 1) root must be consistent with initial mode
+        # 1) root must be consistent with initial net_mode
         root_expected = 0x16 if mode[0] == 1 else 0x49
         assert addr[0] == root_expected
 
-        # 2) each step must be a valid child of its parent in the parent’s mode
-        ugc = reg_grid.ugc_lut  # (num_regions, 1) -> mode
+        # 2) each step must be a valid child of its parent in the parent’s net_mode
+        ugc = reg_grid.ugc_lut  # (num_regions, 1) -> net_mode
         chd = reg_grid.child_lut()  # (2,3,3)
         c1r = reg_grid.pc_c1()  # (num_regions, num_regions) -> c1
 
@@ -1102,13 +1102,13 @@ def test_reg_valid_points(reg_grid):
             c1 = c1r[par, cur]
             # c1 must be 0/1/2 and cur must be one of the canonical 3 children
             assert c1 in (0, 1, 2), f"{name}: Bad c1 at step {i}: c1={c1}, par={par:#04x}, cur={cur:#04x}"
-            assert cur in chd[par_mode, c1], f"{name}: disallowed child; step {i}: par={par:#04x}, cur={cur:#04x}, mode={par_mode}"
+            assert cur in chd[par_mode, c1], f"{name}: disallowed child; step {i}: par={par:#04x}, cur={cur:#04x}, net_mode={par_mode}"
 
         # Strong invariant: decode → re-encode at same depth should be identical
         depth = result_address.shape[1] - 2
         dec = reg_grid.ugc_dec(result_address)
         assert_array_equal(dec[:, :2], xy, err_msg=f'{name}: Roundtrip address mismatch.')
-        assert_array_equal(dec[:, 2], mode, err_msg=f'{name}: Roundtrip mode mismatch.')
+        assert_array_equal(dec[:, 2], mode, err_msg=f'{name}: Roundtrip net_mode mismatch.')
         re_addr = reg_grid.ugc_regions(dec[:, :2], dec[:, 2].astype(np.uint8), depth=depth)
         assert_array_equal(re_addr, result_address, err_msg=f'{name}: Roundtrip mismatch.')
 
@@ -1120,7 +1120,7 @@ def test_ugc_regions_invalid_point(reg_grid):
     # Inputs for a point far outside the grid
     x = np.array([10.0])
     y = np.array([10.0])
-    mode = np.array([1])  # UP mode
+    mode = np.array([1])  # UP net_mode
 
     # Generate the addresses
     result_address = reg_grid.ugc_regions(np.array([x, y]).T, mode, depth=5)
@@ -1133,10 +1133,10 @@ def test_roundtrip_conversion(reg_grid):
     """
     Tests the full encode-decode roundtrip process.
     """
-    # 1. Arrange: Define the initial test point and mode.
+    # 1. Arrange: Define the initial test point and net_mode.
     initial_x = np.array([0.278558759260123456789])
     initial_y = np.array([0.293862554740123456789])
-    initial_mo = np.array([0])  # DOWN mode
+    initial_mo = np.array([0])  # DOWN net_mode
     initial_xym = np.stack([initial_x, initial_y, initial_mo], axis=-1)
 
     # 2. Act: Run the full encode and decode cycle.
@@ -1176,7 +1176,7 @@ def test_ext_neighbours(rel_grid):
 
 
 def test_neighbour_decode_encode_roundtrip_reg01(rel_grid, reg_grid):
-    """Neighbour → decode(xy,mode) → re-encode should roundtrip to the same neighbour addresses.
+    """Neighbour → decode(xy,net_mode) → re-encode should roundtrip to the same neighbour addresses.
     Exercises the transform-then-classify pipeline (no manual C1 flipping), including cascades.
     """
     # Rapa Nui Moai case from test_ext_neighbours
@@ -1192,7 +1192,7 @@ def test_neighbour_decode_encode_roundtrip_reg01(rel_grid, reg_grid):
     xym = reg_grid.ugc_dec(nb_addr)
     mode = xym[:, 2].astype(np.uint8)
 
-    # 3) Re-encode using decoded coordinates + initial mode, for the SAME depth
+    # 3) Re-encode using decoded coordinates + initial net_mode, for the SAME depth
     depth = nb_addr.shape[1] - 2
 
     re_addr = reg_grid.ugc_regions(xym[:, :2], mode, depth=depth)

@@ -58,7 +58,7 @@ class OctahedralNet(CompositeDomain):
             self.base_theta = float(theta) / 1000
             net_name = f'n_oct:{layout}:{int(self.base_theta * 1000):04d}'
         super().__init__(registrar, net_name, 2)
-        tp = H9P.sv  # mode vertices
+        tp = H9P.sv  # net_mode vertices
         self.face_polys = {}
         self.c_oct = c_oct
         self.b_oct = b_oct
@@ -99,7 +99,7 @@ class OctahedralNet(CompositeDomain):
             else:  # if c2 is not None:
                 c2x = []
                 polys = []
-                for (x, y, t) in c2:  # calculate adjusted mode, theta units, x offset, y offset, theta-radians.
+                for (x, y, t) in c2:  # calculate adjusted net_mode, theta units, x offset, y offset, theta-radians.
                     m = int(mode + t) % 2
                     t = int(t % 6)
                     ox = x * self.GW
@@ -107,7 +107,7 @@ class OctahedralNet(CompositeDomain):
                     r = t * self.RT
                     c2x.append((m, t, ox, oy, r))
                 face.set_c2trans(c2x)
-                for c2 in [0, 1, 2]:  # calculate adjusted mode, theta units, x offset, y offset, theta-radians.
+                for c2 in [0, 1, 2]:  # calculate adjusted net_mode, theta units, x offset, y offset, theta-radians.
                     matr, off = face.c2_affine(c2)
                     hh = H9P.hh[bary.mode, c2]
                     polys.append((hh @ matr) + off + face.offset)

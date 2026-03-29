@@ -145,7 +145,7 @@ def create_nlcd_lut():
 
 
 def tri_grid_clipped(level, mode, bbox, h9p=H9P):
-    """Return a set of barycentric xy cell centroids for layer hex_layer, mode M, clipped by a TLBR bounding box"""
+    """Return a set of barycentric xy cell centroids for layer hex_layer, net_mode M, clipped by a TLBR bounding box"""
     tp, lt, bt, rt = bbox
     from hhg9.h9 import H9C, H9R
 
@@ -155,10 +155,10 @@ def tri_grid_clipped(level, mode, bbox, h9p=H9P):
     scale = 1.0
 
     # Pre-fetch lookup tables as NumPy arrays for faster indexing
-    # We assume H9C.off_xy and H9C.mode are indexable by the child indices k
+    # We assume H9C.off_xy and H9C.net_mode are indexable by the child indices k
     off_xy_lut = np.array(H9C.off_xy)
     mode_lut = np.array(H9C.mode)
-    # mo_reg_lut: mapping mode -> 9 child indices [k1, k2, ... k9]
+    # mo_reg_lut: mapping net_mode -> 9 child indices [k1, k2, ... k9]
     mo_reg_lut = np.array([H9R.downs, H9R.ups])
 
     for _ in range(level):
@@ -318,7 +318,7 @@ if __name__ == '__main__':
     tp = float(bhx.coords[:, 1].max())
     cmp, mo = bhx.cm()
     if np.unique(cmp).size > 1:
-        raise NotImplementedError('Need to improve the mode, and components part here.')
+        raise NotImplementedError('Need to improve the net_mode, and components part here.')
     bbox = (tp, lt, bt, rt)  # TLBR
     for layer in range(12, 14):
         pts = tri_grid_clipped(level=layer+3, mode=int(mo[0]), bbox=bbox)

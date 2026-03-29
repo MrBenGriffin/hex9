@@ -17,7 +17,7 @@ def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
     target_rll: (hex_layer,2) lat/lon (or whatever the projector uses)
     initial_mode: (hex_layer,) int {0,1}
     target_octants: (hex_layer,) uint8 oid per point
-    h9c: H9Cell instance providing mode, offsets, and child region info
+    h9c: H9Cell instance providing net_mode, offsets, and child region info
     projector_func: (XY,(...))->(M,2) projects bary XY to target space
     distance_func: ((M,2),(M,2))->(M,) distances in target space
     chunk: max points per beam-search batch (limits peak array size to
@@ -38,12 +38,12 @@ def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
 
     off = h9c.off_xy
 
-    # child region id lists per supercell mode (shape (9,))
+    # child region id lists per supercell net_mode (shape (9,))
     up_children = h9c.ups
     down_children = h9c.downs
     mode_lut = h9c.mode
 
-    # Roots by mode: up→0x16, down→0x49
+    # Roots by net_mode: up→0x16, down→0x49
     root_uris = np.where(initial_mode == 1, 0x16, 0x49).astype(np.uint8)
 
     # Beam state
@@ -55,7 +55,7 @@ def find_coords(target_rll, initial_mode, target_octants, h9c: H9CellLike,
         last = best_paths[:, :, -1]  # (hex_layer,k)
         par_mode = mode_lut[last]  # (hex_layer,k)
 
-        # Select children per parent mode
+        # Select children per parent net_mode
         children = np.where(par_mode[..., None] == 1, up_children, down_children)  # (hex_layer,k,9)
 
         # Expand candidate URIs and coords

@@ -67,17 +67,17 @@ class H9Cell:
 
     Attributes:
         count (int): Count of cells in the classifier.
-        mode (NDArray[np.uint8]): Cell mode (0=down, 1=up).
+        mode (NDArray[np.uint8]): Cell net_mode (0=down, 1=up).
         off_uv (NDArray[np.int8]): UV coordinates, where :math:`uv \\in [-9..9]`.
         off_xy (NDArray[np.float64]): Metric barycentric coordinates (x, y).
         off_ẋy (NDArray[np.float64]): Metric coordinates scaled by :math:`\\sqrt{3}` in x (:math:`\\dot{x}, y`).
         in_scope (NDArray[np.uint8]): Array of in-scope cell IDs.
-        in_mode (NDArray[bool]): Boolean array indicating mode membership.
+        in_mode (NDArray[bool]): Boolean array indicating net_mode membership.
         in_dn (NDArray[bool]): Boolean mask for cells in the **Down** supercell.
         in_up (NDArray[bool]): Boolean mask for cells in the **Up** supercell.
         downs (NDArray[np.uint8]): Array of valid cell IDs in the Down supercell.
         ups (NDArray[np.uint8]): Array of valid cell IDs in the Up supercell.
-        c2 (NDArray[np.uint8]): C2 cluster membership [2, 3, 3] for each mode.
+        c2 (NDArray[np.uint8]): C2 cluster membership [2, 3, 3] for each net_mode.
     """
     count: int
     mode: NDArray[np.uint8]
@@ -107,8 +107,8 @@ def _c2_groups(cell_ids: NDArray[np.uint8], offsets: NDArray[np.float64], superc
     """
     # Hardcoded groups derived from angular sectors for stability
     c2x = [
-        [[0x26, 0x2a, 0x2b], [0x3a, 0x39, 0x49], [0x35, 0x25, 0x21]],  # mode 0 (Down)
-        [[0x39, 0x3a, 0x3e], [0x25, 0x35, 0x34], [0x2a, 0x26, 0x16]]  # mode 1 (Up)
+        [[0x26, 0x2a, 0x2b], [0x3a, 0x39, 0x49], [0x35, 0x25, 0x21]],  # net_mode 0 (Down)
+        [[0x39, 0x3a, 0x3e], [0x25, 0x35, 0x34], [0x2a, 0x26, 0x16]]  # net_mode 1 (Up)
     ]
     return np.array(c2x[supercell_mode]).astype(np.uint8)
 

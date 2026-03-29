@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 from matplotlib.colors import Normalize, LogNorm
 from hhg9 import Registrar, Points
-from hhg9.h9 import H9P
+from hhg9.h9 import H9P, H9O
 from hhg9.h9.polygon import hex_reduce, hex_parents, ctr_from_pars
 from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
 from matplotlib import pyplot as plt, image
@@ -131,8 +131,9 @@ def stage(file: str,
     pop_cmp_f  = src_dir / f"{base}_bry_cmp.npy"
     if pop_bry_f.exists() and pop_cmp_f.exists():
         pop_bary = np.load(pop_bry_f)              # (hex_layer,2)
-        pop_cmp  = np.load(pop_cmp_f)               # (hex_layer,3)
-        pop_pts_b = Points(pop_bary, b_oct, components=pop_cmp)
+        pop_cmp = np.load(pop_cmp_f)               # (hex_layer,3)
+        oids = [H9O.cmp_oid[*tuple(list(c))] for c in pop_cmp]
+        pop_pts_b = Points(pop_bary, b_oct, oid=oids)
         if debug:
             print(f"[pr0007] loaded precomputed bary points: {pop_bary.shape}")
     else:
@@ -247,33 +248,33 @@ def stage(file: str,
         else:
             print("[pr0007] stats: no finite values")
 
-    # Normalization
-    if scale.lower() == 'log':
-        pos = fp > 0
-        if not np.any(pos):
-            # fallback to linear with dummy range
-            vmin, vmax = 0.0, 1.0
-            norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
-            fp_plot = fp
-            print("[pr0007] warning: no positive values for LogNorm; using linear pixels")
-        else:
-            vmin = max(float(fp[pos].min()), float(log_eps))
-            vmax = float(fp.max())
-            if np.isclose(vmin, vmax):
-                vmax = vmin * 10.0
-            # Replace non-positive values by vmin so LogNorm is defined
-            fp_plot = fp.copy()
-            fp_plot[~pos] = vmin
-            norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
-    else:
-        vmin = float(np.nanmin(fp))
-        vmax = float(np.nanmax(fp))
-        if not np.isfinite(vmin) or not np.isfinite(vmax):
-            vmin, vmax = 0.0, 1.0
-        if np.isclose(vmin, vmax):
-            vmax = vmin + 1.0
-        fp_plot = fp
-        norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
+    # # Normalization
+    # if scale.lower() == log:
+    #     pos = fp > 0
+    #     if not np.any(pos):
+    #         # fallback to linear with dummy range
+    #         vmin, vmax = 0.0, 1.0
+    #         norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
+    #         fp_plot = fp
+    #         print("[pr0007] warning: no positive values for LogNorm; using linear pixels")
+    #     else:
+    #         vmin = max(float(fp[pos].min()), float(log_eps))
+    #         vmax = float(fp.max())
+    #         if np.isclose(vmin, vmax):
+    #             vmax = vmin * 10.0
+    #         # Replace non-positive values by vmin so LogNorm is defined
+    #         fp_plot = fp.copy()
+    #         fp_plot[~pos] = vmin
+    #         norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
+    # else:
+    vmin = float(np.nanmin(fp))
+    vmax = float(np.nanmax(fp))
+    if not np.isfinite(vmin) or not np.isfinite(vmax):
+        vmin, vmax = 0.0, 1.0
+    if np.isclose(vmin, vmax):
+        vmax = vmin + 1.0
+    fp_plot = fp
+    norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
 
     colors = cmap(norm(fp_plot))
     colors = np.asarray(colors, dtype=float)

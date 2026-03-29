@@ -91,7 +91,7 @@ class Points:
 
     @classmethod
     def class_mode(cls, oid):
-        """Given (N,) uint8 oid array, return (oid, mode) where mode = popcount(oid) % 2."""
+        """Given (N,) uint8 oid array, return (oid, net_mode) where net_mode = popcount(oid) % 2."""
         oid = np.asarray(oid, dtype=np.uint8)
         bits = np.bitwise_count(oid)
         mode = np.ascontiguousarray(bits % 2, dtype=np.uint8)

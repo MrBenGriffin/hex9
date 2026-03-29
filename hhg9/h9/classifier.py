@@ -15,7 +15,7 @@ Here we are only interested in a small area, defined by just enough boundaries t
 the 12 cells (triangles) that compose the two supercells (each have nine, but six cells are shared).
 
 Therefore, we use a fourfold coordinate scheme,
- * M is the mode (polarity of cell),
+ * M is the net_mode (polarity of cell),
  * H is the horizontal band it belongs to.
  * P is the positive slope band it belongs to.
  * hex_layer is the negative slope band it belongs to.
@@ -123,8 +123,8 @@ def in_down(ẋ, y, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
 
 
 def in_scope(ẋ, y, mode=1, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
-    """Vectorised scope test supporting array-valued mode.
-    Parameters broadcast like NumPy: ẋ, y, and mode may be scalars or arrays.
+    """Vectorised scope test supporting array-valued net_mode.
+    Parameters broadcast like NumPy: ẋ, y, and net_mode may be scalars or arrays.
     Returns a boolean array of the broadcast shape.
     """
     up = in_up(ẋ, y, h9c)
@@ -135,7 +135,7 @@ def in_scope(ẋ, y, mode=1, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
 
 def in_scope_xym(xym, h9c: H9ClassifierLike = H9CL) -> NDArray[bool]:
     """Convenience vectorised scope test for packed barycentric triplets.
-    Expects xym[..., 0] = ẋ (√3·x), xym[..., 1] = y, xym[..., 2] = mode {0,1}.
+    Expects xym[..., 0] = ẋ (√3·x), xym[..., 1] = y, xym[..., 2] = net_mode {0,1}.
     Returns a boolean mask matching xym[..., 0].shape.
     """
     xym = np.asarray(xym)
@@ -316,12 +316,12 @@ def classify_cell(ẋ, y, h9c: H9ClassifierLike = H9CL) -> NDArray[np.uint8]:
 
 def classify_mode_cell(ẋ, y, m, h9c: H9ClassifierLike = H9CL) -> NDArray[np.uint8]:
     """
-    return the cell id (uint8 in 0x00–0x5F), given (ẋ, y, mode) and constants
+    return the cell id (uint8 in 0x00–0x5F), given (ẋ, y, net_mode) and constants
     The difference is miniscule but might affect some rare edge cases.
 
     :param ẋ: np.ndarray;  √3-scaled x-coordinates (classifier frame)
     :param y: np.ndarray;  y-coordinates in classifier frame
-    :param m: np.ndarray;  mode of supercell
+    :param m: np.ndarray;  net_mode of supercell
     :param h9c: H9GConst; H9 constants bundle (defaults to global H9GC)
     :return: np.ndarray;  Array of cell IDs (nybble: (h_id << 4) | (p_id << 2) | n_id)
 

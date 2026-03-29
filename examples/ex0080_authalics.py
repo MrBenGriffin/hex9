@@ -229,7 +229,7 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
 
 
 if __name__ == '__main__':
-    depth = 5  # 0,...5 √
+    depth = 4  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
     b_oct.no_warp()

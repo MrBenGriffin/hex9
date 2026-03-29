@@ -60,7 +60,7 @@ net_layouts = {
         'width': 24,   # number of full triangles across * 6
         'height': 18,  # number of full triangles up * 9
         'grid': {
-            (-1, -1, +1): (1., 4., 3),  # NWP; Rotation in odd = flip mode and rotate.
+            (-1, -1, +1): (1., 4., 3),  # NWP; Rotation in odd = flip net_mode and rotate.
             (-1, -1, -1): (1., 2., 3),  # SWP
             (+1, -1, +1): (3., 4., 0),  # NWA
             (+1, -1, -1): (3., 2., 0),  # SWA

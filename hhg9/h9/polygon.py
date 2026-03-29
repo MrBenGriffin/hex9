@@ -61,28 +61,28 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
     poly_eps = 1 - 1e-16
     pts = {
         # Clockwise.
-        (0, 0): [  # c2 half-hexagons mode 0
+        (0, 0): [  # c2 half-hexagons net_mode 0
             [(3, 1), (2, 0), (0, 0), (-1, 1)],
             [(0, -2), (-1, -1), (0, 0), (2, 0)],
             [(-3, 1), (-1, 1), (0, 0), (-1, -1)]
         ],
-        (0, 1): [  # c2 half-hexagons mode 1
+        (0, 1): [  # c2 half-hexagons net_mode 1
             [(-1, -1), (0, 0), (2, 0), (3, -1)],
             [(-1, 1), (0, 0), (-1, -1), (-3, -1)],
             [(2, 0), (0, 0), (-1, 1), (0, 2)]
         ],
-        (1, 0): [  # c2 hexagons mode 0;  final 2 pts in opp. mode.
+        (1, 0): [  # c2 hexagons net_mode 0;  final 2 pts in opp. net_mode.
             # If exterior, they are idx 2,1 (eg (0,0) (2,0)).
             [(3, 1), (2, 0), (0, 0), (-1, 1), (0, 2), (2, 2)],        # (0, 2), (2, 2)
             [(0, -2), (-1, -1), (0, 0), (2, 0), (3, -1), (2, -2)],    # (3, -1), (2, -2)
             [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0)]   # (-3, -1), (-4, 0)
         ],
-        (1, 1): [  # c2 hexagons mode 1;  final 2 pts in opp. mode - exterior.
+        (1, 1): [  # c2 hexagons net_mode 1;  final 2 pts in opp. net_mode - exterior.
             [(-1, -1), (0, 0), (2, 0), (3, -1), (2, -2), (0, -2)],    # (2, -2), (0, -2)
             [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0), (-3, 1)],  # (-4, 0), (-3, 1)
             [(2, 0), (0, 0), (-1, 1), (0, 2), (2, 2), (3, 1)]         # (2, 2), (3, 1)
         ],
-        (2, 0): [  # region triangles mode 0
+        (2, 0): [  # region triangles net_mode 0
             [  # 0x26, 0x2a, 0x2b: c0 VΛV
                 [(0, 0), (-1, 1), (1, 1)],  # 26
                 [(1, 1), (2, 0), (0, 0)],  # 2a
@@ -97,7 +97,7 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
                 [(-2, 0), (-3, 1), (-1, 1)],  # 21
             ]
         ],
-        (2, 1): [  # region triangles mode 1
+        (2, 1): [  # region triangles net_mode 1
             [  # 0x39, 0x3a, 0x3e: c0  ΛVΛ
                 [(0, 0), (1, -1), (-1, -1)],  # 39
                 [(1, -1), (0, 0), (2, 0)],  # 3a
@@ -136,8 +136,8 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
                 (3, -1), (-3, -1), (0, 2)
             ]
         ],
-        # Unshared points of cell excluding (0,0) use only on one mode
-        # The other mode will be just the (0,0)
+        # Unshared points of cell excluding (0,0) use only on one net_mode
+        # The other net_mode will be just the (0,0)
         (5, 0): [[(2, 0), (1, -1), (-1, -1), (-2, 0), (-1, 1), (1, 1)]]
     }
 
@@ -251,7 +251,7 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
 
     Args:
         levels: Subdivision depth.
-        mode: Root mode (0 or 1).
+        mode: Root net_mode (0 or 1).
         h9p: Polygon LUT.
 
     Returns:

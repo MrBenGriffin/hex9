@@ -191,7 +191,7 @@ def sq_grid_vx(scale: float = 1000, mode: int = 0):
     trx = in_scope(tx, rec[:, 1], mo)  # ~half a pixel in coord space
     return wid, hgt, rec, trx, pix_x, pix_y
 
-def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5):
+def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5, net_mode: int = -1):
     """
     Return a rectilinear grid of points within a quadrilateral.
     Also returns the mask and scales.
@@ -215,6 +215,11 @@ def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5):
         pixel outward.  Adjacent quads therefore overlap by one pixel at
         shared edges, eliminating tears between c2 / half-hex regions.
         Pass ``tol=0`` to restore the original strict boundary.
+    net_mode : int
+        Placed orientation of the sub-triangle in net space (-1 = unspecified).
+        When mode=1 (Λ, apex-up), the flat top edge (cmaxy) is a seam that
+        belongs to the adjacent mode-0 quad by convention; those grid rows are
+        excluded from the mask.  When mode=0 or -1, no adjustment is made.
 
     Returns
     -------
@@ -245,6 +250,8 @@ def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5):
     grid = np.stack((xx.ravel(), yy.ravel()), axis=1)
     dist_tol = tol / scale if (tol > 0.0 and scale > 0.0) else 0.0
     trx = inside_convex_polygon_cw(grid, placed, tol=dist_tol)
+    if net_mode == 1:
+        trx &= ~np.isclose(grid[:, 1], cmaxy, atol=0.4 / scale)
     sx = (wid - 1) / cw if wid > 1 else 1.0
     sy = (hgt - 1) / ch if hgt > 1 else 1.0
     return wid, hgt, grid, trx, (np.array([cminx, cminy, cmaxx, cmaxy]), (sx, sy))
@@ -327,7 +334,7 @@ def hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct):
     Args:
         hex_par:  (H, 2) hex parent centre coordinates in b_oct.
         hex_oid:  (H,)   octant face id for each hex (from hex_parents).
-        xpm:      (H,)   mode index (0 or 1).
+        xpm:      (H,)   net_mode index (0 or 1).
         xc2:      (H,)   c2 index (0, 1, or 2).
         scale:    scalar scale factor for this layer (from hex_parents).
         n_oct:    OctahedralNet domain instance.
@@ -345,13 +352,20 @@ def hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct):
             par_n = hex_par[fm] @ proj.matrix + proj.offset
             hex_verts_n[fm] = par_n[:, None, :] + H9P.hx[xpm[fm], xc2[fm]] * scale @ proj.matrix
         else:
+            from hhg9.h9.classifier import classify_cell
+            from hhg9.h9.region import H9R
+            bary_mode = proj.rev_cs.mode
+            fm_idx = np.where(fm)[0]
+            face_cid = classify_cell(H9K.R3 * hex_par[fm, 0], hex_par[fm, 1])
+            face_c2 = H9R.mcc2[bary_mode, face_cid]
             for c2v in range(3):
-                c2m = fm & (xc2 == c2v)
-                if not np.any(c2m):
+                local_mask = face_c2 == c2v
+                if not np.any(local_mask):
                     continue
+                c2m = fm_idx[local_mask]
                 matr, off_c2 = proj.c2_affine(c2v)
                 par_n = hex_par[c2m] @ matr + off_c2 + proj.offset
-                hex_verts_n[c2m] = par_n[:, None, :] + H9P.hx[xpm[c2m], c2v] * scale @ matr
+                hex_verts_n[c2m] = par_n[:, None, :] + H9P.hx[xpm[c2m], xc2[c2m]] * scale @ matr
     return Points(hex_verts_n.reshape(-1, 2), n_oct)
 
 
@@ -391,7 +405,7 @@ def enmesh(pts, levels: int = 35, shape=None):
             continue
         i = ev.i  # 0..D-1
 
-        # Child c2 for each row under the parent mode
+        # Child c2 for each row under the parent net_mode
         c2 = H9R.mcc2[ev.pmo, ev.cid]  # (hex_layer,)
         hh_shape = hh[ev.pmo, c2]  # pmo
 

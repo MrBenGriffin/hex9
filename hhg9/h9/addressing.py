@@ -33,12 +33,12 @@ The core structure is as follows
 L*[0...8]  Within each hexagon, there are a group of six full hexagons of the subsequent hex_layer,
            and six half-hexagons of the subsequent hex_layer.  They are all numbered between 0..8
            The specific pattern is documented elsewhere.
-1*[mm|reg] Metadata; Without recognising the region-mode of the terminal hexagon, there is some ambiguity
-           Therefore, we need a digit to indicate the region-mode.  It is also useful to record
-           the root mode (which of the octahedron faces this address belongs to).
+1*[mm|reg] Metadata; Without recognising the region-net_mode of the terminal hexagon, there is some ambiguity
+           Therefore, we need a digit to indicate the region-net_mode.  It is also useful to record
+           the root net_mode (which of the octahedron faces this address belongs to).
            Likewise, we want to record the terminating region (0..11) in order to recover an address in full.
 
-           Of these values, only the region-mode of the terminal hexagon is considered to be essential for bin-hex key.
+           Of these values, only the region-net_mode of the terminal hexagon is considered to be essential for bin-hex key.
 
 ***Example***
 Consider the address [5, 7, 6, 21]. What is its latitude and longitude?
@@ -82,7 +82,7 @@ class Style(Enum):
     UR64 = 9
 
 
-# ---------- Region-ID scheme (even → mode 0, odd → mode 1) ----------
+# ---------- Region-ID scheme (even → net_mode 0, odd → net_mode 1) ----------
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +107,7 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
     """
     Builds the Region ID Scheme once and freezes it.
 
-    Enforces that parity equals mode (even→0, odd→1).
+    Enforces that parity equals net_mode (even→0, odd→1).
 
     Args:
         h9c: The cell lattice definition.
@@ -128,10 +128,10 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
     ], dtype=np.uint8)
 
     mo_c2 = np.array([
-        [  # mode 0
+        [  # net_mode 0
             # s, s, u    s,  s, u    s, s,  u   Shared/unshared
             [6, 9, 2], [10, 7, 0], [8, 11, 4]  # c2=0,1,2
-        ], [  # mode 1
+        ], [  # net_mode 1
             #  s, s, u    s,  s, u    s, s,  u   Shared/unshared
             [7, 10, 5], [11, 8, 3], [9, 6, 1]  # c2=0,1,2
         ]
@@ -153,11 +153,11 @@ def _region_scheme(h9c: H9CellLike, h9r: H9RegionLike) -> RegionIdScheme:
                 mc_c2[mo, rg] = c2
 
     # mc_c2 = np.array([[mo, cell2rid[cx], c2] for mo in [0, 1] for c2, rx in enumerate(H9C.c2[mo]) for cx in rx], dtype=np.uint8)
-    # Enforce parity==mode only for in-bounds cells.
+    # Enforce parity==net_mode only for in-bounds cells.
     # rid2cell[12..15] are OOB placeholders (0x5F) and should not participate in the parity check.
     oob_cell = np.uint8(0x5F)
     valid = rid2cell != oob_cell
-    assert np.all(parity[valid] == h9c.mode[rid2cell[valid]]), "rid parity must match cell mode (excluding OOB)"
+    assert np.all(parity[valid] == h9c.mode[rid2cell[valid]]), "rid parity must match cell net_mode (excluding OOB)"
     proto = cell2rid[h9r.proto]
     return RegionIdScheme(rid2cell=rid2cell, cell2rid=cell2rid, modes=parity, props=mo_c2, c2=mc_c2, proto=proto,
                           r_size=r_size)
@@ -179,7 +179,7 @@ class RegionPacker(AddressPackerLike):
     Attributes:
         pack_fn: Callable taking nibbles -> packed words.
         unpack_fn: Callable taking packed words -> nibbles.
-        octant_mode_fn: Optional callable mapping octant ID -> mode (0/1).
+        octant_mode_fn: Optional callable mapping octant ID -> net_mode (0/1).
     """
     pack_fn: callable | None = None
     unpack_fn: callable | None = None
@@ -389,7 +389,7 @@ def neighbours(pts, layer=32, coalesce=True):
     **Coalescing Logic:**
     At a specific hex_layer, 3 "half-hex" triangles meet at a vertex. To form a valid
     Hexagon Grid for binning, these three must be merged (coalesced) into one logical hexagon.
-    This involves checking the parent hex_layer's mode and adjusting the C2 cluster accordingly.
+    This involves checking the parent hex_layer's net_mode and adjusting the C2 cluster accordingly.
 
     Args:
         pts (Points): The input barycentric points.
@@ -418,7 +418,7 @@ def neighbours(pts, layer=32, coalesce=True):
     regions = xy_regions(coords[active], mode[active], layer)  # no depth?!
     if coalesce:
         local_m0 = H9C.mode[regions[:, -2]].astype(bool)
-        active[active] = local_m0  # only mode 1 (mode 0 -> false).
+        active[active] = local_m0  # only net_mode 1 (net_mode 0 -> false).
         regions = regions[local_m0]
     xa = x[active]
     ya = y[active]
@@ -448,24 +448,24 @@ class HexLUT(HexLUTLike):
 
 _m_c2_hx_v2025 = [
     # This is the late-version (2025/2026):
-    # - mode 0 has a cluster of 3 '0' hexes around its origin.
-    # - mode 1 has a cluster of 3 '1' hexes around its origin.
+    # - net_mode 0 has a cluster of 3 '0' hexes around its origin.
+    # - net_mode 1 has a cluster of 3 '1' hexes around its origin.
     # Layer i+1 hexes will have a cluster of 3 '2' hexes at the centres
     #     of the hex_layer i+0 0/1/2 (and 3/4/5, 6/7/8) clusters
     # This dict is the ground-truth for all hexagon digits.
     # It considers the digits from the (triangular) region/super-region context.
     # Consider an equilateral triangle at Layer i.  In hhg9, this is divided into 3 half-hexes (aka c2) at Layer i.
     # - because each triangle in hhg9 is divided into 9 triangles (regions), each c2 contains 3 hex_layer i+1 regions,
-    # each having (according to its mode) 3 half-hexes.
-    # regions are 'shared' or 'unshared'; six regions are shared across both modes. six regions are 1-mode only.
-    # Given a Li; mode j, it's Li+1 hexagons are shared with every other Li; mode j triangle.
+    # each having (according to its net_mode) 3 half-hexes.
+    # regions are 'shared' or 'unshared'; six regions are shared across both modes. six regions are 1-net_mode only.
+    # Given a Li; net_mode j, it's Li+1 hexagons are shared with every other Li; net_mode j triangle.
     # The hexagon=>sub-hexagon relationships look different, but are emergent from the definition as above.
     # Within every hexagon there will be child hexagons 0,1,2,3,4,5 and 3 'split' pairs of half-hexagons 6,7,8.
     # The splits are such that they do not share a c2.  For example, the two '6' half-hexagons might be in
     # modes [0, 2].  '6' half-hexes are 'wings' of the '0' hexagon, '7' half-hexes are the 'wings' of '1' hexagon,
     # and '8' half-hexes are the 'wings' of the '2' hexagon
-    [  # Layer 'i+0'; super-region mode 0 (V), by c2 orientation, referenced by region-id (0..11) (centred with 0-hex)
-        # Note: hex digits ['1', '5', '7'] are not found in i+1 of mode 0.
+    [  # Layer 'i+0'; super-region net_mode 0 (V), by c2 orientation, referenced by region-id (0..11) (centred with 0-hex)
+        # Note: hex digits ['1', '5', '7'] are not found in i+1 of net_mode 0.
         [  # cells of c2=0 of V super-region
             # V: regions [6,9,2] are c2=0. Ordered from centre edge to vertex
             [6, [3, 0, 6]],  # shared,   V; cell:0x26; i+1: c2.0=hex-'3', c2.1=hex-'0', c2.2=hex-'6'
@@ -483,8 +483,8 @@ _m_c2_hx_v2025 = [
             [4, [8, 4, 2]],  # unshared, V; cell:0x21; i+1: c2.0=hex-'8', c2.1=hex-'4', c2.2=hex-'2'
         ],
     ],
-    [  # Layer 'i+0'; super-region mode 0 (Λ), by c2 orientation, referenced by region-id (0..11) (centred with 1-hex)
-        # Note: hex digits ['0', '4', '6'] are not found in i+1 of  mode 1:
+    [  # Layer 'i+0'; super-region net_mode 0 (Λ), by c2 orientation, referenced by region-id (0..11) (centred with 1-hex)
+        # Note: hex digits ['0', '4', '6'] are not found in i+1 of  net_mode 1:
         [  # cells of c2=0 of Λ super-region
             # Λ: regions [7,a,5] are c2=0. Ordered from centre edge to vertex
             [7, [3, 7, 1]],  # shared,   Λ; cell:0x39; i+1: c2.0=hex-'3', c2.1=hex-'7', c2.2=hex-'1'
@@ -517,14 +517,14 @@ def _reg_hex_lut(oob, h9r, scheme: RegionAddressLike) -> HexLUT:
     mc2[mc2 == h9r.invalid_region] = oob
     # 2x12x12: This is 3 region layers i=[0,1,2] at a time.  Why?
     # We should probably limit this to 2x12x12x2.
-    # At i=0, this determines the mode context. We need this because regions 6..11 are shared across modes.
+    # At i=0, this determines the net_mode context. We need this because regions 6..11 are shared across modes.
     # At i=1, determined by c2 context: given region x, we can identify the c2 of i=0; (+hex-group).
     # At i=2, this determines the c2 context of i=1, for which we have a hex-digit.
     # What happens if we have less than 3 regions in the list? Root has 'virtual' ancestry identical to self.
     # Root hex ids are split.  The octahedral 'actual' id is between 0..11.
     # However, the internal representation of Layer 0
-    # uses the C2 value (0,1,2) of the half-hex of each face as the hex-identity for mode=0 faces,
-    # and (3-C2) % 3 for mode=1 faces.
+    # uses the C2 value (0,1,2) of the half-hex of each face as the hex-identity for net_mode=0 faces,
+    # and (3-C2) % 3 for net_mode=1 faces.
     lut = np.full((2, rg_sz, rg_sz, 2), 0x0F, dtype=np.uint8)
     base = _m_c2_hx_v2025
     for p_mo in range(2):  # This is same as the parity of p_reg
@@ -595,7 +595,7 @@ def _hex_reg_lut(oob, scheme: RegionAddressLike):
     Builds the Hex-to-Region lookup table.
     """
     hx_sz = 9  # 0..8 are valid; oob = 0x0F.
-    # Given a hex digit, it's mode and c2, we will return the region id, it's parent-mode, and c2.
+    # Given a hex digit, it's net_mode and c2, we will return the region id, it's parent-net_mode, and c2.
     lut = np.full((hx_sz, 2, 3, 3), oob, dtype=np.uint8)
     base = _m_c2_hx_v2025
     for p_mo in range(2):
@@ -612,18 +612,18 @@ def _luts(scheme: RegionAddressLike):
     """Internal helper to construct intermediate mappings."""
     hx_c2_pmo = {}
     hx_cmo_c2 = {}
-    #     [  # super-region mode down (V)
+    #     [  # super-region net_mode down (V)
     #         [  # cells of c2=0 of V super-region
-    #             [6, [0, 4, 7]],  # shared,   same mode as super-region 0x26 (pL=:3)
-    #             [9, [7, 4, 2]],  # shared,   diff mode to super-region 0x2a
-    #             [2, [3, 6, 2]],  # unshared, same mode as super-region 0x2B
+    #             [6, [0, 4, 7]],  # shared,   same net_mode as super-region 0x26 (pL=:3)
+    #             [9, [7, 4, 2]],  # shared,   diff net_mode to super-region 0x2a
+    #             [2, [3, 6, 2]],  # unshared, same net_mode as super-region 0x2B
     #     ],]
-    for s_mo, s_c2s in enumerate(_m_c2_hx_v2025):  # for each sc.mode (0, 1) walk through the sc.c2s.
+    for s_mo, s_c2s in enumerate(_m_c2_hx_v2025):  # for each sc.net_mode (0, 1) walk through the sc.c2s.
         for sc2, rg_hx in enumerate(s_c2s):  # for each sc.c2 (0,1,2) get the regions and their hexes.
             for plc, triple in enumerate(rg_hx):  # *do* need the parent pos here.
                 t_mo = (plc & 1) ^ s_mo
                 (rgn, hxs) = triple
-                c_mo = int(scheme.modes[rgn])  # this is the mode of this region.
+                c_mo = int(scheme.modes[rgn])  # this is the net_mode of this region.
                 for c_c2, hx in enumerate(hxs):  # for each c2 of this region, there is a hex.
                     k1 = (t_mo, hx, rgn)
                     if k1 in hx_c2_pmo:
@@ -703,9 +703,9 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
             p_mo = scheme.modes[p]
 
         # Tail metadata uses one byte:
-        # bit7: parent-mode of terminating region (par_mode)
+        # bit7: parent-net_mode of terminating region (par_mode)
         # bits6..5: terminating c2
-        # bit4: root mode (mo)
+        # bit4: root net_mode (mo)
         # bits3..0: terminating region id (h)
         if tail_style is TailStyle.reversible:
             tail_ids = tail_pack_reversible(p_mo, c2, mo, h)
@@ -746,12 +746,12 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     else:
         body = hx
 
-    # unpack meta-tail: mode + tail region-id (RegionIdScheme id)
+    # unpack meta-tail: net_mode + tail region-id (RegionIdScheme id)
     c_mo, c2, r_mo, tail_h = tail_unpack_reversible(tail)
 
     layer = body.shape[1]
 
-    # Recover canonical octant from root hex + mode
+    # Recover canonical octant from root hex + net_mode
     root_hex = body[:, 0]
     hex_reg = HEX_LUTS.hex_reg
     oob = HEX_LUTS.hex_oob
@@ -761,7 +761,7 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
 
     # ROOT super-regions mark hex digits as 0,1,2 in line with nominal-c2.
     # However, Hex-L0 c2 is a bit odd and this might need looking at.
-    # I think that c2=0 is stable, but c2=1/c2=2 might be swapped under 1 mode.
+    # I think that c2=0 is stable, but c2=1/c2=2 might be swapped under 1 net_mode.
     # body[:, 0] = oct_c2[:, 1]  # This should be correct.
 
     # Bottom-up reconstruction: [tail, ..., proto]

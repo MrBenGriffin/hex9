@@ -61,7 +61,7 @@ if __name__ == '__main__':
     xy = bpts.coords.copy()
     for _ in range(50):
         rg = xy_regions(xy, mode, 38)  # encode (layers depth chosen internally)
-        xym = regions_xy(rg)  # decode -> (x, y, mode)
+        xym = regions_xy(rg)  # decode -> (x, y, net_mode)
         xy = xym[:, :2]
         mode = xym[:, 2].astype(np.uint8)
 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     import numpy.testing as npt
 
     npt.assert_allclose(xy, xy_ref, rtol=0, atol=1e-15)
-    assert not em, "mode mismatch in round-trip"
+    assert not em, "net_mode mismatch in round-trip"
 
     x_u, y_u = ulps(xy_ref[:, 0], xy[:, 0]).max(), ulps(xy_ref[:, 1], xy[:, 1]).max()
     print(f'Maximum ULP deviation: x:{x_u}, y:{y_u}')

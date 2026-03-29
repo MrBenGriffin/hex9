@@ -65,7 +65,7 @@ def run():
     flat = fs.image(sp_pl)     # convert points back to an image.
     if flat.dtype != np.uint8:
         flat = (flat * 255).astype(np.uint8)
-    img = Image.fromarray(flat)  # mode auto-detected from shape: (H,W,3)→RGB, (H,W,4)→RGBA
+    img = Image.fromarray(flat)  # net_mode auto-detected from shape: (H,W,3)→RGB, (H,W,4)→RGBA
     img.save("output/ex0042_recovered.png")  # PNG keeps alpha
     print(f'fig saved at output/ex0042_recovered.png')
 

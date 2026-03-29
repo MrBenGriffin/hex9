@@ -104,7 +104,7 @@ def run(reg, logger, refs, layers=36):
     b_rys.domain.register_format(h9f)
     print('projecting b_oct->g_gcd')
     b_rtp = reg.project(b_rys, ['b_oct', 'g_gcd'])
-    # Get the octant id and mode of each point (discarding mode here).
+    # Get the octant id and net_mode of each point (discarding net_mode here).
     oc, mo = b_rys.cm()
     locs = pt_loc(b_rys.coords, mo)
     # Now generate the set of h9f labels for each point, and convert to np.array

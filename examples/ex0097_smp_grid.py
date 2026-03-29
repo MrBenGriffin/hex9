@@ -19,14 +19,19 @@ Last Tested
 12 Oct 2025 (passed)
 """
 import numpy as np
-from matplotlib import image
+from matplotlib import image, pyplot as plt
+from matplotlib.collections import PolyCollection
 from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.base import registrar
 from hhg9.domains.nets import net_layouts
 from hhg9.h9 import H9O, H9P
-from hhg9.h9.grid import fit, qa_grid
+from hhg9.h9.addressing import hex_str_encode
+from hhg9.h9.binning import hex_reduce, hex_parents
+from hhg9.h9.grid import fit, qa_grid, hex_verts_in_noct
 from PIL import Image  # image saving
+
+from hhg9.h9.tail import tail_unpack_reversible, TailStyle
 
 
 def run(*, flavours=None, file='src/world360x180.png', scale=1350):
@@ -51,29 +56,55 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
             prj = n_oct.projs[name]
             for c2 in [0, 1, 2]:
                 hhp = H9P.hh[mo, c2]
-                grid = qa_grid(hhp, scale, affine=prj.c2_affine(c2))
+                placed_mode = prj.c2trans[c2][0] if prj.c2trans is not None else -1
+                grid = qa_grid(hhp, scale, affine=prj.c2_affine(c2), net_mode=placed_mode)
                 pix, msk = grid[2], grid[3]
                 if np.any(msk):
                     pix = Points(pix[msk] + prj.offset, n_oct, oid)
                     pt_list.append(pix)
                 else:
                     print(f'No points for {name} {c2}')
-        pts = Points.concat(pt_list)
+        pts = Points.concat(pt_list)  # The n_oct grid of points
         px, py = fit(pts, img_w, img_h)
-        ref = reg.project(pts, [n_oct, b_oct, 'g_gcd'])  # ref. addresses on a cartesian unit sphere
-
-        ok = np.all(np.isfinite(ref.coords), axis=1)
-        px_ok = px[ok]
-        py_ok = py[ok]
-
-        _, idx = src.query(ref.coords[ok], workers=-1)  # query KDTree and return indices of pc_sp
+        b_pxs = reg.project(pts, [n_oct, b_oct])
+        ok = b_oct.valid(b_pxs)
+        px = px[ok]
+        py = py[ok]
+        b_pts = b_pxs.select(ok)
+        ref = reg.project(b_pts, [b_oct, 'g_gcd'])  # ref. addresses on a cartesian unit sphere
+        _, idx = src.query(ref.coords, workers=-1)  # query KDTree and return indices of pc_sp
         samples = pc_px.samples[idx]
+        fig = plt.figure(figsize=(img_w/100, img_h/100), dpi=100, frameon=False)
+        fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+        ax = fig.add_axes([0, 0, 1, 1])  # span the whole figure
+
         rgba = samples if samples.shape[1] == 4 else np.hstack(
             (samples, np.ones((samples.shape[0], 1), dtype=samples.dtype))
         )
         out = np.zeros((img_h, img_w, 4), dtype=float)
-        out[py_ok, px_ok] = rgba
-        Image.fromarray((out * 255).astype(np.uint8)).save(f'output/ex0095_{flavour}.png')
+        out[py, px] = rgba
+        plt.imshow(out, extent=[0, n_oct.wi, 0, n_oct.he], alpha=1.0, origin='upper', aspect='auto')
+        lw = [2, 1]
+        for li, layer in enumerate([1, 2]):
+            hex_num, hex_v_k, hex_inv, counts = hex_reduce(b_pts, layer)
+            # tails = tail_key_from_reversible(hex_v_k[:, -1])
+            hex_par, hex_oid, scale = hex_parents(b_oct, hex_v_k, hex_num)
+            xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+            verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
+            ctrs_n = np.mean(verts_n.coords.reshape(-1, 6, 2), axis=1)
+            hexes = verts_n.coords.reshape(-1, 6, 2)
+
+            collection = PolyCollection(hexes, facecolors='none', ec=(1, 1, 1, 0.5), linewidth=lw[li], antialiaseds=True)
+            ax.add_collection(collection)
+
+            # for ctr, lab in zip(ctrs_n, hex_v_k):
+            #     hex_addr = lab
+            #     label = f'{hex_addr[layer]}'
+            #     ax.text(ctr[0], ctr[1], label,
+            #             fontsize=12, ha='center', va='center',
+            #             color='black', zorder=100, clip_on=True)
+        f_name = f"output/ex0097_{flavour}_012.png"
+        fig.savefig(f_name, dpi=100)
 
 
 if __name__ == '__main__':

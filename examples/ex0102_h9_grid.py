@@ -15,10 +15,15 @@ Last Tested
 """
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.collections import PolyCollection
+
 from hhg9 import Registrar, Points
 from PIL import Image  # image saving
 from hhg9.formats import OctahedralH9
 from hhg9.h9.addressing import TailStyle, hex_str_encode
+from hhg9.h9.binning import hex_reduce, hex_parents, ctr_from_pars
+from hhg9.h9.grid import hex_verts_in_noct
+from hhg9.h9.tail import tail_key_from_reversible, tail_unpack_reversible
 
 
 def run(layout, scale, depths):
@@ -65,6 +70,19 @@ def run(layout, scale, depths):
     py = pix_h - 1 - py[good]
 
     for layer in depths:
+        hex_num, hex_v_k, hex_inv, _ = hex_reduce(ref, layer)
+        # tails = tail_key_from_reversible(hex_v_k[:, -1])
+        hex_par, hex_oid, scale = hex_parents(b_oct, hex_v_k, hex_num)
+        xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+
+        # ctrs_b = ctr_from_pars(b_oct, hex_par, hex_oid, scale, tails)
+        # ctrn_n = reg.project(ctrs_b, [b_oct, n_oct])
+        # ctrs_n = ctrn_n.coords
+        # hex_par: (H, 2) hex parent centre coordinates in b_oct.
+        verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
+        ctrs_n = np.mean(verts_n.coords.reshape(-1, 6, 2), axis=1)
+        # ctrs_n = reg.project(ctrs_b, [b_oct, n_oct])
+
         adr = hex_str_encode(ref, layer=layer, tail_style=TailStyle.key)
         idt = np.array([int(a[layer:layer+1], 16) for a in adr], dtype=np.uint8)
         rgba = cols[idt] * 255
@@ -72,13 +90,37 @@ def run(layout, scale, depths):
         # Colour each unique hex with a repeatable palette index
         out = np.ones((pix_h, pix_w, 4), dtype=float)
         out[py, px] = rgba
-        f_name = f"output/ex0101_{layout}_L{layer}.png"
-        Image.fromarray(out.astype(np.uint8)).save(f_name)
-        print(f"Saved {f_name}")
+
+        fig = plt.figure(figsize=(pix_w/100, pix_h/100), dpi=100, frameon=False)
+        fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+
+        ax = fig.add_axes([0, 0, 1, 1])  # span the whole figure
+        plt.imshow(out.astype(np.uint8),
+                   extent=[0, n_oct.wi, 0, n_oct.he], alpha=0.3,
+                   origin='upper', aspect='auto')
+
+        hexes = verts_n.coords.reshape(-1, 6, 2)
+        # bbox = verts_n.bbox()  # (x_min, y_min, x_max, y_max)
+        # ax.set_xlim(bbox[0], bbox[2])
+        # ax.set_ylim(bbox[1], bbox[3])
+
+        collection = PolyCollection(hexes, facecolors='none', ec=(0, 0, 0, 0.5), linewidth=1, antialiaseds=True)
+        ax.add_collection(collection)
+
+        for ctr, lab in zip(ctrs_n, hex_v_k):
+            hex_addr = lab
+            label = f'{hex_addr[layer]}'
+            ax.text(ctr[0], ctr[1], label,
+                    fontsize=12, ha='center', va='center',
+                    color='black', zorder=100, clip_on=True)
+
+        f_name = f"output/ex0102_{layout}_L{layer}.png"
+        fig.savefig(f_name, dpi=100)
+        print(f'fig saved at {f_name}')
 
 
 if __name__ == "__main__":
     from hhg9.domains.nets import net_layouts
-    # for layout in ['rhombus']:
-    for layout in net_layouts:
-        run(layout, 1200, depths=[1])
+    for layout in ['mortar']:
+    # for layout in net_layouts:
+        run(layout, 1200, depths=[3])

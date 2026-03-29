@@ -42,7 +42,7 @@ def tri_mesh(levels: int = 5, mode: int = 0):
 
     Args:
         levels: Subdivision depth.
-        mode: Root mode (0 or 1).
+        mode: Root net_mode (0 or 1).
         h9p: Polygon LUT.
 
     Returns:

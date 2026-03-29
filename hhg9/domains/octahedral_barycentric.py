@@ -282,34 +282,6 @@ class OctahedralBarycentric(CompositeDomain):
         """Decode octahedral coordinates into a point"""
         return self.h9.revert(addr)
 
-    # def _validate_matrices(self):
-    #     valid = True
-    #     for prj in self.projs:
-    #         mtx = self.projs[prj].matrix
-    #         dt = np.linalg.det(mtx)
-    #         if np.abs(1 - dt) > 1e-6:
-    #             valid = False
-    #             print(f'{mtx}: Matrix Determinant is incorrect {dt}')
-    #         dp = np.dot(mtx[0], mtx[1])
-    #         if np.abs(dp) > 1e-15:
-    #             valid = False
-    #             print(f"Dot should be close to zero. R[0] • R[1] = {dp}")
-    #     opposites = {
-    #         'NEA': 'SWP', 'NEP': 'SWA',
-    #         'NWA': 'SEP', 'NWP': 'SEA',
-    #         'SEA': 'NWP', 'SEP': 'NWA',
-    #         'SWA': 'NEP', 'SWP': 'NEA'
-    #     }
-    #     for f1, f2 in opposites.items():
-    #         m1 = self.projs[f'{f1}'].matrix
-    #         m2 = self.projs[f'{f2}'].matrix
-    #         n1 = np.cross(m1[0], m1[1])
-    #         n2 = np.cross(m2[0], m2[1])
-    #         if not np.abs(np.dot(n1, n2) + 1) <= 1e-12:
-    #             valid = False
-    #             print(f"{f1} vs {f2}: {np.dot(n1, n2):.8f}. Should be -1")  # Should be -1
-    #     if valid:
-    #         print('matrices appear to be valid.')
 
     @classmethod
     def valid(cls, pts: NDArray) -> NDArray:

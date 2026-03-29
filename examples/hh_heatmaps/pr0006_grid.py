@@ -203,7 +203,7 @@ def stage(file: str,
     # t1_mask is defined over the *subset* `bary` (pxl[msk]), so its complement is also subset-sized
     t2_mask = ~t1_mask
 
-    # Choose a component for each triangle (mode of its corners; if tie, pick first)
+    # Choose a component for each triangle (net_mode of its corners; if tie, pick first)
     def dominant_cmp(idxs):
         tri_cmps = [tuple(cmp_arr[i]) for i in idxs]
         # Count occurrences

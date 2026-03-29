@@ -27,8 +27,8 @@ def run():
     reg = Registrar()  # Manage Domains & Projections
 
     # set up the polygon references.
-    tr0 = H9P.tx[0].reshape(-1, 3, 2)  # 9 mode 0 triangles
-    tr1 = H9P.tx[1].reshape(-1, 3, 2)  # 9 mode 1 triangles
+    tr0 = H9P.tx[0].reshape(-1, 3, 2)  # 9 net_mode 0 triangles
+    tr1 = H9P.tx[1].reshape(-1, 3, 2)  # 9 net_mode 1 triangles
     rtx0 = {rg: tx for rg, tx in zip([0x26, 0x2a, 0x2b, 0x3a, 0x39, 0x49, 0x35, 0x25, 0x21], tr0)}
     rtx1 = {rg: tx for rg, tx in zip([0x39, 0x3a, 0x3e, 0x25, 0x35, 0x34, 0x2a, 0x26, 0x16], tr1)}
 

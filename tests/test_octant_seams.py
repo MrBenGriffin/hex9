@@ -165,7 +165,7 @@ def test_seam_greenwich_bulk(world, latitudes):
         regions = ugc_regions(P.coords, mode)
         c1, reg_nb = h9e.region_neighbours(regions)
 
-        # Decode neighbour to (x,y,mode-inferred)
+        # Decode neighbour to (x,y,net_mode-inferred)
         xym = ugc_dec(reg_nb)
         oob = (xym[:, -1] != mode)  # octant seam crossed
 

@@ -215,10 +215,10 @@ def h9_constants() -> H9Const:
     tr = h / r3
     tl = -tr
     # Limits declares ceilings / floors in barycentric order descending.
-    λc = +ẇ   # mode 1 (up) triangle ceiling   y: +2·Ḣ
-    vc = +ḣ   # mode 0 (down) triangle ceiling y: +1·Ḣ
-    λf = -ḣ   # mode 1 (up) triangle floor     y: -1·Ḣ
-    vf = -ẇ   # mode 0 (down) triangle floor   y: -2·Ḣ
+    λc = +ẇ   # net_mode 1 (up) triangle ceiling   y: +2·Ḣ
+    vc = +ḣ   # net_mode 0 (down) triangle ceiling y: +1·Ḣ
+    λf = -ḣ   # net_mode 1 (up) triangle floor     y: -1·Ḣ
+    vf = -ẇ   # net_mode 0 (down) triangle floor   y: -2·Ḣ
     k_limits = Limits(tr, tl, λc, vc, λf, vf)
 
     # Define the Lattice constants
@@ -302,9 +302,9 @@ def oct_constants() -> OctConst:
 
     props = {
         # Octahedral Triangle Identities differ. 0x16, 0x49
-        # Note that OID do not share the id % 2 == mode logic(!)
+        # Note that OID do not share the id % 2 == net_mode logic(!)
         # Also, 'c2' is always equator=0; with nb.c2=1 == self.c2 = 2
-        # AP EW  NS    θ  c2 hexagon region  mo o_id, c2* ngh  hex_id
+        # AP EW   NS   θ   c2 hex region     mo o_id, c2*      ngh          hex_id
         (+1, +1, +1): (2, ('EA', 'NA', 'NE'), 0, 0, (4, 2, 1), (0, 4, 5),   'NEA'),  # 0 'NEA' hex_layer:5, E:8, A: 0
         (-1, +1, +1): (5, ('EP', 'NE', 'NP'), 1, 1, (5, 0, 3), (1, 5, 7),   'NEP'),  # 1 'NEP' hex_layer:4, E:7, P: 0
         (+1, -1, +1): (5, ('WA', 'NW', 'NA'), 1, 2, (6, 3, 0), (2, 6, 4),   'NWA'),  # 2 'NWA'

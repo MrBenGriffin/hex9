@@ -62,7 +62,7 @@ def run():
     # initialise figure.
     fig = plt.figure(figsize=(14, 17), dpi=300, frameon=False)
     fig.subplots_adjust(top=0.98, bottom=0.02, right=0.98, left=0.02)
-    hh_polys = H9P.hh  # (mode, c2) numpy array of half-hexagons.
+    hh_polys = H9P.hh  # (net_mode, c2) numpy array of half-hexagons.
     sc_polys = H9P.sv
     reg = Registrar()  # Manage Domains & Projections
     locs = json_load('../assets/locations.json')
@@ -84,10 +84,10 @@ def run():
             c2i = int(ev.cid[0])         # c2 indicator (next region).
             rgx = [int(a) for a in ev.addresses[:, ev.i-1: ev.i+1][0]]
             rgx.append(c2i)              # moving window with ci being the c2-indicator.
-            pmo = H9C.mode[rgx[0]]       # supercell: parent mode. par_region
+            pmo = H9C.mode[rgx[0]]       # supercell: parent net_mode. par_region
             ax.add_patch(Polygon(3*sc_polys[pmo], linewidth=0.5, facecolor='yellow', alpha=0.50))
             poi = rgx[1]                 # This is the region whose neighbour we want.
-            smo = H9C.mode[poi]          # We will need it's mode (smo=self_mode)
+            smo = H9C.mode[poi]          # We will need it's net_mode (smo=self_mode)
             pxy = 3*offs[poi]            # Offset to the point within the supercell (offs are in sc.scope).
             txy = sc_polys[smo]+pxy      # Get the region triangle at normal size.
             ax.add_patch(Polygon(txy, linewidth=0.5, facecolor='orange', alpha=0.50))  # orange is the new black.
@@ -97,8 +97,8 @@ def run():
             nbr, nc2 = rgn.region_neighbours(np.array([rgx]))  # region_neighbours returns the nbr stack and c2.
             neighbour = nbr[0]           # unpack the array response. neighbour is same structure as rgx
             npa, nme = neighbour[0], neighbour[1]  # we won't use the nc2 indicator here.
-            pmn = H9C.mode[npa]          # the mode of the neighbours parent (used for external checking).
-            nmo = H9C.mode[nme]          # the mode of the neighbour region.
+            pmn = H9C.mode[npa]          # the net_mode of the neighbours parent (used for external checking).
+            nmo = H9C.mode[nme]          # the net_mode of the neighbour region.
             nhp = hh_polys[nmo, c2]      # We can paint in the neighbour hhex.
             fc = 'blue' if pmn == pmo else 'red'  # Paint if it's internal to parent, or external.
             xy = n_offs[smo, pmo, c2, 1]  # rgn.H9R.loc_offs provides offsets for neighbours (visualisation only).

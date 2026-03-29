@@ -20,8 +20,8 @@ class PlatePixelGCD(Projection):
     For Plate Carrée-style rasters, that world frame is usually (lon, lat).
 
     This projection therefore supports two modes:
-    - **World mode**: `p_pix` coords are already (lon,lat) (recommended).
-    - **Legacy index mode**: `p_pix` coords are (px,py) pixel indices and we use
+    - **World net_mode**: `p_pix` coords are already (lon,lat) (recommended).
+    - **Legacy index net_mode**: `p_pix` coords are (px,py) pixel indices and we use
       lookup tables created by `set_dim`.
     """
 
@@ -33,9 +33,9 @@ class PlatePixelGCD(Projection):
         self.lat = None
 
     def set_dim(self, pts: Points = None, bounds: object = None) -> object:
-        """Set dimensions / lookup tables for legacy index mode."""
+        """Set dimensions / lookup tables for legacy index net_mode."""
         if pts is None:
-            raise ValueError('set_dim requires pts for legacy index mode.')
+            raise ValueError('set_dim requires pts for legacy index net_mode.')
 
         if self.p_hgt is None or pts is not None:
             px, py = pts.coords[:, 0], pts.coords[:, 1]
@@ -54,23 +54,23 @@ class PlatePixelGCD(Projection):
     def forward(self, pts: Points) -> NDArray:
         """Convert p_pix → g_gcd.
 
-        World mode (preferred): if the `p_pix` domain carries an `extent`, we
+        World net_mode (preferred): if the `p_pix` domain carries an `extent`, we
         interpret p_pix coords as (lon, lat) already.
 
-        Legacy index mode: if no extent is available, interpret coords as
+        Legacy index net_mode: if no extent is available, interpret coords as
         (px,py) pixel indices and map via lookup tables.
         """
         dom = getattr(pts, 'domain', None)
         extent = getattr(dom, 'extent', None)
 
-        # World mode: coords already represent (lon,lat)
+        # World net_mode: coords already represent (lon,lat)
         if extent is not None:
             lo = pts.coords[:, 0].astype(np.float64)
             la = pts.coords[:, 1].astype(np.float64)
             ret = np.stack([la, lo], axis=-1)
             return Points(ret, domain=self.fwd_cs, samples=pts.samples)
 
-        # Legacy index mode
+        # Legacy index net_mode
         if self.lon is None:
             self.set_dim(pts)
 
@@ -84,10 +84,10 @@ class PlatePixelGCD(Projection):
     def backward(self, pts: Points) -> NDArray:
         """Convert g_gcd → p_pix.
 
-        World mode (preferred): if the reverse domain (`p_pix`) carries an
+        World net_mode (preferred): if the reverse domain (`p_pix`) carries an
         `extent`, return world coords (lon,lat) in that frame.
 
-        Legacy index mode: if no extent is available, return (px,py) indices via
+        Legacy index net_mode: if no extent is available, return (px,py) indices via
         lookup tables.
         """
         # Coordinates are in (lat, lon) order from GCD domain
@@ -99,12 +99,12 @@ class PlatePixelGCD(Projection):
         dom = getattr(self, 'rev_cs', None)
         extent = getattr(dom, 'extent', None)
 
-        # World mode: return (lon,lat) directly.
+        # World net_mode: return (lon,lat) directly.
         if extent is not None:
             ret = np.stack([lo, la], axis=-1)
             return Points(ret, domain=self.rev_cs, samples=pts.samples)
 
-        # Legacy index mode
+        # Legacy index net_mode
         if self.lon is None:
             self.set_dim(Points(np.stack([lo, la], axis=-1), domain=self.fwd_cs, samples=pts.samples))
 
