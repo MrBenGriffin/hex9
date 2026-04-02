@@ -105,6 +105,7 @@ First 11 layers of the pyramid address key:
 ```
 
 #### Round-trip accuracy — globally < 7 nm
+(here, 'nm' is being used in its SI context- so it means nanometres and not nautical miles!)
 
 **Great Pyramid**
 ```
