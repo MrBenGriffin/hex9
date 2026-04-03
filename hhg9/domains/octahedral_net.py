@@ -43,8 +43,8 @@ class OctahedralNet(CompositeDomain):
     R3 = H9K.R3
     GW = H9K.lattice.U * 3  # grid unit width U = H9GC.U H9GC.W/6
     GH = H9K.lattice.V * 3  # grid unit height
-    RT = np.pi / 3.         # grid rotation in 60º
-    GT = np.pi / 12.        # base for net theta 15º
+    RT = np.pi / 3.        # grid rotation in 60º
+    # GT = np.pi / 3.        # base for net theta 30º
 
     def __init__(self, registrar, *, layout='mortar', theta=None):
         c_oct = registrar.domain('c_oct')
@@ -62,7 +62,7 @@ class OctahedralNet(CompositeDomain):
         self.face_polys = {}
         self.c_oct = c_oct
         self.b_oct = b_oct
-        self.global_theta = self.base_theta * self.GT
+        self.global_theta = self.base_theta * self.RT
         self.tri_w = H9K.derived.W / H9K.lattice.U
         self.tri_h = H9K.derived.H / H9K.lattice.V
         self.layout = net_layouts[layout]

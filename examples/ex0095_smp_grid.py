@@ -73,10 +73,11 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
         )
         out = np.zeros((img_h, img_w, 4), dtype=float)
         out[py_ok, px_ok] = rgba
-        Image.fromarray((out * 255).astype(np.uint8)).save(f'output/ex0095_{flavour}.png')
+        flv = flavour.replace(':', '_')
+        Image.fromarray((out * 255).astype(np.uint8)).save(f'output/ex0095_{flv}.png')
 
 
 if __name__ == '__main__':
-    flavours = ['rhombus']  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
-    # flavours = net_layouts  2600/78732
-    run(flavours=flavours, scale=1201, file='src/bm_3600x1800.png')  # 'tissot_3600x1800' bm_3600x1800
+    # 60 is a full cycle
+    # flavours = [f'butterfly:{rx:02}00' for rx in range(1, 96)]  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    run(flavours=['butterfly:5700'], scale=1201, file='src/bm_3600x1800.png')  # 'tissot_3600x1800' bm_3600x1800

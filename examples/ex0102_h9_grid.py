@@ -35,6 +35,7 @@ def run(layout, scale, depths):
     reg = Registrar()                        # Manage Domains & Projections
     b_oct = reg.domain("b_oct")
     n_oct = reg.domain(f"n_oct:{layout}")   # 'mortar', 'butterfly', etc.
+    c_oct = reg.domain("c_oct")
 
     h9f = OctahedralH9(reg)
     b_oct.register_format(h9f)
@@ -71,17 +72,32 @@ def run(layout, scale, depths):
 
     for layer in depths:
         hex_num, hex_v_k, hex_inv, _ = hex_reduce(ref, layer)
-        # tails = tail_key_from_reversible(hex_v_k[:, -1])
         hex_par, hex_oid, scale = hex_parents(b_oct, hex_v_k, hex_num)
         xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
 
-        # ctrs_b = ctr_from_pars(b_oct, hex_par, hex_oid, scale, tails)
-        # ctrn_n = reg.project(ctrs_b, [b_oct, n_oct])
-        # ctrs_n = ctrn_n.coords
-        # hex_par: (H, 2) hex parent centre coordinates in b_oct.
-        verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
-        ctrs_n = np.mean(verts_n.coords.reshape(-1, 6, 2), axis=1)
-        # ctrs_n = reg.project(ctrs_b, [b_oct, n_oct])
+        verts_n2 = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
+
+        # Roundtrip test.
+        verts_b = reg.project(verts_n2, [n_oct, b_oct])
+        hexb_oids = verts_b.oid.reshape(-1, 6)
+        hexb_vrts  = verts_b.coords.reshape(-1, 6, 2)
+        for v, o in zip(hexb_vrts, hexb_oids):
+            vc = [f'({x:.04f}, {y:.04f})' for x,y in v]
+            print(', '.join(vc), o)
+        verts_n = reg.project(verts_b, [b_oct, n_oct])
+
+        hex_oids = verts_n.oid.reshape(-1, 6)
+        mask = np.any(hex_oids == 255, axis=1)   # Find hexes extending outside the net.
+        hex_vrts = verts_n.coords.reshape(-1, 6, 2)
+        full_hexes = hex_vrts[~mask, ...]
+        semi_hexes = hex_vrts[mask, :4, ...]
+
+        hx_v = hex_v_k[~mask, ...]
+        ff_v = hex_v_k[mask, ...]
+        py_v = np.vstack([hx_v, ff_v])
+
+        hx_ctrs_n = np.mean(full_hexes, axis=1)
+        hh_ctrs_n = np.mean(semi_hexes, axis=1)
 
         adr = hex_str_encode(ref, layer=layer, tail_style=TailStyle.key)
         idt = np.array([int(a[layer:layer+1], 16) for a in adr], dtype=np.uint8)
@@ -99,28 +115,27 @@ def run(layout, scale, depths):
                    extent=[0, n_oct.wi, 0, n_oct.he], alpha=0.3,
                    origin='upper', aspect='auto')
 
-        hexes = verts_n.coords.reshape(-1, 6, 2)
-        # bbox = verts_n.bbox()  # (x_min, y_min, x_max, y_max)
-        # ax.set_xlim(bbox[0], bbox[2])
-        # ax.set_ylim(bbox[1], bbox[3])
-
-        collection = PolyCollection(hexes, facecolors='none', ec=(0, 0, 0, 0.5), linewidth=1, antialiaseds=True)
+        collection = PolyCollection(full_hexes, facecolors='none', ec=(0, 0, 0, 0.4), linewidth=0.25, antialiaseds=True)
+        ax.add_collection(collection)
+        collection = PolyCollection(semi_hexes, facecolors='none', ec=(0, 0, 0, 0.5), linewidth=0.25, antialiaseds=True)
         ax.add_collection(collection)
 
-        for ctr, lab in zip(ctrs_n, hex_v_k):
+        poly_ctrs = np.vstack([hx_ctrs_n, hh_ctrs_n])
+
+        for ctr, lab in zip(poly_ctrs, py_v):
             hex_addr = lab
             label = f'{hex_addr[layer]}'
             ax.text(ctr[0], ctr[1], label,
-                    fontsize=12, ha='center', va='center',
+                    fontsize=4*[6-layer], ha='center', va='center',
                     color='black', zorder=100, clip_on=True)
 
         f_name = f"output/ex0102_{layout}_L{layer}.png"
-        fig.savefig(f_name, dpi=100)
+        fig.savefig(f_name, dpi=200)
         print(f'fig saved at {f_name}')
 
 
 if __name__ == "__main__":
     from hhg9.domains.nets import net_layouts
-    for layout in ['mortar']:
-    # for layout in net_layouts:
-        run(layout, 1200, depths=[3])
+    for layout in ['rhombus']:
+    # for layout in net_layouts: range(5)
+        run(layout, 1200, depths=[0])

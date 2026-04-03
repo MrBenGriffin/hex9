@@ -54,7 +54,7 @@ def run(rg: Registrar, layer: int = 3, octant_id: int = 1, plotting: bool = Fals
     cmp = b_oct.signs_by_id[octant_id]
     mode = b_oct.oid_mo[octant_id]
 
-    # tri_mesh(levels: int = 5, mode: int = 0, h9p = H9P)
+    # tri_mesh(levels: int = 5, net_mode: int = 0, h9p = H9P)
     # Base grid in barycentric XY (b_oct)
     verts, _, trx = tri_mesh(layer, mode)
     tris = np.array([verts[v] for t in trx for v in t], dtype=np.float64)

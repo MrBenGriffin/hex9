@@ -13,7 +13,7 @@ def u64_hx_words_p(engine, octant, mode0, regions, depth):
     words = np.zeros((N, W), dtype=np.uint64)
     context_initial = np.array([0, 1, 2], dtype=np.uint8)
 
-    # This is the octant header (mode can be calculated from octant).
+    # This is the octant header (net_mode can be calculated from octant).
     # X hdr = ((octant.astype(np.uint64) << 1) | mode0.astype(np.uint64)) & np.uint64(0xF)
     hdr = octant.astype(np.uint64) & np.uint64(0xF)
     words[:, 0] |= (hdr << np.uint64(60))

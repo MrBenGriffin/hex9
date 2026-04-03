@@ -93,7 +93,6 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
             verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
             ctrs_n = np.mean(verts_n.coords.reshape(-1, 6, 2), axis=1)
             hexes = verts_n.coords.reshape(-1, 6, 2)
-
             collection = PolyCollection(hexes, facecolors='none', ec=(1, 1, 1, 0.5), linewidth=lw[li], antialiaseds=True)
             ax.add_collection(collection)
 
@@ -108,6 +107,6 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 
 if __name__ == '__main__':
-    flavours = ['rhombus']  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    flavours = ['butterfly:0500']  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
     # flavours = net_layouts  2600/78732
     run(flavours=flavours, scale=1201, file='src/bm_3600x1800.png')  # 'tissot_3600x1800' bm_3600x1800

@@ -27,7 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 from typing import Tuple, List, Optional
 
-from hhg9.h9 import H9C, H9K
+from hhg9.h9 import H9C, H9K, H9O
 from hhg9.h9.protocols import H9ConstLike, H9PolygonLike
 
 
@@ -43,6 +43,7 @@ class H9Polygon:
         se (NDArray[float64]): Supercell edge points. Shape (2, 9, 2).
         sv (NDArray[float64]): Supercell vertices. Shape (2, 3, 2).
         gd (NDArray[float64]): Unshared points of a cell excluding (0,0).
+        hi (NDArray[float64]): Full-hex UV, including centroids. Shape  (3, 2) -> [C2,xy]
     """
     hh: NDArray[np.float64]
     hx: NDArray[np.float64]
@@ -50,6 +51,7 @@ class H9Polygon:
     se: NDArray[np.float64]
     sv: NDArray[np.float64]
     gd: NDArray[np.float64]
+    hi: NDArray[np.int16]
 
 
 def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
@@ -73,11 +75,13 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
         ],
         (1, 0): [  # c2 hexagons net_mode 0;  final 2 pts in opp. net_mode.
             # If exterior, they are idx 2,1 (eg (0,0) (2,0)).
+            #་ Mode 0 hexagon centroids, by C2 are (1,1), (1,-1), (-2,0)
             [(3, 1), (2, 0), (0, 0), (-1, 1), (0, 2), (2, 2)],        # (0, 2), (2, 2)
             [(0, -2), (-1, -1), (0, 0), (2, 0), (3, -1), (2, -2)],    # (3, -1), (2, -2)
             [(-3, 1), (-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0)]   # (-3, -1), (-4, 0)
         ],
         (1, 1): [  # c2 hexagons net_mode 1;  final 2 pts in opp. net_mode - exterior.
+            # Mode 1 hexagon centroids, by C2 are (1,-1), (-2,0), (1,-1),
             [(-1, -1), (0, 0), (2, 0), (3, -1), (2, -2), (0, -2)],    # (2, -2), (0, -2)
             [(-1, 1), (0, 0), (-1, -1), (-3, -1), (-4, 0), (-3, 1)],  # (-4, 0), (-3, 1)
             [(2, 0), (0, 0), (-1, 1), (0, 2), (2, 2), (3, 1)]         # (2, 2), (3, 1)
@@ -126,19 +130,21 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
                 (0, 2), (1, 1), (2, 0),
             ]
         ],
-        (4, 0): [  # clockwise, c0,c1,c2 - vertexes of super-region
+        (4, 0): [  # clockwise, c0,c1,c2 - mode 1 vertices of super-region
             [  # =  <-c0->  <-c1->   <-c2->
                 (-3, 1), (3, 1), (0, -2),  # (-3, 1)
             ]
         ],
-        (4, 1): [  # clockwise, c0,c1,c2 - vertexes of super-region
+        (4, 1): [  # clockwise, c0,c1,c2 - mode 1 vertices of super-region
             [  # =  <-c0->    <-c1->  <-c2->
                 (3, -1), (-3, -1), (0, 2)
             ]
         ],
         # Unshared points of cell excluding (0,0) use only on one net_mode
         # The other net_mode will be just the (0,0)
-        (5, 0): [[(2, 0), (1, -1), (-1, -1), (-2, 0), (-1, 1), (1, 1)]]
+        (5, 0): [[(2, 0), (1, -1), (-1, -1), (-2, 0), (-1, 1), (1, 1)]],
+        # Hex centroids.
+        (6, None): [(1, 1), (1, -1), (-2, 0)]
     }
 
     if h9k is None:
@@ -151,6 +157,7 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
     te = np.zeros((2, 9, 2), dtype=np.float64)
     sr = np.zeros((2, 3, 2), dtype=np.float64)
     gd = np.zeros((6, 2), dtype=np.float64)
+    hi = np.zeros((2, 3, 7, 2), dtype=np.int16)  # hexagon index with centroid as uv integers
     for (kind, mode), c2s in pts.items():
         for c2, poly in enumerate(c2s):
             bas = np.asarray(poly, dtype=np.float64) * uv
@@ -169,16 +176,72 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
                     sr[mode] = arr
                 case 5:
                     gd = arr
-    return H9Polygon(hh=hh, hx=hx, tx=tx, se=te, sv=sr, gd=gd)
+                case 6:
+                    hi[0, c2] = np.array(pts[1, 0][c2] + [poly])
+                    hi[1, c2] = np.array(pts[1, 1][c2] + [poly])
+
+
+    return H9Polygon(hh=hh, hx=hx, tx=tx, se=te, sv=sr, gd=gd, hi=hi)
 
 
 H9P: H9Polygon = _h9_polygon()
 
 
+def uv_grid_debug(levels: int = 3, mode: int = 0) -> NDArray:
+    """
+    Generate a grid of points recursively.
+    Returns: np.array of [u, v, scale, mode]
+    """
+    from hhg9.h9 import H9C, H9R
+    h9c, h9r = H9C, H9R
+    modes = [h9r.downs, h9r.ups]
+    kids = modes[mode]
+    scale = 3**levels
+    queue = [(k, h9c.mode[k], h9c.off_uv[k], scale) for k in kids]
+
+    for depth in range(levels):
+        next_q = []
+        for path, mode, origin, scale in queue:
+            kids = modes[mode]  # shape (9,) indices
+            for k in kids:
+                mo_k = h9c.mode[k]
+                off_k = h9c.off_uv[k]
+                path_k = np.append(path, k)
+                origin_k = origin + off_k * scale
+                next_q.append((path_k, mo_k, origin_k, scale // 3))
+        queue = next_q
+    return np.array([[res[2][0], res[2][1], res[3], res[1]] for res in queue], dtype=np.int32)
+
+def uv_grid(levels: int = 3, mode: int = 0, debug=True) -> NDArray:
+    """
+    Generate a grid of points recursively.
+    Returns: np.array of [u, v, scale, mode]
+    """
+    if debug:
+        return uv_grid_debug(levels, mode)
+    from hhg9.h9 import H9C, H9R
+    h9c, h9r = H9C, H9R
+    modes = [h9r.downs, h9r.ups]
+    kids = modes[mode]
+    scale = 3**levels
+    queue = [(h9c.mode[k], h9c.off_uv[k], scale) for k in kids]
+
+    for depth in range(levels):
+        next_q = []
+        for mode, origin, scale in queue:
+            kids = modes[mode]  # shape (9,) indices
+            for k in kids:
+                mo_k = h9c.mode[k]
+                off_k = h9c.off_uv[k]
+                origin_k = origin + off_k * scale
+                next_q.append((mo_k, origin_k, scale // 3))
+        queue = next_q
+    return np.array([[res[1][0], res[1][1], res[2], res[0]] for res in queue], dtype=np.int32)
+
+
 def region_grid(levels: int = 3, mode: int = 0, h9p: H9Polygon = H9P) -> List[Tuple]:
     """
     Generate a grid of points recursively.
-
     Returns:
         List of [address_path, current_mode, origin_xy, scale].
     """
@@ -290,6 +353,81 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
     edges_sorted = np.sort(edges_all, axis=1)
     edges = np.unique(edges_sorted, axis=0)
     return verts, edges, tris
+
+
+def net_polys(reg, n_oct):
+    """Return the polys for a net"""
+    from hhg9 import Points
+    if n_oct.name.split(":")[1] == 'rhombus':
+        raise NotImplementedError("rhombus not implemented - yet!")
+    b_oct = n_oct.b_oct
+    o = np.array([np.repeat(o, 3) for o in range(8)])
+    v = np.array([H9P.sv[mo] for mo in H9O.oid_mo])  # 8,3,2
+    pts = Points(v.reshape(-1, 2), domain=b_oct, oid=o.reshape(-1))
+    return reg.project(pts, [b_oct, n_oct])
+
+
+# Quick helper to round a point for safe matching
+def _match_hx_pt(pt):
+    return tuple(round(v, 5) for v in pt)
+
+
+def net_poly(reg, n_oct):
+    """Given an octahedral net (ONLY triangular! Not rhombus), return the list of bounding polygons"""
+    npt = net_polys(reg, n_oct)
+
+    # convert back to vertices and store as lines.
+    boundary_edges = dict()
+    for tri in npt.coords.reshape([8, 3, 2]):
+        for i in range(3):
+            v1, v2 = tri[i], tri[(i + 1) % 3]
+            # Pair the current vertex with the next one (wrapping around)
+            p1 = tuple(np.round(v1, 5).tolist())
+            p2 = tuple(np.round(v2, 5).tolist())
+            edge = tuple(sorted([p1, p2]))
+            if edge in boundary_edges:
+                del boundary_edges[edge]
+            else:
+                boundary_edges[edge] = [v1, v2]
+
+    # ---------------------------------------------------------
+    # Phase 2: Upgraded Chaining (Safe Float Comparison)
+    # ---------------------------------------------------------
+    edges_pool = list(boundary_edges.values())
+    polygons = []
+
+    while edges_pool:
+        start_edge = edges_pool.pop(0)
+        current_outline = [start_edge[0], start_edge[1]]
+
+        while True:
+            last_pt = current_outline[-1]
+            first_pt = current_outline[0]
+
+            # 1. Safe Loop Closure: Compare rounded points
+            if len(current_outline) > 2 and _match_hx_pt(last_pt) == _match_hx_pt(first_pt):
+                current_outline.pop()
+                break
+
+            found_connection = False
+            for i, edge in enumerate(edges_pool):
+                # 2. Safe Edge Connection: Compare rounded points, but append the RAW payload
+                if _match_hx_pt(edge[0]) == _match_hx_pt(last_pt):
+                    current_outline.append(edge[1])
+                    edges_pool.pop(i)
+                    found_connection = True
+                    break
+                elif _match_hx_pt(edge[1]) == _match_hx_pt(last_pt):
+                    current_outline.append(edge[0])
+                    edges_pool.pop(i)
+                    found_connection = True
+                    break
+
+            if not found_connection:
+                break
+
+        polygons.append(current_outline)
+    return polygons
 
 
 # Binning functions have moved to binning.py; re-exported here for backward compatibility.

@@ -18,7 +18,7 @@ def get_grid(reg: Registrar, layer: int = 3, octant_id: int = 0):
     :param octant_id: which octant to extract (0–7); default is 1
     :return: b_oct - Points of triangle grid, in clockwise order.
     Because this only needs a single octant - we can choose any single octant.
-    Simplex values fit 'mode' during xy projection.
+    Simplex values fit 'net_mode' during xy projection.
     """
     b_oct = reg.domain('b_oct')
     mode = b_oct.oid_mo[octant_id]

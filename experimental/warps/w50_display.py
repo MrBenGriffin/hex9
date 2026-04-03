@@ -126,7 +126,7 @@ def get_grid(reg: Registrar, layer: int = 3, octant_id: int = 0):
     :param octant_id: which octant to extract (0–7); default is 1
     :return: b_oct - Points of triangle grid, in clockwise order.
     Because this only needs a single octant - we can choose any single octant.
-    Simplex values fit 'mode' during xy projection.
+    Simplex values fit 'net_mode' during xy projection.
     """
     b_oct = reg.domain('b_oct')
     mode = b_oct.oid_mo[octant_id]
@@ -161,7 +161,7 @@ def get_cache(rg: Registrar, layer: int = 3, octant_id: int = 0):
     ell = np.log(area_m2 / area_m2_mean)  # authalic log-density ℓ
 
     data = {
-        'mode': mode,
+        'net_mode': mode,
         'b_grid': b_grid,
         's_grid': s_grid,
         'uv_cent': uv_cent,
@@ -178,7 +178,7 @@ def run(rg: Registrar, ma_file, layer: int = 3, octant_id: int = 0, warp_scale: 
     So the number of triangles will be 8*9**(hex_layer+1).
     """
     cache = get_cache(rg, layer=layer, octant_id=octant_id)
-    mode = cache['mode']
+    mode = cache['net_mode']
     b_grid = cache['b_grid']
     s_grid = cache['s_grid']
     uv_cent = cache['uv_cent']
@@ -211,7 +211,7 @@ def run(rg: Registrar, ma_file, layer: int = 3, octant_id: int = 0, warp_scale: 
     rmse_ell = np.sqrt(np.mean(ell ** 2))
     rmse_w = np.sqrt(np.mean(w_ell ** 2))
     rmse_delta = rmse_w - rmse_ell
-    print(f"[w50] hex_layer={layer} mode={mode} warp_scale={warp_scale}")
+    print(f"[w50] hex_layer={layer} net_mode={mode} warp_scale={warp_scale}")
     print(f"  ell:   min={ell.min():+.4f} max={ell.max():+.4f} std={ell.std():.4f}")
     print(f"  w_ell: min={w_ell.min():+.4f} max={w_ell.max():+.4f} std={w_ell.std():.4f}")
     print(f"  RMSE(ell vs 0)   = {rmse_ell:.6f}")

@@ -7,7 +7,7 @@ This script assumes you have already run `ma_precondition.py` to produce
 
 Workflow:
 1) Load preconditioned (u,v) and ℓ from the file, where ℓ = log(A/Ā) as in w10_grid.
-2) Solve for a Bernstein potential ψ so that log det(Hψ_xy) ≈ -ℓ (up to a constant), i.e. the MA-implied log‑density l̂ ≈ -ℓ. In uv-coordinates, log det(Hψ_uv) ≈ (-ℓ) + 2 log|det J|. We center the RHS to remove the constant mode ambiguity.
+2) Solve for a Bernstein potential ψ so that log det(Hψ_xy) ≈ -ℓ (up to a constant), i.e. the MA-implied log‑density l̂ ≈ -ℓ. In uv-coordinates, log det(Hψ_uv) ≈ (-ℓ) + 2 log|det J|. We center the RHS to remove the constant net_mode ambiguity.
 3) Save ψ coefficients and plot Raw ℓ, Fitted ℓ̂, and Residual with shared color scales.
 
 Key conventions:
@@ -50,7 +50,7 @@ def build_rhs(ell_rhs, det_j, use_minus_ell=True, center=True):
         with alternative sign conventions.
     center : bool, optional
         If True (default), subtract the mean of rhs so that the RHS is centered
-        and the constant mode is removed. If False, leave rhs uncentered.
+        and the constant net_mode is removed. If False, leave rhs uncentered.
     """
     ell_rhs = np.asarray(ell_rhs, dtype=float)
     log_detJ2 = 2.0 * np.log(abs(det_j))

@@ -48,7 +48,7 @@ def make_vertex_taper_weights(
     return w
 
 # --- Equilateral face geometry / metric for Laplacian ---
-# We derive the XY triangle for a given octant mode from the H9P simplex vertices
+# We derive the XY triangle for a given octant net_mode from the H9P simplex vertices
 # and expose the inverse metric entries g11,g12,g22 as module-layer globals
 # so that laplacian_uv can use them.
 
@@ -59,14 +59,14 @@ def make_vertex_taper_weights(
 @lru_cache(maxsize=16)
 def metric_from_mode(mode: int):
     """
-    Initialise the metric g^{-1} for the given octant mode.
+    Initialise the metric g^{-1} for the given octant net_mode.
 
-    mode should typically come from b_oct.oid_mo[octant_id].
-    We use H9P.sv[mode] to get the three XY vertices of the equilateral face,
+    net_mode should typically come from b_oct.oid_mo[octant_id].
+    We use H9P.sv[net_mode] to get the three XY vertices of the equilateral face,
     then build the affine map (u,v) -> XY and its induced metric.
     """
     # global g11, g12, g22
-    # H9P.sv[mode] is expected to be shape (3,2): three XY vertices for this mode
+    # H9P.sv[net_mode] is expected to be shape (3,2): three XY vertices for this net_mode
     verts = np.asarray(H9P.sv[mode], dtype=float)
     if verts.shape != (3, 2):
         raise ValueError(f"Expected H9P.sv[{mode!r}] to have shape (3,2), got {verts.shape}")
@@ -84,10 +84,10 @@ def metric_from_mode(mode: int):
 @lru_cache(maxsize=None)
 def load_simplex_grid(layer: int, mode: int):
     """
-    Cached loader for the simplex grid NPZ for a given (hex_layer, mode).
+    Cached loader for the simplex grid NPZ for a given (hex_layer, net_mode).
 
     This avoids re-reading the same file from disk when `run` is called
-    repeatedly for the same (hex_layer, mode) pair.
+    repeatedly for the same (hex_layer, net_mode) pair.
     """
     fname = Path(f"grid_l{layer}_m{mode}_simplex.npz")
     repo = np.load(fname, allow_pickle=True)
@@ -447,7 +447,7 @@ def run(rg, layer, octant_id, conf, *, tweak='base', plot=False, save=True, diag
     uv_vert, v_ell = load_simplex_grid(layer, mode)
     ell = v_ell - v_ell.mean()
     if diagnostics:
-        print(f"[w20] hex_layer={layer} mode={mode} ell stats: min={ell.min():.4f}, max={ell.max():.4f}, mean={ell.mean():.4f}, std={ell.std():.4f}")
+        print(f"[w20] hex_layer={layer} net_mode={mode} ell stats: min={ell.min():.4f}, max={ell.max():.4f}, mean={ell.mean():.4f}, std={ell.std():.4f}")
     n_fit = conf['n_fit']        # number of Bernstein terms to fit
     neumann = conf['neumann']    # edge sampling for BC/Neumann rows
     ns_fac = conf['ns_fac']      # Neumann damping factor

@@ -269,7 +269,7 @@ def load_grid(layer: int):
     """
     Cached loader for the grid NPZ for a given hex_layer.
     This avoids re-reading the same file from disk when `run` is called
-    repeatedly for the same (hex_layer, mode) pair.
+    repeatedly for the same (hex_layer, net_mode) pair.
     """
     f_name = Path(f"grid_l{layer}.npz")
     repo = np.load(f_name, allow_pickle=True)

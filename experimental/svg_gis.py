@@ -9,8 +9,7 @@ import json
 from math import hypot
 from typing import Iterable, List, Tuple
 
-# from svg import Polyline, Polygon
-from svgelements import SVG, Path, Polyline, Polygon
+from svgelements import SVG, Polygon
 from shapely.geometry import LineString, mapping
 from shapely.ops import linemerge
 

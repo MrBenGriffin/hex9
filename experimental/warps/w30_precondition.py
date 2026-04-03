@@ -16,9 +16,9 @@ from w20_bernstein_fit_phi import bernstein_eval_vec
 
 def load_phi(layer: int, mode: int, degree: int = 16, tweak: str = 'base'):
     """
-    Load Bernstein φ fit (degree, terms, coefficients) for a given (hex_layer, mode).
+    Load Bernstein φ fit (degree, terms, coefficients) for a given (hex_layer, net_mode).
     Expects an NPZ of the form:
-      phi_fit_l{hex_layer}_m{mode}_n{n_fit}.npz
+      phi_fit_l{hex_layer}_m{net_mode}_n{n_fit}.npz
     with keys:
       - 'n_fit': Bernstein degree (int)
       - 'terms': array of (i,j,k) or (i,j)
@@ -87,7 +87,7 @@ def load_phi(layer: int, mode: int, degree: int = 16, tweak: str = 'base'):
 
 def load_grid(layer: int, mode: int):
     """
-    Load precomputed simplex grid for (hex_layer, mode) from w10.
+    Load precomputed simplex grid for (hex_layer, net_mode) from w10.
 
     Returns:
       tri_uv     : (N_tri,3,2)
@@ -151,7 +151,7 @@ if __name__ == '__main__':
 
     for layer in [5]:  # range(7):  # range(5):
         # --- Load precomputed grid from w10 ---
-        # tri_uv, tri_xy, uv_cent, p_cent, j_cent, ell, components, area_true, area_mean = load_grid(hex_layer, mode)
+        # tri_uv, tri_xy, uv_cent, p_cent, j_cent, ell, components, area_true, area_mean = load_grid(hex_layer, net_mode)
         vert, ell = load_grid(layer, mode)
 
         # Baseline authalic from stored ℓ
