@@ -16,6 +16,22 @@ from hhg9.h9.protocols import BaryLoc
 from hhg9 import Points, Registrar
 
 
+# Octahedral face adjacency: each face has exactly 3 neighbours.
+# Derived from layer-0 hex boundary corrections in _raw_uv.
+# Used by _get_verts to restrict seam-vertex fallback to geometrically
+# nearby faces and prevent grabbing vertices from non-adjacent (far) faces.
+_FACE_ADJ: tuple[frozenset, ...] = (
+    frozenset({1, 2, 4}),  # 0
+    frozenset({0, 3, 5}),  # 1
+    frozenset({0, 3, 6}),  # 2
+    frozenset({1, 2, 7}),  # 3
+    frozenset({0, 5, 6}),  # 4
+    frozenset({1, 4, 7}),  # 5
+    frozenset({2, 4, 7}),  # 6
+    frozenset({3, 5, 6}),  # 7
+)
+
+
 @cache
 def _hex_areas():
     """Return characteristic lengths for an ideal regular hexagon at each layer.
@@ -495,8 +511,7 @@ class HexMesh:
         self.ia   = ia                           # (M,) int64, finest-scale
         self.ib   = ib                           # (M,) int64, finest-scale
         self._vd  = vert_dict                    # (ia, ib, oid) → vertex idx
-
-    # ---- access --------------------------------------------------------
+        self.uv_o = np.array(list(self._vd.keys()), dtype=np.int32)
 
     @property
     def faces(self) -> np.ndarray:
@@ -517,54 +532,155 @@ class HexMesh:
         h = {L: len(f) for L, f in self._fl.items()}
         return f'HexMesh(verts={n}, hexes={h})'
 
-    # ---- edge densification -------------------------------------------
+    def _get_verts(self, idx_a: int, idx_b: int, lev: int):
+        """Recursively find vertices between idx_a and idx_b.
 
-    def densify(self, L: int) -> np.ndarray:
-        """Return densified face indices for layer *L* using fine-layer verts.
-
-        For each of the 6 edges of each L-hex, the intermediate fine-layer
-        vertices are determined by integer lattice interpolation — pure
-        arithmetic, no collinearity test.
-
-        Returns
-        -------
-        ndarray, shape ``(N_L, 6 * (3**δ + 1))``
-            δ = ``self.fine - L``.  Each row lists vertex indices walking
-            around the densified hex perimeter: ``3**δ + 1`` verts per edge
-            (start vertex + intermediates; final vertex is start of next edge).
+        Returns a list of vertex indices from idx_a to idx_b inclusive.
+        For cross-face edges the ib-axis is reflected across the shared face
+        boundary, so the delta is computed in face-a's local frame.
         """
-        delta  = self.fine - L
+        if lev >= self.fine:
+            return [idx_a, idx_b]
+
+        ua, va = int(self.ia[idx_a]), int(self.ib[idx_a])
+        ub, vb = int(self.ia[idx_b]), int(self.ib[idx_b])
+        oa, ob = int(self.pts.oid[idx_a]), int(self.pts.oid[idx_b])
+        cross = (oa != ob)
+
+        du = (ub - ua) // 3
+        if cross:
+            # Boundary correction in _raw_uv negates ib when reflecting across
+            # the shared face edge, so vb is in face-b's frame.  Reflect it back
+            # into face-a's frame before computing the step.
+            dv = (-vb - va) // 3
+        else:
+            dv = (vb - va) // 3
+
+        u1, v1 = ua + du, va + dv       # 1/3 point (face-a frame)
+        u2, v2 = ua + 2 * du, va + 2 * dv  # 2/3 point (face-a frame)
+
+        s = 3 ** self.fine   # face-scale in fine-layer UV units
+
+        def _lookup(u, v):
+            """Look up (u,v) preferring the endpoint faces.
+
+            For interior edges only oa is tried.
+
+            For cross-face edges the step direction (dv) determines which
+            face owns the intermediate vertex:
+
+            prefer_reflect: (dv<0 and 0<v≤s) or (dv>0 and v<0)
+
+            Case 1 — dv<0, 0<v≤s:
+              We started at or beyond the face-oa boundary (va≥s) and are
+              stepping inward.  The intermediate lies in face-ob's domain
+              despite having positive v in face-oa's frame; the actual fine
+              vertex is stored as (u,−v,ob).
+
+            Case 2 — dv>0, v<0:
+              The start vertex has negative v (already in face-ob's reflected
+              domain), and we are stepping toward face-ob's origin (vb=0).
+              The actual vertex is in face-ob's frame at (u,−v,ob).
+
+            In all other cases (v<0 with dv<0, v>s with dv>0, etc.) the
+            boundary-reflected vertex is correctly stored under oa's oid and
+            the standard (u,v,oa) lookup succeeds first.
+            """
+            if not cross:
+                return self._vd.get((u, v, oa))
+            prefer_reflect = (dv < 0 and 0 < v <= s) or (dv > 0 and v < 0)
+            if prefer_reflect:
+                keys = [(u, -v, ob), (u, -v, oa), (u, v, ob), (u, v, oa)]
+            else:
+                keys = [(u, v, oa), (u, v, ob), (u, -v, ob), (u, -v, oa)]
+            for key in keys:
+                idx = self._vd.get(key)
+                if idx is not None:
+                    return idx
+            return None
+
+        idx_m1 = _lookup(u1, v1)
+        idx_m2 = _lookup(u2, v2)
+
+        # Sparse mode-1 edges occasionally lack the 1/3 vertex; fall back to
+        # the start/end so the output length stays 3^delta.
+        if idx_m1 is None:
+            idx_m1 = idx_a
+        if idx_m2 is None:
+            idx_m2 = idx_b
+
+        path1 = self._get_verts(idx_a, idx_m1, lev + 1)
+        path2 = self._get_verts(idx_m1, idx_m2, lev + 1)
+        path3 = self._get_verts(idx_m2, idx_b, lev + 1)
+
+        return path1[:-1] + path2[:-1] + path3
+
+    def densify(self, layer: int) -> np.ndarray:
+        """Return densified face indices for layer *L* using fine-layer verts."""
+        delta = self.fine - layer
         if delta <= 0:
-            return self._fl[L]
-        factor = int(3 ** delta)
-        f_L    = self._fl[L]                          # (N_L, 6)
-        n_hex  = len(f_L)
-        vpere  = factor + 1                           # verts per edge (incl. start)
-        out    = np.empty((n_hex, 6 * vpere), dtype=np.int32)
+            return self._fl[layer]
 
-        for e in range(6):
-            j       = (e + 1) % 6
-            idx_a   = f_L[:, e]                       # (N_L,) start vertex
-            idx_b   = f_L[:, j]                       # (N_L,) end vertex
-            ia_a    = self.ia[idx_a]
-            ib_a    = self.ib[idx_a]
-            dia     = self.ia[idx_b] - ia_a           # (N_L,) Δia over edge
-            dib     = self.ib[idx_b] - ib_a
-            oid_a   = self.pts.oid[idx_a]
-            oid_b   = self.pts.oid[idx_b]
+        # Every edge at 'layer' contains 3^delta segments at 'fine'
+        v_per_e = 3 ** delta
+        fl = self._fl[layer]
+        n_hex = len(fl)
 
-            for t in range(vpere):
-                ia_t = ia_a + dia * t // factor
-                ib_t = ib_a + dib * t // factor
-                # oid: start side for first half, end side for second half
-                oid_t = np.where(t * 2 < factor, oid_a, oid_b)
-                col   = e * vpere + t
-                out[:, col] = np.array([
-                    self._vd[(int(ia_t[h]), int(ib_t[h]), int(oid_t[h]))]
-                    for h in range(n_hex)
-                ], dtype=np.int32)
+        # We return a loop of vertices for each hex.
+        # Total vertices in the densified loop = 6 edges * v_per_e segments
+        out = np.empty((n_hex, 6 * v_per_e), dtype=np.int32)
+
+        for hi in range(n_hex):
+            hx = fl[hi]
+            full_loop = []
+            for e in range(6):
+                idx_start = hx[e]
+                idx_end = hx[(e + 1) % 6]
+
+                # Get the indices along the edge (start...end)
+                edge_indices = self._get_verts(idx_start, idx_end, layer)
+
+                # Add all points except the last one to maintain a continuous loop
+                full_loop.extend(edge_indices[:-1])
+
+            out[hi] = full_loop
 
         return out
+
+    # def _get_verts(self, a, b, lev: int):
+    #     if lev < self.fine:
+    #         ud, vd = (b[0] - a[0]) // 3, (b[1] - a[1]) // 3
+    #         p = a[0] + ud, a[1] + vd
+    #         if p in self.uv_o[:, :-1]:  # if p[0] in self.ia and p[1] in self.ib:
+    #             lft = self._get_verts(a, p, lev + 1)
+    #             rgt = self._get_verts(p, b, lev + 1)
+    #             return lft + rgt[1:]
+    #         p = a[0] + (ud << 1), a[1] + (vd << 1)
+    #         if p in self.uv_o[:, :-1]:  # if p[0] in self.ia and p[1] in self.ib:
+    #             lft = self._get_verts(a, p, lev + 1)
+    #             rgt = self._get_verts(p, b, lev + 1)
+    #             return lft + rgt[1:]
+    #     return a, b
+    #
+    # # ---- edge densification -------------------------------------------
+    # def densify(self, layer: int) -> np.ndarray:
+    #     """Return densified face indices for layer *L* using fine-layer verts."""
+    #     delta  = self.fine - layer
+    #     if delta <= 0:
+    #         return self._fl[layer]
+    #     v_per_e = int(3 ** delta)
+    #     fl     = self._fl[layer]                          # (N_L, 6)
+    #     n_hex  = len(fl)
+    #     out    = np.empty((n_hex, 6, v_per_e), dtype=np.int32)
+    #     for hi, hx in enumerate(fl):
+    #         for e in range(6):
+    #             j = (e + 1) % 6
+    #             xe, xj = hx[e], hx[j]
+    #             idx_auv = self.ia[xe], self.ib[xe],                       # (N_L,) start vertex
+    #             idx_buv = self.ia[xj], self.ib[xj],                       # (N_L,) start vertex
+    #             vrts = self._get_verts(idx_auv, idx_buv, layer)
+    #             out[hi, e] = vrts
+    #     return out
 
     # ---- supercell helpers ---------------------------------------------
     @staticmethod
@@ -620,73 +736,96 @@ class HexMesh:
             return np.empty((0, 3), dtype=np.int32)
         return np.array(rows, dtype=np.int32)
 
-    @staticmethod
-    def _supercells(layer: int, mode: int):
-        """Yield ``(sc_mode, sc_origin_xy, sc_scale)`` for every supercell.
-
-        Used by ``_raw`` (float b_oct path).  For the integer UV path see
-        ``_supercell_uvs``.
-        """
-        if layer == 0:
-            yield mode, np.zeros(2, dtype=float), 1.0
-        else:
-            for _, sc_mode, sc_origin, sc_scale in region_grid(layer - 1, mode):
-                yield sc_mode, sc_origin, sc_scale
-
-    # ---- raw hex generation per layer ----------------------------------
-
     @classmethod
-    def _raw(cls, layer, b_oct):
-        """Generate corrected hex verts at *layer*, no dedup.
+    def create(cls, layers, reg) -> 'HexMesh':
+        """Build a shared-vertex mesh for one or more layers.
 
-        Returns ``(verts6, oc6)`` — arrays of shape ``(N, 6, 2)`` and
-        ``(N, 6)`` ready for dict insertion.  Mode-1 boundary hexes are
-        already excluded.
+        Parameters
+        ----------
+        layers : int or iterable of int
+            Layer(s) to include.  The finest layer determines the vertex pool.
+        reg : Registrar
+
+        Returns
+        -------
+        HexMesh
         """
-        all_v6  = []
-        all_oc6 = []
+        if isinstance(layers, int):
+            layers = [layers]
+        layers = sorted(set(int(L) for L in layers))
+        finest = layers[-1]
+        b_oct  = reg.domain('b_oct')
 
-        for side, sdom in b_oct.sides.items():
-            oid  = int(sdom.oid)
-            mode = int(H9O.oid_mo[oid])
+        # Prepare UV→xy conversion for the finest layer
+        # Layer 0 = 12 hexagons.
+        div_f = float(3 ** finest)
+        U1    = H9K.lattice.U
+        V3    = 3.0 * H9K.lattice.V
 
-            sc0 = [(o, s) for m, o, s in cls._supercells(layer, mode) if m == 0]
-            if not sc0:
-                continue
+        # --- build finest layer — UV integer keys, centroid in pool -----
+        uv7_f, oc7_f = cls._raw_uv(finest, b_oct)
 
-            rows   = [(o + H9P.hx[0, c2] * s, c2) for o, s in sc0 for c2 in range(3)]
-            verts6 = np.array([r[0] for r in rows])          # (N, 6, 2)
-            c2_arr = np.array([r[1] for r in rows], dtype=int)
-            N      = len(verts6)
+        # debug - check values are the same
+        # xy6_f, oc6_f = cls._raw(finest, b_oct)          # (N, 7, 2), (N, 7)
+        # xy6_f_uv = uv7_f[:, :6, :] * [U1, V3] / div_f
+        # _debug_bp = None  # Looks good. But points are missing.
 
-            flat   = verts6.reshape(-1, 2)
-            mo_arr = np.full(N * 6, mode, dtype=np.uint8)
-            locs   = location(H9K.R3 * flat[:, 0], flat[:, 1], mo_arr).reshape(N, 6)
-            ext    = (locs[:, 4] == BaryLoc.EXT) & (locs[:, 5] == BaryLoc.EXT)
+        N_f          = len(uv7_f)
+        pts_p_hx = uv7_f.shape[1]
 
-            v6  = verts6.copy()
-            oc6 = np.full((N, 6), oid, dtype=int)
+        vert_dict: dict[tuple, int] = {}
+        vert_xy:   list = []
+        vert_oid:  list = []
+        ia_list:   list = []
+        ib_list:   list = []
+        face_idx   = np.empty((N_f, 6), dtype=np.int32)
 
-            if ext.any():
-                if mode == 0:
-                    v6[ext, 4] = verts6[ext, 2] * [1.0, -1.0]
-                    v6[ext, 5] = verts6[ext, 1] * [1.0, -1.0]
-                    for c2v in range(3):
-                        mask = ext & (c2_arr == c2v)
-                        if mask.any():
-                            oc6[mask, 4] = int(H9O.oid_nb[oid, c2v])
-                            oc6[mask, 5] = int(H9O.oid_nb[oid, c2v])
-                else:
-                    v6  = v6[~ext]
-                    oc6 = oc6[~ext]
+        poly_eps = 1.0 - 1e-14  # pull polygon verts slightly off triangle edges as needed.
+        for h in range(N_f):
+            # Centroid xy — used to shrink polygon verts 0-5 toward interior
+            cx = int(uv7_f[h, 6, 0]) * U1 / div_f
+            cy = int(uv7_f[h, 6, 1]) * V3 / div_f
+            for vi in range(pts_p_hx):           # include centroid (vi=6) in pool
+                ia = int(uv7_f[h, vi, 0])
+                ib = int(uv7_f[h, vi, 1])
+                o  = int(oc7_f[h, vi])
+                key = (ia, ib, o)
+                idx = vert_dict.get(key)
+                if idx is None:
+                    idx = len(vert_xy)
+                    vert_dict[key] = idx
+                    rx = ia * U1 / div_f
+                    ry = ib * V3 / div_f
+                    if vi < 6:  # shrink polygon verts; centroid stays exact
+                        rx = cx + (rx - cx) * poly_eps
+                        ry = cy + (ry - cy) * poly_eps
+                    vert_xy.append((rx, ry))
+                    vert_oid.append(o)
+                    ia_list.append(ia)
+                    ib_list.append(ib)
+                if vi < 6:
+                    face_idx[h, vi] = idx
 
-            if len(v6):
-                all_v6.append(v6)
-                all_oc6.append(oc6)
+        pts    = Points(np.array(vert_xy, dtype=np.float64), b_oct, oid=np.array(vert_oid, dtype=np.int32))
+        ia_arr = np.array(ia_list, dtype=np.int64)
+        ib_arr = np.array(ib_list, dtype=np.int64)
 
-        if not all_v6:
-            return np.empty((0, 6, 2)), np.empty((0, 6), dtype=int)
-        return np.concatenate(all_v6), np.concatenate(all_oc6)
+        faces_dict = {finest: face_idx}
+
+        # --- coarser layers: scale UV keys by 3^(finest-L), look up in pool
+        for L in layers[:-1]:
+            factor       = int(3 ** (finest - L))
+            uv7_c, oc7_c = cls._raw_uv(L, b_oct)
+            face_c       = np.empty((len(uv7_c), 6), dtype=np.int32)
+            for h in range(len(uv7_c)):
+                for vi in range(6):
+                    ia = int(uv7_c[h, vi, 0]) * factor
+                    ib = int(uv7_c[h, vi, 1]) * factor
+                    o  = int(oc7_c[h, vi])
+                    face_c[h, vi] = vert_dict[(ia, ib, o)]
+            faces_dict[L] = face_c
+
+        return cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict)
 
     @classmethod
     def _raw_uv(cls, layer, b_oct):
@@ -799,99 +938,153 @@ class HexMesh:
 
         return out_uv.astype(np.int64), out_oid
 
+    # @classmethod
+    # def _raw(cls, layer, b_oct):
+    #     """Generate corrected hex verts at *layer*, no dedup.
+    #
+    #     Returns ``(verts6, oc6)`` — arrays of shape ``(N, 6, 2)`` and
+    #     ``(N, 6)`` ready for dict insertion.  Mode-1 boundary hexes are
+    #     already excluded.
+    #     """
+    #     all_v6  = []
+    #     all_oc6 = []
+    #
+    #     for side, sdom in b_oct.sides.items():
+    #         oid  = int(sdom.oid)
+    #         mode = int(H9O.oid_mo[oid])
+    #
+    #         sc0 = [(o, s) for m, o, s in cls._supercells(layer, mode) if m == 0]
+    #         if not sc0:
+    #             continue
+    #
+    #         rows   = [(o + H9P.hx[0, c2] * s, c2) for o, s in sc0 for c2 in range(3)]
+    #         verts6 = np.array([r[0] for r in rows])          # (N, 6, 2)
+    #         c2_arr = np.array([r[1] for r in rows], dtype=int)
+    #         N      = len(verts6)
+    #
+    #         flat   = verts6.reshape(-1, 2)
+    #         mo_arr = np.full(N * 6, mode, dtype=np.uint8)
+    #         locs   = location(H9K.R3 * flat[:, 0], flat[:, 1], mo_arr).reshape(N, 6)
+    #         ext    = (locs[:, 4] == BaryLoc.EXT) & (locs[:, 5] == BaryLoc.EXT)
+    #
+    #         v6  = verts6.copy()
+    #         oc6 = np.full((N, 6), oid, dtype=int)
+    #
+    #         if ext.any():
+    #             if mode == 0:
+    #                 v6[ext, 4] = verts6[ext, 2] * [1.0, -1.0]
+    #                 v6[ext, 5] = verts6[ext, 1] * [1.0, -1.0]
+    #                 for c2v in range(3):
+    #                     mask = ext & (c2_arr == c2v)
+    #                     if mask.any():
+    #                         oc6[mask, 4] = int(H9O.oid_nb[oid, c2v])
+    #                         oc6[mask, 5] = int(H9O.oid_nb[oid, c2v])
+    #             else:
+    #                 v6  = v6[~ext]
+    #                 oc6 = oc6[~ext]
+    #
+    #         if len(v6):
+    #             all_v6.append(v6)
+    #             all_oc6.append(oc6)
+    #
+    #     if not all_v6:
+    #         return np.empty((0, 6, 2)), np.empty((0, 6), dtype=int)
+    #     return np.concatenate(all_v6), np.concatenate(all_oc6)
+
+# @staticmethod
+# def _supercells(layer: int, mode: int):
+#     """Yield ``(sc_mode, sc_origin_xy, sc_scale)`` for every supercell.
+#
+#     Used by ``_raw`` (float b_oct path).  For the integer UV path see
+#     ``_supercell_uvs``.
+#     """
+#     if layer == 0:
+#         yield mode, np.zeros(2, dtype=float), 1.0
+#     else:
+#         for _, sc_mode, sc_origin, sc_scale in region_grid(layer - 1, mode):
+#             yield sc_mode, sc_origin, sc_scale
+
+# ---- raw hex generation per layer ----------------------------------
+
     # ---- factory -------------------------------------------------------
 
-    @classmethod
-    def create(cls, layers, reg) -> 'HexMesh':
-        """Build a shared-vertex mesh for one or more layers.
+    def claude_densify(self, L: int) -> np.ndarray:
+        """Return densified face indices for layer *L* using fine-layer verts.
 
-        Parameters
-        ----------
-        layers : int or iterable of int
-            Layer(s) to include.  The finest layer determines the vertex pool.
-        reg : Registrar
+        For each of the 6 edges of each L-hex, the intermediate fine-layer
+        vertices are determined by integer lattice interpolation — pure
+        arithmetic, no collinearity test.
 
         Returns
         -------
-        HexMesh
+        ndarray, shape ``(N_L, 6 * (3**δ + 1))``
+            δ = ``self.fine - L``.  Each row lists vertex indices walking
+            around the densified hex perimeter: ``3**δ + 1`` verts per edge
+            (start vertex + intermediates; final vertex is start of next edge).
         """
-        if isinstance(layers, int):
-            layers = [layers]
-        layers = sorted(set(int(L) for L in layers))
-        finest = layers[-1]
-        b_oct  = reg.domain('b_oct')
+        delta  = self.fine - L
+        if delta <= 0:
+            return self._fl[L]
+        factor = int(3 ** delta)
+        f_L    = self._fl[L]                          # (N_L, 6)
+        n_hex  = len(f_L)
+        vpere  = factor                           # verts per edge (incl. start)
+        out    = np.empty((n_hex, 6 * vpere), dtype=np.int32)
 
-        # Prepare UV→xy conversion for the finest layer
-        # Layer 0 = 12 hexagons.
-        div_f = float(3 ** finest)
-        U1    = H9K.lattice.U
-        V3    = 3.0 * H9K.lattice.V
+        for e in range(6):
+            j       = (e + 1) % 6
+            idx_a   = f_L[:, e]                       # (N_L,) start vertex
+            idx_b   = f_L[:, j]                       # (N_L,) end vertex
+            ia_a    = self.ia[idx_a]
+            ib_a    = self.ib[idx_a]
+            dia     = self.ia[idx_b] - ia_a           # (N_L,) Δia over edge
+            dib     = self.ib[idx_b] - ib_a
+            oid_a   = self.pts.oid[idx_a]
+            oid_b   = self.pts.oid[idx_b]
 
-        # --- build finest layer — UV integer keys, centroid in pool -----
-        uv7_f, oc7_f = cls._raw_uv(finest, b_oct)
+            for t in range(vpere):
+                ia_t  = ia_a + dia * t // factor
+                ib_t  = ib_a + dib * t // factor
+                # Primary oid: start-side for first half, end-side for second.
+                # For interior edges (oid_a == oid_b) this always hits.
+                # For boundary edges the halfway rule may not match what
+                # _raw_uv assigned, so fall back to the other oid on a miss.
+                oid_t = np.where(t * 2 < factor, oid_a, oid_b)
+                alt_t = np.where(t * 2 < factor, oid_b, oid_a)
+                col   = e * vpere + t
+                def _lk(ia, ib, o1, o2):
+                    v = self._vd.get((ia, ib, o1))
+                    return v if v is not None else self._vd[(ia, ib, o2)]
+                out[:, col] = np.array([
+                    _lk(int(ia_t[h]), int(ib_t[h]), int(oid_t[h]), int(alt_t[h]))
+                    for h in range(n_hex)
+                ], dtype=np.int32)
 
-        # debug - check values are the same
-        # xy6_f, oc6_f = cls._raw(finest, b_oct)          # (N, 7, 2), (N, 7)
-        # xy6_f_uv = uv7_f[:, :6, :] * [U1, V3] / div_f
-        # _debug_bp = None  # Looks good. But points are missing.
+        return out
 
-        N_f          = len(uv7_f)
-        pts_p_hx = uv7_f.shape[1]
 
-        vert_dict: dict[tuple, int] = {}
-        vert_xy:   list = []
-        vert_oid:  list = []
-        ia_list:   list = []
-        ib_list:   list = []
-        face_idx   = np.empty((N_f, 6), dtype=np.int32)
+def clipped_ll(arr_ll: np.ndarray) -> list:
+    """Simple convex polygon clip to 180/dateline."""
+    result = []
+    for row in arr_ll:
+        # Clean out NaNs/Inf
+        not_oob = np.isfinite(row).all(axis=1)  # Use .all() to ensure both x and y are finite
+        verts = row[not_oob]
 
-        poly_eps = 1.0 - 1e-14  # pull polygon verts slightly off triangle edges as needed.
-        for h in range(N_f):
-            # Centroid xy — used to shrink polygon verts 0-5 toward interior
-            cx = int(uv7_f[h, 6, 0]) * U1 / div_f
-            cy = int(uv7_f[h, 6, 1]) * V3 / div_f
-            for vi in range(pts_p_hx):           # include centroid (vi=6) in pool
-                ia = int(uv7_f[h, vi, 0])
-                ib = int(uv7_f[h, vi, 1])
-                o  = int(oc7_f[h, vi])
-                key = (ia, ib, o)
-                idx = vert_dict.get(key)
-                if idx is None:
-                    idx = len(vert_xy)
-                    vert_dict[key] = idx
-                    rx = ia * U1 / div_f
-                    ry = ib * V3 / div_f
-                    if vi < 6:  # shrink polygon verts; centroid stays exact
-                        rx = cx + (rx - cx) * poly_eps
-                        ry = cy + (ry - cy) * poly_eps
-                    vert_xy.append((rx, ry))
-                    vert_oid.append(o)
-                    ia_list.append(ia)
-                    ib_list.append(ib)
-                if vi < 6:
-                    face_idx[h, vi] = idx
+        if len(verts) == 0:
+            continue
 
-        pts    = Points(np.array(vert_xy, dtype=np.float64), b_oct,
-                        oid=np.array(vert_oid, dtype=np.int32))
-        ia_arr = np.array(ia_list, dtype=np.int64)
-        ib_arr = np.array(ib_list, dtype=np.int64)
+        # Calculate spans between subsequent points
+        lons = verts[:, 1]
+        spans = np.abs(np.diff(lons))
 
-        faces_dict = {finest: face_idx}
-
-        # --- coarser layers: scale UV keys by 3^(finest-L), look up in pool
-        for L in layers[:-1]:
-            factor       = int(3 ** (finest - L))
-            uv7_c, oc7_c = cls._raw_uv(L, b_oct)
-            face_c       = np.empty((len(uv7_c), 6), dtype=np.int32)
-            for h in range(len(uv7_c)):
-                for vi in range(6):
-                    ia = int(uv7_c[h, vi, 0]) * factor
-                    ib = int(uv7_c[h, vi, 1]) * factor
-                    o  = int(oc7_c[h, vi])
-                    face_c[h, vi] = vert_dict[(ia, ib, o)]
-            faces_dict[L] = face_c
-
-        return cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict)
+        jumps = np.where(spans > 180.0)[0]
+        if jumps.size > 0:
+            first_jump_idx = jumps[0] + 1
+            result.append(verts[:first_jump_idx])
+        else:
+            result.append(verts)
+    return result
 
 
 def valid_ll(arr_ll: np.ndarray) -> np.ndarray:
@@ -900,68 +1093,15 @@ def valid_ll(arr_ll: np.ndarray) -> np.ndarray:
     Parameters
     ----------
     arr_ll : (N, K, 2) float  —  last axis is [lat, lon].
-
     Returns
     -------
-    (N,) bool
+    [N, (...)] reduced co-oordinates.
     """
     fin   = np.isfinite(arr_ll).all(axis=(1, 2))
     spans = arr_ll[..., 1].max(axis=-1) - arr_ll[..., 1].min(axis=-1)
-    return fin & (spans <= 180.0)
+    ok = fin & (spans <= 180.0)
+    return ok
 
-
-# def densify_hex_mesh(c_pts: Points, k: int) -> Points:
-#     """
-#     Densify hex polygon edges by linear interpolation in c_oct (3-D Cartesian).
-#     Don't use this.
-#
-#     Interpolation is done in the flat 3-D embedding of the octahedron, which
-#     gives smooth projected edges when the result is subsequently projected to
-#     g_gcd.  Oids for interpolated vertices are derived from the signs of their
-#     c_oct coordinates via ``H9O.cmp_oid``.
-#
-#     Parameters
-#     ----------
-#     c_pts : Points
-#         Hex vertices in c_oct, shape ``(N * 6, 3)``.  Per-vertex oid must be
-#         set (as returned by projecting the output of ``hex_mesh_boct``).
-#     k : int
-#         Number of interpolated points to insert on each edge.  ``k=0`` is a
-#         no-op.  A layer-appropriate value is ``max(0, 8 >> layer)``, giving
-#         8 / 4 / 2 / 1 / 0 for layers 0-4+.
-#
-#     Returns
-#     -------
-#     Points
-#         Densified hex vertices in c_oct, shape ``(N * 6 * (k + 1), 3)``.
-#         Reshape to ``(-1, 6 * (k + 1), 3)`` per hex after projecting.
-#     """
-#     if k == 0:
-#         return c_pts
-#
-#     N     = len(c_pts) // 6
-#     verts = c_pts.coords.reshape(N, 6, 3)                   # (N, 6, 3)
-#     t     = np.linspace(0.0, 1.0, k + 2)[1:-1]             # (k,) strictly interior
-#
-#     parts = []
-#     for i in range(6):
-#         j = (i + 1) % 6
-#         v_i = verts[:, i, :]                                # (N, 3)
-#         v_j = verts[:, j, :]
-#         parts.append(v_i[:, None, :])                       # (N, 1, 3)
-#         lerp = v_i[:, None, :] + t[None, :, None] * (v_j - v_i)[:, None, :]
-#         parts.append(lerp)                                  # (N, k, 3)
-#
-#     dense = np.concatenate(parts, axis=1)                   # (N, 6*(k+1), 3)
-#
-#     # Derive oid from signs of c_oct axes (sign+1 maps -1→0, +1→2)
-#     s     = np.sign(dense).astype(int) + 1                  # (N, 6*(k+1), 3)
-#     oids  = H9O.cmp_oid[s[..., 0], s[..., 1], s[..., 2]]   # (N, 6*(k+1))
-#
-#     return Points(dense.reshape(-1, 3), c_pts.domain, oid=oids.reshape(-1))
-
-
-# ---------- PostGIS hexagon fill -------------------------------------------
 
 def h9_postgis_hexagons(
         min_lon: float,
