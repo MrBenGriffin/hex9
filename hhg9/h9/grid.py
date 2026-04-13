@@ -7,6 +7,7 @@ Grid Methods - eg for composing rectilinear pixel grids for projected sampling.
 """
 from functools import cache
 import numpy as np
+from pandas._libs.tslibs import offsets
 
 from hhg9.algorithms.geometry import inside_convex_polygon_cw
 from hhg9.h9 import H9K, H9O, H9P
@@ -511,6 +512,7 @@ class HexMesh:
         self.ia   = ia                           # (M,) int64, finest-scale
         self.ib   = ib                           # (M,) int64, finest-scale
         self._vd  = vert_dict                    # (ia, ib, oid) → vertex idx
+        self.alt = None
         self.uv_o = np.array(list(self._vd.keys()), dtype=np.int32)
 
     @property
@@ -536,82 +538,85 @@ class HexMesh:
         """Recursively find vertices between idx_a and idx_b.
 
         Returns a list of vertex indices from idx_a to idx_b inclusive.
-        For cross-face edges the ib-axis is reflected across the shared face
-        boundary, so the delta is computed in face-a's local frame.
+
+        For same-oid or same-mode edges, raw (ia, ib) interpolation is used.
+        For cross-mode edges (one mo==0 endpoint, one mo==1 endpoint), the
+        mode-0 endpoint's ib is negated to convert it to mode-1 space before
+        interpolating; all intermediate vertices live on the mode-1 face and
+        are stored under the mode-1 oid with negative ib.
         """
         if lev >= self.fine:
             return [idx_a, idx_b]
 
+        oa = int(self.pts.oid[idx_a])
+        ob = int(self.pts.oid[idx_b])
         ua, va = int(self.ia[idx_a]), int(self.ib[idx_a])
         ub, vb = int(self.ia[idx_b]), int(self.ib[idx_b])
-        oa, ob = int(self.pts.oid[idx_a]), int(self.pts.oid[idx_b])
-        cross = (oa != ob)
-
         du = (ub - ua) // 3
-        if cross:
-            # Boundary correction in _raw_uv negates ib when reflecting across
-            # the shared face edge, so vb is in face-b's frame.  Reflect it back
-            # into face-a's frame before computing the step.
-            dv = (-vb - va) // 3
-        else:
+
+        if oa == ob:
             dv = (vb - va) // 3
-
-        u1, v1 = ua + du, va + dv       # 1/3 point (face-a frame)
-        u2, v2 = ua + 2 * du, va + 2 * dv  # 2/3 point (face-a frame)
-
-        s = 3 ** self.fine   # face-scale in fine-layer UV units
-
-        def _lookup(u, v):
-            """Look up (u,v) preferring the endpoint faces.
-
-            For interior edges only oa is tried.
-
-            For cross-face edges the step direction (dv) determines which
-            face owns the intermediate vertex:
-
-            prefer_reflect: (dv<0 and 0<v≤s) or (dv>0 and v<0)
-
-            Case 1 — dv<0, 0<v≤s:
-              We started at or beyond the face-oa boundary (va≥s) and are
-              stepping inward.  The intermediate lies in face-ob's domain
-              despite having positive v in face-oa's frame; the actual fine
-              vertex is stored as (u,−v,ob).
-
-            Case 2 — dv>0, v<0:
-              The start vertex has negative v (already in face-ob's reflected
-              domain), and we are stepping toward face-ob's origin (vb=0).
-              The actual vertex is in face-ob's frame at (u,−v,ob).
-
-            In all other cases (v<0 with dv<0, v>s with dv>0, etc.) the
-            boundary-reflected vertex is correctly stored under oa's oid and
-            the standard (u,v,oa) lookup succeeds first.
-            """
-            if not cross:
-                return self._vd.get((u, v, oa))
-            prefer_reflect = (dv < 0 and 0 < v <= s) or (dv > 0 and v < 0)
-            if prefer_reflect:
-                keys = [(u, -v, ob), (u, -v, oa), (u, v, ob), (u, v, oa)]
+            u1, v1 = ua + du, va + dv
+            u2, v2 = ua + 2 * du, va + 2 * dv
+            idx_m1 = self._vd.get((u1, v1, oa))
+            if idx_m1 is None:
+                idx_m1 = self._vd.get((u1, v1, ob))
+            idx_m2 = self._vd.get((u2, v2, ob))
+            if idx_m2 is None:
+                idx_m2 = self._vd.get((u2, v2, oa))
+        else:
+            mo_a = int(H9O.oid_mo[oa])
+            mo_b = int(H9O.oid_mo[ob])
+            if mo_a == mo_b:
+                # Same mode (both mo==0 or both mo==1), different octant.
+                dv = (vb - va) // 3
+                u1, v1 = ua + du, va + dv
+                u2, v2 = ua + 2 * du, va + 2 * dv
+                idx_m1 = self._vd.get((u1, v1, oa))
+                if idx_m1 is None:
+                    idx_m1 = self._vd.get((u1, v1, ob))
+                idx_m2 = self._vd.get((u2, v2, ob))
+                if idx_m2 is None:
+                    idx_m2 = self._vd.get((u2, v2, oa))
+            elif mo_a == 0:
+                # a is mo==0, b is mo==1.  Convert a to mode-1 space: (ua, -va).
+                # All intermediates lie on the mode-1 face (ob).
+                va_m1 = -va
+                dv = (vb - va_m1) // 3
+                u1, v1 = ua + du, va_m1 + dv
+                u2, v2 = ua + 2 * du, va_m1 + 2 * dv
+                idx_m1 = self._vd.get((u1, v1, ob))
+                if idx_m1 is None:
+                    idx_m1 = self._vd.get((u1, v1, oa))
+                idx_m2 = self._vd.get((u2, v2, ob))
+                if idx_m2 is None:
+                    idx_m2 = self._vd.get((u2, v2, oa))
             else:
-                keys = [(u, v, oa), (u, v, ob), (u, -v, ob), (u, -v, oa)]
-            for key in keys:
-                idx = self._vd.get(key)
-                if idx is not None:
-                    return idx
-            return None
+                # a is mo==1, b is mo==0.  Convert b to mode-1 space: (ub, -vb).
+                # All intermediates lie on the mode-1 face (oa).
+                vb_m1 = -vb
+                dv = (vb_m1 - va) // 3
+                u1, v1 = ua + du, va + dv
+                u2, v2 = ua + 2 * du, va + 2 * dv
+                idx_m1 = self._vd.get((u1, v1, oa))
+                if idx_m1 is None:
+                    idx_m1 = self._vd.get((u1, v1, ob))
+                idx_m2 = self._vd.get((u2, v2, oa))
+                if idx_m2 is None:
+                    idx_m2 = self._vd.get((u2, v2, ob))
 
-        idx_m1 = _lookup(u1, v1)
-        idx_m2 = _lookup(u2, v2)
+        if idx_m1 is None or idx_m2 is None:
+            raise KeyError(
+                f"densify: missing vertex at lev={lev} between "
+                f"idx={idx_a}(oid={oa}, ia={ua}, ib={va}) and "
+                f"idx={idx_b}(oid={ob}, ia={ub}, ib={vb}): "
+                f"1/3=({u1},{v1}) found={idx_m1}  "
+                f"2/3=({u2},{v2}) found={idx_m2}"
+            )
 
-        # Sparse mode-1 edges occasionally lack the 1/3 vertex; fall back to
-        # the start/end so the output length stays 3^delta.
-        if idx_m1 is None:
-            idx_m1 = idx_a
-        if idx_m2 is None:
-            idx_m2 = idx_b
-
-        path1 = self._get_verts(idx_a, idx_m1, lev + 1)
+        path1 = self._get_verts(idx_a,  idx_m1, lev + 1)
         path2 = self._get_verts(idx_m1, idx_m2, lev + 1)
-        path3 = self._get_verts(idx_m2, idx_b, lev + 1)
+        path3 = self._get_verts(idx_m2, idx_b,  lev + 1)
 
         return path1[:-1] + path2[:-1] + path3
 
@@ -717,24 +722,14 @@ class HexMesh:
         """
         if layer == 0:
             if mode == reduce:
-                return np.array([[0, 0, 1]], dtype=np.int32)  # [ia, ib, scale=1]
+                return np.array([[0, 0, 1]], dtype=np.int32)  # [ia, ib, scale]
             return np.empty((0, 3), dtype=np.int32)
-        U1    = H9K.lattice.U
-        V3    = 3.0 * H9K.lattice.V
-        div_f = float(3 ** layer)
-        rows  = []
-        for _, sc_mode, sc_origin, sc_scale in region_grid(layer - 1, mode):
-            if sc_mode != reduce:
-                continue
-            # Convert float b_oct origin to integer UV.  The products are
-            # always exact integers (off_uv entries are small integers,
-            # powers of 3 are exact in float64).
-            ia = int(round(sc_origin[0] * div_f / U1))
-            ib = int(round(sc_origin[1] * div_f / V3))
-            rows.append([ia, ib, 1])
-        if not rows:
-            return np.empty((0, 3), dtype=np.int32)
-        return np.array(rows, dtype=np.int32)
+        uvg = uv_grid(layer-1, mode, flatten=True)
+        mask = uvg[:, 0] == reduce
+        return uvg[mask, 1:]
+        # result = [g[g[:, 0] == reduce, 1:] for g in uvg]
+        # return result
+
 
     @classmethod
     def create(cls, layers, reg) -> 'HexMesh':
@@ -763,16 +758,10 @@ class HexMesh:
         V3    = 3.0 * H9K.lattice.V
 
         # --- build finest layer — UV integer keys, centroid in pool -----
-        uv7_f, oc7_f = cls._raw_uv(finest, b_oct)
+        alt = cls._alt_uv(finest)
+        uvo_list, alt_hexes = alt
 
-        # debug - check values are the same
-        # xy6_f, oc6_f = cls._raw(finest, b_oct)          # (N, 7, 2), (N, 7)
-        # xy6_f_uv = uv7_f[:, :6, :] * [U1, V3] / div_f
-        # _debug_bp = None  # Looks good. But points are missing.
-
-        N_f          = len(uv7_f)
-        pts_p_hx = uv7_f.shape[1]
-
+        N_f      = len(alt_hexes)
         vert_dict: dict[tuple, int] = {}
         vert_xy:   list = []
         vert_oid:  list = []
@@ -781,30 +770,104 @@ class HexMesh:
         face_idx   = np.empty((N_f, 6), dtype=np.int32)
 
         poly_eps = 1.0 - 1e-14  # pull polygon verts slightly off triangle edges as needed.
-        for h in range(N_f):
-            # Centroid xy — used to shrink polygon verts 0-5 toward interior
-            cx = int(uv7_f[h, 6, 0]) * U1 / div_f
-            cy = int(uv7_f[h, 6, 1]) * V3 / div_f
-            for vi in range(pts_p_hx):           # include centroid (vi=6) in pool
-                ia = int(uv7_f[h, vi, 0])
-                ib = int(uv7_f[h, vi, 1])
-                o  = int(oc7_f[h, vi])
-                key = (ia, ib, o)
-                idx = vert_dict.get(key)
-                if idx is None:
-                    idx = len(vert_xy)
-                    vert_dict[key] = idx
-                    rx = ia * U1 / div_f
-                    ry = ib * V3 / div_f
-                    if vi < 6:  # shrink polygon verts; centroid stays exact
-                        rx = cx + (rx - cx) * poly_eps
-                        ry = cy + (ry - cy) * poly_eps
-                    vert_xy.append((rx, ry))
-                    vert_oid.append(o)
-                    ia_list.append(ia)
-                    ib_list.append(ib)
-                if vi < 6:
-                    face_idx[h, vi] = idx
+
+        def _add_or_alias(ia, ib, o, cx, cy):
+            """Look up (ia, ib, o) in vert_dict; create if absent.
+
+            Seam hex verts 0-3 are stored under the mo==0 oid; verts 4-5
+            (the mo==1 side's interior points) are stored under their mo==1
+            oid with mo==1 UV coords.  _get_verts handles the Y-flip when
+            searching across the seam.  Returns the vertex index.
+            """
+            key = (ia, ib, o)
+            idx = vert_dict.get(key)
+            if idx is None:
+                idx = len(vert_xy)
+                vert_dict[key] = idx
+                rx = ia * U1 / div_f
+                ry = ib * V3 / div_f
+                rx = cx + (rx - cx) * poly_eps
+                ry = cy + (ry - cy) * poly_eps
+                vert_xy.append((rx, ry))
+                vert_oid.append(o)
+                ia_list.append(ia)
+                ib_list.append(ib)
+            return idx
+
+        for h, hverts in enumerate(alt_hexes):
+            # Float centroid = average of the 6 polygon vertices.
+            cx = sum(uvo_list[v][0] for v in hverts) * U1 / (6.0 * div_f)
+            cy = sum(uvo_list[v][1] for v in hverts) * V3 / (6.0 * div_f)
+            for vi, gv in enumerate(hverts):
+                ia, ib, o = uvo_list[gv]
+                face_idx[h, vi] = _add_or_alias(ia, ib, o, cx, cy)
+
+        # --- cache coarser-layer UV data (needed for both synthetic verts and face arrays)
+        coarser_uv = {}
+        for L in layers[:-1]:
+            coarser_uv[L] = cls._raw_uv(L)
+
+        # --- synthetic edge-interior vertices for densification ---
+        # For a coarser layer L, the 1/3, 2/3, … positions along each hex edge
+        # are required by _get_verts but may not coincide with any fine-grid hex
+        # vertex.  Add them to the vertex pool here (before freezing arrays) so
+        # that _get_verts can always find them by (ia, ib, oid) lookup.
+        #
+        # For cross-mode edges (one mo==0 endpoint, one mo==1 endpoint), the
+        # interpolation is done in mode-1 space: the mo==0 endpoint's ib is
+        # negated before computing the step.  All intermediate vertices are
+        # stored under the mode-1 oid with a negative ib.
+        for L in layers[:-1]:
+            factor = int(3 ** (finest - L))
+            uv7_c, oc7_c = coarser_uv[L]
+            for h in range(len(uv7_c)):
+                for e in range(6):
+                    e_next = (e + 1) % 6
+                    ia_a = int(uv7_c[h, e,      0]) * factor
+                    ib_a = int(uv7_c[h, e,      1]) * factor
+                    oa   = int(oc7_c[h, e])
+                    ia_b = int(uv7_c[h, e_next, 0]) * factor
+                    ib_b = int(uv7_c[h, e_next, 1]) * factor
+                    ob   = int(oc7_c[h, e_next])
+                    dia  = ia_b - ia_a
+
+                    if oa == ob:
+                        ib_start, dib, o_mid = ib_a, ib_b - ib_a, oa
+                    else:
+                        mo_a_v = int(H9O.oid_mo[oa])
+                        mo_b_v = int(H9O.oid_mo[ob])
+                        if mo_a_v == mo_b_v:
+                            ib_start, dib, o_mid = ib_a, ib_b - ib_a, oa
+                        elif mo_a_v == 0:
+                            # a is mo==0, b is mo==1: convert a to mode-1 space
+                            ib_start = -ib_a
+                            dib      = ib_b - ib_start
+                            o_mid    = ob
+                        else:
+                            # a is mo==1, b is mo==0: convert b to mode-1 space
+                            ib_start = ib_a
+                            dib      = (-ib_b) - ib_start
+                            o_mid    = oa
+
+                    for k in range(1, factor):
+                        ia_m  = ia_a     + k * dia  // factor
+                        ib_m  = ib_start + k * dib  // factor
+                        key   = (ia_m, ib_m, o_mid)
+                        if key in vert_dict:
+                            continue
+                        alt_o   = ob if o_mid == oa else oa
+                        alt_key = (ia_m, ib_m, alt_o)
+                        if alt_key in vert_dict:
+                            continue
+                        # Vertex genuinely absent — add synthetic entry.
+                        idx = len(vert_xy)
+                        vert_dict[key] = idx
+                        rx = ia_m * U1 / div_f
+                        ry = ib_m * V3 / div_f
+                        vert_xy.append((rx, ry))
+                        vert_oid.append(o_mid)
+                        ia_list.append(ia_m)
+                        ib_list.append(ib_m)
 
         pts    = Points(np.array(vert_xy, dtype=np.float64), b_oct, oid=np.array(vert_oid, dtype=np.int32))
         ia_arr = np.array(ia_list, dtype=np.int64)
@@ -815,20 +878,332 @@ class HexMesh:
         # --- coarser layers: scale UV keys by 3^(finest-L), look up in pool
         for L in layers[:-1]:
             factor       = int(3 ** (finest - L))
-            uv7_c, oc7_c = cls._raw_uv(L, b_oct)
+            uv7_c, oc7_c = coarser_uv[L]
             face_c       = np.empty((len(uv7_c), 6), dtype=np.int32)
             for h in range(len(uv7_c)):
                 for vi in range(6):
                     ia = int(uv7_c[h, vi, 0]) * factor
                     ib = int(uv7_c[h, vi, 1]) * factor
                     o  = int(oc7_c[h, vi])
-                    face_c[h, vi] = vert_dict[(ia, ib, o)]
+                    key = (ia, ib, o)
+                    idx = vert_dict.get(key)
+                    if idx is None:
+                        # Seam vertex: stored under canonical (mo==0) oid.
+                        for nb in H9O.oid_nb[o].tolist():
+                            idx = vert_dict.get((ia, ib, nb))
+                            if idx is not None:
+                                break
+                    face_c[h, vi] = idx
             faces_dict[L] = face_c
 
-        return cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict)
+        offspring = cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict)
+        offspring.alt = alt
+        return offspring
 
     @classmethod
-    def _raw_uv(cls, layer, b_oct):
+    def _alt_results(cls, layer):
+        """Generate corrected hex verts at *layer* in integer UV space.
+
+        Each hex is assembled as:
+            hex_uv[h, vi] = scale * template[c2, vi] + origin_uv[h]
+        where scale = 1 for all supercell leaf nodes (see ``_supercell_uvs``).
+        """
+        template = H9P.hi[:, :, :4, :]  # mode, c2, 4 pts.
+        if layer == 0:
+            result = []
+            for mode in range(2):
+                pts = template[mode]
+                coords = []
+                hhm = []
+                for hhp in pts:
+                    hh = []
+                    for (u, v) in hhp:
+                        pt = (u, v)
+                        try:
+                            idx = coords.index(pt)
+                        except ValueError:
+                            idx = len(coords)
+                            coords.append(pt)
+                        hh.append(idx)
+                    hhm.append(hh)
+                result.append((np.array(coords, dtype=np.int32), [], np.array(hhm, dtype=np.int32)))
+            return result
+        offsets = np.array([  # scale is 1. so we carve off the redundant 1.
+            uv_grid(layer - 1, 0)[:, :3],
+            uv_grid(layer - 1, 1)[:, :3]
+        ])
+        modes = offsets[:, :, 0].astype(np.int32)
+        xy_offsets = offsets[:, :, 1:]
+        coords = template[modes] + xy_offsets[:, :, np.newaxis, np.newaxis, :]
+        coords = coords.reshape((2, -1, 4, 2))  # Drop the c2.
+        results = []
+        for group in coords:
+            all_pts = group.reshape((-1, 2))
+            unique_pts, inverse = np.unique(all_pts, axis=0, return_inverse=True)
+            row_ids = inverse.reshape(-1, 4)  # Shape: [N, 4]
+            endpoints = row_ids[:, [0, 3]]  # Get start and end IDs for every row
+            sorted_endpoints = np.sort(endpoints, axis=1)
+            edge_keys = sorted_endpoints[:, 0].astype(np.int64) * (unique_pts.shape[0] + 1) + sorted_endpoints[:, 1]
+            # Get indices of sorted keys to find neighbors
+            sort_idx = np.argsort(edge_keys)
+            sorted_keys = edge_keys[sort_idx]
+            is_match = sorted_keys[:-1] == sorted_keys[1:]
+            idx_a = sort_idx[:-1][is_match]
+            idx_b = sort_idx[1:][is_match]
+            flip_mask = row_ids[idx_a, 0] != row_ids[idx_b, 3]
+            hex_indices = np.zeros((len(idx_a), 6), dtype=int)
+            hex_indices[:, 0:4] = row_ids[idx_a]
+
+            b_mids = row_ids[idx_b, 1:3]
+            b_mids[flip_mask] = b_mids[flip_mask, ::-1]  # Flip [p5, p4] to [p4, p5]
+            hex_indices[:, 4:6] = b_mids
+
+            # all_row_indices = np.arange(len(row_ids))
+            matched_mask = np.zeros(len(row_ids), dtype=bool)
+            matched_mask[idx_a] = True
+            matched_mask[idx_b] = True
+            orphan_rows = row_ids[~matched_mask]
+
+            results.append([unique_pts, hex_indices, orphan_rows])
+        return results
+
+    # @classmethod
+    # def _stitch_seam(cls, m0_data, m1_data, transform_fn):
+    #     """
+    #     Generic stitcher for any seam.
+    #     m0_data/m1_data: (orphans, pts, val)
+    #     """
+    #     orphans0, pts0, val0 = m0_data
+    #     orphans1, pts1, val1 = m1_data
+    #
+    #     # 1. Transform mode 1 into mode 0 space
+    #     val1_trans = transform_fn(val1)
+    #
+    #     # 2. Get keys and match
+    #     keys0 = cls._get_endpoint_keys(val0)
+    #     keys1 = cls._get_endpoint_keys(val1_trans)
+    #
+    #     map1 = {k: i for i, k in enumerate(keys1)}
+    #     matches = np.array([(i, map1[k]) for i, k in enumerate(keys0) if k in map1])
+    #
+    #     if len(matches) == 0:
+    #         return None, {}
+    #
+    #     idx0, idx1 = matches[:, 0], matches[:, 1]
+    #
+    #     # 3. Assemble Hexagons
+    #     # pts 0-3 from m0, pts 4-5 from m1 (middle points)
+    #     m0_seam = orphans0[idx0]
+    #     m1_seam = orphans1[idx1]
+    #
+    #     hexs = np.zeros((len(matches), 6), dtype=int)
+    #     hexs[:, 0:4] = m0_seam
+    #
+    #     # Winding check: Does p0 of m0 match p0 of transformed m1?
+    #     # If not, it matches p3, so we flip the middle points p1, p2
+    #     flip_mask = np.any(val0[idx0, 0] != val1_trans[idx1, 0], axis=1)
+    #     b_mids = m1_seam[:, 1:3]
+    #     # Vectorized flip for winding
+    #     b_mids[flip_mask] = b_mids[flip_mask, ::-1]
+    #     hexs[:, 4:6] = b_mids
+    #
+    #     # 4. Generate Remap (stale m1 points to definitive m0 points)
+    #     remapping = {}
+    #     for i, (i0, i1) in enumerate(matches):
+    #         p0_0, p3_0 = m0_seam[i, [0, 3]]
+    #         p0_1, p3_1 = m1_seam[i, [0, 3]]
+    #         if flip_mask[i]:
+    #             remapping[p0_1], remapping[p3_1] = p3_0, p0_0
+    #         else:
+    #             remapping[p0_1], remapping[p3_1] = p0_0, p3_0
+    #
+    #     return hexs, remapping
+    @classmethod
+    def _stitch_seam(cls, m0_bundle, m1_bundle, c2):
+        m0_orphans, pts0, val0 = m0_bundle
+        m1_orphans, pts1, val1 = m1_bundle
+
+        # Transform mode 1 into mode 0 coordinate space pts
+        val1_trans = val1 * [1, -1]
+
+        # Match endpoints
+        keys0 = cls._get_endpoint_keys(val0)
+        keys1 = cls._get_endpoint_keys(val1_trans)
+        map1 = {k: i for i, k in enumerate(keys1)}
+
+        matches = []
+        for i0, k0 in enumerate(keys0):
+            if k0 in map1:
+                matches.append((i0, map1[k0]))
+
+        if not matches: return None, {}
+        matches = np.array(matches)
+        idx0, idx1 = matches[:, 0], matches[:, 1]
+
+        # Assemble with proper winding
+        hexs = np.zeros((len(matches), 6), dtype=np.int32)
+        hexs[:, 0:4] = m0_orphans[idx0]
+
+        # WINDING FIX:
+        # Check if Mode 0 Start matches Mode 1 Transformed Start
+        # If it matches the End instead, we must flip the middle points
+        m1_orphans_matched = m1_orphans[idx1]
+        # Corrected comparison: Does Start match Start?
+        start_match = np.all(val0[idx0, 0] == val1_trans[idx1, 0], axis=1)
+        b_mids = m1_orphans_matched[:, 1:3]
+        # If it's a Start-to-End match (not start-to-start),
+        # the points p1, p2 are already in the "correct" return order.
+        # If it's a Start-to-Start match, we must flip them.
+        for i in range(len(b_mids)):
+            if start_match[i]:
+                hexs[i, 4:6] = b_mids[i, ::-1]  # Reverse for return trip
+            else:
+                hexs[i, 4:6] = b_mids[i]
+
+        # Create the Remap Table
+        remap = {}
+        for i, (i0, i1) in enumerate(matches):
+            p0_m0, p3_m0 = m0_orphans[idx0[i], [0, 3]]
+            p0_m1, p3_m1 = m1_orphans[idx1[i], [0, 3]]
+            if start_match[i]:
+                remap[p0_m1], remap[p3_m1] = (p0_m0, c2), (p3_m0, c2)
+            else:
+                remap[p0_m1], remap[p3_m1] = (p3_m0, c2), (p0_m0, c2)
+
+        return hexs, remap
+
+    @classmethod
+    def _alt_uv(cls, layer):
+        # s2 = (3 ** layer) << 1
+        s1 = 3 ** layer
+        s2 = s1 << 1
+
+        results = cls._alt_results(layer)
+        m0_pts, m0_hex, m0_orphans = results[0]
+        m1_pts, m1_hex, m1_orphans = results[1]
+        m0_op, m1_op = m0_pts[m0_orphans], m1_pts[m1_orphans]
+
+        # Mode 0 Masks
+        m0c2_0 = (m0_op[:, 0, 1] == s1) & (m0_op[:, 3, 1] == s1)  # Y = s1
+        m0c2_1 = (m0_op[:, 0, 0] - m0_op[:, 0, 1] == s2) & (m0_op[:, 3, 0] - m0_op[:, 3, 1] == s2)    # X - Y = s2
+        m0c2_2 = (m0_op[:, 0, 0] + m0_op[:, 0, 1] == -s2) & (m0_op[:, 3, 0] + m0_op[:, 3, 1] == -s2)  # X + Y = -s2
+
+        # Mode 1 Masks (Mirrored)
+        m1c2_0 = (m1_op[:, 0, 1] == -s1) & (m1_op[:, 3, 1] == -s1)  # Y = -s1
+        m1c2_1 = (m1_op[:, 0, 0] - m1_op[:, 0, 1] == -s2) & (m1_op[:, 3, 0] - m1_op[:, 3, 1] == -s2)  # X - Y = -s2
+        m1c2_2 = (m1_op[:, 0, 0] + m1_op[:, 0, 1] == s2) & (m1_op[:, 3, 0] + m1_op[:, 3, 1] == s2)    # X + Y = s2
+
+        masks = [
+            (m0c2_0, m1c2_0),  # Equator: Both endpoints have Y = +/- s1
+            (m0c2_1, m1c2_2),  # Forward: Both endpoints satisfy X - Y = +/- s2 (after Y-flip logic)
+            (m0c2_2, m1c2_1),  # Backward: Both endpoints satisfy X + Y = +/- s2
+        ]
+        seam_hexs = []
+        for seam_type in range(3):
+            m0_mask, m1_mask = masks[seam_type]
+            m0_bundle = (m0_orphans[m0_mask], m0_pts, m0_op[m0_mask])
+            m1_bundle = (m1_orphans[m1_mask], m1_pts, m1_op[m1_mask])
+            hexs, remap = cls._stitch_seam(m0_bundle, m1_bundle, seam_type)
+            if hexs is not None:
+                seam_hexs.append(hexs)
+            # g_map = {tuple(m1_pts[k].tolist()): tuple((m0_pts[v].tolist(), c2)) for k, (v, c2) in remap.items()}
+        # seam_hexs are in c2 order (consider oid_nb here!)
+        # Need to return uvo_points, uv_faces.
+        uvo = []
+        uvo_lookup = {}
+        hexes = []
+
+        def _add_to_uvo(pts, o, repo):
+            for pt in pts:
+                u, v = int(pt[0]), int(pt[1])
+                gp = (u, v, o)
+                if gp not in uvo_lookup:
+                    uvo_lookup[gp] = len(uvo)
+                    uvo.append(gp)
+                repo[gp] = uvo_lookup[gp]
+
+        for oid in range(8):
+            onb = H9O.oid_nb[oid].tolist()
+            l_to_g = {}
+            mo = H9O.oid_mo[oid]
+            if mo == 0:
+                for hx in m0_hex:
+                    hx_0 = [m0_pts[p].tolist() for p in hx]
+                    _add_to_uvo(hx_0, oid, l_to_g)
+                    hexes.append([l_to_g[(u, v, oid)] for (u, v) in hx_0])
+                for c2, nb in enumerate(onb):
+                    oi = [oid, oid, oid, oid, nb, nb]
+                    for hx in seam_hexs[c2]:
+                        hx_0 = [m0_pts[p].tolist() for p in hx[:4]]
+                        hx_1 = [m1_pts[p].tolist() for p in hx[4:]]
+                        _add_to_uvo(hx_0, oid, l_to_g)
+                        _add_to_uvo(hx_1, nb, l_to_g)
+                        hexes.append([l_to_g[(u, v, o)] for (u, v), o in zip(hx_0 + hx_1, oi)])
+            else:
+                for hx in m1_hex:
+                    hx_1 = [m1_pts[p].tolist() for p in hx]
+                    _add_to_uvo(hx_1, oid, l_to_g)
+                    hexes.append([l_to_g[(u, v, oid)] for (u, v) in hx_1])
+        return uvo, hexes
+
+    @classmethod
+    def get_canonical_gp(cls, u, v, oid, s1, s2):
+        """
+        Finds the lowest-ID octant that shares this physical coordinate
+        and returns the point in that octant's coordinate space.
+        """
+        # 1. Identify which seams this point sits on
+        seams = []
+        if abs(v) == s1: seams.append(0)  # Equator
+        if abs(u - v) == s2: seams.append(1)  # Forward Seam
+        if abs(u + v) == s2: seams.append(2)  # Backward Seam
+
+        if not seams:
+            return (u, v, oid)  # Internal point, no sharing
+
+        # 2. Find all sharing octants using the LUT
+        # Start with the current octant
+        sharing_oids = {oid}
+        for s_type in seams:
+            neighbor_oid = int(H9O.oid_nb[oid][s_type])
+            sharing_oids.add(neighbor_oid)
+
+            # At corners, a neighbor's neighbor might also share this point.
+            # This catch-all handles the 4-way pole junctions.
+            second_neighbor = H9O.oid_nb[neighbor_oid][(s_type + 1) % 3]
+            # (This logic varies slightly based on your LUT structure,
+            # but min() is the ultimate decider)
+
+        master_oid = min(sharing_oids)
+
+        if master_oid == oid:
+            return (u, v, oid)  # We are the owner
+
+        # 3. Coordinate Transformation
+        # If we are handing ownership to a neighbor of a DIFFERENT mode,
+        # apply the Y-flip. If same mode, keep current (u, v).
+        target_u, target_v = u, v
+        if H9O.oid_mo[oid] != H9O.oid_mo[master_oid]:
+            target_v = -v
+
+        return (target_u, target_v, master_oid)
+
+    @classmethod
+    def _get_endpoint_keys(cls, pts):
+        # pts shape: [N, 4, 2]
+        # We take point 0 and point 3 as the "bridge"
+        endpoints = pts[:, [0, 3], :].reshape(-1, 4)  # [N, (x0, y0, x3, y3)]
+        # We sort the start/end pairs so direction (p0->p3 vs p3->p0) doesn't matter
+        # p0 = endpoints[:, :2]
+        # p3 = endpoints[:, 2:]
+
+        # Simple Cantor-like pairing or just a view-based comparison
+        # Sorting ensures that a [p0, p3] and [p3, p0] match
+        sorted_ends = np.sort(endpoints.reshape(-1, 2, 2), axis=1).reshape(-1, 4)
+        return [tuple(row) for row in sorted_ends]
+
+    @classmethod
+    def _raw_uv(cls, layer):
         """Generate corrected hex verts at *layer* in integer UV space.
 
         Returns ``(N, 7, 2)`` int64 and ``(N, 7)`` int32.
@@ -937,130 +1312,6 @@ class HexMesh:
             out_oid[ext, 5] = nb
 
         return out_uv.astype(np.int64), out_oid
-
-    # @classmethod
-    # def _raw(cls, layer, b_oct):
-    #     """Generate corrected hex verts at *layer*, no dedup.
-    #
-    #     Returns ``(verts6, oc6)`` — arrays of shape ``(N, 6, 2)`` and
-    #     ``(N, 6)`` ready for dict insertion.  Mode-1 boundary hexes are
-    #     already excluded.
-    #     """
-    #     all_v6  = []
-    #     all_oc6 = []
-    #
-    #     for side, sdom in b_oct.sides.items():
-    #         oid  = int(sdom.oid)
-    #         mode = int(H9O.oid_mo[oid])
-    #
-    #         sc0 = [(o, s) for m, o, s in cls._supercells(layer, mode) if m == 0]
-    #         if not sc0:
-    #             continue
-    #
-    #         rows   = [(o + H9P.hx[0, c2] * s, c2) for o, s in sc0 for c2 in range(3)]
-    #         verts6 = np.array([r[0] for r in rows])          # (N, 6, 2)
-    #         c2_arr = np.array([r[1] for r in rows], dtype=int)
-    #         N      = len(verts6)
-    #
-    #         flat   = verts6.reshape(-1, 2)
-    #         mo_arr = np.full(N * 6, mode, dtype=np.uint8)
-    #         locs   = location(H9K.R3 * flat[:, 0], flat[:, 1], mo_arr).reshape(N, 6)
-    #         ext    = (locs[:, 4] == BaryLoc.EXT) & (locs[:, 5] == BaryLoc.EXT)
-    #
-    #         v6  = verts6.copy()
-    #         oc6 = np.full((N, 6), oid, dtype=int)
-    #
-    #         if ext.any():
-    #             if mode == 0:
-    #                 v6[ext, 4] = verts6[ext, 2] * [1.0, -1.0]
-    #                 v6[ext, 5] = verts6[ext, 1] * [1.0, -1.0]
-    #                 for c2v in range(3):
-    #                     mask = ext & (c2_arr == c2v)
-    #                     if mask.any():
-    #                         oc6[mask, 4] = int(H9O.oid_nb[oid, c2v])
-    #                         oc6[mask, 5] = int(H9O.oid_nb[oid, c2v])
-    #             else:
-    #                 v6  = v6[~ext]
-    #                 oc6 = oc6[~ext]
-    #
-    #         if len(v6):
-    #             all_v6.append(v6)
-    #             all_oc6.append(oc6)
-    #
-    #     if not all_v6:
-    #         return np.empty((0, 6, 2)), np.empty((0, 6), dtype=int)
-    #     return np.concatenate(all_v6), np.concatenate(all_oc6)
-
-# @staticmethod
-# def _supercells(layer: int, mode: int):
-#     """Yield ``(sc_mode, sc_origin_xy, sc_scale)`` for every supercell.
-#
-#     Used by ``_raw`` (float b_oct path).  For the integer UV path see
-#     ``_supercell_uvs``.
-#     """
-#     if layer == 0:
-#         yield mode, np.zeros(2, dtype=float), 1.0
-#     else:
-#         for _, sc_mode, sc_origin, sc_scale in region_grid(layer - 1, mode):
-#             yield sc_mode, sc_origin, sc_scale
-
-# ---- raw hex generation per layer ----------------------------------
-
-    # ---- factory -------------------------------------------------------
-
-    def claude_densify(self, L: int) -> np.ndarray:
-        """Return densified face indices for layer *L* using fine-layer verts.
-
-        For each of the 6 edges of each L-hex, the intermediate fine-layer
-        vertices are determined by integer lattice interpolation — pure
-        arithmetic, no collinearity test.
-
-        Returns
-        -------
-        ndarray, shape ``(N_L, 6 * (3**δ + 1))``
-            δ = ``self.fine - L``.  Each row lists vertex indices walking
-            around the densified hex perimeter: ``3**δ + 1`` verts per edge
-            (start vertex + intermediates; final vertex is start of next edge).
-        """
-        delta  = self.fine - L
-        if delta <= 0:
-            return self._fl[L]
-        factor = int(3 ** delta)
-        f_L    = self._fl[L]                          # (N_L, 6)
-        n_hex  = len(f_L)
-        vpere  = factor                           # verts per edge (incl. start)
-        out    = np.empty((n_hex, 6 * vpere), dtype=np.int32)
-
-        for e in range(6):
-            j       = (e + 1) % 6
-            idx_a   = f_L[:, e]                       # (N_L,) start vertex
-            idx_b   = f_L[:, j]                       # (N_L,) end vertex
-            ia_a    = self.ia[idx_a]
-            ib_a    = self.ib[idx_a]
-            dia     = self.ia[idx_b] - ia_a           # (N_L,) Δia over edge
-            dib     = self.ib[idx_b] - ib_a
-            oid_a   = self.pts.oid[idx_a]
-            oid_b   = self.pts.oid[idx_b]
-
-            for t in range(vpere):
-                ia_t  = ia_a + dia * t // factor
-                ib_t  = ib_a + dib * t // factor
-                # Primary oid: start-side for first half, end-side for second.
-                # For interior edges (oid_a == oid_b) this always hits.
-                # For boundary edges the halfway rule may not match what
-                # _raw_uv assigned, so fall back to the other oid on a miss.
-                oid_t = np.where(t * 2 < factor, oid_a, oid_b)
-                alt_t = np.where(t * 2 < factor, oid_b, oid_a)
-                col   = e * vpere + t
-                def _lk(ia, ib, o1, o2):
-                    v = self._vd.get((ia, ib, o1))
-                    return v if v is not None else self._vd[(ia, ib, o2)]
-                out[:, col] = np.array([
-                    _lk(int(ia_t[h]), int(ib_t[h]), int(oid_t[h]), int(alt_t[h]))
-                    for h in range(n_hex)
-                ], dtype=np.int32)
-
-        return out
 
 
 def clipped_ll(arr_ll: np.ndarray) -> list:

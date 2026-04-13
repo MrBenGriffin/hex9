@@ -288,3 +288,122 @@ def test_densify_shape_and_range(fix_name, coarse_L, expect_pass, request):
     else:
         with pytest.raises(Exception):
             _check()
+
+
+# ---------------------------------------------------------------------------
+# 7. densify — UV linearity
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("fix_name,coarse_L,expect_pass", _DENSIFY_CASES)
+def test_densify_uv_linear(fix_name, coarse_L, expect_pass, request):
+    """Every intermediate densified vertex must lie on the UV line between its
+    edge endpoints, with equal spacing (no fallback-to-endpoint collapse)."""
+    mesh   = request.getfixturevalue(fix_name)
+    finest = mesh.fine
+    delta  = finest - coarse_L
+    factor = int(3 ** delta)
+
+    def _check():
+        d   = mesh.densify(coarse_L)     # (N, 6*factor)
+        fl  = mesh[coarse_L]             # (N, 6) coarse face indices
+        ia  = mesh.ia                    # integer U per vertex
+        ib  = mesh.ib                    # integer V per vertex
+
+        failures = []
+        for hi in range(len(fl)):
+            hx   = fl[hi]
+            loop = d[hi]
+            for e in range(6):
+                v_start = int(hx[e])
+                v_end   = int(hx[(e + 1) % 6])
+                ia_a, ib_a = int(ia[v_start]), int(ib[v_start])
+                ia_b, ib_b = int(ia[v_end]),   int(ib[v_end])
+                dia = ia_b - ia_a
+                dib = ib_b - ib_a
+
+                # Corner vertex must match coarse face index
+                assert int(loop[e * factor]) == v_start, (
+                    f"hex {hi} edge {e}: loop corner != coarse vert")
+
+                # Intermediate vertices (k = 1 … factor-1)
+                for k in range(1, factor):
+                    exp_ia = ia_a + k * dia // factor
+                    exp_ib = ib_a + k * dib // factor
+                    v = int(loop[e * factor + k])
+                    act_ia = int(ia[v])
+                    act_ib = int(ib[v])
+                    if act_ia != exp_ia or act_ib != exp_ib:
+                        failures.append(
+                            dict(hex=hi, edge=e, k=k,
+                                 exp=(exp_ia, exp_ib),
+                                 act=(act_ia, act_ib)))
+                        if len(failures) >= 5:
+                            break
+                if len(failures) >= 5:
+                    break
+            if len(failures) >= 5:
+                break
+
+        assert not failures, (
+            f"densify({coarse_L}, finest={finest}): {len(failures)} non-linear "
+            f"intermediate verts. First: {failures[0]}")
+
+    if expect_pass:
+        _check()
+    else:
+        pytest.xfail(f"densify({coarse_L}, finest={finest}) UV linearity not yet passing")
+
+
+# ---------------------------------------------------------------------------
+# 8. densify — shared-edge consistency (neighbour reversal)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("fix_name,coarse_L,expect_pass", _DENSIFY_CASES)
+def test_densify_edge_reversal(fix_name, coarse_L, expect_pass, request):
+    """For every shared edge, the densified vertex sequence of one hex must be
+    the exact reverse of its neighbour's sequence for the same edge."""
+    mesh   = request.getfixturevalue(fix_name)
+    finest = mesh.fine
+    delta  = finest - coarse_L
+    factor = int(3 ** delta)
+    n_loop = 6 * factor
+
+    def _check():
+        d  = mesh.densify(coarse_L)   # (N, n_loop)
+        fl = mesh[coarse_L]           # (N, 6)
+
+        # Build edge_key → list of (hi, e, full_edge_sequence including both endpoints)
+        edge_map: dict = {}
+        for hi in range(len(fl)):
+            loop = d[hi]
+            for e in range(6):
+                v_start = int(fl[hi, e])
+                v_end   = int(fl[hi, (e + 1) % 6])
+                # Full edge sequence: factor+1 vertices (start … end inclusive)
+                seq = tuple(int(loop[(e * factor + k) % n_loop])
+                            for k in range(factor + 1))
+                key = (min(v_start, v_end), max(v_start, v_end))
+                edge_map.setdefault(key, []).append((hi, e, seq))
+
+        failures = []
+        for key, entries in edge_map.items():
+            if len(entries) != 2:
+                continue  # boundary edge — no neighbour to compare
+            (hi_a, e_a, seq_a), (hi_b, e_b, seq_b) = entries
+            if seq_a != seq_b[::-1]:
+                failures.append(dict(
+                    key=key,
+                    hex_a=hi_a, edge_a=e_a, seq_a=seq_a[:4],
+                    hex_b=hi_b, edge_b=e_b, seq_b=seq_b[:4],
+                ))
+                if len(failures) >= 5:
+                    break
+
+        assert not failures, (
+            f"densify({coarse_L}, finest={finest}): {len(failures)} edge-reversal "
+            f"mismatches. First: {failures[0]}")
+
+    if expect_pass:
+        _check()
+    else:
+        pytest.xfail(f"densify({coarse_L}, finest={finest}) edge reversal not yet passing")

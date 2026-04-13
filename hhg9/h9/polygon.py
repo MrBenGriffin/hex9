@@ -63,15 +63,15 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
     poly_eps = 1 - 1e-16
     pts = {
         # Clockwise.
-        (0, 0): [  # c2 half-hexagons net_mode 0
-            [(3, 1), (2, 0), (0, 0), (-1, 1)],
-            [(0, -2), (-1, -1), (0, 0), (2, 0)],
-            [(-3, 1), (-1, 1), (0, 0), (-1, -1)]
+        (0, 0): [  # c2 half-hexagons net_mode 0 - starting at oct. vertex
+            [(3, 1), (2, 0), (0, 0), (-1, 1)],    # c2=0 gradient: flat
+            [(0, -2), (-1, -1), (0, 0), (2, 0)],  # c2=1 gradient: forward
+            [(-3, 1), (-1, 1), (0, 0), (-1, -1)]  # c2=2 gradient: back
         ],
-        (0, 1): [  # c2 half-hexagons net_mode 1
-            [(-1, -1), (0, 0), (2, 0), (3, -1)],
-            [(-1, 1), (0, 0), (-1, -1), (-3, -1)],
-            [(2, 0), (0, 0), (-1, 1), (0, 2)]
+        (0, 1): [  # c2 half-hexagons net_mode 1- starting at oct. vertex
+            [(3, -1), (-1, -1), (0, 0), (2, 0)],
+            [(-3, -1), (-1, 1), (0, 0), (-1, -1)],
+            [(0, 2), (2, 0), (0, 0), (-1, 1)]
         ],
         (1, 0): [  # c2 hexagons net_mode 0;  final 2 pts in opp. net_mode.
             # If exterior, they are idx 2,1 (eg (0,0) (2,0)).
@@ -116,27 +116,27 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
                 [(0, 2), (1, 1), (-1, 1)],  # 16
             ]
         ],
-        (3, 0): [  # clockwise, c0,c1,c2 - edges of super-region
+        (3, 0): [  # clockwise, c0,c1,c2 - edges of super-region 0: (0,0 is centre)
             [
-                (-3, 1), (-1, 1), (1, 1),
-                (3, 1), (2, 0), (1, -1),
-                (0, -2), (-1, -1), (-2, 0),
+                (-1, 1), (1, 1), (3, 1),
+                (2, 0), (1, -1), (0, -2),
+                (-1, -1), (-2, 0), (-3, 1)
             ]
         ],
-        (3, 1): [  # clockwise, c0,c1,c2 - edges of super-region
+        (3, 1): [  # clockwise, c0,c1,c2 - edges of super-region 1
             [
-                (3, -1), (1, 1), (-1, -1),
+                (3, -1), (1, -1), (-1, -1),
                 (-3, -1), (-2, 0), (-1, 1),
                 (0, 2), (1, 1), (2, 0),
             ]
         ],
-        (4, 0): [  # clockwise, c0,c1,c2 - mode 1 vertices of super-region
-            [  # =  <-c0->  <-c1->   <-c2->
-                (-3, 1), (3, 1), (0, -2),  # (-3, 1)
+        (4, 0): [  # clockwise, c0,c1,c2 - mode 0 vertices of super-region
+            [  # <-c0->  <-c1->   <-c2->
+                (3, 1), (0, -2), (-3, 1),  # (-3, 1)
             ]
         ],
         (4, 1): [  # clockwise, c0,c1,c2 - mode 1 vertices of super-region
-            [  # =  <-c0->    <-c1->  <-c2->
+            [  # <-c0->  <-c1->   <-c2->
                 (3, -1), (-3, -1), (0, 2)
             ]
         ],
@@ -264,6 +264,45 @@ def region_grid(levels: int = 3, mode: int = 0, h9p: H9Polygon = H9P) -> List[Tu
                 next_q.append((path_k, mo_k, origin_k, scale_k))
         queue = next_q
     return queue
+
+
+def uv_grid(levels: int = 3, mode: int = 0, flatten=True, h9p: H9Polygon = H9P) -> List[Tuple]:
+    """
+    Generate a grid of points in UV recursively.
+    If flatten=True, returns a list of (mode, u, v) tuples (where scale = 1)
+    If flatten=False, returns a list of lists of (mode, u, v) tuples.
+    Returns:
+        List of [current_mode, origin_xy, scale].
+    """
+    from hhg9.h9 import H9C, H9R   # H9_RA
+    h9c, h9r = H9C, H9R
+    mode_cells = [h9r.downs, h9r.ups]
+    mode_ofs = h9c.off_uv[mode_cells].astype(np.int32)
+    mode_ofs[:, :, 0] *= 3   # Polygon Grid shape: U is 3U
+    k_mos = mode_cells[mode]
+    k_ofs = mode_ofs[mode]
+    scale = 3**levels
+    queue = [(h9c.mode[k], o * scale, scale) for k, o in zip(k_mos, k_ofs)]
+    layers = []
+    if not flatten:
+        layers.append(np.array([[m, u, v, s] for (m, (u, v), s) in queue], dtype=np.int32))
+    for depth in range(levels):
+        next_q = []
+        for mode, origin, scale in queue:
+            k_scale = scale // 3
+            k_mos = mode_cells[mode]
+            k_ofs = mode_ofs[mode]
+            for k, o in zip(k_mos, k_ofs):
+                mo_k = h9c.mode[k]
+                origin_k = origin + (o * k_scale)
+                next_q.append((mo_k, origin_k, k_scale))
+        queue = next_q
+        if not flatten:
+            layers.append(np.array([[m, u, v, s] for (m, (u, v), s) in queue], dtype=np.int32))
+    if flatten:
+        return np.array([[m, u, v, s] for (m, (u, v), s) in queue], dtype=np.int32)
+    else:
+        return layers
 
 
 def tri_grid(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P) -> NDArray[np.float64]:
