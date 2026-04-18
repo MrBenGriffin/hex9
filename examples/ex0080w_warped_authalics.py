@@ -104,7 +104,9 @@ def cull_backface(arr, axis):
 def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
     """Display a 3D point cloud using matplotlib"""
     mpl.rcParams['path.simplify'] = False
-    fig = plt.figure(figsize=(15, 15), dpi=200, frameon=False)
+    plt.rcParams['figure.constrained_layout.use'] = True
+    mpl.rcParams["figure.autolayout"] = True
+    fig = plt.figure(figsize=(15, 15), dpi=400, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_subplot(111, projection='3d')
     ax.view_init(elev=30, azim=40)
@@ -198,9 +200,10 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
     print(f"  % dev  min/mean/max: {pct_dev.min():+.3f}% / "
           f"{pct_dev.mean():+.3f}% / {pct_dev.max():+.3f}%")
     print(f"  log-ratio std dev  : {score.std():.6f}")
-    print(f"  |% dev| p50/p90/p99: "
+    print(f"  |% dev| p50/p90/p95/p99: "
           f"{np.percentile(np.abs(pct_dev), 50):.3f}% / "
           f"{np.percentile(np.abs(pct_dev), 90):.3f}% / "
+          f"{np.percentile(np.abs(pct_dev), 95):.3f}% / "
           f"{np.percentile(np.abs(pct_dev), 99):.3f}%")
 
     # ── CSV export ──────────────────────────────────────────────────────────
@@ -229,7 +232,7 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
 
 
 if __name__ == '__main__':
-    depth = 4  # 0,...5 √
+    depth = 5  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
     data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)

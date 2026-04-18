@@ -25,14 +25,14 @@ def run():
 
     sx, sy = src[:, 0], src[:, 1]
     dx, dy = dst[:, 0], dst[:, 1]
-    fig = plt.figure(figsize=(10, 10), dpi=200, frameon=False)
+    fig = plt.figure(figsize=(12, 10), dpi=400, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_axes([0, 0, 1, 1])  # span the whole figure
     ax.set_aspect('equal', adjustable='box')
-    ax.scatter(sx, sy, marker='.', ec='none', s=12, color='green', alpha=0.5)
-    ax.scatter(dx, dy, marker='.', ec='none', s=12, color='blue', alpha=0.25)
+    ax.scatter(sx, sy, marker='.', ec='none', s=2, color='green', alpha=0.5)
+    ax.scatter(dx, dy, marker='.', ec='none', s=2, color='blue', alpha=0.25)
     ax.set_axis_off()
-    fig.savefig(f"output/ex0046_warp.png", dpi=200)
+    fig.savefig(f"output/ex0046_warp.png", dpi=400)
     print(f'fig saved at output/ex0046_warp.png')
 
 

@@ -297,17 +297,25 @@ def test_densify_shape_and_range(fix_name, coarse_L, expect_pass, request):
 @pytest.mark.parametrize("fix_name,coarse_L,expect_pass", _DENSIFY_CASES)
 def test_densify_uv_linear(fix_name, coarse_L, expect_pass, request):
     """Every intermediate densified vertex must lie on the UV line between its
-    edge endpoints, with equal spacing (no fallback-to-endpoint collapse)."""
+    edge endpoints, with equal spacing (no fallback-to-endpoint collapse).
+
+    For cross-mode edges (one mo==0 endpoint, one mo==1 endpoint) the
+    interpolation is done in mode-1 space — the mo==0 endpoint's ib is negated
+    before computing the expected step — matching _get_verts behaviour.
+    """
+    from hhg9.h9 import H9O
+
     mesh   = request.getfixturevalue(fix_name)
     finest = mesh.fine
     delta  = finest - coarse_L
     factor = int(3 ** delta)
 
     def _check():
-        d   = mesh.densify(coarse_L)     # (N, 6*factor)
-        fl  = mesh[coarse_L]             # (N, 6) coarse face indices
-        ia  = mesh.ia                    # integer U per vertex
-        ib  = mesh.ib                    # integer V per vertex
+        d    = mesh.densify(coarse_L)     # (N, 6*factor)
+        fl   = mesh[coarse_L]             # (N, 6) coarse face indices
+        ia   = mesh.ia                    # integer U per vertex
+        ib   = mesh.ib                    # integer V per vertex
+        oids = mesh.pts.oid               # oid per vertex
 
         failures = []
         for hi in range(len(fl)):
@@ -318,6 +326,19 @@ def test_densify_uv_linear(fix_name, coarse_L, expect_pass, request):
                 v_end   = int(hx[(e + 1) % 6])
                 ia_a, ib_a = int(ia[v_start]), int(ib[v_start])
                 ia_b, ib_b = int(ia[v_end]),   int(ib[v_end])
+
+                # For cross-mode edges interpolate in mode-1 space
+                oid_a = int(oids[v_start])
+                oid_b = int(oids[v_end])
+                if oid_a != oid_b:
+                    mo_a = int(H9O.oid_mo[oid_a])
+                    mo_b = int(H9O.oid_mo[oid_b])
+                    if mo_a != mo_b:
+                        if mo_a == 0:
+                            ib_a = -ib_a   # convert mo==0 start to mode-1 space
+                        else:
+                            ib_b = -ib_b   # convert mo==0 end to mode-1 space
+
                 dia = ia_b - ia_a
                 dib = ib_b - ib_a
 
@@ -355,7 +376,42 @@ def test_densify_uv_linear(fix_name, coarse_L, expect_pass, request):
 
 
 # ---------------------------------------------------------------------------
-# 8. densify — shared-edge consistency (neighbour reversal)
+# 8. densify — no repeated vertex within a single hex loop
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("fix_name,coarse_L,expect_pass", _DENSIFY_CASES)
+def test_densify_no_repeated_vertices(fix_name, coarse_L, expect_pass, request):
+    """No vertex index may appear more than once in the densified loop of a hex."""
+    mesh   = request.getfixturevalue(fix_name)
+    finest = mesh.fine
+
+    def _check():
+        d  = mesh.densify(coarse_L)   # (N, 6*factor)
+        failures = []
+        for hi in range(len(d)):
+            loop = d[hi].tolist()
+            seen = set()
+            dups = []
+            for idx in loop:
+                if idx in seen:
+                    dups.append(idx)
+                seen.add(idx)
+            if dups:
+                failures.append(dict(hex=hi, duplicates=dups, loop=loop))
+                if len(failures) >= 3:
+                    break
+        assert not failures, (
+            f"densify({coarse_L}, finest={finest}): repeated vertex indices in "
+            f"{len(failures)} hex(es). First: {failures[0]}")
+
+    if expect_pass:
+        _check()
+    else:
+        pytest.xfail(f"densify({coarse_L}, finest={finest}) repeated-vertex check not yet passing")
+
+
+# ---------------------------------------------------------------------------
+# 9. densify — shared-edge consistency (neighbour reversal)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("fix_name,coarse_L,expect_pass", _DENSIFY_CASES)

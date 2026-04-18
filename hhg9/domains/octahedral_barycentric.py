@@ -260,7 +260,8 @@ class OctahedralBarycentric(CompositeDomain):
 
         # self.rot90_idx = b_raw.rot90_idx   # same rotation-quadrant index
         pkg = "hhg9.data"
-        data = resources.files(pkg).joinpath("l4_boct_warp_data.npz")
+        # "l4_boct_warp_data.npz"  "l5_boct_warp_data.npz"
+        data = resources.files(pkg).joinpath("l5_boct_warp_data.npz")
         self.set_warp(data)  # This is the better default.
         registrar.register_bridge(['c_oct', 'b_raw', 'b_oct'])
         registrar.register_bridge(['g_gcd', 'b_raw', 'b_oct'])

@@ -17,11 +17,11 @@ class EllipsoidCartesian(Domain):
     A Domain representing the surface of the WGS84 ellipsoid in Cartesian (ECEF) coordinates.
     """
 
-    def __init__(self, registrar, name='c_ell'):
+    def __init__(self, registrar, name='c_ell', a=A, b=B, f=F):
         super().__init__(registrar, name, 3)
-        self.a = A   # semi-major axis (m)
-        self.b = B   # semi-minor axis (m)
-        self.f = F   # flattening
+        self.a = a   # semi-major axis (m)
+        self.b = b   # semi-minor axis (m)
+        self.f = f   # flattening
 
     def valid(self, pts: Points) -> NDArray:
         """

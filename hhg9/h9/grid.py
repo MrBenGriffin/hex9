@@ -94,8 +94,10 @@ def _tri_areas():
 
 
 @cache
-def hex_props(level):
+def hex_props(level=None):
     """return (ideal) hex_grid properties for layer"""
+    if level is None:
+        return _hex_areas()
     h_areas = _hex_areas()
     return h_areas[level]
 
@@ -210,6 +212,7 @@ def sq_grid_vx(scale: float = 1000, mode: int = 0):
     trx = in_scope(tx, rec[:, 1], mo)  # ~half a pixel in coord space
     return wid, hgt, rec, trx, pix_x, pix_y
 
+
 def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5, net_mode: int = -1):
     """
     Return a rectilinear grid of points within a quadrilateral.
@@ -274,6 +277,7 @@ def qa_grid(quad, scale: float = 200, affine=None, tol: float = 0.5, net_mode: i
     sx = (wid - 1) / cw if wid > 1 else 1.0
     sy = (hgt - 1) / ch if hgt > 1 else 1.0
     return wid, hgt, grid, trx, (np.array([cminx, cminy, cmaxx, cmaxy]), (sx, sy))
+
 
 def _calculate_intersections(poly_grid, v):
     """
@@ -505,13 +509,14 @@ class HexMesh:
         polys  = ll.coords[dense]               # (12, 6*(3^δ+1), 2)
     """
 
-    def __init__(self, pts, faces_dict, fine, ia, ib, vert_dict):
+    def __init__(self, pts, faces_dict, fine, ia, ib, vert_dict, addrs_dict=None):
         self.pts  = pts                          # unique b_oct Points
         self._fl  = faces_dict                   # {layer: (N_L, 6) int32}
         self.fine = fine                         # finest layer index
         self.ia   = ia                           # (M,) int64, finest-scale
         self.ib   = ib                           # (M,) int64, finest-scale
         self._vd  = vert_dict                    # (ia, ib, oid) → vertex idx
+        self._ad  = addrs_dict or {}             # {layer: [uuid.UUID, ...]}
         self.alt = None
         self.uv_o = np.array(list(self._vd.keys()), dtype=np.int32)
 
@@ -519,6 +524,15 @@ class HexMesh:
     def faces(self) -> np.ndarray:
         """Face index array for the finest layer."""
         return self._fl[self.fine]
+
+    @property
+    def addrs(self) -> np.ndarray:
+        """UUID address list for the finest layer."""
+        return self._ad.get(self.fine, [])
+
+    def addr(self, L: int) -> list:
+        """UUID address list for layer L."""
+        return self._ad.get(int(L), [])
 
     @property
     def layers(self) -> tuple:
@@ -896,7 +910,44 @@ class HexMesh:
                     face_c[h, vi] = idx
             faces_dict[L] = face_c
 
-        offspring = cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict)
+        # --- H9 UUID addresses for each hex at each layer -------------------
+        import uuid as _uuid
+        from hhg9.h9.addressing import hex_layer as _hex_layer
+        from hhg9.h9.tail import TailStyle as _TS
+        from hhg9.h9.uuid_address import batch_nibbles_to_int as _pack
+
+        addrs_dict = {}
+        for L in layers:
+            fl = faces_dict[L]
+            N = len(fl)
+
+            # Mode-safe centroid: seam hexes span mode-0 and mode-1 octants.
+            # Averaging mixed-mode b_oct coords (where mode-1 has y negated) puts
+            # the centroid outside any valid octant, causing hex_layer to return
+            # garbage nibbles (including 0x0F in body positions).
+            # Fix: use only vertices whose mode matches the first vertex.
+            oid_v        = pts.oid[fl]                           # (N, 6)
+            mo_v         = H9O.oid_mo[oid_v]                    # (N, 6)
+            primary_mo   = mo_v[:, 0]                            # (N,)
+            match_mo     = (mo_v == primary_mo[:, None])         # (N, 6) bool
+            coords_v     = pts.coords[fl]                        # (N, 6, 2)
+            sum_xy       = (coords_v * match_mo[:, :, None]).sum(axis=1)
+            count        = match_mo.sum(axis=1, keepdims=True).astype(float)
+            centroid_xy  = sum_xy / count                        # (N, 2)
+            centroid_oid = oid_v[:, 0].astype(np.int32)
+
+            centroid_pts = Points(centroid_xy, b_oct, oid=centroid_oid)
+            hx_L         = _hex_layer(centroid_pts, layer=L, tail_style=_TS.key)
+            body_L       = hx_L[:, :-1]                          # (N, L+1) nibbles
+            key_nibble   = ((hx_L[:, -1] >> 4) & 0x0F).astype(np.uint8)
+            uuid_nibs    = np.zeros((N, 32), dtype=np.uint8)
+            uuid_nibs[:, :L + 1] = body_L
+            if L + 1 < 31:
+                uuid_nibs[:, L + 1:31] = 0x0F          # OOB sentinel — 0 is a valid hex digit
+            uuid_nibs[:, -1] |= (key_nibble & 0x0F)
+            addrs_dict[L] = [_uuid.UUID(int=v) for v in _pack(uuid_nibs)]
+
+        offspring = cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict, addrs_dict)
         offspring.alt = alt
         return offspring
 
@@ -967,57 +1018,6 @@ class HexMesh:
             results.append([unique_pts, hex_indices, orphan_rows])
         return results
 
-    # @classmethod
-    # def _stitch_seam(cls, m0_data, m1_data, transform_fn):
-    #     """
-    #     Generic stitcher for any seam.
-    #     m0_data/m1_data: (orphans, pts, val)
-    #     """
-    #     orphans0, pts0, val0 = m0_data
-    #     orphans1, pts1, val1 = m1_data
-    #
-    #     # 1. Transform mode 1 into mode 0 space
-    #     val1_trans = transform_fn(val1)
-    #
-    #     # 2. Get keys and match
-    #     keys0 = cls._get_endpoint_keys(val0)
-    #     keys1 = cls._get_endpoint_keys(val1_trans)
-    #
-    #     map1 = {k: i for i, k in enumerate(keys1)}
-    #     matches = np.array([(i, map1[k]) for i, k in enumerate(keys0) if k in map1])
-    #
-    #     if len(matches) == 0:
-    #         return None, {}
-    #
-    #     idx0, idx1 = matches[:, 0], matches[:, 1]
-    #
-    #     # 3. Assemble Hexagons
-    #     # pts 0-3 from m0, pts 4-5 from m1 (middle points)
-    #     m0_seam = orphans0[idx0]
-    #     m1_seam = orphans1[idx1]
-    #
-    #     hexs = np.zeros((len(matches), 6), dtype=int)
-    #     hexs[:, 0:4] = m0_seam
-    #
-    #     # Winding check: Does p0 of m0 match p0 of transformed m1?
-    #     # If not, it matches p3, so we flip the middle points p1, p2
-    #     flip_mask = np.any(val0[idx0, 0] != val1_trans[idx1, 0], axis=1)
-    #     b_mids = m1_seam[:, 1:3]
-    #     # Vectorized flip for winding
-    #     b_mids[flip_mask] = b_mids[flip_mask, ::-1]
-    #     hexs[:, 4:6] = b_mids
-    #
-    #     # 4. Generate Remap (stale m1 points to definitive m0 points)
-    #     remapping = {}
-    #     for i, (i0, i1) in enumerate(matches):
-    #         p0_0, p3_0 = m0_seam[i, [0, 3]]
-    #         p0_1, p3_1 = m1_seam[i, [0, 3]]
-    #         if flip_mask[i]:
-    #             remapping[p0_1], remapping[p3_1] = p3_0, p0_0
-    #         else:
-    #             remapping[p0_1], remapping[p3_1] = p0_0, p3_0
-    #
-    #     return hexs, remapping
     @classmethod
     def _stitch_seam(cls, m0_bundle, m1_bundle, c2):
         m0_orphans, pts0, val0 = m0_bundle

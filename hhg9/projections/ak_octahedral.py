@@ -14,6 +14,7 @@ from hhg9.algorithms.distance import haversine_rad
 from hhg9.h9.root_finding import find_coords
 from hhg9.algorithms.wgs84 import A, B
 from hhg9.h9 import H9C, H9K, H9O
+from hhg9.h9.grid import hex_props, tri_props
 
 
 class AKOctahedralEllipsoid(Projection):
@@ -23,11 +24,11 @@ class AKOctahedralEllipsoid(Projection):
     """
     ALPHA = 3.227806237143884260376580  # 𝛂 - vis. Kaseorg.
 
-    def __init__(self, registrar, name='oct_ell'):
+    def __init__(self, registrar, name='oct_ell', a=A, b=B):
         self.reg = registrar
         super().__init__(self.reg, name, 'c_oct', 'c_ell')
-        self.ab = A, B
-        self.ab2 = 1., (B / A) ** 2
+        self.ab = a, b
+        self.ab2 = 1., (b / a) ** 2
 
         self.b_oct = self.reg.domain('b_oct')
         self.b_raw = self.reg.domain('b_raw')
@@ -38,21 +39,6 @@ class AKOctahedralEllipsoid(Projection):
         self.vertices = H9O.oct_vrt   # np.array(list(self.rev_cs.vertices.values()))
         self._e = 1e-200
         self.tol = 1e-15
-
-        # Level 0 area ≈ 5362 km (area of Earth / 12 hexes)
-        # This shouldn't be here.
-        earth = 510_065_621_724_154.6
-        self.hex_0 = earth / 12
-        self.tri_0 = earth / 8
-        l_hex = self.hex_0
-        l_tri = self.tri_0
-        self.h_areas = np.zeros((64,), dtype=np.float64)
-        self.t_areas = np.zeros((64,), dtype=np.float64)
-        for i in range(64):
-            self.h_areas[i] = l_hex
-            self.t_areas[i] = l_tri
-            l_hex /= 9
-            l_tri /= 9
         self.accuracy = 40  # accuracy is nanometres.
 
     @cache
@@ -108,24 +94,17 @@ class AKOctahedralEllipsoid(Projection):
 
     def get_accuracy(self, layer):
         """
-        Get accuracy in m2 from a given layer.
+        Get accuracy in area (m2) for a given layer.
         """
-        if layer < 0:
-            raise ValueError("get_accuracy: hex_layer must be >= 0")
-        h_area = self.h_areas[-1]
-        t_area = self.t_areas[-1]
-        if layer < len(self.h_areas):
-            h_area = self.h_areas[layer]
-            t_area = self.t_areas[layer]
-        # side = np.sqrt((2*area)/(3*H9K.R3))
-        return h_area, t_area
+        return hex_props(layer)[0], tri_props(layer)[0]
 
     def set_accuracy(self, m2):
         """
         Set the layer such that the hex area is ≤ desired accuracy in m2.
         """
-        idx = np.searchsorted(self.h_areas[::-1], m2, side='right')
-        self.accuracy = len(self.h_areas) - idx
+        areas = hex_props()
+        idx = np.searchsorted(areas[::-1, 0], m2, side='right')
+        self.accuracy = len(areas) - idx
         return self.accuracy
 
     def normalise(self, p):
@@ -255,8 +234,8 @@ class AKOctahedralEllipsoid(Projection):
 
     def jacobian(self, uvw):
         """
-        :param uvw:
-        :return: jacobian of the forward projection
+        :param uvw: in unit octahedron coordinates
+        :return: jacobian of the forward projection (octahedron to WGS84)
         """
         uvw = np.asarray(uvw, dtype=np.float64, copy=True)
         aa = self._invariants(uvw)
@@ -265,7 +244,7 @@ class AKOctahedralEllipsoid(Projection):
         if np.any(aa):
             a = uvw[aa]
             a[a == 0] = np.finfo(np.float64).tiny
-            c = np.sign(a)/np.sqrt(3)
+            c = np.sign(a)/H9K.R3
             adj = a + 1e-15 * (c - a)
             uvw[aa] = adj
 
