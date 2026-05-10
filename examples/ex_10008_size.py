@@ -3,9 +3,10 @@
 # Licensed under the Apache License, Version 2.0
 import numpy as np
 from math import sqrt
+from hhg9.h9.ellipsoid import ellipsoid_area_wgs84
 
 if __name__ == '__main__':
-    earth = 510_065_621_724_154.6
+    earth = ellipsoid_area_wgs84() # 510_065_621_724_154.6
     hex_0 = earth / 12
     tri_0 = earth / 8
     l_hex = hex_0

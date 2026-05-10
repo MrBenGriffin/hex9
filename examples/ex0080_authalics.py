@@ -171,7 +171,7 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
     pts, pops = hex_poly_layer(b_pts, layers)
 
     # Calculate geodesic area per hexagon via geographiclib PolygonArea.
-    gm2 = 510_065_621_724_154.6   # WGS-84 total surface area (m²)
+    gm2 = reg.ellipsoid_area       # 510_065_621_724_154.6   WGS-84 total surface area (m²)
     bins = 12 * 9 ** layers        # total hexagons at this layer
     ideal_m2 = gm2 / bins          # ideal equal-area per hex
 
@@ -204,25 +204,25 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
           f"{np.percentile(np.abs(pct_dev), 99):.3f}%")
 
     # ── CSV export ──────────────────────────────────────────────────────────
-    csv_path = f"output/ex0080_{layers}.csv"
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "hex_idx", "centroid_lat", "centroid_lon",
-            "area_m2", "ideal_m2", "ratio", "pct_deviation", "log_ratio"
-        ])
-        for i in range(len(w_area_m2)):
-            writer.writerow([
-                i,
-                f"{centroid_lat[i]:.8f}",
-                f"{centroid_lon[i]:.8f}",
-                f"{w_area_m2[i]:.3f}",
-                f"{ideal_m2:.3f}",
-                f"{ratio[i] - 1e-12:.9f}",   # strip the epsilon back out
-                f"{pct_dev[i]:.6f}",
-                f"{score[i]:.9f}",
-            ])
-    print(f"  CSV saved: {csv_path}")
+    # csv_path = f"output/ex0080_{layers}.csv"
+    # with open(csv_path, "w", newline="") as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow([
+    #         "hex_idx", "centroid_lat", "centroid_lon",
+    #         "area_m2", "ideal_m2", "ratio", "pct_deviation", "log_ratio"
+    #     ])
+    #     for i in range(len(w_area_m2)):
+    #         writer.writerow([
+    #             i,
+    #             f"{centroid_lat[i]:.8f}",
+    #             f"{centroid_lon[i]:.8f}",
+    #             f"{w_area_m2[i]:.3f}",
+    #             f"{ideal_m2:.3f}",
+    #             f"{ratio[i] - 1e-12:.9f}",   # strip the epsilon back out
+    #             f"{pct_dev[i]:.6f}",
+    #             f"{score[i]:.9f}",
+    #         ])
+    # print(f"  CSV saved: {csv_path}")
 
     # ── Globe plot ───────────────────────────────────────────────────────────
     snow_globe(c_pts, 6, score, f'{layers}')
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     depth = 4  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
-    b_oct.no_warp()
+
     data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
     hexify(rg, data, layers=depth)
 

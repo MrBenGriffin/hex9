@@ -20,7 +20,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.interpolate import CloughTocher2DInterpolator
 
 from hhg9 import Registrar, Points
-from hhg9.algorithms.distance import wgs84_area
+from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84
 from hhg9.h9 import H9_RA, H9O
 from hhg9.h9.region import regions_xy
 from hhg9.h9.polygon import hex_poly_layer
@@ -196,7 +196,7 @@ def hexify(reg: Registrar, b_pts: Points, warp=None, layers: int = 4):
     g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
 
     w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
-    gm2 = 510_065_621_724_154.6   # total surface area of WGS-84 (m²)
+    gm2 = ellipsoid_area_wgs84() # total surface area of WGS-84 (m²)
     bins = 12*9**layers           # number of hexes at this layer
     w_area_m2_ideal = gm2/bins    # ideal equal-area per hex
     w_adj = np.abs(w_area_m2 / w_area_m2_ideal)

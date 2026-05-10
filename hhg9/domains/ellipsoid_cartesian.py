@@ -9,19 +9,19 @@ import numpy as np
 from hhg9.base import Points
 from hhg9.base.domain import Domain
 from numpy.typing import NDArray
-from hhg9.algorithms.wgs84 import A, B, F
-
-
 class EllipsoidCartesian(Domain):
     """
-    A Domain representing the surface of the WGS84 ellipsoid in Cartesian (ECEF) coordinates.
+    A Domain representing the surface of the reference ellipsoid in Cartesian (ECEF) coordinates.
+    Ellipsoid parameters are taken from registrar.ellipsoid (defaults to WGS84).
     """
 
-    def __init__(self, registrar, name='c_ell', a=A, b=B, f=F):
+    def __init__(self, registrar, name='c_ell', a=None, b=None, f=None):
         super().__init__(registrar, name, 3)
-        self.a = a   # semi-major axis (m)
-        self.b = b   # semi-minor axis (m)
-        self.f = f   # flattening
+        geo = registrar.ellipsoid
+        self.f = f if f is not None else geo.f
+        self.a = a if a is not None else geo.a
+        self.b = b if b is not None else self.a * (1.0 - self.f)
+        self.e2 = 2.0 * self.f - self.f ** 2
 
     def valid(self, pts: Points) -> NDArray:
         """

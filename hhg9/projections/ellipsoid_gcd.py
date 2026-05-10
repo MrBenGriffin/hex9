@@ -14,34 +14,38 @@ from hhg9.algorithms.wgs84 import ecef_to_latlon, latlon_to_ecef
 
 
 class EllipsoidGCD(Projection):
-    """ECEF ↔ geodetic (lat, lon degrees) on WGS84.
+    """ECEF ↔ geodetic (lat, lon degrees) on the registrar's reference ellipsoid.
     Forward: ECEF → (lat, lon)
     Backward: (lat, lon) → ECEF
     """
 
     def __init__(self, registrar):
+        self._reg = registrar
         super().__init__(registrar, 'ell_gcd', 'c_ell', 'g_gcd')
 
     def forward(self, arr: Points) -> Points:
         """ECEF → geodetic (lat_deg, lon_deg)"""
+        c_ell = self._reg.domain('c_ell')
         x, y, z = arr.coords[:, 0], arr.coords[:, 1], arr.coords[:, 2]
-        lat, lon = ecef_to_latlon(x, y, z)
+        lat, lon = ecef_to_latlon(x, y, z, c_ell.a, c_ell.e2)
         return Points(np.stack([lat, lon], axis=-1), domain=self.fwd_cs, samples=arr.samples)
 
     def backward(self, arr: Points) -> Points:
         """Geodetic (lat_deg, lon_deg) → ECEF"""
+        c_ell = self._reg.domain('c_ell')
         lat, lon = arr.coords[:, 0], arr.coords[:, 1]
-        x, y, z = latlon_to_ecef(lat, lon)
+        x, y, z = latlon_to_ecef(lat, lon, c_ell.a, c_ell.e2)
         return Points(np.stack([x, y, z], axis=-1), domain=self.rev_cs, samples=arr.samples)
 
 
 class EllipsoidGCDRad(Projection):
-    """ECEF ↔ geodetic (lat, lon radians) on WGS84.
+    """ECEF ↔ geodetic (lat, lon radians) on the registrar's reference ellipsoid.
     Forward: ECEF → (lat_rad, lon_rad)
     Backward: (lat_rad, lon_rad) → ECEF
     """
 
     def __init__(self, registrar):
+        self._reg = registrar
         super().__init__(registrar, 'ell_gcr', 'c_ell', 'r_gcd')
         try:
             registrar.domain('r_gcd')
@@ -53,13 +57,15 @@ class EllipsoidGCDRad(Projection):
 
     def forward(self, arr: Points) -> Points:
         """ECEF → geodetic radians (lat_rad, lon_rad)"""
+        c_ell = self._reg.domain('c_ell')
         x, y, z = arr.coords[:, 0], arr.coords[:, 1], arr.coords[:, 2]
-        lat, lon = ecef_to_latlon(x, y, z)
+        lat, lon = ecef_to_latlon(x, y, z, c_ell.a, c_ell.e2)
         return Points(np.radians(np.stack([lat, lon], axis=-1)), domain=self.fwd_cs, samples=arr.samples)
 
     def backward(self, arr: Points) -> Points:
         """Geodetic radians (lat_rad, lon_rad) → ECEF"""
+        c_ell = self._reg.domain('c_ell')
         lat = np.degrees(arr.coords[:, 0])
         lon = np.degrees(arr.coords[:, 1])
-        x, y, z = latlon_to_ecef(lat, lon)
+        x, y, z = latlon_to_ecef(lat, lon, c_ell.a, c_ell.e2)
         return Points(np.stack([x, y, z], axis=-1), domain=self.rev_cs, samples=arr.samples)

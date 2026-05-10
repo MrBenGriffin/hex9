@@ -14,14 +14,14 @@ Last Tested
 25 Nov 2025 (passed)
 """
 import csv
+from pathlib import Path
+
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
-from hhg9.algorithms.distance import wgs84_area
-from hhg9.h9 import H9_RA, H9O, H9K
-from hhg9.h9.classifier import location
-from hhg9.h9.protocols import BaryLoc
+from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84, wgs84
+from hhg9.h9 import H9_RA, H9O
 from hhg9.h9.region import regions_xy
 from hhg9.h9.polygon import hex_poly_layer
 import matplotlib as mpl
@@ -166,19 +166,20 @@ def get_data(reg: Registrar, depth, mode=None):
     return result
 
 
-def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
+def hexify(reg: Registrar, b_pts: Points, layers: int = 4, name=''):
     """
     Find hexagons for data, display on a globe, and export area stats to CSV.
     """
     pts, pops = hex_poly_layer(b_pts, layers)
 
     # Calculate geodesic area per hexagon via geographiclib PolygonArea.
-    gm2 = 510_065_621_724_154.6   # WGS-84 total surface area (m²)
+    gm2 = reg.ellipsoid_area       # 510_065_621_724_154.6   # WGS-84 total surface area (m²)
     bins = 12 * 9 ** layers        # total hexagons at this layer
     ideal_m2 = gm2 / bins          # ideal equal-area per hex
+    ideal_side = np.sqrt(2 * ideal_m2 / (3 * np.sqrt(3)))
 
     h_pts = pts.copy()
-    c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])
+    # c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])
     g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
 
     w_area_m2 = wgs84_area(reg, g_pts)           # (N_hex,) actual areas
@@ -190,52 +191,88 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4):
     latlon = g_pts.coords.reshape(-1, 6, 2)       # (N_hex, 6, [lat, lon])
     centroid_lat = latlon[:, :, 0].mean(axis=1)   # (N_hex,)
     centroid_lon = latlon[:, :, 1].mean(axis=1)
+    a = latlon
+    b = np.roll(latlon, -1, axis=1)
+    edge_m = wgs84(a, b)  # lengths between a, b (N,6)
+    e_long = edge_m.max(axis=1) / edge_m.min(axis=1)
+    s_pct_dev = (np.abs(e_long) - 1.0) * 100
+    edge_cv = edge_m.std(axis=1) / edge_m.mean(axis=1)
+    e_log_anisotropy = np.log(edge_m.max(axis=1) / edge_m.min(axis=1))
+    e_mean_log = np.mean(e_log_anisotropy)
+    e_std_log = np.std(e_log_anisotropy)
+    z_99 = e_mean_log + 2.326 * e_std_log
 
     # ── Summary statistics ──────────────────────────────────────────────────
     pct_dev = (ratio - 1.0) * 100.0               # % deviation from ideal
-    print(f"\nAuthalic quality — layer {layers}  ({bins} hexagons)")
-    print(f"  ideal area per hex : {ideal_m2:,.0f} m²  "
-          f"({ideal_m2 / 1e6:,.0f} km²)")
-    print(f"  area min / max     : {w_area_m2.min():,.0f} / {w_area_m2.max():,.0f} m²")
-    print(f"  % dev  min/mean/max: {pct_dev.min():+.3f}% / "
-          f"{pct_dev.mean():+.3f}% / {pct_dev.max():+.3f}%")
-    print(f"  log-ratio std dev  : {score.std():.6f}")
-    print(f"  |% dev| p50/p90/p95/p99: "
-          f"{np.percentile(np.abs(pct_dev), 50):.3f}% / "
-          f"{np.percentile(np.abs(pct_dev), 90):.3f}% / "
-          f"{np.percentile(np.abs(pct_dev), 95):.3f}% / "
-          f"{np.percentile(np.abs(pct_dev), 99):.3f}%")
-
+    print(f"\n {name}:  ({bins} hexagons) {reg.ellipsoid_name}")
+    print(f"  area min/max/ ideal: {w_area_m2.min():,.0f} / {w_area_m2.max():,.0f} / {ideal_m2:,.0f} m²")
+    print(f"  % dev  min/mean/max: {pct_dev.min():+.8f}% / "
+          f"{pct_dev.mean():+.8f}% / {pct_dev.max():+.8f}%")
+    print(f"  log-ratio std dev  : {score.std():.8f}")
+    print(f"  |% dev| p50/p90/p95/p99/p99.9/p99.99: "
+          f"{np.percentile(np.abs(pct_dev), 50):.8f}% / "
+          f"{np.percentile(np.abs(pct_dev), 90):.8f}% / "
+          f"{np.percentile(np.abs(pct_dev), 95):.8f}% / "
+          f"{np.percentile(np.abs(pct_dev), 99):.8f}% / "
+          f"{np.percentile(np.abs(pct_dev), 99.9):.8f}% / "
+          f"{np.percentile(np.abs(pct_dev), 99.99):.8f}%"
+          f"")
+    print(f"  edge-anisotropy:")
+    print(f"  |% dev| p50/p90/p95/p99/p99.9/p99.99: "
+          f"{np.percentile(np.abs(s_pct_dev), 50):.8f}% / "
+          f"{np.percentile(np.abs(s_pct_dev), 90):.8f}% / "
+          f"{np.percentile(np.abs(s_pct_dev), 95):.8f}% / "
+          f"{np.percentile(np.abs(s_pct_dev), 99):.8f}% / "
+          f"{np.percentile(np.abs(s_pct_dev), 99.9):.8f}% / "
+          f"{np.percentile(np.abs(s_pct_dev), 99.99):.8f}%"
+          f"")
+    print(f"  coefficient of variation:")
+    print(f"99th Percentile (Normal Approx): {np.exp(z_99)}")
+    print(f"  |% dev| p50/p90/p95/p99/p99.9/p99.99: "
+          f"{np.percentile(np.abs(edge_cv) * 100, 50):.8f}% / "
+          f"{np.percentile(np.abs(edge_cv) * 100, 90):.8f}% / "
+          f"{np.percentile(np.abs(edge_cv) * 100, 95):.8f}% / "
+          f"{np.percentile(np.abs(edge_cv) * 100, 99):.8f}% / "
+          f"{np.percentile(np.abs(edge_cv) * 100, 99.9):.8f}% / "
+          f"{np.percentile(np.abs(edge_cv) * 100, 99.99):.8f}%"
+          f"")
     # ── CSV export ──────────────────────────────────────────────────────────
-    csv_path = f"output/ex0080w_{layers}.csv"
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "hex_idx", "centroid_lat", "centroid_lon",
-            "area_m2", "ideal_m2", "ratio", "pct_deviation", "log_ratio"
-        ])
-        for i in range(len(w_area_m2)):
-            writer.writerow([
-                i,
-                f"{centroid_lat[i]:.8f}",
-                f"{centroid_lon[i]:.8f}",
-                f"{w_area_m2[i]:.3f}",
-                f"{ideal_m2:.3f}",
-                f"{ratio[i] - 1e-12:.9f}",   # strip the epsilon back out
-                f"{pct_dev[i]:.6f}",
-                f"{score[i]:.9f}",
-            ])
-    print(f"  CSV saved: {csv_path}")
+    # csv_path = f"output/ex0080w_{layers}{name}.csv"
+    # with open(csv_path, "w", newline="") as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow([
+    #         "hex_idx", "centroid_lat", "centroid_lon",
+    #         "area_m2", "ideal_m2", "ratio", "pct_deviation", "log_ratio"
+    #     ])
+    #     for i in range(len(w_area_m2)):
+    #         writer.writerow([
+    #             i,
+    #             f"{centroid_lat[i]:.8f}",
+    #             f"{centroid_lon[i]:.8f}",
+    #             f"{w_area_m2[i]:.8f}",
+    #             f"{ideal_m2:.8f}",
+    #             f"{ratio[i] - 1e-12:.6f}",   # strip the epsilon back out
+    #             f"{pct_dev[i]:.8f}",
+    #             f"{score[i]:.8f}",
+    #         ])
+    # print(f"  CSV saved: {csv_path}")
 
     # ── Globe plot ───────────────────────────────────────────────────────────
-    snow_globe(c_pts, 6, score, f'{layers}')
+    # snow_globe(c_pts, 6, score, f'{layers}_{name}')
 
 
 if __name__ == '__main__':
-    depth = 5  # 0,...5 √
-    rg = Registrar()  # Manage Domains & Projections
+    depth = 4  # 0,...5 √
+    rg = Registrar()  # Manage Domains & Projections (6378137.0, 1/298.257222101)
+    # rg.set_ellipsoid(name='GRS80', a=6378137.0, inv_f=298.257222101)
     b_oct = rg.domain('b_oct')
-    data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
-    hexify(rg, data, layers=depth)
+    ellipsoid = rg.ellipsoid_name
+    warps = ['l5_warp_data']
+    for warp in warps:
+        warp_path = Path(f'../hhg9/data/{ellipsoid}_{warp}.npz')
+        b_oct.set_warp(warp_path)
+        data = get_data(rg, depth)  # should be 8*9**depth (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
+        hexify(rg, data, layers=depth, name=f'{warp}')
+
 
 

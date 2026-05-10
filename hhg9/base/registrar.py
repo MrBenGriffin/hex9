@@ -11,6 +11,7 @@ from itertools import pairwise
 
 import numpy as np
 from numpy.typing import NDArray
+from geographiclib.geodesic import Geodesic
 from .domain import Domain
 from .point_format import PointFormat
 from .points import Points
@@ -39,11 +40,37 @@ class Registrar:
     """
 
     def __init__(self):
+        self.ellipsoid = Geodesic.WGS84
+        self.ellipsoid_name = 'WGS84'
+        self._ellipsoid_area = None
         self._domains = {}
         self._projections = {}
         self._domain_projections = {}
         self._formats = {}
         self._bridges = {}
+
+    @property
+    def ellipsoid_area(self) -> float:
+        """Surface area of the reference ellipsoid in m², computed once and cached."""
+        if self._ellipsoid_area is None:
+            try:
+                from hhg9.algorithms.distance import calculate_ellipsoid_area
+                self._ellipsoid_area = float(calculate_ellipsoid_area(
+                    self.ellipsoid.a, f'1/{self.ellipsoid.f}'
+                ))
+            except Exception:
+                self._ellipsoid_area = 510065621724088.50944  # WGS84 fallback
+        return self._ellipsoid_area
+
+    def set_ellipsoid(self, *, a, f=None, inv_f=None, name='Unknown Ellipsoid'):
+        """Set the reference ellipsoid. Pass either f (flattening) or inv_f (inverse flattening)."""
+        if f is None and inv_f is not None:
+            f = 1.0 / inv_f
+        elif f is None:
+            raise ValueError("set_ellipsoid requires either f or inv_f")
+        self.ellipsoid = Geodesic(a, f)
+        self._ellipsoid_area = None
+        self.ellipsoid_name = name
 
     def register_bridge(self, _chain: list):
         """Register a projection chain."""

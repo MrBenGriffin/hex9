@@ -29,11 +29,13 @@ import numpy as np
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area
 from hhg9.h9 import H9O
+from hhg9.h9.polygon import region_grid, H9P
 
 # ── CONFIGURATION ────────────────────────────────────────────────────────────
-L4_CHECKPOINT = Path("l4_best_grad_32_s1e-05_01500.npz")   # L4 warp used for CT warm-start
-# L5_CHECKPOINT = Path("l5_grad_32_s1e-05_00100.npz")      # Set to resume an existing L5 run; None = fresh start
+L4_CHECKPOINT = None
+L4_CHECKPOINT = Path("l4_sphere_best.npz")   # l4_best_grad_32_s1e-05_01500.npz
 L5_CHECKPOINT = None
+# L5_CHECKPOINT = Path("l05_f04_t06_k00209.npz")    # Set to resume an existing L5 run; None = fresh start
 OCTANT_ID     = 0
 LAYER         = 5
 GRID_FILE     = None                   # None → auto-derive as grid_l{LAYER}.npz
@@ -44,11 +46,18 @@ STEP_MIN      = 1e-9      # stop when Adam lr cooled below this
 STEP_COOL     = 0.80      # multiply lr by this when MAE improvement stalls
 STEP_PATIENCE = 100       # Adam warm-up is non-monotone; wait for moments to stabilise
 WARMUP_ITERS  = 200       # suppress cooling entirely for first N iters
-SHAPE_DAMPEN  = 0.6       # gradient dampener for non-equilateral triangles.
+SHAPE_DAMPEN  = 0.8       # gradient dampener for non-equilateral triangles.
                           # 0 = no dampening; 1 = full suppression at 90°.
                           # Triangles with all angles near 60° (equilateral → regular hexagons)
                           # get full weight; weight falls as the largest angle exceeds 60°.
                           # Polar triangles (oc_vtx) are always exempt.
+MB_LAMBDA     = 0.5       # mode-balance correction strength (0 = off).
+                          # Each iteration, the effective log-ratio used in the gradient
+                          # is shifted by ±(MB_LAMBDA × half_asymmetry) so that mode-0 and
+                          # mode-1 triangles receive a corrective nudge proportional to the
+                          # current inter-mode offset.  MB_LAMBDA=1.0 applies the full
+                          # half-asymmetry correction; 0.5 applies half of it per step.
+                          # Does not change the gradient structure, only per-mode weighting.
 
 # Adam hyper-parameters
 ADAM_BETA1    = 0.9       # first-moment decay (momentum)
@@ -96,11 +105,11 @@ def snap_boundary_analytic(xy, oc_edg, oc_vtx, mode, mirror_idx=None):
     # Full interior mirror symmetry: dx antisymmetric, dy symmetric
     if mirror_idx is not None:
         dx = (out[:, 0] - out[mirror_idx, 0]) / 2.0
-        out[:, 0]            =  dx
-        out[mirror_idx, 0]   = -dx
+        out[:, 0]           =  dx
+        out[mirror_idx, 0]  = -dx
         dy = (out[:, 1] + out[mirror_idx, 1]) / 2.0
-        out[:, 1]            =  dy
-        out[mirror_idx, 1]   =  dy
+        out[:, 1]           =  dy
+        out[mirror_idx, 1]  =  dy
     return out
 
 
@@ -119,7 +128,8 @@ COT_IDEAL = 1.0 / np.sqrt(3)   # cot(60°) — target for equilateral triangles 
 
 
 def compute_gradient(x_prime, t_grid, ratios, c_ideal, move_mask, oc_vtx,
-                     shape_dampen=SHAPE_DAMPEN):
+                     shape_dampen=SHAPE_DAMPEN,
+                     tri_modes=None, mb_lambda=0.0):
     """
     Vectorised gradient of Σ log(r_t)² w.r.t. vertex positions in b_raw space.
 
@@ -139,6 +149,18 @@ def compute_gradient(x_prime, t_grid, ratios, c_ideal, move_mask, oc_vtx,
     (1 − shape_dampen) at 90° and zero at (1 + 1/shape_dampen)× COT_IDEAL below
     zero. Polar triangles (oc_vtx) are always exempt — their angles are
     topologically constrained by the 4-valent octahedral vertex.
+
+    Mode-balance correction (mb_lambda > 0, tri_modes provided):
+    The AK projection has an intrinsic inter-mode area bias: mode-0 (∇) triangles
+    are systematically under-area and mode-1 (△) are over-area.  The shared-vertex
+    gradient cannot eliminate this bias unaided.  When mb_lambda > 0, the effective
+    log(r_t) used in the gradient is shifted by ±(mb_lambda × half_asymmetry) for
+    each mode, amplifying the corrective signal for the lagging mode.
+
+    Sign convention: if mode-0 is under-area (log(r_0) < 0, m0 < m1):
+      asym = m0 - m1 < 0
+      mode-0 shift = -asym * mb_lambda/2 > 0   → effective_log more negative → expands ✓
+      mode-1 shift =  asym * mb_lambda/2 < 0   → effective_log more positive → contracts ✓
     """
     v0 = t_grid[:, 0]
     v1 = t_grid[:, 1]
@@ -174,8 +196,20 @@ def compute_gradient(x_prime, t_grid, ratios, c_ideal, move_mask, oc_vtx,
     shape_weight = np.clip(1.0 - shape_dampen * shape_dev, 0.0, 1.0)
     angle_weight = np.where(is_polar, 1.0, shape_weight)
 
+    # Effective log-ratio: optionally shifted per-mode to correct inter-mode bias.
+    log_r = np.log(ratios)
+    if mb_lambda > 0.0 and tri_modes is not None:
+        m0       = log_r[tri_modes == 0].mean()
+        m1       = log_r[tri_modes == 1].mean()
+        asym     = m0 - m1          # negative when mode-0 is under-area
+        shift    = asym * mb_lambda * 0.5
+        # mode-0: subtract -shift (= add |shift|) → more negative effective_log
+        # mode-1: subtract +shift (= subtract |shift|) → more positive effective_log
+        mode_shift = np.where(tri_modes == 0, -shift, shift)
+        log_r      = log_r - mode_shift
+
     # Combined per-triangle log weight, modulated by angle guard.
-    w = 2.0 * np.log(ratios) * sign_f / abs_flat * angle_weight
+    w = 2.0 * log_r * sign_f / abs_flat * angle_weight
 
     grad = np.zeros_like(x_prime)
 
@@ -197,6 +231,8 @@ if __name__ == '__main__':
 
     # 1. Setup registrar / domains
     rg    = Registrar()
+    rg.set_ellipsoid(a=6371008.8, f=0, name='Sphere')
+    print(rg.ellipsoid_name)
     b_raw = rg.domain('b_raw')
     g_gcd = rg.domain('g_gcd')
     mode  = H9O.oid_mo[OCTANT_ID]
@@ -212,15 +248,21 @@ if __name__ == '__main__':
     print(f"  L5 grid: {len(l5_src)} vertices, {len(t_grid)} triangles")
 
     # Precompute mirror_idx: for each vertex (x,y), find index of (-x,y) partner.
-    # Source grid is accurate to 2.289e-16  so KDTree lookup is unambiguous.
     from scipy.spatial import cKDTree
     mirror_query = np.column_stack([-l5_src[:, 0], l5_src[:, 1]])
     _, mirror_idx = cKDTree(l5_src).query(mirror_query, k=1)
     print(f"  Mirror symmetry: max mirror-pair distance = "
           f"{np.linalg.norm(l5_src[mirror_idx] - mirror_query, axis=1).max():.3e}")
+
     on_axis = np.where(mirror_idx == np.arange(len(l5_src)))[0]
     print(f"  On-axis vertices (x=0): {len(on_axis)}")
 
+    # Per-triangle mode (0=∇, 1=△) — used by mode-balance correction
+    tri_modes = np.array(
+        [m for (_path, m, _origin, _scale) in region_grid(LAYER, mode, H9P)],
+        dtype=np.int8,
+    )
+    print(f"  Triangle modes: {(tri_modes==0).sum()} mode-0, {(tri_modes==1).sum()} mode-1")
 
     # 3. Initialise x_prime — either resume L5 run or warm-start from L4
     if L5_CHECKPOINT is not None:
@@ -240,7 +282,7 @@ if __name__ == '__main__':
             l4_layer = int(l4_ckpt['layer']) if 'layer' in l4_ckpt.files else 4
             l4_src = np.load(Path(f"grid_l{l4_layer}.npz"), allow_pickle=True)['xy_vert']
         l4_disp = l4_tgt - l4_src
-        print(f"  L4 displacement: {len(l4_src)} pts, MAE {float(l4_ckpt['mae']):.9f}")
+        print(f"  L4 displacement: {len(l4_src)} pts, MAE {float(l4_ckpt['mae']):.8f}")
 
         print(f"  CT-interpolating to {len(l5_src)} L5 vertices...")
         ct       = CloughTocher2DInterpolator(l4_src, l4_disp)
@@ -263,8 +305,12 @@ if __name__ == '__main__':
     # 5. Baseline measurement
     areas, ratios, c_ideal = measure_areas(x_prime, t_grid, rg, b_raw, g_gcd)
     mae    = float(np.mean(np.abs(ratios - 1.0)))
-    print(f"\n[Baseline]  MAE: {mae:.9f} | "
-          f"Min/Max: {ratios.min():.9f}/{ratios.max():.9f}")
+    pct_dev = (ratios - 1.0) * 100.0
+    m0_mean = pct_dev[tri_modes == 0].mean()
+    m1_mean = pct_dev[tri_modes == 1].mean()
+    print(f"\n[Baseline]  MAE: {mae:.8f} | "
+          f"All Min/Max: {ratios.min():.6f}/{ratios.max():.6f} | "
+          f"mode Δ: {m0_mean:+.4f}% / {m1_mean:+.4f}%")
 
     # 6. Adam state
     best_mae     = mae
@@ -296,7 +342,8 @@ if __name__ == '__main__':
             print(f"Step below minimum ({STEP_MIN:.1e}), stopping.")
             break
 
-        grad   = compute_gradient(x_prime, t_grid, ratios, c_ideal, move_mask, oc_vtx)
+        grad   = compute_gradient(x_prime, t_grid, ratios, c_ideal, move_mask, oc_vtx,
+                                   tri_modes=tri_modes, mb_lambda=MB_LAMBDA)
         adam_t += 1
         adam_m  = ADAM_BETA1 * adam_m + (1.0 - ADAM_BETA1) * grad
         adam_v  = ADAM_BETA2 * adam_v + (1.0 - ADAM_BETA2) * grad ** 2
@@ -325,18 +372,22 @@ if __name__ == '__main__':
         curr_min = ratios.min()
         curr_max = ratios.max()
 
-        print(f"[Iter {k:4d}]  MAE: {mae:.9f} | lr={step:.1e} | "
-              f"Min/Max: {curr_min:.9f}/{curr_max:.9f}")
+        pct_dev = (ratios - 1.0) * 100.0
+        m0_mean = pct_dev[tri_modes == 0].mean()
+        m1_mean = pct_dev[tri_modes == 1].mean()
+        print(f"[Iter {k:4d}]  MAE: {mae:.8f} | lr={step:.1e} | "
+              f"All Min/Max: {curr_min:.6f}/{curr_max:.6f} | "
+              f"mode Δ: {m0_mean:+.4f}% / {m1_mean:+.4f}%")
 
         best = False
         if mae < best_mae and curr_min > best_min and curr_max < best_max:
-            print(f"  New best MAE: {mae:.9f}  (from {best_mae:.9f})")
+            print(f"  New best MAE: {mae:.8f}  (from {best_mae:.8f})")
             best = True
             best_mae     = mae
             best_x_prime = x_prime.copy()
 
         if (k % 23 == 0) or best:
-            out_path = Path(f"l05_f04_t06_k{k:05d}.npz")
+            out_path = Path(f"l05_sphere_t06_k{k:05d}.npz")
             np.savez(
                 out_path,
                 layer=LAYER,

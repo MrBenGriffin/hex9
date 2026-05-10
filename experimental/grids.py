@@ -165,6 +165,6 @@ def grid(layer: int = 3, octant_id: int = 0):
 
 if __name__ == '__main__':
     octant_id = 0
-    for layer in [5]:  # range(4, 6):
+    for layer in [6]:  # range(4, 6):
         grid(layer, octant_id)
         print(f"Generated grid for layer {layer} and octant {octant_id}")

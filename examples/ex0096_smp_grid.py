@@ -93,16 +93,8 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
             verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
             ctrs_n = np.mean(verts_n.coords.reshape(-1, 6, 2), axis=1)
             hexes = verts_n.coords.reshape(-1, 6, 2)
-
             collection = PolyCollection(hexes, facecolors='none', ec=(1, 1, 1, 0.5), linewidth=lw[li], antialiaseds=True)
             ax.add_collection(collection)
-
-            # for ctr, lab in zip(ctrs_n, hex_v_k):
-            #     hex_addr = lab
-            #     label = f'{hex_addr[layer]}'
-            #     ax.text(ctr[0], ctr[1], label,
-            #             fontsize=12, ha='center', va='center',
-            #             color='black', zorder=100, clip_on=True)
         f_name = f"output/ex0096_{flavour}_012.png"
         fig.savefig(f_name, dpi=100)
 

@@ -17,7 +17,7 @@ import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
-from hhg9.algorithms.distance import wgs84_area
+from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84
 from hhg9.h9 import H9_RA, H9O, H9K
 from hhg9.h9.classifier import location
 from hhg9.h9.protocols import BaryLoc
@@ -168,7 +168,7 @@ def hexify(reg: Registrar, b_pts: Points, warp_m=None, layers: int = 4):
     pts, pops = hex_poly_layer(b_pts, layers)
 
     # Now calculate their area as a metric. (ignore pops).
-    gm2 = 510_065_621_724_154.6  # total surface area of WGS-84 (m²)
+    gm2 = ellipsoid_area_wgs84() # total surface area of WGS-84 (m²) about 510_065_621_724km
     bins = 12*9**layers          # number of hexes at this layer
     w_area_m2_mean = gm2/bins    # ideal equal-area per hex
     h_pts = pts.copy()
@@ -181,7 +181,7 @@ def hexify(reg: Registrar, b_pts: Points, warp_m=None, layers: int = 4):
 
 
 if __name__ == '__main__':
-    depth = 4  # 0,...5 √
+    depth = 5  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
     data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)

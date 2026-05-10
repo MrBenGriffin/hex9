@@ -12,15 +12,14 @@ Last Tested
 
 import numpy as np
 from hhg9 import Points, Registrar
-from hhg9.algorithms.distance import wgs84_area
+from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84
 from hhg9.h9.addressing import hex_layer, TailStyle
 from hhg9.h9.grid import poly_net_field
 
 
 if __name__ == '__main__':
     # WGS84 ellipsoid surface area (m^2). Using helper keeps this aligned with the rest of the stack.
-    # earth = float(wgs84_area())
-    earth = 510_065_621_724_154.6
+    earth = ellipsoid_area_wgs84()
     hex_0 = earth / 12
     l_hex = hex_0
     h_areas = np.zeros((64,), dtype=np.float64)

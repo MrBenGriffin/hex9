@@ -5,8 +5,6 @@
 """Pickers for sampling points on the sphere and ellipsoids."""
 
 import numpy as np
-from geographiclib.geodesic import Geodesic as _Geodesic
-_geod = _Geodesic.WGS84
 
 
 def ell_rnd_quick(reg, n_points):
@@ -287,8 +285,9 @@ def geodesic_cap_rnd_ecef(reg, center_lat, center_lon, n, radius_m, seed=None):
 
     end_lat = np.empty(n)
     end_lon = np.empty(n)
+    geod = reg.ellipsoid
     for k in range(n):
-        r = _geod.Direct(center_lat, center_lon, azimuths[k], distances[k])
+        r = geod.Direct(center_lat, center_lon, azimuths[k], distances[k])
         end_lat[k] = r['lat2']
         end_lon[k] = r['lon2']
     # g_gcd uses lat/lon order.

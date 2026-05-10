@@ -7,13 +7,11 @@ Grid Methods - eg for composing rectilinear pixel grids for projected sampling.
 """
 from functools import cache
 import numpy as np
-from pandas._libs.tslibs import offsets
-
 from hhg9.algorithms.geometry import inside_convex_polygon_cw
 from hhg9.h9 import H9K, H9O, H9P
 from hhg9.h9.classifier import in_scope, location
 from hhg9.h9.polygon import region_grid, uv_grid
-from hhg9.h9.protocols import BaryLoc
+from hhg9.algorithms.distance import ellipsoid_area_wgs84
 from hhg9 import Points, Registrar
 
 
@@ -34,7 +32,7 @@ _FACE_ADJ: tuple[frozenset, ...] = (
 
 
 @cache
-def _hex_areas():
+def _hex_areas(earth_area: float = None):
     """Return characteristic lengths for an ideal regular hexagon at each layer.
     Returns:
         np.array (max_depth, 5):
@@ -46,7 +44,7 @@ def _hex_areas():
     """
     # Level 0 area ≈ 42_505_468 km^2 (area of Earth / 12 hexes)
     max_depth = 64  # way over the top.
-    earth = 510_065_621_724_154.6
+    earth = earth_area if earth_area is not None else float(ellipsoid_area_wgs84())
     hex_0 = earth / 12
     l_hex = hex_0
     h_areas = np.zeros((max_depth, 5), dtype=np.float64)
@@ -63,7 +61,7 @@ def _hex_areas():
 
 
 @cache
-def _tri_areas():
+def _tri_areas(earth_area: float = None):
     """Return characteristic lengths for an ideal equilateral triangle at `layer`.
     Derived from area A = (sqrt(3)/4) * a^2.
     returns np.array (max_depth, 5):
@@ -75,7 +73,7 @@ def _tri_areas():
     """
     # Level 0 area ≈ 63_758_203 km^2 (area of Earth / 8 faces)
     max_depth = 64  # way over the top.
-    earth = 510_065_621_724_154.6
+    earth = earth_area if earth_area is not None else float(ellipsoid_area_wgs84())
     tri_0 = earth / 8
     l_tri = tri_0
     t_areas = np.zeros((max_depth, 5), dtype=np.float64)
@@ -94,19 +92,17 @@ def _tri_areas():
 
 
 @cache
-def hex_props(level=None):
+def hex_props(level=None, earth_area: float = None):
     """return (ideal) hex_grid properties for layer"""
     if level is None:
-        return _hex_areas()
-    h_areas = _hex_areas()
-    return h_areas[level]
+        return _hex_areas(earth_area)
+    return _hex_areas(earth_area)[level]
 
 
 @cache
-def tri_props(level):
-    """return  (ideal)  tri_grid properties for layer"""
-    t_areas = _tri_areas()
-    return t_areas[level]
+def tri_props(level, earth_area: float = None):
+    """return (ideal) tri_grid properties for layer"""
+    return _tri_areas(earth_area)[level]
 
 
 def densify_step_for_layer(level, kind: str = 'hex', factor: float = 1.0, safety: float = 0.9) -> float:

@@ -86,6 +86,30 @@ def great_circle_atan2_rad(p1_rad, p2_rad, R: float = R_MEAN):
     return R * ang
 
 
+def calculate_ellipsoid_area(a_val, inv_f_val):
+    from sympy import Number, N, sqrt, pi, atanh
+    a = Number(a_val)  # Semi-major axis in meters
+    inv_f = Number(inv_f_val)
+    f = 1 / inv_f
+    b = a * (1 - f)  # Derive the Semi-minor axis (b)
+    e_sq = 1 - (b**2 / a**2) # Calculate Eccentricity (e)
+    e = sqrt(e_sq)
+    area_expr = 2 * pi * a**2 * (1 + ((1 - e**2) / e) * atanh(e)) # Oblate Spheroid Surface S = 2πa² * [1 + ((1-e²)/e) * atanh(e)]
+    return float(N(area_expr, 20))
+
+
+def ellipsoid_area_wgs84():
+    """
+    Create and cache a single instance of the Geodesic object.
+    """
+    wgs84_ellipsoid = Geodesic.WGS84
+    area = 510065621724088.50944
+    try:
+        area = calculate_ellipsoid_area(wgs84_ellipsoid.a, f'1/{wgs84_ellipsoid.f}')
+    except (ImportError, Exception):
+        pass
+    return area
+
 @cache
 def geodesic_wgs84():
     """
@@ -140,7 +164,8 @@ def wgs84_offset(p1, theta, dist):
 def densify_poly_geodesic_by_step(poly_latlon: np.ndarray,
                                   max_step_m: float = 2_000.0,
                                   max_per_edge: int = 512,
-                                  closed: bool = True) -> np.ndarray:
+                                  closed: bool = True,
+                                  geo=None) -> np.ndarray:
     """
     Densify a polygon boundary by geodesic interpolation.
 
@@ -161,7 +186,8 @@ def densify_poly_geodesic_by_step(poly_latlon: np.ndarray,
         return poly.copy()
     if closed and np.allclose(poly[0], poly[-1]):
         poly = poly[:-1]
-    geo = geodesic_wgs84()
+    if geo is None:
+        geo = geodesic_wgs84()
     m = poly.shape[0]
     last = m if closed else (m - 1)
     out = []
@@ -224,10 +250,10 @@ def wgs84_area(reg, pts, shape=6):
     Polygons are defined in hhg following CW rules.
     """
     from hhg9 import Points
-    geo = geodesic_wgs84()
-
-    wp = None
+    geo = reg.ellipsoid if hasattr(reg, 'ellipsoid') else geodesic_wgs84()
+    lat_lon_pts = None
     if isinstance(pts, Points):
+        wp = None
         dom = pts.domain
         if dom.name != 'g_gcd':
             try:
@@ -237,7 +263,9 @@ def wgs84_area(reg, pts, shape=6):
                 raise ValueError(f'wgs84_polygon_area: {msg} while attempting [{dom.name} => g_gcd]')
         else:
             wp = pts.copy()
-    lat_lon_pts = wp.coords.reshape((-1, shape, 2))
+        lat_lon_pts = wp.coords.reshape((-1, shape, 2))
+    else:
+        lat_lon_pts = pts
     areas = np.empty(len(lat_lon_pts))
     for i, poly in enumerate(lat_lon_pts):
         lat, lon = poly[:, 0], poly[:, 1]

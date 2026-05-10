@@ -155,17 +155,16 @@ if __name__ == '__main__':
     accuracy = 1e-22  # in meters^2
     reg = Registrar()  # Manage Domains & Projections
     seed = 4007
-    samples = 100_000
+    samples = 10_000
     ake = reg.projection('oct_ell')
     b_oct = reg.domain('b_oct')
-    # b_oct.warp.tolerance = WarpTolerance.MACH
-    b_oct.no_warp()
+    # b_oct.no_warp()
 
     layers = ake.set_accuracy(accuracy)
     np.random.seed(seed)
     base = Path(__file__).parent
 
-    log_file = base.joinpath(f'output/logs/l{layers}_{samples}_{seed}_no_warp.csv')
+    log_file = base.joinpath(f'output/logs/l{layers}_{samples}_{seed}.csv')
     main_logger = CSVLogger(log_file)
     start_time = time.perf_counter()
 

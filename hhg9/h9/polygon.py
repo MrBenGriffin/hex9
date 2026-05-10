@@ -395,7 +395,14 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
 
 
 def net_polys(reg, n_oct):
-    """Return the polys for a net"""
+    """Return the face-triangle vertices for a net as Points in n_oct.
+
+    .. deprecated::
+        For face membership / seam testing prefer ``n_oct.pt_face(coords)``
+        (``OctahedralNet.pt_face``), which handles all layouts including
+        rhombus and returns a per-point octant OID directly.
+        This function does not support the rhombus layout.
+    """
     from hhg9 import Points
     if n_oct.name.split(":")[1] == 'rhombus':
         raise NotImplementedError("rhombus not implemented - yet!")
@@ -412,7 +419,11 @@ def _match_hx_pt(pt):
 
 
 def net_poly(reg, n_oct):
-    """Given an octahedral net (ONLY triangular! Not rhombus), return the list of bounding polygons"""
+    """Given an octahedral net (ONLY triangular! Not rhombus, yet), return the list of bounding polygons.
+
+    .. deprecated::
+        See ``net_polys`` — prefer ``n_oct.pt_face(coords)`` for membership tests.
+    """
     npt = net_polys(reg, n_oct)
 
     # convert back to vertices and store as lines.

@@ -180,6 +180,7 @@ def example(space_set):
 
 
 if __name__ == '__main__':
+    # TODO: Limit tilings to those where the long-edge of the half-hexagons meet.
     # 9-piece half-hexagon tiling (27 triangular cells = 9 × 3): H9 proof space
     # 49 solutions (confirmed) — the relevant H9 result.
     # H9 solutions (mirror pair): results 09 and 48 from the 49-solution run:
@@ -188,7 +189,7 @@ if __name__ == '__main__':
     #   The numbers represent possible orientations (or rotations) of a half-hexagon, where
     #   0 has its *base* towards the south-west, 1 to the south, etc., with 5 towards the north-west.
     #   The space to fill is a half-hexagon with the long side north (orientation 4).
-    #   The fill is left to right, top to bottom, treating each parity as it's own row.
+    #   The fill is left to right, top to bottom, treating each parity as its own row.
     #   442442|42542|02502|0530|0130|113
     """
        4   4   2   4   4   2  <-- downward pointing triangles

@@ -159,7 +159,7 @@ if __name__ == '__main__':
 
     el_pts   = reg.project(mesh.pts, [b_oct, g_gcd, c_ell])
     el_hexes = el_pts.coords[layer_0]
-    # el_px = reg.project(pc_px, [p_pix, g_gcd, c_ell])
+    el_px = reg.project(pc_px, [p_pix, g_gcd, c_ell])
     show_global(el_px, el_hexes)
 
     # ok       = valid_ll(ll_hexes)                               # drop antimeridian-crossing hexes

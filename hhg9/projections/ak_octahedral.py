@@ -12,7 +12,6 @@ from hhg9 import Points
 from hhg9.base.projection import Projection
 from hhg9.algorithms.distance import haversine_rad
 from hhg9.h9.root_finding import find_coords
-from hhg9.algorithms.wgs84 import A, B
 from hhg9.h9 import H9C, H9K, H9O
 from hhg9.h9.grid import hex_props, tri_props
 
@@ -21,12 +20,16 @@ class AKOctahedralEllipsoid(Projection):
     """
         An Octahedron/Ellipsoid Projection generated via an analytical approximation to a
         force-directed dataset. Approximation designer: Anders Kaseorg
+        𝛂 Alpha reduces mode asymmetry slightly while cutting global deviation by more than half
     """
     ALPHA = 3.227806237143884260376580  # 𝛂 - vis. Kaseorg.
 
-    def __init__(self, registrar, name='oct_ell', a=A, b=B):
+    def __init__(self, registrar, name='oct_ell', a=None, b=None):
         self.reg = registrar
         super().__init__(self.reg, name, 'c_oct', 'c_ell')
+        geo = registrar.ellipsoid
+        a = a if a is not None else geo.a
+        b = b if b is not None else a * (1.0 - geo.f)
         self.ab = a, b
         self.ab2 = 1., (b / a) ** 2
 
