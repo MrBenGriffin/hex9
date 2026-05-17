@@ -33,7 +33,7 @@ g_gcd  →  r_gcd  →  c_ell  →  c_oct  →  b_raw  →  b_oct
 | `c_ell` | ECEF Cartesian | 3D Cartesian on the WGS84 ellipsoid |
 | `c_oct` | Octahedral Cartesian | Projected onto the unit octahedron via the AK formula |
 | `b_raw` | Geometric barycentric | Per-face barycentric coordinates (unwarped) |
-| `b_oct` | Authalic barycentric | Equal-area–warped barycentric — the grid's home space |
+| `b_oct` | Authalic-ish barycentric | Near Equal-area–warped barycentric — the grid's home space |
 
 The non-trivial step is `c_ell ↔ c_oct`: the forward direction uses the AK
 tangent–normalisation formula; the inverse has no reliable closed form and is
