@@ -117,8 +117,8 @@ def show_global(pts, poly):
     # 4. Add the points
     # ax.scatter(x, y, z, c=cols, s=2, alpha=0.5, antialiased=True)
 
-    # 2. Add the polygons
-    poly_collection = Poly3DCollection(poly, ec='black', fc='none', linewidth=2.0)
+    # 2. Add the polygons. facecolor='none' will cause trouble.
+    poly_collection = Poly3DCollection(poly, ec='black', facecolor=(0, 0, 0, 0), linewidth=2.0)
     ax.add_collection(poly_collection)
 
     fig.savefig(f"output/ex0115_global.png",
