@@ -1,0 +1,149 @@
+% Hex9 paper — references
+% Started 2026-06-14. Keys referenced inline as [@key].
+% Verify page numbers / editions before final submission.
+
+% --- Octahedral base projection (AK) ---
+@misc{kaseorg_octahedral,
+  author       = {Kaseorg, Anders},
+  title        = {Answer to ``How to identify the spherical function(s) this pattern''},
+  howpublished = {Mathematics Stack Exchange},
+  year         = {2025},
+  note         = {Analytic octahedral projection (tangent substitution, coupling
+                  parameter $\alpha \approx 3.2278$) answering a question posed
+                  2024-12-28; answer ID on the question page below},
+  url          = {https://math.stackexchange.com/questions/5016695/}
+}
+
+% --- DGGS prior art and theory ---
+@article{sahr2003geodesic,
+  author  = {Sahr, Kevin and White, Denis and Kimerling, A. Jon},
+  title    = {Geodesic Discrete Global Grid Systems},
+  journal  = {Cartography and Geographic Information Science},
+  volume   = {30},
+  number   = {2},
+  pages    = {121--134},
+  year     = {2003},
+  doi      = {10.1559/152304003100011090}
+}
+
+@techreport{ogc_topic21,
+  author       = {{Open Geospatial Consortium}},
+  title        = {OGC Abstract Specification Topic 21: Discrete Global Grid Systems --
+                  Part 1: Core Reference System and Operations and Equal Area Earth
+                  Reference System},
+  institution  = {Open Geospatial Consortium},
+  number       = {20-040r3},
+  year         = {2021},
+  url          = {https://docs.ogc.org/as/20-040r3/20-040r3.html}
+}
+
+@techreport{iso19111,
+  author      = {{International Organization for Standardization}},
+  title       = {ISO 19111:2019 Geographic information --- Referencing by coordinates},
+  institution = {ISO},
+  number      = {ISO 19111:2019},
+  year        = {2019},
+  url         = {https://www.iso.org/standard/74039.html}
+}
+
+% --- Operational DGGS implementations (for the comparison section) ---
+@misc{h3,
+  author       = {{Uber Technologies}},
+  title        = {H3: A Hexagonal Hierarchical Geospatial Indexing System},
+  howpublished = {\url{https://h3geo.org}},
+  note         = {Icosahedral aperture-7 hexagonal grid; twelve pentagon cells},
+  year         = {2018}
+}
+
+@misc{s2,
+  author       = {{Google}},
+  title        = {S2 Geometry},
+  howpublished = {\url{https://s2geometry.io}},
+  note         = {Cube-based quadrilateral hierarchical grid},
+  year         = {2017}
+}
+
+@article{healpix,
+  author  = {G{\'o}rski, K. M. and Hivon, E. and Banday, A. J. and Wandelt, B. D.
+             and Hansen, F. K. and Reinecke, M. and Bartelmann, M.},
+  title    = {HEALPix: A Framework for High-Resolution Discretization and Fast
+              Analysis of Data Distributed on the Sphere},
+  journal  = {The Astrophysical Journal},
+  volume   = {622},
+  number   = {2},
+  pages    = {759--771},
+  year     = {2005},
+  doi      = {10.1086/427976}
+}
+
+% --- Projections ---
+@book{snyder1987map,
+  author    = {Snyder, John P.},
+  title     = {Map Projections --- A Working Manual},
+  series    = {U.S. Geological Survey Professional Paper 1395},
+  publisher = {United States Government Printing Office},
+  year      = {1987},
+  doi       = {10.3133/pp1395}
+}
+
+@article{snyder1992equal,
+  author  = {Snyder, John P.},
+  title    = {An Equal-Area Map Projection for Polyhedral Globes},
+  journal  = {Cartographica},
+  volume   = {29},
+  number   = {1},
+  pages    = {10--21},
+  year     = {1992},
+  doi      = {10.3138/27H7-8K88-4882-1752}
+}
+
+@article{lee1965conformal,
+  author  = {Lee, L. P.},
+  title    = {Some Conformal Projections Based on Elliptic Functions},
+  journal  = {Geographical Review},
+  volume   = {55},
+  number   = {4},
+  pages    = {563--580},
+  year     = {1965},
+  doi      = {10.2307/212415}
+}
+
+% --- Optimal transport (the warp) ---
+@inproceedings{cuturi2013sinkhorn,
+  author    = {Cuturi, Marco},
+  title     = {Sinkhorn Distances: Lightspeed Computation of Optimal Transport},
+  booktitle = {Advances in Neural Information Processing Systems 26 (NeurIPS)},
+  pages     = {2292--2300},
+  year      = {2013}
+}
+
+% --- Interpolation (the warp interpolant) ---
+@incollection{clough1965finite,
+  author    = {Clough, R. W. and Tocher, J. L.},
+  title     = {Finite Element Stiffness Matrices for Analysis of Plates in Bending},
+  booktitle = {Proceedings of the Conference on Matrix Methods in Structural Mechanics},
+  publisher = {Wright-Patterson Air Force Base},
+  pages     = {515--545},
+  year      = {1965}
+}
+
+% --- Data sources (figures) ---
+@misc{hdx_bhutan_pop,
+  author       = {{Meta Data for Good} and {Center for International Earth Science
+                  Information Network (CIESIN), Columbia University}},
+  title        = {Bhutan: High Resolution Population Density Maps + Demographic Estimates},
+  howpublished = {Humanitarian Data Exchange (HDX)},
+  year         = {2020},
+  note         = {File btn\_general\_2020.csv; source extent clipped to Bhutan's
+                  national borders before binning},
+  url          = {https://data.humdata.org/dataset/bhutan-high-resolution-population-density-maps-demographic-estimates}
+}
+
+% --- Tooling ---
+@misc{ortools,
+  author       = {Perron, Laurent and Furnon, Vincent},
+  title        = {OR-Tools},
+  howpublished = {\url{https://developers.google.com/optimization}},
+  organization = {Google},
+  year         = {2023}
+}
