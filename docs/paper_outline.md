@@ -58,6 +58,11 @@
 ## Figures
 → paper_figures.md   (specification of all figures, sources, production notes)
 
+## References
+→ docs/references.bib   (core entries started 2026-06-14; Kaseorg key needs a citable URL)
+
 ## Still to draft
-- References / .bib (no citations exist anywhere yet)
-- OGC/ISO terminology pass (glossary.md table → verified against current spec editions)
+- OGC/ISO terminology pass (glossary.md table → verified against current spec editions;
+  Topic 21 edition 20-040r3 confirmed, DGGS-as-SRS paraphrase verified in arc 9)
+- Figure *production* of bespoke figures (F3/F4/F5 anatomy; F12/F13 warp; F6/F15/F17 maps)
+- F23 (Thimphu adaptive, L5–L12) — image exists; caption + §14a placement done

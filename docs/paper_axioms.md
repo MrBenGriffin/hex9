@@ -120,3 +120,34 @@ The dual graph of the simplicial complex induces a structured hexagonal lattice:
 
 *Hex9 structure is emergent from simplices, not fundamental.*
 
+---
+
+## Main Theorem
+
+Axioms 1–9 admit a discrete global grid that is **unique up to two free choices** —
+a global chirality (Axiom 6) and a geodetic gauge (Axiom 7). That grid is **Hex9**:
+the shifted-aperture-9 hexagonal grid on the octahedral triangulation of the
+reference ellipsoid, with the cell hierarchy and addressing developed in §§6–10.
+
+Concretely, the axioms force each link of the following chain, and the arc sections
+that follow constitute its proof:
+
+1. **Carrier.** The discrete carrier is a simplicial complex, and the only
+   triangulation of S² with even, uniform valence and no exceptional cells is the
+   octahedral triangulation (Axioms 2–4; §§1–5).
+2. **Aperture.** Refinements preserving mode transport have odd linear factor *k*;
+   the admissible aperture class is {*k*² : *k* odd, *k* > 1}, of which **9 is
+   minimal** (Axioms 4–5; §6).
+3. **Hex emergence.** The dual carries the 12 units of topological defect required
+   by the Euler characteristic of S² as 4-valent cells at the 6 octahedral
+   vertices, not as face anomalies (Axiom 9; §7).
+4. **Orientation.** The residual orientation freedom collapses to a single chiral
+   pair (Axiom 6; §8).
+5. **Identity.** Every cell carries a unique hierarchical address from which its
+   geographic location is read directly, with no prior coordinate reference system
+   (Axiom 8; §§9–10).
+
+The geometric realisation on the ellipsoid (§11) is a separable engineering step:
+it places this combinatorial object onto WGS84 but adds no degrees of freedom to
+the structure the axioms determine.
+

@@ -14,7 +14,8 @@
   external coordinate transformation is required to establish it.
 
   Hex9 is a discrete spatial reference system in the sense of OGC Abstract Specification
-  Topic 21, which defines a DGGS as a kind of spatial reference system. What
+  Topic 21 [@ogc_topic21], which characterises a DGGS as a spatial reference system that
+  partitions and addresses the globe through a hierarchical tessellation of cells. What
   distinguishes Hex9 within this class is the direction of derivation. The conventional
   workflow — select a coordinate reference system, then design a grid over it — is
   inverted. Here, the geometric coherence requirements of §§1–8 define the structure;

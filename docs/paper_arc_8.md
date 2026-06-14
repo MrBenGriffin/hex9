@@ -21,6 +21,21 @@
   boundary vertex. The two survivors are related by a global reflection — a chiral
   pair, geometrically distinct but structurally equivalent up to handedness.
 
+  [Figure 2: the surviving chiral pair — the two orientations of the 9-cell
+  equilateral that satisfy internal closure, three half-hexagons each, coloured
+  by orientation class; the members are mirror images]
+
+  This count is not an assertion. The full enumeration is machine-verified by
+  `experimental/halfhex_verify.py` (checks V0–V6): of the 49 distinct hextile
+  solutions (24 chiral pairs + 1 self-mirror), the long-edge constraint (A)
+  admits 18, the three-equilateral structural constraint (B) admits 8, and their
+  intersection A ∩ B is exactly the recorded Hex9 chiral pair. The constructive
+  2³ → 2 argument above and this enumeration agree.
+
+  [Figure 1: the 49 hextile solutions, chiral pairs grouped and the self-mirror
+  marked, with the Hex9 pair highlighted; caption carries the counts
+  49 = 24 pairs + 1 self-mirror, A → 18, B → 8, A ∩ B → 2]
+
   Axiom 6 resolves the remaining freedom: a single consistent chirality choice,
   induced by the embedding into the reference ellipsoid frame, selects one of the two.
   The orientation of the half-hexagon — and with it the entire hexagonal lattice

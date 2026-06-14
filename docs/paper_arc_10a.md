@@ -13,7 +13,9 @@
   property except at the 3 split x_cells per level, whose parentage is resolved
   by the tail of the x_adr.
 
-  [Figure: 9-child x_cell subdivision with x_dig labels]
+  [Figure 4: a parent x_cell and its 9 child x_cells labelled by x_dig (0–8),
+  coloured by high-trit class (0–2 / 3–5 / 6–8); the three split children (6,7,8)
+  straddle the parent boundary and there is no central child]
 
   Once the projection from the reference ellipsoid to the octant 2D plane is
   complete, the encode direction (point → x_adr) operates via a sequence of
@@ -31,7 +33,9 @@
   96-slot classifier combining horizontal and slope bands) maps directly to a
   t_cell, and from there to the d_cell and x_cell via the construction of §§6–8.
 
-  [Figure: three-family line partition of the octant plane showing t_cell grid]
+  [Figure 5: the classifier (c-layer) — the three band families partition the
+  octant plane; their indices compose c_dig = h_id<<4 | p_id<<2 | n_id (the
+  96-slot c_grid), which maps to a t_cell and thence to the d_cell and x_cell]
 
   The mapping operates in both directions. Given an x_adr, the corresponding
   geographic region is recovered by tracing the digit sequence from the octant

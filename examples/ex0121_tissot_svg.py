@@ -47,8 +47,8 @@ os.makedirs('output', exist_ok=True)
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-FLAVOUR = 'rhombus'  # 'butterfly:0500'
-# FLAVOUR    = 'butterfly:0500'      # 'butterfly:0500'
+# FLAVOUR = 'rhombus'  # 'butterfly:0500'
+FLAVOUR = 'butterfly:0500'      # 'butterfly:0500'
 PIXELS = 1200  # triangle side in pixels → controls SVG canvas size
 
 LAND_FILE = os.path.join(os.path.dirname(__file__), '../preparatory/landmasses/ne_50m_land.shp')

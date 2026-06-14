@@ -13,8 +13,26 @@
   normalisation for the same task, and the normalisation factor varies by
   location.
 
-  [Figure: population density heatmap binned to Hex9 cells, one country or
+  [Figure 15: population density heatmap binned to Hex9 cells, one country or
   global]
+
+  Cells need not share a level. Because parentage is exact (§12), a single
+  layer can mix resolutions — coarse cells where data is sparse, fine cells
+  where it is dense — without T-junctions, seams, or interpolation between
+  levels, and the mixed layer still rolls up losslessly. Refinement can
+  therefore be driven by the data itself: subdivide a cell only while the
+  population it contains stays within a target band, stopping when the count
+  falls low enough or a depth limit is reached. Figure 23 shows this for
+  Thimphu, Bhutan, where a population layer drives adaptive refinement across
+  L5 to L12 — coarse L5 cells over empty terrain, refining to L12 along the
+  inhabited valley floors. Each cell is shaded by population density (count per
+  authalic cell area), so the fill is directly comparable across levels without
+  area correction — a single coherent grid whose cells span seven levels at
+  once.
+
+  [Figure 23: Thimphu, Bhutan — population-driven adaptive refinement spanning
+  L5–L12 in one mixed-resolution Hex9 layer; fill is population density per
+  authalic cell area]
 
 ### 14b. Spatial joins and multi-resolution analysis
 
