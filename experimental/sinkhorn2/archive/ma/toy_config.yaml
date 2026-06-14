@@ -1,0 +1,39 @@
+default: &default
+  description: "Minimum MA solve for Toy"
+  rhs_scale: 1.0
+  lam: 1.0e-2
+  iters: 30
+  use_neg_ell: false
+  center_rhs: false
+  damping: 0.5
+  mu_tether: 0.0
+  gamma_cross: 0.0
+  s_floor: 3.0e-5
+  det_floor: 3.0e-5
+  max_step_k: 0.12
+  edge_band: 0.04
+  edge_gain: 0.0
+  alphas: [1.0]
+  max_iter_per_stage: 32
+  mu_polish_scale: 0.02
+  lam_gn_min: 3.0e-4
+  use_residual: false
+  allow_beta: false
+  enforce_d3: true
+  verbosity: 1
+
+
+stronger_reg_sym: &stronger_reg_sym
+  <<: *default
+  description: "Toy: symmetric, stronger regularisation"
+  iters: 60
+  mu_tether: 0.05
+  gamma_cross: 16.0
+  max_iter_per_stage: 80
+  verbosity: 1
+
+stronger_reg_asym: &stronger_reg_asym
+  <<: *stronger_reg_sym
+  description: "Toy: stronger regularisation but asymmetric"
+  enforce_d3: false
+

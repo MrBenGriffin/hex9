@@ -51,7 +51,7 @@ if __name__ == '__main__':
         bc0 = reg.project(ll0, [g_gcd, b_oct])  # spherical cart
         cmp = bc0.oid[0]
         co, mo = bc0.cm()
-        uri = xy_regions(bc0.coords, mo, accuracy)
+        uri = xy_regions(bc0.coords, mo, accuracy, ensure)
         nbr, nmo = region_neighbours(uri)
         ub2, rmo = region_neighbours(nbr)
         xyb = regions_xy(uri)

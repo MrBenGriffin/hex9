@@ -53,13 +53,17 @@ class Registrar:
     def ellipsoid_area(self) -> float:
         """Surface area of the reference ellipsoid in m², computed once and cached."""
         if self._ellipsoid_area is None:
-            try:
-                from hhg9.algorithms.distance import calculate_ellipsoid_area
-                self._ellipsoid_area = float(calculate_ellipsoid_area(
-                    self.ellipsoid.a, f'1/{self.ellipsoid.f}'
-                ))
-            except Exception:
-                self._ellipsoid_area = 510065621724088.50944  # WGS84 fallback
+            if self.ellipsoid.f == 0.0:
+                # sphere: the oblate-spheroid formula is singular at e=0
+                self._ellipsoid_area = 4.0 * np.pi * self.ellipsoid.a ** 2
+            else:
+                try:
+                    from hhg9.algorithms.distance import calculate_ellipsoid_area
+                    self._ellipsoid_area = float(calculate_ellipsoid_area(
+                        self.ellipsoid.a, f'1/{self.ellipsoid.f}'
+                    ))
+                except Exception:
+                    self._ellipsoid_area = 510065621724088.50944  # WGS84 fallback
         return self._ellipsoid_area
 
     def set_ellipsoid(self, *, a, f=None, inv_f=None, name='Unknown Ellipsoid'):

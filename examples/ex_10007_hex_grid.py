@@ -53,7 +53,7 @@ def get_data(reg: Registrar, depth):
         rgc = rgn[H9O.oid_mo[oc]]
         xym = regions_xy(rgc)
         xy = xym[:, :-1]
-        sides.append(Points(xy, b_oct, H9O.oid_cmp[oc]))
+        sides.append(Points(xy, b_oct, oc))
     globe = Points.concat(sides)
     return globe  # This will return six points per hexagon.
 
@@ -70,7 +70,6 @@ def layer_hex_roundtrip(depth: int = 0):
     So, eg [0, 6] = net_mode 0, region 6. (c2=0)
     """
     reg = Registrar()
-    b_oct = reg.domain('b_oct')
 
     globe = get_data(reg, depth)
     hxd = hex_layer(globe, layer=depth)
@@ -92,5 +91,5 @@ def layer_hex_roundtrip(depth: int = 0):
 
 
 if __name__ == "__main__":
-    for depth in range(5):
+    for depth in range(3):
         layer_hex_roundtrip(depth)

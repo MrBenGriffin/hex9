@@ -118,7 +118,7 @@ if __name__ == "__main__":
     o_id, mode = pts.cm()
     ggg = reg.project(pts, ['b_oct', 'g_gcd'])
 
-    rn = xy_regions(pts.coords, mode, 2)
+    rn = xy_regions(pts.coords, mode, 2, ensure)
     assert np.all(rn == exm)
 
     hex_reg = HEX_LUTS.hex_reg

@@ -161,6 +161,40 @@ class AKOctahedralEllipsoid(Projection):
             return grx.coords.reshape(xy.shape)
 
         found, _ = find_coords(ref, oct_m, oid, H9C, fwd, haversine_rad, self.accuracy+2, beam_width=6)
+
+        # Newton refinement for apex-convergence cases (e.g. near-polar seam points).
+        # The beam can converge to the octant apex instead of the correct b_raw when
+        # many consecutive levels select the most-polar child. A 2×2 Newton step in
+        # b_raw space corrects the residual quickly — typically 2–4 iterations.
+        residuals = haversine_rad(fwd(found, oid), ref)
+        needs = residuals > 1e-3  # 1 mm threshold — beam gives sub-nm for normal points
+        if np.any(needs):
+            _h = 1e-7
+            curr = found[needs].copy()
+            ro = oid[needs]
+            rr = ref[needs]
+            for _ in range(20):
+                f = fwd(curr, ro)
+                err = f - rr
+                if np.abs(err).max() < 1e-13:
+                    break
+                cx = curr.copy()
+                cx[:, 0] += _h
+                cy = curr.copy()
+                cy[:, 1] += _h
+                jx = (fwd(cx, ro) - f) / _h
+                jy = (fwd(cy, ro) - f) / _h
+                a, b_, c_, d = jx[:, 0], jy[:, 0], jx[:, 1], jy[:, 1]
+                det = a * d - b_ * c_
+                ex, ey = err[:, 0], err[:, 1]
+                safe = np.abs(det) > 1e-20
+                dn = np.where(safe, det, 1.0)
+                delta_x = np.where(safe, -(d * ex - b_ * ey) / dn, 0.0)
+                delta_y = np.where(safe, -(a * ey - c_ * ex) / dn, 0.0)
+                curr += np.stack([delta_x, delta_y], axis=1)
+            found = found.copy()
+            found[needs] = curr
+
         bpt = Points(found, self.b_raw, uvw.oid)
         return self.reg.project(bpt, [self.b_raw, self.rev_cs])  # rev_cs = c_oct
 

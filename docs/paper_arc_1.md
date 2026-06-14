@@ -1,4 +1,4 @@
-1. The simplicial carrier
+## 1. The Simplicial Carrier
 
   A discrete global grid partitions the globe into a finite collection of cells. The choice of cell shape is the first apparent design decision: squares, triangles, hexagons, and other polygons all tile the plane, and several tile the globe with appropriate modifications.
 
@@ -8,6 +8,6 @@
   This intrinsic orientability makes the triangle the natural substrate for a globally coherent grid. We take the triangular field — a tiling of the globe by triangles — as the simplicial carrier on which the remaining coherence requirements will act.
 
 
-  A coherent grid carrier must satisfy several requirements simultaneously: operators such as interpolation and refinement must be definable without auxiliary choices; each cell must support a unique, intrinsic coordinate system; refinement must be closed and structure-preserving; and no cell-type exceptions or singular vertices may appear. The triangle is the only 2-cell that satisfies all of these at once. Its barycentric coordinates are intrinsic — defined by the vertices alone, with no ambient metric required. It is closed under subdivision. It forms a simplicial complex without diagonal ambiguity. Every other polygon either decomposes into triangles or requires additional structure to recover these properties.
+  A coherent grid carrier must satisfy several requirements simultaneously: operators such as interpolation and refinement must be definable without auxiliary choices; each cell must support a unique, intrinsic coordinate system; refinement must be closed and structure-preserving; and no cell-type exceptions or singular vertices may appear. The triangle is the only 2-cell that satisfies all of these at once. Its barycentric coordinates are intrinsic — defined by the vertices alone, with no ambient metric required. It is closed under subdivision. It forms a simplicial complex without diagonal ambiguity.
 
-  On curved surfaces this distinction becomes decisive: triangular meshes accommodate curvature without introducing topological defects, whereas higher-order tilings must. The triangular field is therefore not one choice among many — it is the unique simplicial carrier from which a coherent global grid may be constructed.
+  On curved surfaces this distinction becomes decisive. A triangulation absorbs curvature at its vertices without changing cell type; tilings by higher polygons must place their topological obligations somewhere visible — as exceptional cells (the twelve pentagons of icosahedral hexagonal grids) or exceptional corners (the eight 3-valent corners of cube-based quadrilateral grids). The triangular field is therefore not one choice among many — every other option either reduces to it or requires additional structure not established by the coherence requirements alone.

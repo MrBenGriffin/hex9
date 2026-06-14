@@ -118,15 +118,6 @@ def geodesic_wgs84():
     return Geodesic.WGS84
 
 
-def _wgs84_distance(lat1, lon1, lat2, lon2):
-    """
-    Create and cache a single instance of the vectorised inverse
-    limited to just DISTANCE.
-    """
-    geo = geodesic_wgs84()
-    return geo.Inverse(lat1, lon1, lat2, lon2, Geodesic.DISTANCE)['s12']
-
-
 def _wgs84_offset(lat1, lon1, azi, dist):
     """
     Create and cache a single instance of the vectorised inverse
@@ -143,11 +134,23 @@ def wgs84(p1, p2):
     Calculates the geodesic distance between a batch of reference points
     and their corresponding sets of candidate points in a vectorized way.
     """
+    return ell_distance(p1, p2)
+
+
+@cache
+def _make_ell_vec(geo: Geodesic):
+    return np.vectorize(lambda la1, lo1, la2, lo2: geo.Inverse(la1, lo1, la2, lo2, Geodesic.DISTANCE)['s12'])
+
+
+def ell_distance(p1, p2, geo: Geodesic = Geodesic.WGS84):
+    """
+    Calculates the geodesic distance between a batch of reference points
+    and their corresponding sets of candidate points in a vectorized way.
+    Uses WGS84 by default; pass a custom Geodesic instance for other ellipsoids.
+    """
     lat1, lon1 = p1[..., 0], p1[..., 1]
     lat2, lon2 = p2[..., 0], p2[..., 1]
-
-    result = np.vectorize(_wgs84_distance)(lat1, lon1, lat2, lon2)
-    return result
+    return _make_ell_vec(geo)(lat1, lon1, lat2, lon2)
 
 
 def wgs84_offset(p1, theta, dist):

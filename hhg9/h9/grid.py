@@ -514,7 +514,7 @@ class HexMesh:
         self._vd  = vert_dict                    # (ia, ib, oid) → vertex idx
         self._ad  = addrs_dict or {}             # {layer: [uuid.UUID, ...]}
         self.alt = None
-        self.uv_o = np.array(list(self._vd.keys()), dtype=np.int32)
+        self.uv_o = np.array(list(self._vd.keys()), dtype=np.int64)
 
     @property
     def faces(self) -> np.ndarray:
@@ -946,6 +946,258 @@ class HexMesh:
         offspring = cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict, addrs_dict)
         offspring.alt = alt
         return offspring
+
+    # ---- polygon-clipped construction ---------------------------------
+    @classmethod
+    def _nodes_overlap(cls, queue, oid, reg, b_oct, g_gcd, div_f, U1, V3, poly_bbox):
+        """Bool array: does each descent node's lat/lon footprint hit the poly bbox.
+
+        A node is a (mode, origin_uv, scale) supercell.  An H9 supercell is
+        self-similar — its three mode-template hexes at the node's own scale
+        tile the whole node region exactly — so the 18 hex vertices give an
+        exact conservative footprint for pruning.
+        """
+        n = len(queue)
+        if n == 0:
+            return np.zeros(0, dtype=bool)
+        all_uv = np.empty((n, 18, 2), dtype=np.float64)
+        for i, (m, origin, scale) in enumerate(queue):
+            verts = (H9P.hi[m][:, :6, :].astype(np.int64) * scale
+                     + origin).reshape(18, 2)
+            all_uv[i] = verts
+        flat = all_uv.reshape(-1, 2)
+        rx = flat[:, 0] * U1 / div_f
+        ry = flat[:, 1] * V3 / div_f
+        node_pts = Points(np.stack([rx, ry], axis=1), b_oct,
+                          oid=np.full(len(flat), oid, dtype=np.int32))
+        ll = reg.project(node_pts, [b_oct, g_gcd]).coords.reshape(n, 18, 2)
+        lat, lon = ll[:, :, 0], ll[:, :, 1]
+        with np.errstate(invalid='ignore'):
+            latmin, latmax = np.nanmin(lat, axis=1), np.nanmax(lat, axis=1)
+            lonmin, lonmax = np.nanmin(lon, axis=1), np.nanmax(lon, axis=1)
+        plat0, plat1, plon0, plon1 = poly_bbox
+        keep = ((latmin <= plat1) & (latmax >= plat0) &
+                (lonmin <= plon1) & (lonmax >= plon0))
+        return np.nan_to_num(keep, nan=False)
+
+    @classmethod
+    def _clip_descent(cls, L, oid, reg, b_oct, g_gcd, poly_bbox, U1, V3):
+        """Pruned hierarchical descent: mode-0 supercell origins for *oid* at *L*.
+
+        Subdivides the H9 supercell tree breadth-first, discarding any branch
+        whose footprint misses the polygon bounding box.  The surviving queue
+        is bounded by the polygon's area, not the globe — so deep layers over
+        a small region stay tractable (no 12·9**L global enumeration).
+        """
+        from hhg9.h9 import H9C, H9R
+        mode = int(H9O.oid_mo[oid])
+        if L == 0:
+            return [(0, 0)] if mode == 0 else []
+        levels = L - 1
+        mode_cells = [np.asarray(H9R.downs), np.asarray(H9R.ups)]
+        mode_ofs = H9C.off_uv[[H9R.downs, H9R.ups]].astype(np.int64)
+        mode_ofs[:, :, 0] *= 3                       # polygon grid: U is 3U
+        div_f = float(3 ** L)
+        scale0 = 3 ** levels
+        queue = [(int(H9C.mode[k]), o * scale0, scale0)
+                 for k, o in zip(mode_cells[mode], mode_ofs[mode])]
+        for depth in range(levels + 1):
+            keep = cls._nodes_overlap(queue, oid, reg, b_oct, g_gcd,
+                                      div_f, U1, V3, poly_bbox)
+            queue = [q for q, k in zip(queue, keep) if k]
+            if depth == levels or not queue:
+                break
+            nxt = []
+            for m, origin, scale in queue:
+                ks = scale // 3
+                for k, o in zip(mode_cells[m], mode_ofs[m]):
+                    nxt.append((int(H9C.mode[k]), origin + o * ks, ks))
+            queue = nxt
+        return [(int(origin[0]), int(origin[1]))
+                for m, origin, scale in queue if m == 0]
+
+    @classmethod
+    def _assemble_clipped(cls, kept_by_oid, L):
+        """Build (uv7, oid7) hex arrays from surviving mode-0 supercells.
+
+        Mirrors the ``_raw_uv`` per-supercell template placement and the
+        verts 4/5 boundary reflection, restricted to the kept supercells.
+        """
+        template = H9P.hi[0, :3]                     # (3, 7, 2) mode-0
+        parts_uv, parts_oid, parts_c2 = [], [], []
+        for oid, origins in kept_by_oid.items():
+            if not origins:
+                continue
+            org = np.array(origins, dtype=np.int64)  # (S, 2)
+            hex_uv = (template[None, :, :, :] + org[:, None, None, :]).reshape(-1, 7, 2)
+            n = len(hex_uv)
+            parts_uv.append(hex_uv)
+            parts_oid.append(np.full((n, 7), oid, dtype=np.int32))
+            parts_c2.append(np.tile(np.arange(3, dtype=np.int32), len(org)))
+        if not parts_uv:
+            return np.empty((0, 7, 2), np.int64), np.empty((0, 7), np.int32)
+        out_uv = np.concatenate(parts_uv)
+        out_oid = np.concatenate(parts_oid)
+        c2 = np.concatenate(parts_c2)
+        face_oid = out_oid[:, 0].copy()
+        # Mode-0 octants own the seam reflection; mode-1 octants leave their
+        # v4/v5 in place and share vertices via the pooled dedup.  Without
+        # this guard the mode-0 edge conditions below misfire on mode-0 sub-
+        # hexes inside mode-1 octants (whose face triangle is inverted), and
+        # ``H9O.oid_nb[face_oid, c2]`` returns the wrong neighbour.
+        is_m0 = (H9O.oid_mo[face_oid] == 0)
+
+        s = 3 ** L
+        u4, v4 = out_uv[:, 4, 0], out_uv[:, 4, 1]
+        u5, v5 = out_uv[:, 5, 0], out_uv[:, 5, 1]
+        ext4 = (v4 > s) | (u4 - v4 > 2 * s) | (u4 + v4 < -2 * s)
+        ext5 = (v5 > s) | (u5 - v5 > 2 * s) | (u5 + v5 < -2 * s)
+        ext = is_m0 & ext4 & ext5
+        if ext.any():
+            out_uv[ext, 4, 0] = out_uv[ext, 2, 0]
+            out_uv[ext, 4, 1] = -out_uv[ext, 2, 1]
+            out_uv[ext, 5, 0] = out_uv[ext, 1, 0]
+            out_uv[ext, 5, 1] = -out_uv[ext, 1, 1]
+            nb = H9O.oid_nb[face_oid[ext], c2[ext]].astype(np.int32)
+            out_oid[ext, 4] = nb
+            out_oid[ext, 5] = nb
+        return out_uv.astype(np.int64), out_oid
+
+    @classmethod
+    def create_clipped(cls, layers, ll_polygon, reg) -> 'HexMesh':
+        """Build a hex mesh clipped to a lat/lon polygon — no global enumeration.
+
+        Unlike :meth:`create`, which enumerates every hex on the globe, this
+        descends the H9 supercell hierarchy while pruning branches outside the
+        polygon's bounding box, then keeps only hexes whose centroid lies
+        inside the polygon.  Cost scales with the polygon's area, so deep
+        layers over a bounded region remain feasible.
+
+        Parameters
+        ----------
+        layers : int or iterable of int
+            Layer(s) to include.  Coarser layers form the ancestry "nest".
+        ll_polygon : (P, 2) array
+            Polygon vertices as ``[lat, lon]`` in WGS84 degrees.
+        reg : Registrar
+
+        Returns
+        -------
+        HexMesh
+            ``mesh[L]`` gives the clipped face array for each requested layer.
+            ``mesh.densify`` is unavailable on a clipped mesh (no synthetic
+            edge vertices) — use the per-layer face arrays directly.
+        """
+        from matplotlib.path import Path as _Path
+        import uuid as _uuid
+        from hhg9.h9.addressing import hex_layer as _hex_layer
+        from hhg9.h9.tail import TailStyle as _TS
+        from hhg9.h9.uuid_address import batch_nibbles_to_int as _pack
+
+        if isinstance(layers, int):
+            layers = [layers]
+        layers = sorted(set(int(L) for L in layers))
+        finest = layers[-1]
+        b_oct = reg.domain('b_oct')
+        g_gcd = reg.domain('g_gcd')
+        U1 = H9K.lattice.U
+        V3 = 3.0 * H9K.lattice.V
+        div_f = float(3 ** finest)
+
+        poly = np.asarray(ll_polygon, dtype=np.float64)        # (P, 2) [lat, lon]
+        poly_path = _Path(np.column_stack([poly[:, 1], poly[:, 0]]))   # (lon, lat)
+        poly_bbox = (poly[:, 0].min(), poly[:, 0].max(),
+                     poly[:, 1].min(), poly[:, 1].max())
+
+        # --- per-layer pruned descent + exact centroid clip ----------------
+        clip_uv7 = {}
+        for L in layers:
+            kept = {oid: cls._clip_descent(L, oid, reg, b_oct, g_gcd,
+                                           poly_bbox, U1, V3)
+                    for oid in range(8)}
+            uv7, oid7 = cls._assemble_clipped(kept, L)
+            if len(uv7):
+                # Filter by the *match-mo* centroid — the same one the UUID
+                # encoder uses below.  ``uv7[:, 6]`` is the template centroid
+                # in the face-oid's b_oct frame; for seam-straddling hexes it
+                # falls exactly on the octant edge and projects to lon=±180
+                # (or any seam meridian), causing the polygon containment test
+                # to reject the hex even though its geometric centroid is
+                # well inside the bbox.  The match-mo centroid uses only the
+                # face-oid-frame vertices (v0..v3 for a reflected hex), so it
+                # stays inside the face and projects to a representative
+                # interior lat/lon.
+                vu = uv7[:, :6, 0].astype(np.float64) * U1 / (3 ** L)
+                vv = uv7[:, :6, 1].astype(np.float64) * V3 / (3 ** L)
+                coords_v = np.stack([vu, vv], axis=-1)             # (n, 6, 2)
+                mo_v = H9O.oid_mo[oid7[:, :6]]
+                match_mo = (mo_v == mo_v[:, :1])
+                weights = match_mo[:, :, None].astype(np.float64)
+                cen_xy = (coords_v * weights).sum(axis=1) / weights.sum(axis=1)
+                cpts = Points(cen_xy, b_oct,
+                              oid=oid7[:, 0].astype(np.int32))
+                cll = reg.project(cpts, [b_oct, g_gcd]).coords
+                inside = poly_path.contains_points(
+                    np.column_stack([cll[:, 1], cll[:, 0]]))
+                uv7, oid7 = uv7[inside], oid7[inside]
+            clip_uv7[L] = (uv7, oid7)
+
+        # --- shared vertex pool (finest first, coarser keys scaled up) -----
+        vert_dict, vert_xy, vert_oid, ia_list, ib_list = {}, [], [], [], []
+
+        def _add(ia, ib, o):
+            key = (ia, ib, o)
+            idx = vert_dict.get(key)
+            if idx is None:
+                idx = len(vert_xy)
+                vert_dict[key] = idx
+                vert_xy.append((ia * U1 / div_f, ib * V3 / div_f))
+                vert_oid.append(o)
+                ia_list.append(ia)
+                ib_list.append(ib)
+            return idx
+
+        faces_dict = {}
+        for L in [finest] + [x for x in layers if x != finest]:
+            uv7, oid7 = clip_uv7[L]
+            fct = int(3 ** (finest - L))
+            face = np.empty((len(uv7), 6), dtype=np.int32)
+            for h in range(len(uv7)):
+                for vi in range(6):
+                    face[h, vi] = _add(int(uv7[h, vi, 0]) * fct,
+                                       int(uv7[h, vi, 1]) * fct,
+                                       int(oid7[h, vi]))
+            faces_dict[L] = face
+
+        pts = Points(np.array(vert_xy, dtype=np.float64).reshape(-1, 2), b_oct,
+                     oid=np.array(vert_oid, dtype=np.int32))
+        ia_arr = np.array(ia_list, dtype=np.int64)
+        ib_arr = np.array(ib_list, dtype=np.int64)
+
+        # --- H9 UUID addresses per hex per layer ---------------------------
+        addrs_dict = {}
+        for L in layers:
+            fl = faces_dict[L]
+            n = len(fl)
+            if n == 0:
+                addrs_dict[L] = []
+                continue
+            oid_v = pts.oid[fl]
+            mo_v = H9O.oid_mo[oid_v]
+            match_mo = (mo_v == mo_v[:, :1])
+            coords_v = pts.coords[fl]
+            centroid_xy = ((coords_v * match_mo[:, :, None]).sum(axis=1) /
+                           match_mo.sum(axis=1, keepdims=True).astype(float))
+            centroid_pts = Points(centroid_xy, b_oct, oid=oid_v[:, 0].astype(np.int32))
+            hx_L = _hex_layer(centroid_pts, layer=L, tail_style=_TS.key)
+            uuid_nibs = np.zeros((n, 32), dtype=np.uint8)
+            uuid_nibs[:, :L + 1] = hx_L[:, :-1]
+            if L + 1 < 31:
+                uuid_nibs[:, L + 1:31] = 0x0F
+            uuid_nibs[:, -1] |= ((hx_L[:, -1] >> 4) & 0x0F).astype(np.uint8)
+            addrs_dict[L] = [_uuid.UUID(int=v) for v in _pack(uuid_nibs)]
+
+        return cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict, addrs_dict)
 
     @classmethod
     def _alt_results(cls, layer):

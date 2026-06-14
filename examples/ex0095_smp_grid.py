@@ -79,5 +79,5 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
 
 if __name__ == '__main__':
     # 60 is a full cycle
-    # flavours = [f'butterfly:{rx:02}00' for rx in range(1, 96)]  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
-    run(flavours=['butterfly:5700'], scale=1201, file='src/bm_3600x1800.png')  # 'tissot_3600x1800' bm_3600x1800
+    # flavours = [f'butterfly:{rx:05}00' for rx in range(1, 96)]  #'c_butterfly', 'mortar',  'pacific_windmill', 'diamonds', 'mortar', 'butterfly']  # 'mortar', 'butterfly', 'c_butterfly', 'windmill',
+    run(flavours=['butterfly:0500'], scale=1201, file='src/bm_3600x1800.png')  # 'tissot_3600x1800' bm_3600x1800

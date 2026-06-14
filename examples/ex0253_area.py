@@ -28,6 +28,12 @@ if __name__ == '__main__':
         l_hex /= 9
 
     tests = {
+        'Hyde Park': [
+            (51.515948, -0.212225),
+            (51.518371, -0.151910),
+            (51.500830, -0.143740),
+            (51.497451, -0.197695)
+        ],
         'LAX, CA': [
             (-118.418990325877004, 33.9333814840111),
             (-118.419070754935007, 33.933926959066604),
@@ -47,7 +53,7 @@ if __name__ == '__main__':
     rg = Registrar()
     b_oct = rg.domain('b_oct')
     g_gcd = rg.domain('g_gcd')
-    n_oct = rg.domain('n_oct:butterfly:2000')
+    n_oct = rg.domain('n_oct:butterfly:1000')
 
     for name, values in tests.items():
         coords = np.array(values, dtype=np.float64)[:, ::-1]

@@ -53,7 +53,7 @@ if __name__ == '__main__':
     bc0 = reg.project(ll0, [g_gcd, b_oct])
     co, mo = bc0.cm()
     oid = co[0]  # This is one point.
-    uri = xy_regions(bc0.coords, mo)
+    uri = xy_regions(bc0.coords, mo, force=ensure)
     hx_pts, _ = hex_poly_layer(bc0, layers=3)
     hx_npt = reg.project(hx_pts, [b_oct, n_oct])
     gpy = hx_npt.coords.reshape([6, 2])

@@ -38,7 +38,7 @@ L*[0...8]  Within each hexagon, there are a group of six full hexagons of the su
            the root net_mode (which of the octahedron faces this address belongs to).
            Likewise, we want to record the terminating region (0..11) in order to recover an address in full.
 
-           Of these values, only the region-net_mode of the terminal hexagon is considered to be essential for bin-hex key.
+           For the bin-hex key tail, both p_c2 and r_mo are essential: p_c2 disambiguates the terminal region within its parent (digit 6 can arise from multiple regions at different parent c2 values), and r_mo disambiguates the root octant (two octants of opposite mode can produce the same root hex digit).
 
 ***Example***
 Consider the address [5, 7, 6, 21]. What is its latitude and longitude?
@@ -758,7 +758,8 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
 
     oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (hex_layer, 2): [face_id, c2_root]
     r_oct = oct_c2[:, 0]
-
+    # r_c2 = oct_c2[:, 1]
+    # body[:, 0] = r_c2
     # ROOT super-regions mark hex digits as 0,1,2 in line with nominal-c2.
     # However, Hex-L0 c2 is a bit odd and this might need looking at.
     # I think that c2=0 is stable, but c2=1/c2=2 might be swapped under 1 net_mode.

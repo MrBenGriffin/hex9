@@ -1,0 +1,66 @@
+default:
+  description: "Baseline conservative MA solve for L5"
+  rhs_scale: 1.00        # fit 100% of the ell signal
+  tweak: "base"
+  lam: 1.0e-6
+  iters: 30
+  damping: 0.5
+  mu_tether: 0.015
+  gamma_cross: 32.0
+  s_floor: 3.0e-5
+  det_floor: 3.0e-5
+  max_step_k: 0.12
+  edge_band: 0.04
+  edge_gain: 1.5
+  alphas: [0.03, 0.10, 0.22, 0.38, 0.55, 0.72, 0.85, 0.92, 0.955, 0.975, 0.987, 0.994, 1.0]
+  max_iter_per_stage: 32
+  mu_polish_scale: 0.02
+  lam_gn_min: 3.0e-4
+  use_residual: false
+  allow_beta: true
+  enforce_d3: true
+  use_minus_ell: false
+  verbosity: 1
+
+# --- Base knobs (don’t run directly, use via overloads) ---
+base_soft:
+  description: "Softer fit, strong smoothing"
+  rhs_scale: 1.00
+  mu_tether: 1e-3
+  gamma_cross: 16.0
+  lam: .30e-3
+  enforce_d3: false
+  iters: 60
+  use_pre_ak: true
+
+base_pts:
+  description: "Vertex Tuning"
+  rhs_scale: 1.00
+  mu_tether: 1e-3
+  gamma_cross: 16.0
+  lam: 0.0675
+  enforce_d3: false
+  iters: 120
+
+# --- L4 candidate configs for MA + warp tuning ---
+
+# This is essentially what we've just validated for L4: positive-ℓ, full-strength RHS,
+# soft tether, stronger smoothing.
+l4_best:
+  overloads: [default, base_soft]
+  description: "L4: lam 30e-3 mu_tether: 1e-6"
+  mu_tether: 1e-6
+
+tweaked:
+    tweak: 'base'
+
+
+l5_v0305:
+  overloads: [default, base_pts]
+  tweak: 'v0305'
+  lam: 6.00e-2
+
+l5_v0408:
+  overloads: [default, base_pts]
+  tweak: 'v0408'
+  lam: 6.00e-2

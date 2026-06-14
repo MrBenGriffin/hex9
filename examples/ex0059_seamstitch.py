@@ -125,8 +125,8 @@ def seam_litmus(b_on_seq, mode, depth=12, delta=1e-12, engine=None):
     bL = xy + delta * nhat
     bR = xy - delta * nhat
 
-    regsL = xy_regions(bL, mode, depth=depth)
-    regsR = xy_regions(bR, mode, depth=depth)
+    regsL = xy_regions(bL, mode, depth=depth, force=ensure)
+    regsR = xy_regions(bR, mode, depth=depth, force=ensure)
 
     # leaf region id (last filled col); if your layout is [root, ..., leaf]
     leafL = regsL[:, -1]
@@ -400,6 +400,7 @@ def run():
     """
         Convert
     """
+
     reg = Registrar()  # Manage Domains & Projections
     g_gcd = reg.domain('g_gcd')
     c_ell = reg.domain('c_ell')

@@ -60,7 +60,7 @@ if __name__ == '__main__':
     _, mode = bpts.cm()
     xy = bpts.coords.copy()
     for _ in range(50):
-        rg = xy_regions(xy, mode, 38)  # encode (layers depth chosen internally)
+        rg = xy_regions(xy, mode, 38, ensure)  # encode (layers depth chosen internally)
         xym = regions_xy(rg)  # decode -> (x, y, net_mode)
         xy = xym[:, :2]
         mode = xym[:, 2].astype(np.uint8)

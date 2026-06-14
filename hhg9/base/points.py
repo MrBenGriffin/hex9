@@ -108,6 +108,9 @@ class Points:
         if self.coords is not None:
             if self.domain.name in ['g_gcd']:
                 (y_min, x_min), (y_max, x_max) = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
+            elif self.domain.name in ['c_ell', 'c_oct']:
+                p_min, p_max = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
+                return p_min, p_max
             else:
                 (x_min, y_min), (x_max, y_max) = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
             bbox = (x_min, y_min, x_max, y_max) if not trbl else (y_max, x_max, y_min, x_min)

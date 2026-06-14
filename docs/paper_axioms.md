@@ -35,25 +35,26 @@ The simplicial complex forms a valid triangulation of S² with:
 This enforces uniform representation class across the entire domain and excludes
 complexes with topological defects (such as forced pentagonal faces).
 
-*Consequence: combined with Axiom 2 and Axiom 5, the minimal admissible complex
+*Consequence: combined with Axiom 2 and Axiom 4 — simplicial carrier, even valence
+from vertex closure, and this axiom's uniformity requirement — the admissible complex
 is the octahedral triangulation.*
 
 ---
 
 ## Axiom 4 — Mode Transport
 
-Mode transport defines a ℤ₂-valued 1-cocycle on the dual graph of the triangulation
-(established by Axioms 2–3). Consistency of this transport — the existence of a
-globally coherent mode field — requires the cocycle to be flat: trivial holonomy
-over all closed loops.
+Mode transport is consistent when traversing any closed loop through the triangulation
+returns the mode to its starting value (trivial holonomy, in the language of
+differential geometry; equivalently, a flat ℤ₂ connection, in gauge-theoretic terms).
+This is equivalent to the existence of a globally coherent mode field: fix the mode
+of any one face and every other face's mode follows directly.
 
-Any refinement operator must preserve the flatness of this ℤ₂ connection. Failure
-to do so introduces a transport defect.
+Any refinement operator must preserve this consistency. Failure to do so introduces
+a transport defect.
 
-- Preservation under refinement requires the linear subdivision factor k to be odd.
-- The minimal non-trivial odd k is 3, giving aperture k² = 9.
-
-*Consequence: the admissible aperture class is {k² : k odd, k > 1}; aperture 9 is minimal.*
+*Consequence (proved in §6): refinements satisfying this condition have odd linear
+subdivision factor k; the admissible aperture class is {k² : k odd, k > 1}, and
+aperture 9 is minimal.*
 
 ---
 
@@ -78,8 +79,8 @@ induced by embedding into the reference ellipsoid frame.
 - This resolves the residual Z₂ symmetry left after Axioms 2–5.
 - The choice is globally coherent, not locally independent.
 
-*Consequence: this is where the half-hexagon orientation freedom collapses to a
-unique solution per handedness.*
+*Consequence: this is where the half-hexagon orientation freedom collapses to
+one surviving solution per chirality.*
 
 ---
 
@@ -95,15 +96,15 @@ This is not arbitrary once fixed — it is the reference gauge of the system.
 
 ---
 
-## Axiom 8 — Structure–Label Isomorphism
+## Axiom 8 — Unique Cell Addressing
 
-There exists a structure-preserving bijection between the combinatorial structure of
-the simplicial complex (simplices, adjacency, duals) and the system of geographic
-identifiers (octants, faces, cell addresses), such that geographic identity is read
-directly from combinatorial position.
+Every cell in the hierarchy has a unique address, and every valid address identifies
+exactly one cell. This bijection is compatible with hierarchical structure: a cell's
+address encodes its position in the refinement hierarchy, and the parent–child
+relationship is recoverable directly from address structure.
 
-No coordinate transformation is required to infer location from label or label from
-location.
+Geographic identity is read directly from combinatorial position. No coordinate
+transformation is required to infer location from address or address from location.
 
 ---
 
@@ -112,8 +113,9 @@ location.
 The dual graph of the simplicial complex induces a structured hexagonal lattice:
 
 - hexagons are derived dual cells,
-- 12 global topological defects (required by the Euler characteristic of S²) are
-  absorbed into the simplicial structure as vertices rather than face anomalies,
+- the total topological defect of 12 required by the Euler characteristic of S²
+  (Σ over vertices of (6 − valence) = 12) is concentrated at the 6 seed vertices
+  — a deficit of 2 at each — rather than appearing as face anomalies,
 - no independent hex tiling is assumed at the primitive level.
 
 *Hex9 structure is emergent from simplices, not fundamental.*

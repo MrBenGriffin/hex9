@@ -21,6 +21,7 @@ from numpy.typing import NDArray
 from typing import Literal, Optional, Generator
 from dataclasses import dataclass
 
+from hhg9.h9 import H9K
 from hhg9.h9.classifier import location
 from hhg9.h9.protocols import H9ConstLike, H9ClassifierLike, H9CellLike, H9RegionLike, BaryPlc as L, BaryLoc
 
@@ -444,6 +445,63 @@ def soft_clamp(ẋ: NDArray[np.float64], y: NDArray[np.float64], mode: NDArray[i
     return ẋ_final, y_final
 
 
+# ── _recover telemetry (drop after measurement) ─────────────────────────────
+# Process-wide counters tracking which recovery strategy fired how often.
+# Use:
+#   from hhg9.h9.region import recover_stats_reset, recover_stats_report
+#   recover_stats_reset()
+#   ... run workload ...
+#   recover_stats_report()
+_RECOVER_STATS = {
+    'calls':       0,      # total _recover invocations
+    'nonzero':     0,      # invocations with at least one bad point
+    'pts_in':      0,      # total bad points handed to _recover
+    'by_strategy': [0]*8,  # fixes per strategy (0-6 cascade; 7 = cardinal-nudge fallback)
+    'unrecovered': 0,      # points that survived all strategies
+    'src': {}
+}
+
+_RECOVER_STRATEGY_NAMES = [
+    'nudge-y',   'nudge-ẋ',   'soft-0.5',  'soft-1.0',
+    'soft-2.0',  'soft-4.0',  'hard-10',   'cardinal-8',
+]
+
+
+def recover_stats_reset():
+    """Zero all _recover counters. Call before timed workload."""
+    _RECOVER_STATS['calls']       = 0
+    _RECOVER_STATS['nonzero']     = 0
+    _RECOVER_STATS['pts_in']      = 0
+    _RECOVER_STATS['unrecovered'] = 0
+    for i in range(len(_RECOVER_STATS['by_strategy'])):
+        _RECOVER_STATS['by_strategy'][i] = 0
+    _RECOVER_STATS['src'] = {}
+
+def recover_stats_report():
+    """Pretty-print _recover hit distribution since last reset."""
+    s = _RECOVER_STATS
+    print(f"\n_recover stats:")
+    print(f"  calls          : {s['calls']:>12,}")
+    print(f"  nonzero calls  : {s['nonzero']:>12,}")
+    print(f"  points in      : {s['pts_in']:>12,}")
+    base = s['pts_in'] or 1
+    for i, name in enumerate(_RECOVER_STRATEGY_NAMES):
+        c   = s['by_strategy'][i]
+        pct = 100.0 * c / base
+        print(f"  [{i}] {name:<11s}: {c:>12,}  ({pct:5.2f}%)")
+    pct_u = 100.0 * s['unrecovered'] / base
+    print(f"  unrecovered    : {s['unrecovered']:>12,}  ({pct_u:5.2f}%)")
+    for i, name in enumerate(_RECOVER_STRATEGY_NAMES):
+        if i in s['src']:
+            src = s['src'][i]
+            print(f"  [{i}] {name:<11s}")
+            for err, fix in src.items():
+                asx, asy = err[0], err[1]
+                adx, ady = fix[0], err[1]
+                print(f"{asx:.17g},{asy:.17g} => {adx:.17g},{ady:.17g}")
+            print()
+
+
 def _recover(cid: np.ndarray,
              ẋ: np.ndarray,
              y: np.ndarray,
@@ -468,8 +526,11 @@ def _recover(cid: np.ndarray,
     from hhg9.h9.classifier import in_scope, classify_mode_cell
     to_fix = np.flatnonzero(bad)
 
+    _RECOVER_STATS['calls'] += 1
     if to_fix.size == 0:
         return cid
+    _RECOVER_STATS['nonzero'] += 1
+    _RECOVER_STATS['pts_in']  += int(to_fix.size)
 
     lat_v = h9k.lattice.V
     lat_ü = h9k.lattice.Ü
@@ -506,6 +567,14 @@ def _recover(cid: np.ndarray,
                 ok_idx = to_fix[ok_sel]
 
                 cid[ok_idx] = cid_try[ok_lut]
+
+                # _RECOVER_STATS['by_strategy'][fix_int] += int(ok_sel.size)
+                # if fix_int not in _RECOVER_STATS['src']:
+                #     _RECOVER_STATS['src'][fix_int] = dict()
+                # _kxs = tuple([float(ẋ[ok_idx[0]]), float(y[ok_idx[0]])])
+                # _vxs = tuple([float(ẋ_loc[ok_sel[0]]), float(y_loc[ok_sel[0]])])
+                # _RECOVER_STATS['src'][fix_int][_kxs] = _vxs
+
                 ẋ[ok_idx] = ẋ_loc[ok_sel]
                 y[ok_idx] = y_loc[ok_sel]
 
@@ -565,9 +634,12 @@ def _recover(cid: np.ndarray,
             ẋ[ok_idx] = ẋ_loc[ok_sel]
             y[ok_idx] = y_loc[ok_sel]
 
+            _RECOVER_STATS['by_strategy'][7] += int(ok_sel.size)
+
             still_bad = np.ones_like(to_fix, dtype=bool)
             still_bad[ok_sel] = False
             to_fix = to_fix[still_bad]
+    _RECOVER_STATS['unrecovered'] += int(to_fix.size)
     return cid
 
 

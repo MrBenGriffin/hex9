@@ -42,6 +42,8 @@ def create_nlcd_lut() -> np.ndarray:
 
 if __name__ == '__main__':
     print('Initialising')
+    from hhg9.h9.region import recover_stats_reset, recover_stats_report
+
     gdal.UseExceptions()
     rg = Registrar()
     g_gcd = rg.domain('g_gcd')
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     b_oct = rg.domain('b_oct')
     c_oct = rg.domain('c_oct')
     n_oct = rg.domain('n_oct:diamonds')  # diamonds keeps north pole north
-
+    recover_stats_reset()
     nlcd_lut = create_nlcd_lut()
 
     print('Loading geotiffs')
@@ -143,3 +145,4 @@ if __name__ == '__main__':
         title = 'Emerald Bay: Tahoe trailhead centre'
         plot_hex(composed, save_path=f'output/ex0252_sn_B{size_str}L{layer:02d}_{focus}.png',
                  bbox=bbox_n, title=title, north_dir=north_dir)
+    recover_stats_report()

@@ -7,13 +7,17 @@ import sys
 sys.path.insert(0, '/Users/ben/Documents/Projects/PyCharm/hex9')
 
 if __name__ == '__main__':
+    from hhg9.h9.region import recover_stats_reset, recover_stats_report
+
     from hhg9 import Registrar
     from hhg9.h9.grid import HexMesh
+
+    recover_stats_reset()
 
     reg = Registrar()
 
     # Build mesh with L0 through L3 all sharing the L3 vertex pool
-    mesh = HexMesh.create(range(2), reg)
+    mesh = HexMesh.create(range(6), reg)
     print(repr(mesh))
     print(f'layers:{mesh.layers}')
 
@@ -46,4 +50,5 @@ if __name__ == '__main__':
             print(f'densify({L}) index range ok: {not bad} (max={d.max()}, n_verts={n_v})')
         except Exception as e:
             print(f'densify({L}) error:{e}')
+    recover_stats_report()
 

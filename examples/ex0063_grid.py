@@ -101,8 +101,8 @@ def snow_globe(arr: Points, poly_len: int = 6, pop=None):
     y_min, y_max = rx[:, 1].min(), rx[:, 1].max()
     z_min, z_max = rx[:, 2].min(), rx[:, 2].max()
     if True:
-        ax.set_xlim(x_min, x_max)  # fill the area with the map.
-        ax.set_ylim(y_min, y_max)
+        ax.set_xlim(x_min, 0)  # fill the area with the map.
+        ax.set_ylim(0, y_max)
         ax.set_zlim(z_min, z_max)
     polys = [p for p in front]
     if pop is not None:
@@ -214,7 +214,7 @@ if __name__ == '__main__':
     rg = Registrar()  # Manage Domains & Projections
     octant = 0  # entire sphere = None.
     b_oct = rg.domain('b_oct')
-    for depth in [4]:  # range(6):
+    for depth in [5]:  # range(6):
         l_stats = octa_layer_stats(depth)
         b_pts = get_data(rg, layer=depth, o_id=octant)
         u, v = b_pts.coords[:, 0], b_pts.coords[:, 1]

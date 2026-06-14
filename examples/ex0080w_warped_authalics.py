@@ -29,6 +29,7 @@ import matplotlib as mpl
 
 def chain_generator(initial_seed, depth, props=H9_RA.props, modes=H9_RA.modes):
     """Generator for comprehensive region chain generation"""
+
     def _recurse(current_chain):  # Recursive Closure
         if len(current_chain) - 2 == depth:  # Stop condition
             yield current_chain
@@ -37,6 +38,7 @@ def chain_generator(initial_seed, depth, props=H9_RA.props, modes=H9_RA.modes):
         children = props[modes[seed]].flatten()
         for child in children:  # Iterate and dive deeper
             yield from _recurse(current_chain + [child])  # Create new list
+
     yield from _recurse([initial_seed])  # yield from closure.
 
 
@@ -91,7 +93,7 @@ def mplot_ax_vector(ax):
     """mplot3d uses azim around z and elev from xy-plane"""
     az = np.deg2rad(ax.azim)
     el = np.deg2rad(ax.elev)
-    return np.array([np.cos(el)*np.cos(az), np.cos(el)*np.sin(az), np.sin(el)])
+    return np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
 
 
 def cull_backface(arr, axis):
@@ -148,7 +150,7 @@ def get_data(reg: Registrar, depth, mode=None):
     """Load up global sample data"""
     # grab generation for given depth
     b_oct = reg.domain('b_oct')
-    all_rgn = [   # these are 0..11
+    all_rgn = [  # these are 0..11
         list(chain_generator(H9_RA.proto[0], depth)),
         list(chain_generator(H9_RA.proto[1], depth))
     ]
@@ -173,23 +175,23 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4, name=''):
     pts, pops = hex_poly_layer(b_pts, layers)
 
     # Calculate geodesic area per hexagon via geographiclib PolygonArea.
-    gm2 = reg.ellipsoid_area       # 510_065_621_724_154.6   # WGS-84 total surface area (m²)
-    bins = 12 * 9 ** layers        # total hexagons at this layer
-    ideal_m2 = gm2 / bins          # ideal equal-area per hex
+    gm2 = reg.ellipsoid_area  # 510_065_621_724_154.6   # WGS-84 total surface area (m²)
+    bins = 12 * 9 ** layers  # total hexagons at this layer
+    ideal_m2 = gm2 / bins  # ideal equal-area per hex
     ideal_side = np.sqrt(2 * ideal_m2 / (3 * np.sqrt(3)))
 
     h_pts = pts.copy()
     # c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])
     g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
 
-    w_area_m2 = wgs84_area(reg, g_pts)           # (N_hex,) actual areas
+    w_area_m2 = wgs84_area(reg, g_pts)  # (N_hex,) actual areas
     ratio = np.abs(w_area_m2 / ideal_m2) + 1e-12
-    score = np.log(ratio)                          # authalic log-density ℓ
+    score = np.log(ratio)  # authalic log-density ℓ
 
     # Geodesic centroids: average 6 vertex lat/lons per hexagon.
     # Averaging in lat/lon is valid at hex scale (hexes are small).
-    latlon = g_pts.coords.reshape(-1, 6, 2)       # (N_hex, 6, [lat, lon])
-    centroid_lat = latlon[:, :, 0].mean(axis=1)   # (N_hex,)
+    latlon = g_pts.coords.reshape(-1, 6, 2)  # (N_hex, 6, [lat, lon])
+    centroid_lat = latlon[:, :, 0].mean(axis=1)  # (N_hex,)
     centroid_lon = latlon[:, :, 1].mean(axis=1)
     a = latlon
     b = np.roll(latlon, -1, axis=1)
@@ -203,7 +205,7 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4, name=''):
     z_99 = e_mean_log + 2.326 * e_std_log
 
     # ── Summary statistics ──────────────────────────────────────────────────
-    pct_dev = (ratio - 1.0) * 100.0               # % deviation from ideal
+    pct_dev = (ratio - 1.0) * 100.0  # % deviation from ideal
     print(f"\n {name}:  ({bins} hexagons) {reg.ellipsoid_name}")
     print(f"  area min/max/ ideal: {w_area_m2.min():,.0f} / {w_area_m2.max():,.0f} / {ideal_m2:,.0f} m²")
     print(f"  % dev  min/mean/max: {pct_dev.min():+.8f}% / "
@@ -227,8 +229,8 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4, name=''):
           f"{np.percentile(np.abs(s_pct_dev), 99.99):.8f}%"
           f"")
     print(f"  coefficient of variation:")
-    print(f"99th Percentile (Normal Approx): {np.exp(z_99)}")
-    print(f"  |% dev| p50/p90/p95/p99/p99.9/p99.99: "
+    print(f"  99th Percentile (Normal Approx): {np.exp(z_99)}")
+    print(f"  |elongation %| p50/p90/p95/p99/p99.9/p99.99: "
           f"{np.percentile(np.abs(edge_cv) * 100, 50):.8f}% / "
           f"{np.percentile(np.abs(edge_cv) * 100, 90):.8f}% / "
           f"{np.percentile(np.abs(edge_cv) * 100, 95):.8f}% / "
@@ -262,17 +264,17 @@ def hexify(reg: Registrar, b_pts: Points, layers: int = 4, name=''):
 
 
 if __name__ == '__main__':
-    depth = 4  # 0,...5 √
+    depth = 5  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections (6378137.0, 1/298.257222101)
     # rg.set_ellipsoid(name='GRS80', a=6378137.0, inv_f=298.257222101)
     b_oct = rg.domain('b_oct')
+
+    layer = 5
+    data = get_data(rg, depth)  # should be 8*9**depth (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
+
     ellipsoid = rg.ellipsoid_name
-    warps = ['l5_warp_data']
+    warps = ['warp_data']
     for warp in warps:
-        warp_path = Path(f'../hhg9/data/{ellipsoid}_{warp}.npz')
+        warp_path = Path(f'../hhg9/data/{ellipsoid}_l{layer}_{warp}.npz')
         b_oct.set_warp(warp_path)
-        data = get_data(rg, depth)  # should be 8*9**depth (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
-        hexify(rg, data, layers=depth, name=f'{warp}')
-
-
-
+        hexify(rg, data.copy(), layers=depth, name=f'{warp}')

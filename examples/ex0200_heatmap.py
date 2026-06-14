@@ -91,7 +91,7 @@ def run(layers):
     reg = Registrar()
     # g_gcd = reg.domain('g_gcd')
     b_oct = reg.domain('b_oct')
-    n_oct = reg.domain('n_oct:c_butterfly')
+    n_oct = reg.domain('n_oct:butterfly')
     ak = reg.projection('oct_ell')
     ha, ta = ak.get_accuracy(layers)
     print(f'Layer {layers}; approx per hex area: {ha:,.2f}m²')

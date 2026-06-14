@@ -13,6 +13,8 @@ Last Tested
 16 Dec 2025 0.1.0a3 (passed)
 25 Nov 2025 (passed)
 """
+from pathlib import Path
+
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -100,7 +102,7 @@ def cull_backface(arr, axis):
     return sides >= 0
 
 
-def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
+def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x', lim_pct: float = 5.0):
     """Display a 3D point cloud using matplotlib"""
     mpl.rcParams['path.simplify'] = False
     fig = plt.figure(figsize=(15, 15), dpi=200, frameon=False)
@@ -112,12 +114,15 @@ def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
     mask = cull_backface(all_polys, axis)
     front = all_polys[mask]
     # front = all_polys
-    max_abs = float(np.max(np.abs(scores)))
-    norm = colors.TwoSlopeNorm(vcenter=0.0, vmin=-max_abs, vmax=+max_abs)
+    # scores arrive as ℓ = log(area/ideal); show as % deviation on a FIXED
+    # symmetric scale so renders are directly comparable (worst L5 hex ≈
+    # +4.8%, inside ±5%). Cells beyond ±lim_pct saturate to full red/blue.
+    pct = np.expm1(scores) * 100.0
+    norm = colors.TwoSlopeNorm(vcenter=0.0, vmin=-lim_pct, vmax=+lim_pct)
     cmap_name = 'RdBu_r'
     sm = plt.cm.ScalarMappable(cmap=cmap_name, norm=norm)
     sm.set_array([])
-    rgba, _norm = rgba_from(scores, cmap_name, norm=norm)
+    rgba, _norm = rgba_from(pct, cmap_name, norm=norm)
     # pops = scores[mask]
     ax.set_proj_type('ortho')  # FOV = 0 deg
     if True:
@@ -130,10 +135,12 @@ def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x'):
     ax.add_collection(collection)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
-    lil, big = np.min(scores), np.max(scores)
-    # authalic_p98 = np.quantile(np.abs(scores), 0.98)
-    # p98_frac = 100 * np.expm1(authalic_p98)
-    ax.title.set_text(f'min:{lil}, max:{big} deviation from ideal.')
+    cbar = fig.colorbar(sm, ax=ax, orientation='horizontal', pad=0.0,
+                        fraction=0.025, aspect=40, shrink=0.6)
+    cbar.set_label(f'% area deviation from ideal (scale clipped at ±{lim_pct:g}%)',
+                   fontsize=10)
+    lil, big = float(np.min(pct)), float(np.max(pct))
+    ax.title.set_text(f'L{layers} area deviation   min {lil:+.2f}%   max {big:+.2f}%')
     plt.tight_layout()
     fig.savefig(f"output/ex0081wau_{layers}.png", dpi=400)
     print(f'fig saved at output/ex0081wau_{layers}.png')
@@ -184,7 +191,12 @@ if __name__ == '__main__':
     depth = 5  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
-    data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
-    hexify(rg, data, layers=depth)
+    ellipsoid = 'WGS84'
+    warps = ['l5_warp_data']
+    for warp in warps:
+        warp_path = Path(f'../hhg9/data/{ellipsoid}_{warp}.npz')
+        b_oct.set_warp(warp_path)
+        data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
+        hexify(rg, data, layers=depth)
 
 

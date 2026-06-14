@@ -1,4 +1,5 @@
-.DSStore
+.DS_Store
+**/.DS_Store
 __pycache__/
 __pycache__
 .venv/
@@ -20,12 +21,24 @@ htmlcov/
 /other/
 /examples/sh/
 /examples/logs/
+/examples/wmts_cache/
 /experimental/personal/
 /examples/**.npy
 /examples/**.tif
 /examples/**.zip
 /examples/**.ttf
 /experimental/**/*.png
+
+# generated outputs / build artifacts (added 2026-06-14)
+/docs/_build/
+/examples/output/
+/examples/hh_heatmaps/
+/experimental/sinkhorn/output/
 /experimental/**/*.npz
-/experimental/**/*.json
+# keep only the two deployed warps under hhg9/data; exclude the rest
+/hhg9/data/other_warps/
+/hhg9/data/*_full_ot.npz
+/hhg9/data/*_tidied.npz
+# 179MB, regenerable — exceeds GitHub 100MB file limit
+/examples/src/tissot_3600x1800.npz
 

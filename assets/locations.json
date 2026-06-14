@@ -184,12 +184,18 @@
         "S 11 East":   [-11.0, -179.99999999999]
 },
 "VERTEX_NEAR": {
-    "Near North Pole": [89.999999999, 0.0],
-    "Near South Pole": [-89.999999999, 0.0]
+    "Near North Pole": [89.99, 0.0],
+    "Near South Pole": [-89.99, 0.0],
+    "Nearer North Pole": [89.999, 0.0],
+    "Nearer South Pole": [-89.999, 0.0],
+    "Even Nearer North Pole": [89.9999, 0.0],
+    "Even Nearer South Pole": [-89.9999, 0.0],
+    "By North Pole": [89.0, 0.0],
+    "By South Pole": [-89.0, 0.0]
 },
-"ANTIPODES": {
-    "Null Island": [0.0, 0.0],
-    "Null Antipode": [0.0, 180.0],
-    "London Antipode": [-51.50778633491179, 179.87208948107254]
-}
+    "ANTIPODES": {
+        "Null Island": [0.0, 0.0],
+        "Null Antipode": [0.0, 180.0],
+        "London Antipode": [-51.50778633491179, 179.87208948107254]
+    }
 }

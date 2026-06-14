@@ -114,7 +114,7 @@ def draw_globe(poly_groups: Points, layers='x'):
 
 if __name__ == '__main__':
     LAYER = 0  # 0,...5 √
-    MAX_LAYER = 7
+    MAX_LAYER = 6
     reg = Registrar()  # Manage Domains & Projections
     mesh = HexMesh.create(range(MAX_LAYER), reg)
     layer_f = mesh.faces
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     hf = c_pts.coords[layer_f]
 
     layers = []
-    for i in [1]:
+    for i in [0,1,2,3,4,5]:
     # for i in range(MAX_LAYER):
         a = mesh.densify(i)
         print(f'Layer {i} has {len(a)} hexagons')

@@ -7,6 +7,8 @@ This is 'b_oct' barycentric xy equilateral.
 """
 import numpy as np
 from importlib import resources
+
+from hhg9 import Points
 from numpy.typing import NDArray
 # from scipy.special import eval_jacobi
 from hhg9.base.composite import CompositeDomain, ComponentDomain
@@ -14,6 +16,47 @@ from hhg9.base.point_format import PointFormat
 from hhg9.projections import OctantBary
 from hhg9.h9 import H9K, H9O, in_scope
 from scipy.interpolate import CloughTocher2DInterpolator, LinearNDInterpolator, NearestNDInterpolator
+
+
+# Lateral-edge treatment in AuthalicWarp.do / .undo (see libhex9
+# docs/warp-retrain-brief.md; F6 fix 2026-06-11, F6 retrain 2026-06-12).
+#
+#   'raw' (default) — no edge treatment: the trained field speaks for
+#       itself. The F6-retrained WGS84_l5_warp_data.npz is edge-tangent
+#       (on-edge vertex deltas slide along the seam, zero normal component)
+#       and the loader makes the CT interpolant tangent identically (ghost
+#       padding + edge-tangent gradient projection below), so raw mode is
+#       exact at the seams: no slivers, no catchment splitting, both octant
+#       frames agree about seam points to FP precision.
+#   'feather' — pre-retrain workaround: delta scaled by a smoothstep ramp to
+#       identity on the edge over line-value LATERAL_EDGE_FEATHER_W. Correct
+#       for the OLD zero-pinned field only. DO NOT use with the F6 field:
+#       it compresses the field's legitimate km-scale tangential seam slide
+#       into the 350 m ramp (massive shear).
+#   'bypass'  — the legacy hard identity band (|line value| < 1e-7); the
+#       original needle/sliver bug, kept for historic comparison only.
+#
+# Mode is read from the H9_WARP_EDGE environment variable, same as libhex9.
+import os as _os
+LATERAL_EDGE_MODE = _os.environ.get("H9_WARP_EDGE", "raw")
+if LATERAL_EDGE_MODE not in ("feather", "bypass", "raw"):
+    raise ValueError(f"H9_WARP_EDGE must be feather|bypass|raw, got {LATERAL_EDGE_MODE!r}")
+LATERAL_EDGE_BYPASS = (LATERAL_EDGE_MODE == "bypass")
+LATERAL_EDGE_FEATHER_W = 1e-4   # line-value width ≈ 350 m half-zone
+
+
+def _edge_feather_scale(xy):
+    """Smoothstep ramp per point: 0 exactly on either lateral edge of the
+    mode-0 frame (y = ±R3·x − Ẇ) → 1 beyond line-value LATERAL_EDGE_FEATHER_W.
+    Width is measured on the line value (2× the perpendicular distance)."""
+    R3 = H9K.radical.R3
+    Ẇ = H9K.Ẇ
+    s = np.ones(xy.shape[0])
+    for f in (np.abs(xy[:, 1] - R3 * xy[:, 0] + Ẇ),
+              np.abs(xy[:, 1] + R3 * xy[:, 0] + Ẇ)):
+        t = np.clip(f / LATERAL_EDGE_FEATHER_W, 0.0, 1.0)
+        s *= t * t * (3.0 - 2.0 * t)
+    return s
 
 
 def _jacobi_all(x, n_max, alpha):
@@ -135,10 +178,9 @@ class WarpTolerance:
     """Named Newton-Raphson convergence tolerances (barycentric XY units).
     1 unit ≈ 2.5 × 10⁷ m, so: SUB_MM ≈ 0.25 mm, ROUGH ≈ 25 cm."""
     MACH = 1e-17  # machine ε — exhausts all iterations; for validation
-    FINE = 1e-14  # ~0.25 mm  — recommended production default
-    # Not much to lose here: AK is the meat grinder.
-    # GOOD = 1e-9   # ~25 cm — < 1M
-    # OKAY = 1e-6   # ~25 m — < 10M
+    FINE = 1e-15  # ~0.25 mm  — recommended production default
+    NORM = 1e-14  # ~0.25 mm  — recommended production default
+
 
 class AuthalicWarp:
     def __init__(self, file_name=None, interp='ct', tolerance=WarpTolerance.FINE):
@@ -163,6 +205,7 @@ class AuthalicWarp:
         repo = np.load(file_name, allow_pickle=True)
         self.src = repo['source_pts']  # Regular Grid (a_p)
         self.dst = repo['target_pts']  # Deformed Grid (x_prime)
+        repo.close()
 
         # --- GHOST ROW PADDING (Equator Stabilization) ---
         diff = self.dst - self.src
@@ -170,8 +213,14 @@ class AuthalicWarp:
 
         # Grab points within a small margin of the equator (e.g., top 5% of the triangle)
         # Adjust eq_base 0.05 if your grid spacing is wider/narrower.
+        # Strict band (exclude y == Y_EQ): the equator-line points reflect onto
+        # themselves with identical (dx, dy) — Y-mirror of (dx, 0) is (dx, 0) —
+        # so including them generates informationally-redundant duplicates and
+        # leaves Qhull's tie-break to pick arbitrary diagonals on rhombi that
+        # straddle the equator. Excluding them gives a canonical CT.
         eq_base = 0.05
-        eq_band_mask = (Y_EQ - self.src[:, 1]) < eq_base
+        delta_y = Y_EQ - self.src[:, 1]
+        eq_band_mask = (delta_y > 0.0) & (delta_y < eq_base)
 
         if np.any(eq_band_mask):
             ghost_src = self.src[eq_band_mask].copy()
@@ -191,7 +240,81 @@ class AuthalicWarp:
         else:
             padded_src = self.src
             padded_diff = diff
-        # --------------------------------------------------
+
+        # --- LATERAL GHOST PADDING (Seam tangency, F6) ---
+        # Same construction as the equatorial ghost row, applied to the two
+        # lateral edges: a thin halo of points is reflected across each edge
+        # line with the delta's edge-normal component negated (tangential
+        # preserved). The trained vertex data is already edge-tangent, but
+        # without these ghosts the CT gradient estimation couples the steep
+        # near-corner tangential slide into an edge-normal bulge BETWEEN the
+        # on-edge vertices (~135 m near the apex, ~48 m cross-frame seam
+        # disagreement on the F6 retrain). Mirror-symmetric input makes the
+        # interpolant tangent on the edge by construction.
+        # Strict band (exclude on-edge points): they reflect onto themselves,
+        # and the duplicates leave Qhull's tie-break to pick arbitrary
+        # diagonals (see equator note above).
+        _R3 = H9K.radical.R3
+        _Ẇ = H9K.Ẇ
+        GHOST_BAND = 0.05
+        lat_src, lat_diff = [padded_src], [padded_diff]
+        for sgn in (1.0, -1.0):
+            # Edge line: sgn·√3·x − y − Ẇ = 0; unit normal points out of the
+            # triangle, signed distance is negative inside.
+            n_hat = np.array([sgn * _R3, -1.0]) / 2.0
+            s_dist = self.src @ n_hat - _Ẇ / 2.0
+            band = (s_dist > -GHOST_BAND) & (s_dist < -1e-12)
+            if not np.any(band):
+                continue
+            g_src = self.src[band] - 2.0 * s_dist[band, None] * n_hat
+            d_n = diff[band] @ n_hat
+            g_diff = diff[band] - 2.0 * d_n[:, None] * n_hat
+            lat_src.append(g_src)
+            lat_diff.append(g_diff)
+
+        # --- CORNER ORBIT PADDING (Seam tangency, F6) ---
+        # At each triangle corner the two adjacent edge mirrors meet at 60°
+        # and generate a dihedral group (3 mirror lines + ±120° rotations).
+        # The single-mirror bands above fill only the two wedges adjacent to
+        # the corner; the three back wedges stay empty, so the CT gradient
+        # estimate at near-corner vertices is still asymmetric — this is
+        # where the residual normal bulge lives. Filling the full orbit
+        # (rotations ±120° and the third mirror, all about the corner) makes
+        # each corner disc exactly dihedral-symmetric. The orbit images are
+        # compositions of valid seam continuations, so they are correct
+        # field continuations, and each lands in a wedge the bands do not
+        # touch (no duplicate points).
+        tr_, vf_, vc_ = H9K.limits.TR, H9K.limits.VF, H9K.limits.VC
+        c120, s120 = -0.5, _R3 / 2.0
+        rot_p = np.array([[c120, -s120], [s120, c120]])   # +120°
+        rot_m = rot_p.T                                   # −120°
+        # (corner, direction of the adjacent edge line chosen so that the
+        # OTHER edge lies at +60°; then +120° rotation of it gives the third
+        # mirror line of the dihedral group, never one of the edges)
+        corner_edges = (
+            (np.array([0.0, vf_]),  np.array([tr_, vc_ - vf_])),   # apex: 60°
+            (np.array([tr_, vc_]),  np.array([1.0, 0.0])),         # eq R: 0°
+            (np.array([-tr_, vc_]), np.array([tr_, vf_ - vc_])),   # eq L: 120°
+        )
+        # strict interior: off all three boundary lines
+        d_eq = np.abs(self.src[:, 1] - vc_)
+        d_lr = np.abs(self.src[:, 1] - _R3 * self.src[:, 0] + _Ẇ)
+        d_ll = np.abs(self.src[:, 1] + _R3 * self.src[:, 0] + _Ẇ)
+        interior = (d_eq > 1e-12) & (d_lr > 1e-12) & (d_ll > 1e-12)
+        for corner, u_a in corner_edges:
+            u_a = u_a / np.linalg.norm(u_a)
+            d3 = rot_p @ u_a                  # third mirror line direction
+            m3 = 2.0 * np.outer(d3, d3) - np.eye(2)
+            near = interior & (np.linalg.norm(self.src - corner, axis=1)
+                               < GHOST_BAND)
+            if not np.any(near):
+                continue
+            rel = self.src[near] - corner
+            for T in (rot_p, rot_m, m3):
+                lat_src.append(corner + rel @ T.T)
+                lat_diff.append(diff[near] @ T.T)
+        padded_src = np.vstack(lat_src)
+        padded_diff = np.vstack(lat_diff)
 
         # 1. Forward Engine (Cubic / Smooth)
         # We model the *displacement* (diff) rather than absolute position for better stability
@@ -203,8 +326,88 @@ class AuthalicWarp:
         nn_dy = NearestNDInterpolator(self.src, diff[:, 1])
 
         if interp != 'linear':
-            ct_dx = CloughTocher2DInterpolator(padded_src, padded_diff[:, 0])
-            ct_dy = CloughTocher2DInterpolator(padded_src, padded_diff[:, 1])
+            # tol=1e-12 to converge the Bell-Sibson gradient sweep tightly.
+            # scipy's default tol=1e-6 leaves ~600 µm of unconverged "noise"
+            # in the CT output (well above the 1 µm ground-accuracy target);
+            # tight tol pins the warp at FP-eps and lets the C++ port match
+            # Python bit-near-exactly.
+            ct_dx = CloughTocher2DInterpolator(padded_src, padded_diff[:, 0],
+                                               tol=1e-12, maxiter=2000)
+            ct_dy = CloughTocher2DInterpolator(padded_src, padded_diff[:, 1],
+                                               tol=1e-12, maxiter=2000)
+            # Exposed for the C-port gradient export (see libhex9
+            # docs/warp-port-brief-f6-cside.md): .grad carries the final
+            # symmetrised, edge-tangent-projected vertex gradients.
+            self.ct_dx, self.ct_dy = ct_dx, ct_dy
+
+            # --- EDGE-TANGENT GRADIENT PROJECTION (Seam tangency, F6) ---
+            # CT restricted to a triangulation edge is the cubic Hermite of
+            # the endpoint values and ALONG-EDGE gradient components only.
+            # The on-edge vertex deltas are exactly edge-tangent, so zeroing
+            # the along-edge derivative of the delta's edge-normal component
+            # at every boundary vertex makes the interpolated delta tangent
+            # along the entire edge identically. The ghost padding above
+            # improves near-edge gradient quality, but a finite pad cannot
+            # make the global gradient estimate exactly symmetric (residual
+            # ~1e-5 units of normal bulge near the corners without this).
+            # X-mirror symmetrisation of the gradients first makes the two
+            # frames' on-edge tangential cubics agree exactly, so adjacent
+            # octants concur about where seam points go. C1 continuity is
+            # preserved: CT is C1 for any choice of vertex gradients.
+            from scipy.spatial import cKDTree
+            n_real = len(self.src)
+            g_dx = ct_dx.grad   # (n_padded, 1, 2), mutable, used at eval
+            g_dy = ct_dy.grad
+            _, mir = cKDTree(self.src).query(
+                np.column_stack([-self.src[:, 0], self.src[:, 1]]), k=1)
+            # dx antisymmetric in x → (∂dx/∂x even, ∂dx/∂y odd);
+            # dy symmetric in x   → (∂dy/∂x odd,  ∂dy/∂y even).
+            g_dx[:n_real, 0, 0] = 0.5 * (g_dx[:n_real, 0, 0] + g_dx[mir, 0, 0])
+            g_dx[:n_real, 0, 1] = 0.5 * (g_dx[:n_real, 0, 1] - g_dx[mir, 0, 1])
+            g_dy[:n_real, 0, 0] = 0.5 * (g_dy[:n_real, 0, 0] - g_dy[mir, 0, 0])
+            g_dy[:n_real, 0, 1] = 0.5 * (g_dy[:n_real, 0, 1] + g_dy[mir, 0, 1])
+
+            # Boundary lines: (unit normal, unit tangent, on-line mask).
+            x_, y_ = self.src[:, 0], self.src[:, 1]
+            lines = [
+                (np.array([_R3, -1.0]) / 2.0, np.array([1.0, _R3]) / 2.0,
+                 np.abs(y_ - _R3 * x_ + _Ẇ) < 1e-9),                # right
+                (np.array([-_R3, -1.0]) / 2.0, np.array([1.0, -_R3]) / 2.0,
+                 np.abs(y_ + _R3 * x_ + _Ẇ) < 1e-9),                # left
+                (np.array([0.0, 1.0]), np.array([1.0, 0.0]),
+                 np.abs(y_ - vc_) < 1e-9),                          # equator
+            ]
+            corner_pts = np.array([[0.0, vf_], [tr_, vc_], [-tr_, vc_]])
+            is_corner = np.zeros(n_real, dtype=bool)
+            for cp in corner_pts:
+                is_corner |= np.linalg.norm(self.src - cp, axis=1) < 1e-9
+            for n_hat, t_hat, on in lines:
+                idx = np.flatnonzero(on & ~is_corner)
+                # s = t̂·∇f_n; subtract s·t̂ from ∇f_n, leaving ∇f_t intact.
+                s = (n_hat[0] * (g_dx[idx, 0] @ t_hat)
+                     + n_hat[1] * (g_dy[idx, 0] @ t_hat))
+                g_dx[idx, 0] -= np.outer(s * n_hat[0], t_hat)
+                g_dy[idx, 0] -= np.outer(s * n_hat[1], t_hat)
+            # Corners sit on two boundary lines: joint null-space projection
+            # of both tangency constraints on (∇dx, ∇dy) ∈ R⁴.
+            line_vals = [
+                lambda p: p[1] - _R3 * p[0] + _Ẇ,    # right lateral
+                lambda p: p[1] + _R3 * p[0] + _Ẇ,    # left lateral
+                lambda p: p[1] - vc_,                # equator
+            ]
+            for cp in corner_pts:
+                rows = [np.concatenate([n_hat[0] * t_hat, n_hat[1] * t_hat])
+                        for (n_hat, t_hat, _), lv in zip(lines, line_vals)
+                        if abs(lv(cp)) < 1e-9]
+                ki = np.flatnonzero(
+                    np.linalg.norm(self.src - cp, axis=1) < 1e-9)
+                if len(rows) < 2 or len(ki) == 0:
+                    continue
+                A = np.vstack(rows)
+                k = ki[0]
+                G = np.concatenate([g_dx[k, 0], g_dy[k, 0]])
+                G -= A.T @ np.linalg.solve(A @ A.T, A @ G)
+                g_dx[k, 0], g_dy[k, 0] = G[:2], G[2:]
 
             def fwd_dx(xy):
                 d = ct_dx(xy)
@@ -250,17 +453,82 @@ class AuthalicWarp:
         self.inv_linear = LinearNDInterpolator(self.dst, self.src)
         self.inv_nearest = NearestNDInterpolator(self.dst, self.src)
 
+    def _edge_undo(self, target, n_iter=52):
+        """
+        1D bisection inverse for b_raw points on a lateral triangle edge.
+        The warp is boundary-preserving, so b_oct is on the same lateral edge.
+        Parameterise the edge as (t, R3*t - Ẇ) for t ≥ 0 (right) or t ≤ 0 (left).
+        Bisection converges to machine precision in ~52 steps.
+        Works in the canonical DOWN orientation (mo=0).
+        Returns b_oct for each target.
+        """
+        Ẇ = H9K.Ẇ
+        R3 = H9K.radical.R3
+        seeds = np.empty_like(target)
+
+        # Find max |x| along each lateral edge in src training data
+        src = self.src
+        on_right = np.abs(src[:, 1] - R3 * src[:, 0] + Ẇ) < 1e-6
+        on_left  = np.abs(src[:, 1] + R3 * src[:, 0] + Ẇ) < 1e-6
+        x_max_right = np.max(src[on_right, 0]) if np.any(on_right) else 0.01
+        x_max_left  = np.min(src[on_left,  0]) if np.any(on_left)  else -0.01
+
+        for i in range(target.shape[0]):
+            tx, ty = target[i, 0], target[i, 1]
+            # Determine which lateral edge (right: x ≥ 0, left: x < 0)
+            if tx >= 0:
+                lo, hi = 0.0, x_max_right
+                def do_x(t):
+                    return self.do(np.array([[t, R3 * t - Ẇ]]), mo=0)[0, 0]
+                t_tgt = tx
+            else:
+                lo, hi = x_max_left, 0.0
+                def do_x(t):
+                    return self.do(np.array([[t, -R3 * t - Ẇ]]), mo=0)[0, 0]
+                t_tgt = tx
+
+            # 1D bisection: find t s.t. do_x(t) = t_tgt
+            for _ in range(n_iter):
+                mid = (lo + hi) * 0.5
+                if do_x(mid) < t_tgt:
+                    lo = mid
+                else:
+                    hi = mid
+
+            t = (lo + hi) * 0.5
+            if tx >= 0:
+                seeds[i] = [t, R3 * t - Ẇ]
+            else:
+                seeds[i] = [t, -R3 * t - Ẇ]
+
+        return seeds
+
     def do(self, pts, mo=0):
         """ Forward Warp (Precise Cubic) """
         xy = np.array(pts, dtype=np.float64)  # Force Copy
         mode = 1.0 if mo == 0 else -1.0
         xy[:, 1] *= mode
 
+        # Lateral-edge treatment (see LATERAL_EDGE_MODE at module top).
+        _R3 = H9K.radical.R3
+        _Ẇ  = H9K.Ẇ
+        on_right = np.abs(xy[:, 1] - _R3 * xy[:, 0] + _Ẇ) < 1e-7
+        on_left  = np.abs(xy[:, 1] + _R3 * xy[:, 0] + _Ẇ) < 1e-7
+        edge_mask = on_right | on_left
+
         # Interpolate displacement
         dx = self.fwd_dx(xy)
         dy = self.fwd_dy(xy)
+        if LATERAL_EDGE_MODE == "feather":
+            s = _edge_feather_scale(xy)
+            # where the ramp is 0 the delta is identically 0 — also guards
+            # NaN interpolants exactly on the hull edge (0·NaN otherwise)
+            dx = np.where(s > 0.0, dx * s, 0.0)
+            dy = np.where(s > 0.0, dy * s, 0.0)
 
         res = xy + np.stack([dx, dy], axis=1)
+        if LATERAL_EDGE_BYPASS and np.any(edge_mask):
+            res[edge_mask] = xy[edge_mask]
         res[:, 1] *= mode
         return res
 
@@ -287,38 +555,114 @@ class AuthalicWarp:
             out = None
             target = target_all
 
-        # --- COARSE GUESS ---
-        guess = self.inv_linear(target)
+        # --- LATERAL EDGE DETECTION ---
+        # b_raw points on a lateral edge (y − R3·|x| = −Ẇ) must map to b_oct on the
+        # same edge (the warp is boundary-preserving). Newton oscillates on these points
+        # because its 2D step repeatedly crosses the edge and gets y-clamped back, leaving
+        # x wrong. Use 1D bisection along the edge instead — it converges exactly.
+        R3 = H9K.radical.R3
+        Ẇ = H9K.Ẇ
+        on_right_edge = np.abs(target[:, 1] - R3 * target[:, 0] + Ẇ) < 1e-7
+        on_left_edge  = np.abs(target[:, 1] + R3 * target[:, 0] + Ẇ) < 1e-7
+        edge_mask = on_right_edge | on_left_edge
 
+        # --- COARSE GUESS ---
+        # guess = self.inv_nearest(target)
+        guess = self.inv_linear(target)
+        # inv_linear returns NaN outside its convex hull (e.g. near poles).
         nan_mask = np.isnan(guess[:, 0])
         if np.any(nan_mask):
             tgt_nan = target[nan_mask]
             tgt_nan_finite = np.isfinite(tgt_nan).all(axis=1)
             if np.any(tgt_nan_finite):
                 nan_idx = np.flatnonzero(nan_mask)
-                guess[nan_idx[tgt_nan_finite]] = self.inv_nearest(tgt_nan[tgt_nan_finite])
+                tgt_finite = tgt_nan[tgt_nan_finite]
+                nan_on_edge = edge_mask[nan_mask][tgt_nan_finite]
+                seeds = self.inv_nearest(tgt_finite)
+                if LATERAL_EDGE_MODE in ("bypass", "feather") and np.any(nan_on_edge):
+                    seeds[nan_on_edge] = tgt_finite[nan_on_edge]  # identity on edge
+                guess[nan_idx[tgt_nan_finite]] = seeds
+
+        # Exact-on-edge points: under 'bypass' identity is the forced answer;
+        # under 'feather' identity is the EXACT root (the feathered delta is
+        # identically zero on the edge), so seed with it and skip Newton.
+        # Under 'raw' Newton treats edge points like any other — honestly.
+        if LATERAL_EDGE_MODE in ("bypass", "feather") and np.any(edge_mask):
+            guess[edge_mask] = target[edge_mask]
 
         # --- ITERATIVE POLISH ---
         curr = guess.copy()
+        edge_done = (edge_mask.copy() if LATERAL_EDGE_MODE in ("bypass", "feather")
+                     else np.zeros_like(edge_mask))
+
+        def _eval_d(p):
+            """Forward delta at p — the function Newton inverts. The feather
+            scale moves with the iterate, so it lives inside the evaluation
+            (and therefore inside the finite-difference Jacobian)."""
+            dxe = self.fwd_dx(p)
+            dye = self.fwd_dy(p)
+            if LATERAL_EDGE_MODE == "feather":
+                se = _edge_feather_scale(p)
+                dxe = np.where(se > 0.0, dxe * se, 0.0)
+                dye = np.where(se > 0.0, dye * se, 0.0)
+            return dxe, dye
 
         for _ in range(iterations):
-            dx = self.fwd_dx(curr)
-            dy = self.fwd_dy(curr)
+            dx, dy = _eval_d(curr)
 
             # If the guess drifted off the interpolation hull, snap it back.
             bad_mask = np.isnan(dx)
             if np.any(bad_mask):
                 curr[bad_mask] = self.inv_nearest(target[bad_mask])
-                dx = self.fwd_dx(curr)
-                dy = self.fwd_dy(curr)
+                dx, dy = _eval_d(curr)
 
             error = curr + np.stack([dx, dy], axis=1) - target
-            curr -= error
 
-            # Snap any non-finite updates back to a safe seed.
-            nonfinite_mask = ~np.isfinite(curr).all(axis=1)
-            if np.any(nonfinite_mask):
-                curr[nonfinite_mask] = self.inv_nearest(target[nonfinite_mask])
+            # Full Newton step: (I + J_D) · delta = -error, solved via 2×2 Cramer.
+            # Two extra evaluations: perturb curr in x then y to estimate J_D.
+            _h = 1e-7
+            cp_x = curr.copy()
+            cp_x[:, 0] += _h
+            cp_y = curr.copy()
+            cp_y[:, 1] += _h
+            dx_px, dy_px = _eval_d(cp_x)
+            dx_py, dy_py = _eval_d(cp_y)
+            a = 1.0 + (dx_px - dx) / _h  # 1 + ∂dx/∂x
+            b = (dx_py - dx) / _h        # ∂dx/∂y
+            c = (dy_px - dy) / _h        # ∂dy/∂x
+            d = 1.0 + (dy_py - dy) / _h  # 1 + ∂dy/∂y
+            det = a * d - b * c
+            ex, ey = error[:, 0], error[:, 1]
+            safe = np.abs(det) > 1e-12
+            denom = np.where(safe, det, 1.0)
+            delta_x = np.where(safe, -(d * ex - b * ey) / denom, -ex)
+            delta_y = np.where(safe, -(a * ey - c * ex) / denom, -ey)
+            if np.any(edge_done):
+                delta_x[edge_done] = 0.0
+                delta_y[edge_done] = 0.0
+            curr += np.stack([delta_x, delta_y], axis=1)
+
+            # Handle out-of-scope or non-finite Newton steps.
+            # NaN coordinates fail in_scope (NaN comparisons → False).
+            # Near-polar seam points correctly live on the lateral triangle edge;
+            # snapping them to inv_nearest (the apex) breaks convergence.
+            # Strategy: NaN → inv_nearest fallback; merely out-of-scope → project
+            # onto the DOWN triangle boundary so Newton can continue from there.
+            ẋ = H9K.radical.R3 * curr[:, 0]
+            bad = ~in_scope(ẋ, curr[:, 1], 0)
+            if np.any(bad):
+                nan_bad = bad & ~np.isfinite(curr).all(axis=1)
+                oob_bad = bad & ~nan_bad
+                if np.any(nan_bad):
+                    curr[nan_bad] = self.inv_nearest(target[nan_bad])
+                if np.any(oob_bad):
+                    _xd = ẋ[oob_bad]
+                    _y = curr[oob_bad, 1]
+                    _W = H9K.Ẇ
+                    _y = np.maximum(_y, _xd - _W)   # right lateral edge: y - ẋ >= -Ẇ
+                    _y = np.maximum(_y, -_xd - _W)  # left lateral edge:  y + ẋ >= -Ẇ
+                    _y = np.minimum(_y, H9K.VC)     # ceiling
+                    curr[oob_bad, 1] = _y
 
         curr[:, 1] *= mode
 
@@ -407,6 +751,7 @@ class OctahedralBarycentric(CompositeDomain):
     def set_warp(self, warp_file=None, method=None):
         """Add a warp method to the domain"""
         self.warp = AuthalicWarp(warp_file, method)
+        self.warp.domain = self
         for proj in self.projs.values():
             proj.warp = self.warp
 

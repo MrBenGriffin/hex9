@@ -155,10 +155,12 @@ if __name__ == '__main__':
     accuracy = 1e-22  # in meters^2
     reg = Registrar()  # Manage Domains & Projections
     seed = 4007
-    samples = 10_000
+    samples = 100_000
+    from hhg9.h9.region import recover_stats_reset, recover_stats_report
     ake = reg.projection('oct_ell')
     b_oct = reg.domain('b_oct')
     # b_oct.no_warp()
+    recover_stats_reset()
 
     layers = ake.set_accuracy(accuracy)
     np.random.seed(seed)
@@ -177,3 +179,4 @@ if __name__ == '__main__':
     print(f'Results written to {log_file.relative_to(base)}\n'
           f'Completed {len(gpts)} points in {elapsed:.3f} seconds'
           f' ({elapsed / len(gpts):.6f} sec/pt)')
+    recover_stats_report()
