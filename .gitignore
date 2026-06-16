@@ -42,3 +42,5 @@ htmlcov/
 # 179MB, regenerable — exceeds GitHub 100MB file limit
 /examples/src/tissot_3600x1800.npz
 
+/hhg9/data/WGS84_pkdo_grid_80.npz
+/hhg9/data/WGS84_pkdo_warp.npz
