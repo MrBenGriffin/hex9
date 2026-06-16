@@ -6,7 +6,7 @@
 This reads in the GCD for Stonehenge.
 
 Last Tested
-16 Jun 2026 0.1.3a0 (skipped)
+16 Jun 2026 0.1.3a0 (passed) 36.2s -- not doing anything interesting though.
 20 Mar 2026 0.1.1a2 (passed - rewritten)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     bc0 = reg.project(ll0, [g_gcd, b_oct])
     co, mo = bc0.cm()
     oid = co[0]  # This is one point.
-    uri = xy_regions(bc0.coords, mo, force=ensure)
+    uri = xy_regions(bc0.coords, mo)
     hx_pts, _ = hex_poly_layer(bc0, layers=3)
     hx_npt = reg.project(hx_pts, [b_oct, n_oct])
     gpy = hx_npt.coords.reshape([6, 2])

@@ -30,8 +30,8 @@ from pathlib import Path
 # Examples that can't run without specific data files not in the repo.
 # Add filenames (without path) here as needed.
 SKIP_DATA_DEPENDENT: set[str] = {
-    'ex0076_stonehenge.py',    # needs re-consideration (noted in docstring)
-    'ex0064_vertices.py'       # very slow.
+    # 'ex0076_stonehenge.py',    # needs re-consideration (noted in docstring)
+    # 'ex0064_vertices.py'       # very slow.
 }
 
 # Examples that are intentionally slow and need a higher per-example timeout.

@@ -11,7 +11,7 @@ Vertices are, like seams, special edge cases.
 Looks at radii of 3,000km, 10,000km, and 5m.
 
 Last Tested
-# (currently skipped)
+16 Jun 2026 0.1.3a0 (passed) 200.0s
 13 Mar 2026 0.1.1a1 (passed)
 02 Mar 2026 0.1.1a1 (passed, fixed measurement issue.)
 26 Dec 2025 0.1.0a4 (passed)
@@ -19,6 +19,7 @@ Last Tested
 25 Nov 2025 (passed)
 """
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 import re
 
@@ -186,7 +187,17 @@ def plot_cartesian_kde(u_coords, v_coords, values, *,
     grid_u, grid_v, grid_z = res['grid_u'], res['grid_v'], res['nw']
 
     fig, ax = plt.subplots(figsize=(12, 12))
-    pc = ax.contourf(grid_u, grid_v, grid_z, levels=150, cmap=cmap)
+    # Log colour scale: the vertex-snap singularity (~1e8 nm) bleaches a linear
+    # scale, hiding the ~nm baseline and the ring/petal structure. LogNorm spreads
+    # the orders; log needs strictly positive, so mask the exact-zero background.
+    zp = np.where(grid_z > 0, grid_z, np.nan)
+    vmin = np.nanpercentile(zp, 5)          # baseline floor (skips exact-zero pixels)
+    vmax = np.nanmax(zp)
+    # vmax = np.nanpercentile(zp, 85)  # a few ×10 nm; annulus pins to max-colour
+
+    levels = np.geomspace(max(vmin, 1e-3), vmax, 150)
+    pc = ax.contourf(grid_u, grid_v, zp, levels=levels, cmap=cmap,
+                     norm=LogNorm(vmin=vmin, vmax=vmax), extend='both')
     ax.set_aspect('equal')
     fig.colorbar(pc, ax=ax, label="Estimated mean ∂ (nm) — Nadaraya–Watson")
     ax.set_title(title)
@@ -348,12 +359,12 @@ def run():
 
     vertices = {
         # "Russia": np.array([35.264, 45.0], dtype=float),
-        "Null Antipodes": np.array([0.0, 180.0], dtype=float),
+        # "Null Antipodes": np.array([0.0, 180.0], dtype=float),
         "Null Island": np.array([0.0, 0.0], dtype=float),
-        "East Equator": np.array([0.0, 90.0], dtype=float),
-        "West Equator": np.array([0.0, -90.0], dtype=float),
+        # "East Equator": np.array([0.0, 90.0], dtype=float),
+        # "West Equator": np.array([0.0, -90.0], dtype=float),
         "North Pole": np.array([90.0, 0.0], dtype=float),
-        "South Pole": np.array([-90.0, 0.0], dtype=float),
+        # "South Pole": np.array([-90.0, 0.0], dtype=float),
     }
 
     # elliptical axes
@@ -363,11 +374,11 @@ def run():
     # 3_000_000 =  local
     # 10_000_000 = hemisphere.
     # 20_000_000 = global. , 3_000_000, 10_000_000.0, 5.0
-
-    for radius in [20_000_000, 0.1, 5.0]:
+    # low [0.1, 0.2, 1.0, 5.0, 20.0]
+    for radius in [12_000_000.0]:
         for name, (lat, lon) in vertices.items():
             centre = Points(np.array([[lat, lon]]), g_gcd)
-            ll_pts = geodesic_cap_rnd_ecef(reg, lat, lon, 100_000, radius, seed=4325325)
+            ll_pts = geodesic_cap_rnd_ecef(reg, lat, lon, 120_000, radius, seed=4325325)
             ref = reg.project(ll_pts, [g_gcd, c_ell])
 
             # Round-trip back to lat/lon (so we can inspect the worst offenders)
