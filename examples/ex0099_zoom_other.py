@@ -23,6 +23,7 @@ coarse layers before conversion to Mercator metres.
 Point of Interest: Rotch Library, MIT, Cambridge MA.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 53.3s
 28 Mar 2026 (new)
 """
 import hashlib

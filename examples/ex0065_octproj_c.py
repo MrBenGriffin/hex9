@@ -28,7 +28,7 @@ PRACTICAL OUTCOME:
   (e.g. embedded / no-data-file fallback), accepting the ~15× quality tradeoff.
 
 Last Tested
-16 Jun 2026 0.1.3a0 (timeout)
+16 Jun 2026 0.1.3a0 (passed) 216.6s
 """
 
 import os

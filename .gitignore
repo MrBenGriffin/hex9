@@ -37,8 +37,6 @@ htmlcov/
 /experimental/**/*.npz
 # keep only the two deployed warps under hhg9/data; exclude the rest
 /hhg9/data/other_warps/
-/hhg9/data/*_full_ot.npz
-/hhg9/data/*_tidied.npz
 # 179MB, regenerable — exceeds GitHub 100MB file limit
 /examples/src/tissot_3600x1800.npz
 

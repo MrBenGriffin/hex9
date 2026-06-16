@@ -4,7 +4,7 @@
 
 """
 Display warp matrix
-16 Jun 2026 0.1.3a0 (passed) 8.3s
+16 Jun 2026 0.1.3a0 (passed) 8.3s (cache used).
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 

@@ -7,10 +7,12 @@ Direct hex mesh generation from H9 lattice LUTs.
 Uses HexMesh.create() from hhg9.h9.grid: sc_mode=0 supercells only, boundary
 hex exterior verts reflected y→-y into the adjacent face via H9O.oid_nb.
 Each hex is generated exactly once; no seam artefacts, no duplication.
+Do not try running the entire sphere on L8! It will flounder in memory.
+It would work - but the result isn't useful.
 
 Last Tested
 -----------
-16 Jun 2026 0.1.3a0 (time)
+16 Jun 2026 0.1.3a0 (passed) 393.3s
 """
 import numpy as np
 from matplotlib import pyplot as plt
@@ -114,9 +116,9 @@ if __name__ == '__main__':
     g_gcd = reg.domain('g_gcd')
     c_ell = reg.domain('c_ell')
 
-    mesh = HexMesh.create([8], reg)
+    mesh = HexMesh.create([6], reg)
     # layer_0 = mesh.densify(0)
-    layer_4 = mesh.densify(8)
+    layer_4 = mesh.densify(6)
 
     el_pts = reg.project(mesh.pts, [b_oct, g_gcd, c_ell])
     el_hexes = el_pts.coords[layer_4]

@@ -87,4 +87,4 @@ def run(*, force=False):
 
 
 if __name__ == '__main__':
-    run(force=False)
+    run(force=True)

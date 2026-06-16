@@ -19,7 +19,7 @@ Usage:
   python ex0118_mollweide.py --layer 5 # L5 (~944k hexes, paper quality)
 
 Last Tested
-16 Jun 2026 0.1.3a0 (time)
+16 Jun 2026 0.1.3a0 (passed) 390.7s
 """
 
 import argparse

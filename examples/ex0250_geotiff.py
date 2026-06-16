@@ -12,6 +12,7 @@ a bad idea to have these libraries, alongside the GIS stack it does use
 (geographiclib, proj)
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 300.6s
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
 """
