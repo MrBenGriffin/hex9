@@ -8,6 +8,7 @@ This follows ex0030_plate_glb.py (which loaded the png and displayed it as a uni
 This loads a Plate Carrée png image, converts it to Unit Octahedron, via latitude/longitude and sphere and displays it.
 As the inverse of the AK projection is slow we use the cache from ex0041_cache.py
 Added chain registration example.
+16 Jun 2026 0.1.3a0 (passed) 40.0s
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)

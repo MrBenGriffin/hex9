@@ -8,6 +8,7 @@ and a hex_layer, generate the hex-grid for that hex_layer
 and draw it in b_oct.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 7.7s
 13 Mar 2026 0.1.1a1 (passed)
 06 Mar 2026 0.1.1a1 (better)
 26 Dec 2025 0.1.0a4 (working well)

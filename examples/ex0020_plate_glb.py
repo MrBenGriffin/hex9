@@ -6,6 +6,7 @@ Supporting System Test - No octahedral projection or H9
 This follows ex0010_plate_px.py (which loaded a png and displayed it).
 This loads a Plate Carrée png, converts it to latitude/longitude, and displays it.
 Needless to say, in this case, we could just use Basemap - but the point is to demonstrate
+16 Jun 2026 0.1.3a0 (passed) 118.1s
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
@@ -74,8 +75,7 @@ def run():
     p_pix = reg.domain('p_pix')  # PlatePixel (configured as Plate Carrée here)
 
     # Load as uint8 RGBA (matplotlib.imread often yields float32 0..1, which breaks roundtrips/saving)
-    file = 'output/ex0115_flat_l4.png'
-    alt = 'src/tissot_3600x1800.png'
+    file = 'src/tissot_3600x1800.png'
     pil_img = Image.open(file).convert('RGBA')
     img = np.array(pil_img)
     print('img loaded', img.shape, img.dtype)

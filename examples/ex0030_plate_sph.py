@@ -6,6 +6,7 @@
 Supporting System Test - No octahedral projection or H9
 This follows ex0020_plate_glb.py (which loaded the png and displayed it on a globe).
 Converts PlateCarree to ECEF via GCD and displays it
+16 Jun 2026 0.1.3a0 (passed) 27.6s
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)

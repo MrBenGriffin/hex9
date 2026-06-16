@@ -13,6 +13,7 @@ This is functionally no different from 0094, as we are currently not implementin
 Though it -does- do a roundtrip to simplex.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 13.4s
 13 Mar 2026 0.1.1a1 (passed)
 02 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)

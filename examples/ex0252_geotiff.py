@@ -12,6 +12,7 @@ a small number of raster pixels; any per-raster-pixel variance within a hex
 is negligible at that scale.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (fail)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2026 0.1.0a4 (passed)
 """

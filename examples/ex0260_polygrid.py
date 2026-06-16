@@ -8,6 +8,7 @@ and a hex_layer, generate the hex-grid for that hex_layer, along with ancestry.
 It will extract any common prefix, and plot the hex-grid and ancestry along with hex labels.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (fail)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (working well)
 """

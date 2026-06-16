@@ -25,7 +25,6 @@ _PAIR_TO_PROJ: dict[frozenset, str] = {
     frozenset(['p_pix', 'g_gcd']): 'pix_gcd',
     frozenset(['r_gcd', 'g_gcd']): 'rxd_gcd',
     frozenset(['c_ell', 'g_gcd']): 'ell_gcd',
-    # frozenset(['g_gcd', 'b_oct']): 'gcd_bry',
     frozenset(['g_gcd', 'b_raw']): 'gcd_brw',
     frozenset(['b_raw', 'b_oct']): 'brw_bct',
     frozenset(['c_oct', 'c_ell']): 'oct_ell',

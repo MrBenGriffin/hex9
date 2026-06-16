@@ -26,6 +26,7 @@ Usage:
   python ex0120_tissot.py --all                  # all registered layouts
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 60.2s
 20 Apr 2026
 """
 

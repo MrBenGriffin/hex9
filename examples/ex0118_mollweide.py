@@ -17,6 +17,9 @@ is printed. This is the known QGIS/display limitation — data is correct.
 Usage:
   python ex0118_mollweide.py           # default L4 (~78k hexes, fast)
   python ex0118_mollweide.py --layer 5 # L5 (~944k hexes, paper quality)
+
+Last Tested
+16 Jun 2026 0.1.3a0 (time)
 """
 
 import argparse

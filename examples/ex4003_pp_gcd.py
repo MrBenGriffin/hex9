@@ -4,6 +4,7 @@
 """
 Ensure that there's no plate pixel errors in roundtrip
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 2.4s
 13 Mar 2026 0.1.1a1 (passed)
 """
 import numpy as np

@@ -26,6 +26,7 @@ Usage:
   python ex0121_tissot_svg.py --flavour butterfly:0500
 
 Last Tested
+16 Jun 2026 0.1.3a0 (time)
 20 Apr 2026
 """
 

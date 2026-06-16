@@ -8,6 +8,7 @@ This is a processor-intensive analysis of all edge-cases, measuring behaviour
 on each seam, and alongside it. These are then depicted as graphs and summarised
 in console messages. Seams are important edge cases (literally!)
 This is a bit of a dogs dinner, thanks to AI assistance.
+16 Jun 2026 0.1.3a0 (passed) 95.1s
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
 16 Dec 2025 0.1.0a3 (passed)
@@ -125,8 +126,8 @@ def seam_litmus(b_on_seq, mode, depth=12, delta=1e-12, engine=None):
     bL = xy + delta * nhat
     bR = xy - delta * nhat
 
-    regsL = xy_regions(bL, mode, depth=depth, force=ensure)
-    regsR = xy_regions(bR, mode, depth=depth, force=ensure)
+    regsL = xy_regions(bL, mode, depth=depth)
+    regsR = xy_regions(bR, mode, depth=depth)
 
     # leaf region id (last filled col); if your layout is [root, ..., leaf]
     leafL = regsL[:, -1]

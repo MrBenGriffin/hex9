@@ -8,6 +8,7 @@ hexagon in that layer - generate the set of hexagons at that layer
 and display on the globe.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (TIME)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
 16 Dec 2025 0.1.0a3 (passed)
@@ -184,7 +185,7 @@ def hexify(reg: Registrar, b_pts: Points, warp_m=None, layers: int = 4):
     w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
     w_adj = np.abs(w_area_m2 / w_area_m2_mean) + 1e-12
     score = np.log(w_adj)  # authalic log-density ℓ
-    snow_globe(c_pts, 6, score, f'{layers}')
+    snow_globe(c_pts, 6, score, f'{layers}', lim_pct=1.0)
 
 
 if __name__ == '__main__':

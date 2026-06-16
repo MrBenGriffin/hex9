@@ -26,6 +26,7 @@ Build a VRT first:
 Point of Interest: Hall of Maps, Palazzo Vecchio, Florence, Italy.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (time)
 28 Mar 2026 (new)
 """
 import numpy as np

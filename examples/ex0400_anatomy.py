@@ -30,16 +30,29 @@ import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 from matplotlib.patches import Polygon as MplPolygon, Patch
-
 from hhg9.h9 import H9C, H9R, H9P
 from hhg9.h9.polygon import region_grid
 
 _OUT = Path(__file__).resolve().parent / 'output'
 
 # Canonical colour scheme (shared across F3/F4/F7 per paper_figures.md).
-MODE0 = '#bcd9ec'   # Down / V   (net_mode 0)
-MODE1 = '#cfe6c3'   # Up   / Λ   (net_mode 1)
+# Colour-blind-safe (deuteranopia/protanopia). The design keeps every encoding on
+# axes that r/g vision retains (luminance + blue<->yellow), and NEVER relies on
+# blue<->green (which r/g vision cannot resolve, especially at thin line widths):
+#   - mode fills (F3) are NEUTRAL greys separated by LIGHTNESS, so no fill shares
+#     a hue with any edge — killing both green->grey and warm-edge-on-warm-fill.
+#   - t/d/x grid edges (F3) use Paul Tol's high-contrast trio (blue / gold / red),
+#     engineered to stay mutually distinct for THREE categories under all CVD.
+#   - F4 high-trit class fills reuse the SAME blue/gold/red hue families, darkened
+#     so white digits read on them (and so F4 ties visually to F3's x-layer).
+MODE0 = '#c2cbd2'   # Down / V   (net_mode 0)  mid cool grey
+MODE1 = '#f1f4f6'   # Up   / Λ   (net_mode 1)  near-white grey
+GCOL = {'t': '#004488', 'd': '#DDAA33', 'x': '#BB5566', }
+# F4 high-trit class -> fill (x_dig // 3): 0-2, 3-5, 6-8(splits). Dark enough for
+# white digits; blue/amber/red echo F3's t/d/x so the two figures read as a set.
+F4_FILL = ['#1b4f7a', '#9c6a16', '#9c3550']
 SPLIT = '#f6cda0'   # split / straddling cell highlight
 C2COL = ['#e8a3a0', '#a0c4e8', '#b8e0a8']  # c2 = 0,1,2
 EDGE = '#33444f'
@@ -144,7 +157,7 @@ def _far_half(origin, scale, mode, c2):
     return h[[3, 4, 5, 0]]
 
 
-def _draw_layer(ax, cells, show, lw=1.0, stroke=None):
+def _draw_layer(ax, cells, show, lw=1.0, layer=0):
     """Draw one column's layer over a set of (origin, scale, mode) regions.
 
     Columns advance the assembly: t (triangles, mode two-tone) -> d (half-hexes
@@ -155,38 +168,29 @@ def _draw_layer(ax, cells, show, lw=1.0, stroke=None):
     colour with a single hue (used to make the fine layer one neutral colour in
     the i+j overlay row).
     """
-    t_ec = stroke or EDGE
-    d_ec = stroke or DCOL
-    x_ec = stroke or XCOL
+    alpha = 1.0 if layer == 0 else 0.5
+    alpha = 1.0
+    ec = GCOL[show]
     for origin, scale, mode in cells:
-        if show in ('t', 'td'):
+        if show == 't':
             for c2 in range(3):
                 for ti in range(3):
                     tri = origin + H9P.tx[mode, c2, ti] * scale
-                    _poly(ax, tri, MODECOL[_tri_mode(tri)], ec=t_ec,
-                          lw=0.7 * lw, z=2)
-            if show == 'td':
-                for c2 in range(3):
-                    _poly(ax, origin + H9P.hh[mode, c2] * scale, 'none',
-                          ec=d_ec, lw=1.9 * lw, z=4)
+                    fc = MODECOL[_tri_mode(tri)] if layer == 0 else 'none'
+                    _poly(ax, tri, fc, ec=ec, lw=lw, z=layer+1, alpha=alpha)
         elif show == 'd':
             for c2 in range(3):
                 dm = _d_mode(mode, c2)
-                _poly(ax, origin + H9P.hh[mode, c2] * scale, MODECOL[dm],
-                      ec=d_ec, lw=1.9 * lw, z=3)
-        elif show in ('dx', 'x'):
+                fc = MODECOL[dm] if layer == 0 else 'none'
+                _poly(ax, origin + H9P.hh[mode, c2] * scale, fc, ec=ec, lw=lw, z=layer+1, alpha=alpha)
+        elif show == 'x':
             for c2 in range(3):
                 dm = _d_mode(mode, c2)
-                # solid fill: far (opposite-mode) half, then near half on top
-                _poly(ax, _far_half(origin, scale, mode, c2), MODECOL[1 - dm],
-                      ec='none', alpha=1.0, z=2)
-                _poly(ax, origin + H9P.hh[mode, c2] * scale, MODECOL[dm],
-                      ec='none', alpha=1.0, z=2)
-                if show == 'dx':
-                    _poly(ax, origin + H9P.hh[mode, c2] * scale, 'none',
-                          ec=d_ec, lw=1.1 * lw, z=4)
-                _poly(ax, origin + H9P.hx[mode, c2] * scale, 'none',
-                      ec=x_ec, lw=1.9 * lw, z=5)
+                fc = MODECOL[dm] if layer == 0 else 'none'
+                oc = MODECOL[1-dm]
+                _poly(ax, origin + H9P.hx[mode, c2] * scale, fc=oc, ec='none', lw=lw, alpha=alpha, z=layer-10)
+                _poly(ax, origin + H9P.hh[mode, c2] * scale, fc=fc, ec='none', lw=0, z=layer+1, alpha=alpha)
+                _poly(ax, origin + H9P.hx[mode, c2] * scale, fc='none', ec=ec, lw=lw, alpha=alpha, z=layer+2)
 
 
 # common drawing extent (root mode 0, padded to include hexagon overhang)
@@ -196,31 +200,6 @@ def _limits(mode=0, pad=0.08):
     (x0, y0), (x1, y1) = P.min(0), P.max(0)
     dx, dy = (x1 - x0) * pad, (y1 - y0) * pad
     return (x0 - dx, x1 + dx), (y0 - dy, y1 + dy)
-
-
-def _coarse_boundaries(ax, cells, show):
-    """Wide outlines of one column's coarse (level i) layer, hued by PARENT mode
-    (so the overlay shows p_mo as well as the fine c_mo fills), drawn over the
-    thin grey fine (level j) layer in the i+j overlay row. The region triangle
-    is shown only for the t / t+d columns (it is noise in the d / x columns)."""
-    for origin, scale, mode in cells:
-        col = PMO[mode]
-        if show in ('t', 'td'):
-            _poly(ax, origin + H9P.sv[mode] * scale, 'none', ec=col, lw=2.6, z=9)
-        if show == 't':
-            for c2 in range(3):
-                for ti in range(3):
-                    _poly(ax, origin + H9P.tx[mode, c2, ti] * scale, 'none',
-                          ec=col, lw=1.6, z=8)
-        elif show in ('td', 'd'):
-            for c2 in range(3):
-                _poly(ax, origin + H9P.hh[mode, c2] * scale, 'none',
-                      ec=col, lw=2.6, z=8)
-        elif show in ('dx', 'x'):
-            for c2 in range(3):
-                _poly(ax, origin + H9P.hx[mode, c2] * scale, 'none',
-                      ec=col, lw=2.8, z=8)
-
 
 # --- F7 adjacency -----------------------------------------------------------
 # Ground-truth neighbour LUT (region.py): [region, super_mode, c2] -> [neighbour,
@@ -298,7 +277,7 @@ def figure_f7(root_mode=0):
                 f'edge/LUT mismatch cell {cid:02x} mode {mode}: {ext_count}!={cls}'
             cx, cy = _ctr(tri)
             ax.text(cx, cy, f'{cid:02x}', ha='center', va='center',
-                    fontsize=7, color='#333', zorder=6)
+                    fontsize=9, color='#333', zorder=6)
         # central hex cluster: the x_dig 0 (mode 0) / 1 (mode 1) hexes
         for c2 in range(3):
             _poly(ax, H9P.hx[mode, c2], 'none', ec='#444', lw=1.2, z=4)
@@ -327,23 +306,138 @@ def figure_f7(root_mode=0):
     plt.close(fig)
 
 
+def _xdig_lut(parent_mode):
+    """{cell_id -> [x_dig for c2=0,1,2]} for one parent net_mode, built straight
+    from the ground-truth `_m_c2_hx_v2025` (via `rid2cell`), so the F4 digits are
+    generated, not transcribed. Verified equal to the LUT's documented cells."""
+    from hhg9.h9.addressing import _m_c2_hx_v2025, H9_RA
+    rid2cell = H9_RA.rid2cell
+    out = {}
+    for c2_entries in _m_c2_hx_v2025[parent_mode]:
+        for region, hexdigs in c2_entries:
+            out[int(rid2cell[region])] = list(hexdigs)
+    return out
+
+
+# text halos so labels read on any (dark) fill — keeps the big-white/small-dark
+# visual language but makes both legible over the dark high-trit faces.
+_HALO_W = [pe.withStroke(linewidth=2.4, foreground='#1a1a1a')]   # white text on dark
+_HALO_D = [pe.withStroke(linewidth=2.0, foreground='white')]     # dark text on dark
+
+
+def _limits_both(pad=0.03):
+    """Drawing extent covering BOTH concentric parents (the hexagram overlay)."""
+    pts = np.vstack([H9P.hx[m, c2] for m in (0, 1) for c2 in range(3)]
+                    + [H9P.sv[m] for m in (0, 1)])
+    (x0, y0), (x1, y1) = pts.min(0), pts.max(0)
+    dx, dy = (x1 - x0) * pad, (y1 - y0) * pad
+    return (x0 - dx, x1 + dx), (y0 - dy, y1 + dy)
+
+
+def _f4_tiling(ax, mode, *, ghost, skip_ids=frozenset()):
+    """Draw one parent's x_dig hexagon tiling, concentric at the origin.
+
+    ghost=True  -> the *other* mode behind the foreground: faded fills, a faint
+                   c2 outline, NO x_digs (they change with parent context, so
+                   they would only confuse), and c-cell ids only for regions NOT
+                   already labelled by the foreground (`skip_ids`) — so the 3
+                   c-regions unique to this mode pop out of the background.
+    ghost=False -> the foreground: solid fills, white x_digs, bold c2 spokes,
+                   and every c-cell id."""
+    lut = _xdig_lut(mode)
+    fa = 0.30 if ghost else 1.0
+    for path, cmode, origin, scale in region_grid(0, mode):
+        cell = int(np.atleast_1d(path)[-1])
+        xdigs = lut[cell]
+        for c2 in range(3):
+            xd = xdigs[c2]
+            # x_dig 0-5 are full hexagons; 6/7/8 are the half-hex 'wings' that
+            # straddle the parent boundary, so draw those as their d_cell half.
+            base = H9P.hh if xd >= 6 else H9P.hx
+            hexv = origin + base[cmode, c2] * scale
+            _poly(ax, hexv, F4_FILL[xd // 3], ec='none' if ghost else '#222',
+                  lw=0.8, z=1 if ghost else 2, alpha=fa)
+            if not ghost:
+                cx, cy = _ctr(hexv)
+                ax.text(cx, cy, str(xd), ha='center', va='center', fontsize=14,
+                        fontweight='bold', color='white', zorder=6,
+                        path_effects=_HALO_W)
+        # c_cell / region id at the region (t_cell) centre = shared vertex of its
+        # 3 hexes. Drawn once per region; ghost skips ids the foreground owns.
+        if ghost and cell in skip_ids:
+            continue
+        rx, ry = origin
+        ax.text(rx, ry, f'{cell:02X}', ha='center', va='center', fontsize=8,
+                color='#111', zorder=7, path_effects=_HALO_D)
+    # c2 (half-hex) structure: faint grey for the ghost parent, bold black spokes
+    # for the foreground (kept under the labels at z=4).
+    for c2 in range(3):
+        _poly(ax, H9P.hh[mode, c2], 'none',
+              ec='#9aa0a6' if ghost else 'k',
+              lw=1.4 if ghost else 2.4, z=1 if ghost else 4, alpha=fa)
+
+
+def figure_f4():
+    """F4 — the x-layer: the 9 x_dig (0-8) hexagon children of a parent, in the
+    high-trit colouring (class = x_dig // 3: 0-2 / 3-5 / 6-8 splits). Each panel
+    overlays BOTH parents concentrically: the foreground mode solid (with x_digs
+    + c-cell ids), the other mode ghosted behind (faded, no x_digs). The two
+    triangles form a hexagram whose central hexagon is the 6 c-regions shared by
+    both modes (identical cells), while each mode contributes 3 unique outer
+    c-regions — those ghost ids pop out of the background. The same core hexes
+    carry different x_digs under each parent (e.g. 0/6/3 vs 1/7/5 around 0x35),
+    which is why the ghost's digits are suppressed. Geometry from H9P; digits
+    from the ground-truth `_m_c2_hx_v2025`."""
+    fg_cells = {m: {int(np.atleast_1d(p)[-1]) for p, _, _, _ in region_grid(0, m)}
+                for m in (0, 1)}
+    fig, axes = plt.subplots(1, 2, figsize=(14, 7.2),
+                             gridspec_kw={'wspace': 0.03})
+    for ax, mode in zip(axes, (0, 1)):
+        _f4_tiling(ax, 1 - mode, ghost=True, skip_ids=fg_cells[mode])
+        _f4_tiling(ax, mode, ghost=False)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'parent mode {mode} (foreground)', fontsize=11)
+    (x0, x1), (y0, y1) = _limits_both()
+    for ax in axes:
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(y0, y1)
+    handles = [Patch(facecolor=F4_FILL[i], edgecolor='#222',
+                     label=f'x_dig {3*i}-{3*i+2}' + ('  (splits)' if i == 2 else ''))
+               for i in range(3)]
+    handles.append(Patch(facecolor=F4_FILL[0], edgecolor='none', alpha=0.30,
+                         label='other mode (ghost)'))
+    fig.legend(handles=handles, loc='lower center', ncol=4, fontsize=9,
+               frameon=False, bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle('F4 — the x-layer: shared c-regions across both parent modes',
+                 fontsize=13)
+    # tight_layout is incompatible with equal-aspect axes (and would reset wspace);
+    # set margins explicitly and let bbox_inches='tight' crop the outer border.
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.93, bottom=0.06, wspace=0.03)
+    out = str(_OUT / 'ex0400_anatomy_f4.png')
+    fig.savefig(out, dpi=140, bbox_inches='tight')
+    print(f'Saved {out}')
+    plt.close(fig)
+
+
 def figure_f3(root_mode=0, depth_i=0, depth_j=1):
     """The §10.0 anatomy figure: 5 columns (t,t+d,d,d+x,x) x 3 rows
     (level i, i+j overlay, level j)."""
     cols = [('t', 't'), ('t+d', 'td'), ('d', 'd'), ('d+x', 'dx'), ('x', 'x')]
     xlim, ylim = _limits(root_mode)
-    coarse = supercells(depth_i, root_mode)
-    fine = supercells(depth_j, root_mode)
-
+    d_i = supercells(depth_i, root_mode)
+    d_j = supercells(depth_j, root_mode)
+    lw = [2.4, 1.2]
     fig, axes = plt.subplots(3, 5, figsize=(16, 10))
     for c, (title, show) in enumerate(cols):
-        # row 0 — level i (coarse)
-        _draw_layer(axes[0, c], coarse, show)
-        # row 1 — i+j overlay: fine layer thin + neutral grey, coarse wide + p_mo hue
-        _draw_layer(axes[1, c], fine, show, lw=0.45, stroke=JCOL)
-        _coarse_boundaries(axes[1, c], coarse, show)
-        # row 2 — level j (fine): thinner strokes than the coarse top row
-        _draw_layer(axes[2, c], fine, show, lw=0.55)
+        for layer, g in enumerate(show):
+            # row 0 — level i (d_i)
+            _draw_layer(axes[0, c], d_i, g, lw=lw[0], layer=2*layer)
+            # row 1 — level i + level j
+            _draw_layer(axes[1, c], d_i, g, lw=lw[0], layer=2*layer+1)
+            _draw_layer(axes[1, c], d_j, g, lw=lw[1], layer=2*layer)
+            # row 2 — level j
+            _draw_layer(axes[2, c], d_j, g, lw=lw[1], layer=2*layer)
 
     # Symbolic levels only — the hierarchy is fractal, so no absolute depth is
     # implied: i is any level, j is one (or more) refinements finer.
@@ -390,4 +484,5 @@ def main():
 if __name__ == '__main__':
     main()
     figure_f3()
+    figure_f4()
     figure_f7()

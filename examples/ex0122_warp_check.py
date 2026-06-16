@@ -22,6 +22,7 @@ Outputs:
   Console report + output/ex0122_warp_check_<stem>.png  (displacement + det map)
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 8.9s
 21 Apr 2026
 """
 

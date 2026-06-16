@@ -17,6 +17,7 @@ Companion to ex0262_greenwich_seam.py.
 
 Last Tested
 -----------
+16 Jun 2026 0.1.3a0 (passed) 8.1s
 23 May 2026
 """
 import numpy as np

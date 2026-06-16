@@ -24,6 +24,9 @@ QGIS quick-start:
      Color ramp: RdBu (reversed), Classes: 10, Mode: Equal interval, centred at 0
   4. Project → Properties → CRS → EPSG:54009 (Mollweide) for on-screen view
   5. Project → Import/Export → Export Map to Image / PDF
+
+Last Tested
+16 Jun 2026 0.1.3a0 (fail)
 """
 
 import argparse

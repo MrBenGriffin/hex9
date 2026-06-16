@@ -15,6 +15,7 @@ Companion to ex0261_polygrid_mesh.py.
 
 Last Tested
 -----------
+16 Jun 2026 0.1.3a0 (passed) 10.0s
 22 May 2026 (passed: L11-L13 nest, 53297 hexes at L13, seam continuous)
 """
 import numpy as np

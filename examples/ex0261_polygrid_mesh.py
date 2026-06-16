@@ -21,6 +21,7 @@ Coarser layers form an ancestry "nest" drawn behind the finest layer.
 
 Last Tested
 -----------
+16 Jun 2026 0.1.3a0 (passed) 8.9s
 22 May 2026 (passed: L4-L6 nest, 572 hexes at L6)
 """
 import numpy as np

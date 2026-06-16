@@ -11,6 +11,7 @@ Vertices are, like seams, special edge cases.
 Looks at radii of 3,000km, 10,000km, and 5m.
 
 Last Tested
+# (currently skipped)
 13 Mar 2026 0.1.1a1 (passed)
 02 Mar 2026 0.1.1a1 (passed, fixed measurement issue.)
 26 Dec 2025 0.1.0a4 (passed)

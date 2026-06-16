@@ -6,6 +6,7 @@
 Further breakdown for warp analysis (currently experimental/and put to one side).
 All renders follow the triangular sub-grid.
 Another way of calculating this has been used with hexagons in ex0080_authalics
+16 Jun 2026 0.1.3a0 (passed) 168.8s
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
 16 Dec 2025 0.1.0a3 (passed)

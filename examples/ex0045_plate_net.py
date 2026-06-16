@@ -10,6 +10,7 @@ displays it as an octahedron net, under different layouts.
 Normally I do not project maps this way, but use grid sampling instead.
 Because without sampling, one gets a bit patchy.
 And also the ECEF=>COCT=>BOCT is slow. (upstream)
+16 Jun 2026 0.1.3a0 (passed) 54.4s
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)

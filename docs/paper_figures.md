@@ -9,7 +9,7 @@ likely need bespoke (but small) plotting code.
 | F1 | §8 / §2 (Foundations) | The 49 tilings, Hex9 pair highlighted | `experimental/halfhex_further.py` (emits `hh.hh.svg`)                    |
 | F2 | §8 | The two equilateral tilings (L/R chiral pair) | same script (`eq.hh.svg`)                                                |
 | F3 | §10.0 | Anatomy of one parent triangle: t/c2/d/x | ✳ `examples/ex0400_anatomy.py` (primitives validated; layout WIP)         |
-| F4 | §10a | x-layer: x_dig 0–8 hexagon children, high-trit colouring | `f4_hex_outline.png` (exists; `f4_better.png` = no-outline variant) |
+| F4 | §10a | x-layer: x_dig 0–8 children, high-trit colouring + shared c-regions overlay | `examples/ex0400_anatomy.py` `figure_f4` → `ex0400_anatomy_f4.png` (supersedes `f4_hex_outline.png`/`f4_better.png`) |
 | F7 | §10d/§10f | Sibling adjacency: internal vs cross-parent edges (blue/red) | `examples/ex0400_anatomy.py` `figure_f7` → `ex0400_anatomy_f7.png` |
 | F5 | §10a | Classifier (c-layer): 96-slot c_grid, three band families → c_dig | `f5.png` (exists, amended) — the c-layer counterpart to F4's x-layer |
 | F6 | §10b | London / Prime Meridian split-cell example | `ex0262_greenwich_seam.py` / `ex0263_…_zoom.py`                          |
@@ -75,19 +75,31 @@ for the ×9 story. Production: margin labels must not be black-on-black;
 articulate the quadrant boundaries (thin dividers or margin ticks) so the
 blend reads as structure, not decoration.
 
-**F4 — the x-layer (delivered: `f4_hex_outline.png`).** A periodic tile of
-hexagons with one parent `t_par` bolded (black triangle). Each hexagon carries
-its **`x_dig` (0–8)** as the large white digit and its region/`c_dig` id as the
-small black label (cross-references straight to F5). **Colour = high-trit class**:
-green = `x_dig` 0–2, slate = 3–5, mauve = 6–8 (the split cells). The figure shows
-the three F4 claims: there is **no central child** (the parent centre lands on a
-d_cell edge); the **split children (6,7,8, mauve) straddle the parent boundary**
-— the two-parent case that makes `x_list` right-to-left; and the digits follow
-the ground-truth LUT `_m_c2_hx_v2025` in `addressing.py` (clusters of 0/1/2,
-3/4/5, 6/7/8). `f4_better.png` is the same without hexagon outlines (triangular
-substrate more visible); the outline version reads the hexagon cells better.
-Because the tile is periodic it also conveys "repeats to fill the plane"
-(this absorbs the role of the dropped multi-level nesting figure).
+**F4 — the x-layer (generated: `examples/ex0400_anatomy.py` `figure_f4`, output
+`ex0400_anatomy_f4.png`).** Two panels (parent mode 0 / mode 1 in the
+foreground), each an **overlay of both concentric parents**: the foreground mode
+drawn solid, the other mode **ghosted** behind it (faded, no digits). Each hexagon
+carries its **`x_dig` (0–8)** as the large white digit; the region/`c_dig` id sits
+**once per region**, at the t_cell centre (the shared vertex of that region's three
+hexes), cross-referencing straight to F5. **Colour = high-trit class** (CVD-safe,
+shared with F3's t/d/x): blue = `x_dig` 0–2, amber = 3–5, red = 6–8 (the split
+cells); split children are drawn as their half-hex **wings**, the others as full
+hexagons. The digits are generated from the ground-truth LUT `_m_c2_hx_v2025` in
+`addressing.py` (clusters of 0/1/2, 3/4/5, 6/7/8).
+
+The figure makes four points. (1) **No central child** — the parent centre lands
+on a d_cell edge, so the origin is ringed by three hexes, not one. (2) The **split
+children (6/7/8) straddle the parent boundary** — the two-parent case that makes
+`x_list` right-to-left. (3) The two opposite parents form a **hexagram** whose
+central hexagon is the **6 c-regions shared by both modes** — geometrically
+*identical* cells (same origin, same child mode), while each mode contributes only
+**3 unique outer c-regions** (mode-0: 0x21/0x2b/0x49; mode-1: 0x16/0x34/0x3e),
+whose ghost ids pop out of the faded background. (4) Those shared core hexes carry
+**different `x_dig`s under each parent** (e.g. 0/6/3 vs 1/7/5 around region 0x35) —
+so the ghost digits are deliberately suppressed, and the c-region id is what is
+shown as invariant. This is the visual link tying the whole c/t/d/x grid together:
+one set of c-regions (the classifier substrate of §10a / F5) underlies both modes,
+with mode and parent context supplying the differing x-layer addresses.
 
 **F7 — adjacency (delivered: `examples/ex0400_anatomy.py` `figure_f7`, in the
 ex0110 idiom).** Two panels (parent mode 0 / mode 1). Each child t_cell's three

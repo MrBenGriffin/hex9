@@ -16,6 +16,7 @@ This:
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 303.4s
 19 May 2026 (passed)
 """
 import csv

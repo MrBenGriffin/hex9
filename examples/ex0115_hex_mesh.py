@@ -10,6 +10,7 @@ Each hex is generated exactly once; no seam artefacts, no duplication.
 
 Last Tested
 -----------
+16 Jun 2026 0.1.3a0 (time)
 """
 import numpy as np
 from matplotlib import pyplot as plt

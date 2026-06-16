@@ -7,6 +7,7 @@ Part of the H9 project - Visualisation of hexagons as a heatmap (using Tokyo det
 This could be better - the sampling isn't ideal, and I have modified the approach.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 63.3s
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)
 16 Dec 2025 0.1.0a3 (passed - with rewrite)

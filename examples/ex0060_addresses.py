@@ -16,6 +16,7 @@ This:
 # ⚠️ 'nm' == NANOMETRES, not NAUTICAL MILES.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (passed) 300.7s
 13 Mar 2026 0.1.1a1 (passed)
 02 Mar 2026 0.1.1a1 (passed; tidied somewhat.)
 26 Dec 2025 0.1.0a4 (passed; accuracy has changed to area m^2)

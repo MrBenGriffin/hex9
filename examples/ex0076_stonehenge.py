@@ -6,6 +6,7 @@
 This reads in the GCD for Stonehenge.
 
 Last Tested
+16 Jun 2026 0.1.3a0 (skipped)
 20 Mar 2026 0.1.1a2 (passed - rewritten)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (passed)

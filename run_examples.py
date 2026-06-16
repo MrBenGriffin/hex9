@@ -37,14 +37,27 @@ SKIP_DATA_DEPENDENT: set[str] = {
 # Examples that are intentionally slow and need a higher per-example timeout.
 # Value is the suggested minimum timeout in seconds.
 SLOW_EXAMPLES: dict[str, int] = {
-    'ex0045_plate_net.py': 180,
-    'ex0063_gridb.py': 180,
-    'ex0095_smp_grid.py': 180,
-    'ex0059_seamstitch.py': 180,
-    'ex0080w_warped_authalics': 180,
-    'ex0101_h9_grid.py': 180,
-    'ex0260_polygrid.py': 180,
-    'ex0261_polygrid.py': 180,
+    'ex0045_plate_net.py': 200,
+    'ex0059_seamstitch.py': 200,
+    'ex0060_addresses.py': 5000,  # >120s
+    'ex0060u_addresses.py': 5000,  # >120s
+    'ex0065_octproj_a.py': 5000,  # >120s
+    'ex0065_octproj_c.py': 5000,  # >120s
+    'ex0080w_warped_authalics.py': 5000,  # >120s
+    'ex0081w_warped_authalics.py': 5000,  # >120s
+    'ex0098_zoom_sequence.py': 5000,  # >120s
+    'ex0099_zoom_other.py': 5000,  # >120s
+    'ex0115_hex_mesh.py': 5000,  # >120s
+    'ex0117_hexgrid_data.py': 5000,  # >120s
+    'ex0118_mollweide.py': 5000,  # >120s
+    'ex0121_tissot_svg.py': 5000,  # >120s
+    'ex0250_geotiff.py': 5000,  # >120s
+    'ex0253_area.py': 5000,  # >120s
+    'ex0063_gridb.py': 200,
+    'ex0095_smp_grid.py': 200,
+    'ex0101_h9_grid.py': 200,
+    'ex0260_polygrid.py': 200,
+    'ex0261_polygrid.py': 200,
 }
 
 # ANSI colours — disabled automatically if not a TTY
@@ -155,8 +168,8 @@ def main():
     parser = argparse.ArgumentParser(description='Run H9 example scripts in batch.')
     parser.add_argument('--dev', action='store_true',
                         help='Also run ex_10xxx development examples')
-    parser.add_argument('--timeout', type=int, default=100,
-                        help='Per-example timeout in seconds (default: 100)')
+    parser.add_argument('--timeout', type=int, default=120,
+                        help='Per-example timeout in seconds (default: 120)')
     parser.add_argument('--stamp', action='store_true',
                         help="Update 'Last Tested' in passing examples")
     parser.add_argument('filters', nargs='*',

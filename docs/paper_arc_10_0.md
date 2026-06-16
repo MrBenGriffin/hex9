@@ -16,6 +16,14 @@
   0 = flat (horizontal), 1 = forward (positive slope), 2 = back (negative
   slope). Adjacent triangles agree on the c2 value of their common edge, and
   the c2 progression around any triangle is clockwise regardless of mode.
+  *Etymology:* "c2" is shorthand for **"colouring 2"** — one of the two distinct
+  three-colourings of the wallpaper group **p31m** (Grünbaum & Shephard 1986,
+  *Tilings and Patterns*, §8.3 "Color Pattern Types", p. 433, type IH38;
+  PP25[3]₁/p31m[3]₁ and PP25[3]₂/p31m[3]₂ — see the `grunbaum_shephard_*`
+  figures, the second with the Hex9 d_cell overlay aligned). Note a **very 
+  early naming mismatch**: despite the "2", the Hex9 c2 labelling actually 
+  corresponds to Grünbaum & Shephard's *first* colouring, **p31m[3]₁**, 
+  not the second.
 
   **c_cell** — a slot in the 96-position classifier grid: the raw output of
   the three-family inequality classification of §10a. Twelve of the 96 slots
