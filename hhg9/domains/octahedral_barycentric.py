@@ -717,7 +717,27 @@ class OctahedralBarycentric(CompositeDomain):
 
         self.sides = {}
         self.projs = {}
-        self.warp = None
+
+        # ── Warp state (lazy) ────────────────────────────────────────────
+        # warp_enabled is the cheap on/off TOGGLE both engines read (no_warp /
+        # use_warp flip it). The AuthalicWarp object is built LAZILY on first
+        # access to the `warp` property (the CT/Newton build is expensive), so
+        # the libhex9 path — which never touches `.warp` — pays no init cost.
+        # _warp_spec = (file, method) is what to build when the Python path needs it.
+        self.warp_enabled = True
+        self._warp_obj = None
+        self._warp_spec = None
+
+        # ── Engine state ─────────────────────────────────────────────────
+        # Default to the libhex9 backend for g_gcd↔b_oct when it loads;
+        # no_lib()/use_lib() flip lib_enabled at runtime. Pure Python stays
+        # fully available (blue/green, regression, intermediate inspection).
+        try:
+            from hhg9.accel import backend as _accel_backend
+            self._lib = _accel_backend()
+        except Exception:
+            self._lib = None
+        self.lib_enabled = self._lib is not None
 
         # c_oct = registrar.domain('c_oct')
         b_raw = registrar.domain('b_raw')   # geometric foundation — owns the matrices
@@ -733,33 +753,73 @@ class OctahedralBarycentric(CompositeDomain):
             self.projs[face] = proj
 
         # self.rot90_idx = b_raw.rot90_idx   # same rotation-quadrant index
+        # Warp source: the F6-retrained authalic blob, built LAZILY (see the
+        # `warp` property). The legacy pkdo / 'linear' warps are fossils — removed.
         pkg = "hhg9.data"
         layer = 5
         ell = registrar.ellipsoid_name
-        pkdo_data = resources.files(pkg).joinpath(f"{ell}_pkdo_warp.npz")
-        if pkdo_data.exists():
-            self.set_warp(pkdo_data, method='pkdo')
-        else:
-            data = resources.files(pkg).joinpath(f"{ell}_l{layer}_warp_data.npz")
-            if not data.exists():
-                data = resources.files(pkg).joinpath(f"WGS84_l{layer}_warp_data.npz")
-            self.set_warp(data)
+        data = resources.files(pkg).joinpath(f"{ell}_l{layer}_warp_data.npz")
+        if not data.exists():
+            data = resources.files(pkg).joinpath(f"WGS84_l{layer}_warp_data.npz")
+        self._warp_spec = (data, None)
+
         registrar.register_bridge(['c_oct', 'b_raw', 'b_oct'])
         registrar.register_bridge(['g_gcd', 'b_raw', 'b_oct'])
 
+        # When libhex9 is present, register the direct g_gcd↔b_oct lib resolver
+        # AHEAD of the bridge above (a direct projection beats a bridge in
+        # _check_chain). It honours no_lib() by falling through to that exact
+        # bridge, so the pure-Python path stays the canonical reference.
+        if self._lib is not None:
+            from hhg9.projections.gcd_boct_lib import GcdBoctLib
+            GcdBoctLib(registrar)
+
+    @property
+    def warp(self):
+        """The AuthalicWarp, or None when disabled. Built lazily on first use
+        (the CT/Newton solver is expensive) so the lib path never pays for it.
+        Read live by BrawBoct on the pure-Python path."""
+        if not self.warp_enabled or self._warp_spec is None:
+            return None
+        if self._warp_obj is None:
+            file, method = self._warp_spec
+            self._warp_obj = AuthalicWarp(file, method)
+            self._warp_obj.domain = self
+        return self._warp_obj
+
+    @property
+    def warp_file(self):
+        """The configured warp source WITHOUT building the warp (cheap)."""
+        return self._warp_spec[0] if self._warp_spec else None
 
     def set_warp(self, warp_file=None, method=None):
-        """Add a warp method to the domain"""
-        self.warp = AuthalicWarp(warp_file, method)
-        self.warp.domain = self
-        for proj in self.projs.values():
-            proj.warp = self.warp
+        """Configure the warp source and enable it (built lazily on first use)."""
+        if warp_file is not None:
+            self._warp_spec = (warp_file, method)
+        self._warp_obj = None        # force rebuild against the new spec
+        self.warp_enabled = True
+        return self
+
+    def use_warp(self):
+        """Enable the warp — AK + warp (b_oct). Symmetric with no_warp()."""
+        self.warp_enabled = True
+        return self
 
     def no_warp(self):
-        """Remove warp method from the domain"""
-        self.warp = None
-        for proj in self.projs.values():
-            proj.warp = None
+        """Disable the warp — AK-only / BRAW (metric & dev comparisons)."""
+        self.warp_enabled = False
+        self._warp_obj = None
+        return self
+
+    def use_lib(self):
+        """Use the libhex9 backend for g_gcd↔b_oct (if it loaded)."""
+        self.lib_enabled = self._lib is not None
+        return self
+
+    def no_lib(self):
+        """Use the pure-Python engine (exposes intermediates; blue/green ref)."""
+        self.lib_enabled = False
+        return self
 
     def decode(self, addr):
         """Decode octahedral coordinates into a point"""

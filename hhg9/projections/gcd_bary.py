@@ -87,6 +87,16 @@ class GCDBary(Projection):
 
     Switches between serial execution (small batches or PostgreSQL) and
     ProcessPoolExecutor (large batches outside PostgreSQL).
+
+    NOTE — engine tension (read this if g_gcd↔b_oct seems to bypass GCDBary):
+    GCDBary is an OPT-IN direct hop; nothing instantiates it by default, so the
+    default resolver for ('g_gcd','b_oct') is either the libhex9 resolver
+    GcdBoctLib (registered by OctahedralBarycentric when libhex9 loads) or, with
+    no lib, the g_gcd→b_raw→b_oct bridge. If GCDBary IS instantiated alongside
+    GcdBoctLib, both register ('g_gcd','b_oct'); Registrar.project picks the
+    first inserted, so GcdBoctLib (registered at b_oct construction) wins. Use
+    b_oct.no_lib() to fall back to the pure-Python bridge. See
+    hhg9/projections/gcd_boct_lib.py and OctahedralBarycentric.
     """
 
     def __init__(self, registrar, *,
@@ -100,8 +110,10 @@ class GCDBary(Projection):
         self.chunk = int(chunk)
         self.threshold = int(threshold)
         self.b_oct = registrar.domain('b_oct')
-        # Cached for process workers (they can't share the parent's objects)
-        self.warp_file = getattr(self.b_oct.warp, 'file_name', None)
+        # Cached for process workers (they can't share the parent's objects).
+        # Use the cheap warp_file property — reading .warp would force the lazy
+        # CT/Newton build (see OctahedralBarycentric.warp).
+        self.warp_file = self.b_oct.warp_file
         self.accuracy = registrar.projection('oct_ell').accuracy
 
     def set_parallel(self, *, workers=None, chunk=None, threshold=None):

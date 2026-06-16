@@ -5,7 +5,7 @@
 """
 Showing 2 layers of hexagons:  land-usage, hill-shading
 Last Tested
-16 Jun 2026 0.1.3a0 (time)
+16 Jun 2026 0.1.3a0 (passed) 1873.1s
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 26 Dec 2026 0.1.0a4 (passed)

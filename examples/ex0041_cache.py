@@ -11,7 +11,8 @@ The ellipsoid -> octahedral projection is slow, and depends upon using H9 for ro
 so here we use a cache. Recent work on vectorising the forward projection has improved timings,
 but root-finding is inherently slow.
 This processes about 7k points / second at full accuracy - 3600x1800 cache_building will be about 10 minutes
-16 Jun 2026 0.1.3a0 (passed) 35.2s
+16 Jun 2026 0.1.3a0 (passed) 35.2s cache used.
+16 Jun 2026 0.1.3a0 (passed) 40.9s (accelerated).
 13 Mar 2026 0.1.1a1 (passed)
 28 Feb 2026 0.1.1a1 (passed)
 26 Dec 2025 0.1.0a4 (fixed/passed)
