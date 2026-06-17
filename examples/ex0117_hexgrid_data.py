@@ -60,7 +60,7 @@ def export_grid(coords_pool, layers_data, output_path):
 
 
 if __name__ == '__main__':
-    MAX_LAYER = 6                                        # layers 0..3; finest = 3
+    MAX_LAYER = 3                                        # layers 0..3; finest = 3
     reg = Registrar()
     mesh = HexMesh.create(range(MAX_LAYER+1), reg)
 

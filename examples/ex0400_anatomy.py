@@ -297,7 +297,7 @@ def figure_f7(root_mode=0):
          for i in range(3)]
     fig.legend(handles=handles, loc='lower center', ncol=5, fontsize=9,
                frameon=False, bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle('F7 — sibling adjacency: internal vs cross-parent edges '
+    fig.suptitle('Sibling adjacency: internal vs cross-parent edges '
                  '(class = red-edge count)', fontsize=13)
     fig.tight_layout()
     out = str(_OUT / 'ex0400_anatomy_f7.png')
@@ -409,7 +409,7 @@ def figure_f4():
                          label='other mode (ghost)'))
     fig.legend(handles=handles, loc='lower center', ncol=4, fontsize=9,
                frameon=False, bbox_to_anchor=(0.5, 0.0))
-    fig.suptitle('F4 — the x-layer: shared c-regions across both parent modes',
+    fig.suptitle('The x-layer: shared c-regions across both parent modes',
                  fontsize=13)
     # tight_layout is incompatible with equal-aspect axes (and would reset wspace);
     # set margins explicitly and let bbox_inches='tight' crop the outer border.
@@ -453,7 +453,7 @@ def figure_f3(root_mode=0, depth_i=0, depth_j=1):
                 ax.set_title(title, fontsize=12)
         axes[r, 0].text(-0.04, 0.5, row_lbl[r], transform=axes[r, 0].transAxes,
                         rotation=90, va='center', ha='right', fontsize=10)
-    fig.suptitle('F3 — Hex9 anatomy: t → d → x (assembly) × refinement',
+    fig.suptitle('Hex9 anatomy: t → d → x (assembly) × refinement',
                  fontsize=15)
     fig.tight_layout()
     out = str(_OUT / 'ex0400_anatomy_f3.png')

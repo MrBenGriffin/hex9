@@ -13,10 +13,13 @@
   enumeration. The structure that survives is a shifted-aperture-9 hexagonal
   hierarchy in which every cell carries a unique address derived from the
   construction alone: truncated at level L, the address is a DGGS cell
-  identifier in the sense of OGC Topic 21; carried to the limit, it converges
-  to a point on the reference ellipsoid in the sense of ISO 19111. The same
-  mathematical object serves both roles, with no prior coordinate reference
-  system as input. A separable geometric realisation — an analytical
+  identifier in the sense of OGC Topic 21; carried to the limit, a function
+  recovers from it a point on the reference ellipsoid to arbitrary precision.
+  The addressing is quasi-continuous — position is recoverable everywhere except
+  on a measure-zero set of seams — rather than continuous in the strict ISO
+  19111 sense; the same mathematical object serves as both cell identifier and
+  position-recovery coordinate, with no prior coordinate reference system as
+  input. A separable geometric realisation — an analytical
   octahedral base projection composed with an optimal-transport-derived
   area-correcting warp — places the grid on WGS84 with quasi-uniform cell
   areas: at level 5, 99% of the 708,588 cells lie within 0.005% of ideal

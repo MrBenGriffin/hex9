@@ -1,44 +1,45 @@
-# Hex9: A Quasi-Authalic Hexagonal DGGS with Dual CRS Compliance on the WGS84 Ellipsoid
+---
+title: "Hex9: A Quasi-Authalic, Quasi-Continuous Hexagonal DGGS on the Reference Ellipsoid"
+author: Ben Griffin
+date: June 2026
+abstract: |
+  Discrete global grid systems are conventionally designed over a prior
+  coordinate reference system and inherit its compromises. Hex9 inverts the
+  direction of design: we ask what requirements a hierarchical grid must satisfy
+  to be geometrically coherent — intrinsic orientability, flat mode transport,
+  vertex closure, refinement commutativity — and show that these requirements,
+  taken together, essentially determine the grid. The admissible cell primitive
+  is the triangle; the admissible seed is the octahedral triangulation of S²;
+  admissible refinement has odd linear factor, minimally aperture 9; and the
+  hexagonal dual lattice admits exactly one orientation per chirality — a result
+  established by machine-verified exhaustive enumeration. The structure that
+  survives is a shifted-aperture-9 hexagonal hierarchy in which every cell
+  carries a unique address derived from the construction alone: truncated at
+  level L, the address is a DGGS cell identifier in the sense of OGC Topic 21;
+  carried to the limit, a function recovers from it a point on the reference
+  ellipsoid to arbitrary precision. The addressing is quasi-continuous — position
+  is recoverable everywhere except on a measure-zero set of seams — rather than
+  continuous in the strict ISO 19111 sense; the same mathematical object serves
+  as both cell identifier and position-recovery coordinate, with no prior
+  coordinate reference system as input. A separable geometric realisation — an
+  analytical octahedral base projection composed with an
+  optimal-transport-derived area-correcting warp — places the grid on WGS84 with
+  quasi-uniform cell areas: at level 5, 99% of the 708,588 cells lie within
+  0.005% of ideal area, with residual deviation confined to the six octahedral
+  vertices required by the topology. The combinatorial grid is projection- and
+  ellipsoid-independent; only the warp is specific to the reference body, and it
+  is recomputable for any ellipsoid, terrestrial or planetary.
 
-*Assembled review draft. Source of truth remains the per-section files
-(`paper_abstract.md`, `paper_intro.md`, `paper_axioms.md`, `paper_arc_*.md`,
-`paper_appendix_*.md`); figures are specified in `paper_figures.md` with images
-in `paper_figures/`; citation keys resolve against `references.bib`. Code
-artefacts use the prefix `h9` (e.g. `h9_encode`, `h9_boct`); prose uses Hex9.*
-
+  **Keywords:** discrete global grid system (DGGS) · coordinate reference system
+  (CRS) · hexagonal grid · octahedron · aperture 9 · optimal transport ·
+  equal-area projection · spatial indexing · WGS84
+nocite: |
+  @*
 ---
 
-## Abstract
-
-Discrete global grid systems are conventionally designed over a prior
-coordinate reference system and inherit its compromises. Hex9 inverts the
-direction of design: we ask what requirements a hierarchical grid must satisfy
-to be geometrically coherent — intrinsic orientability, flat mode transport,
-vertex closure, refinement commutativity — and show that these requirements,
-taken together, essentially determine the grid. The admissible cell primitive
-is the triangle; the admissible seed is the octahedral triangulation of S²;
-admissible refinement has odd linear factor, minimally aperture 9; and the
-hexagonal dual lattice admits exactly one orientation per chirality — a result
-established by machine-verified exhaustive enumeration. The structure that
-survives is a shifted-aperture-9 hexagonal hierarchy in which every cell
-carries a unique address derived from the construction alone: truncated at
-level L, the address is a DGGS cell identifier in the sense of OGC Topic 21;
-carried to the limit, it converges to a point on the reference ellipsoid in the
-sense of ISO 19111. The same mathematical object serves both roles, with no
-prior coordinate reference system as input. A separable geometric realisation —
-an analytical octahedral base projection composed with an
-optimal-transport-derived area-correcting warp — places the grid on WGS84 with
-quasi-uniform cell areas: at level 5, 99% of the 708,588 cells lie within
-0.005% of ideal area, with residual deviation confined to the six octahedral
-vertices required by the topology. The combinatorial grid is projection- and
-ellipsoid-independent; only the warp is specific to the reference body, and it
-is recomputable for any ellipsoid, terrestrial or planetary.
-
-**Keywords:** discrete global grid system (DGGS) · coordinate reference system
-(CRS) · hexagonal grid · octahedron · aperture 9 · optimal transport ·
-equal-area projection · spatial indexing · WGS84
-
----
+*Draft for review. This file is the canonical source (it supersedes the earlier
+per-section `paper_arc_*.md` fragments). Code artefacts use the prefix `h9`
+(e.g. `h9_encode`); prose uses Hex9 throughout.*
 
 ## Introduction
 
@@ -527,8 +528,7 @@ mode-preserving mirror would make the tiling achiral, contradicting the chiral
 pair of §8), so the mode-preserving subgroup is exactly the rotational part, p3.
 The ℤ₂ of §2 is, in crystallographic terms, the quotient p31m / p3.
 
-*[Figure: translational unit of the d_cell tiling with p31m symmetry overlay —
-3-fold centres, mirrors, glides, fundamental domain. (F20)]*
+![Crystallographic structure of the d_cell tiling: the translational unit (left) and its IUC symmetry — three-fold centres, mirror and glide lines, fundamental domain (right). The symmetry-reduction chain is p6m → p31m → p3 (§7).^[Source figure `paper_figures/f20.png`.]](paper_figures/f20.png){width=85%}
 
 The resulting system consists of a hexagonal dual lattice with a minimal,
 seed-localised defect structure and a refinement-induced shift. The remaining
@@ -560,9 +560,7 @@ Exactly 2 of the 8 combinations satisfy the internal closure condition at every
 boundary vertex. The two survivors are related by a global reflection — a chiral
 pair, geometrically distinct but structurally equivalent up to handedness.
 
-*[Figure 2: the surviving chiral pair — the two orientations of the 9-cell
-equilateral that satisfy internal closure, three half-hexagons each, coloured by
-orientation class; the members are mirror images. (F2)]*
+![The surviving chiral pair: the two orientations of the 9-cell equilateral that satisfy internal closure (three half-hexagons each, coloured by orientation class). The members are mirror images — the residual chirality Axiom 6 fixes.^[Generated by `experimental/halfhex_further.py`; enumeration counts verified by `experimental/halfhex_verify.py`.]](paper_figures/f2.pdf){width=55%}
 
 This count is not an assertion. The full enumeration is machine-verified by
 `experimental/halfhex_verify.py` (checks V0–V6): of the 49 distinct hextile
@@ -571,9 +569,7 @@ solutions (24 chiral pairs + 1 self-mirror), the long-edge constraint (A) admits
 intersection A ∩ B is exactly the recorded Hex9 chiral pair. The constructive
 2³ → 2 argument above and this enumeration agree.
 
-*[Figure 1: the 49 hextile solutions, chiral pairs grouped and the self-mirror
-marked, with the Hex9 pair highlighted; caption carries the counts
-49 = 24 pairs + 1 self-mirror, A → 18, B → 8, A ∩ B → 2. (F1)]*
+![The 49 distinct hextile solutions, chiral pairs grouped and the self-mirror marked, with the Hex9 pair highlighted. Of 49 = 24 pairs + 1 self-mirror, constraint A admits 18, constraint B admits 8, and A ∩ B is the highlighted pair.^[Generated by `experimental/halfhex_further.py`; counts machine-verified by `experimental/halfhex_verify.py`.]](paper_figures/f1.pdf){width=85%}
 
 Axiom 6 resolves the remaining freedom: a single consistent chirality choice,
 induced by the embedding into the reference ellipsoid frame, selects one of the
@@ -594,6 +590,8 @@ The system defined by Axioms 1–9 and constructed through the preceding steps i
 **Hex9**: a shifted-aperture-9 hexagonal grid on an octahedral embedding of the
 reference ellipsoid, with a cell hierarchy in which every cell has a distinct
 address, derived from simplicial coherence requirements alone.
+
+![The seed solid and the 12 root cells. Left: the octahedron with each octant face creased into its three d_cell facets (24 faces, the diploid form that names the d_cell). Right: coloured per root x_cell, hue by octahedral axis, light/dark for the mode-0/mode-1 halves — at L0 every root cell is one of the 12 topological pentagons. The faceting is illustrative; the cells live on the smooth ellipsoid.^[Source figure `paper_figures/f21.png`.]](paper_figures/f21.png){width=92%}
 
 Each Hex9 cell is identified by its octant (one of 8) and its path through the
 refinement hierarchy. This pair is not a coordinate computed from a prior
@@ -685,8 +683,7 @@ resolved right-to-left. An **x_adr** is an x_list plus a **tail** — a single
 metadata byte that resolves split-cell parentage and terminal state (§10b). The
 tail is metadata only: it never participates in geometric computation.
 
-*[Figure: one parent triangle annotated with t_cells, c2 edges, d_cells, and the
-assembled x_cells with x_dig labels. (F3)]*
+![Anatomy of one parent triangle: t_cells, c2 edges, d_cells, and the assembled x_cells with x_dig labels — the c/t/d/x taxonomy in one picture.^[Generated by `examples/ex0400_anatomy.py`.]](paper_figures/ex0400_anatomy_f3.png){width=90%}
 
 ### 10a. Identity as Locator
 
@@ -703,18 +700,16 @@ single-parent structure for t_cells and d_cells; x_cells inherit this property
 except at the 3 split x_cells per level, whose parentage is resolved by the tail
 of the x_adr.
 
-*[Figure 4: a parent x_cell and its 9 child x_cells labelled by x_dig (0–8),
-coloured by high-trit class (0–2 / 3–5 / 6–8); the three split children (6,7,8)
-straddle the parent boundary and there is no central child. (F4)]*
+![The x-layer: a parent x_cell and its 9 child x_cells labelled by x_dig (0–8), coloured by high-trit class (0–2 / 3–5 / 6–8). The three split children (6,7,8) straddle the parent boundary; there is no central child.^[Generated by `examples/ex0400_anatomy.py`.]](paper_figures/ex0400_anatomy_f4.png){width=85%}
 
 Once the projection from the reference ellipsoid to the octant 2D plane is
 complete, the encode direction (point → x_adr) operates via a sequence of linear
 inequality evaluations. Three families of parallel lines partition the octant
 plane into the triangular grid:
 
-    — horizontal bands:       y  compared against fixed thresholds
-    — positive-slope bands:   y − √3·x  compared against fixed thresholds
-    — negative-slope bands:   y + √3·x  compared against fixed thresholds
+- horizontal bands: $y$ compared against fixed thresholds;
+- positive-slope bands: $y - \sqrt{3}\,x$ compared against fixed thresholds;
+- negative-slope bands: $y + \sqrt{3}\,x$ compared against fixed thresholds.
 
 A point's t_cell at a given level is determined by which band it occupies on each
 family — a small fixed number of comparisons, with no geometric distance
@@ -723,9 +718,7 @@ thresholds scale by 1/3, maintaining identical structure. The c_cell (the
 96-slot classifier combining horizontal and slope bands) maps directly to a
 t_cell, and from there to the d_cell and x_cell via the construction of §§6–8.
 
-*[Figure 5: the classifier (c-layer) — the three band families partition the
-octant plane; their indices compose c_dig = h_id<<4 | p_id<<2 | n_id (the 96-slot
-c_grid), which maps to a t_cell and thence to the d_cell and x_cell. (F5)]*
+![The classifier (c-layer): three band families partition the octant plane; their indices compose the 96-slot c_grid digit, which maps to a t_cell and thence to d_cell and x_cell. Locating a point is band membership, not search.^[Generated from the `addressing.py` classifier (`paper_figures/f5.png`).]](paper_figures/f5.png){width=85%}
 
 The mapping operates in both directions. Given an x_adr, the corresponding
 geographic region is recovered by tracing the digit sequence from the octant
@@ -828,14 +821,12 @@ with non-adjacent prefixes:
 43527 appears to have jumped lineage: it belongs to 4352 (south-west England)
 despite being geographically adjacent to 43486 in 4348 (east England). The jump
 is not an anomaly — it is the visible signature of the split digits. Digits 6–8
-carry high ternary trit 2: these cells straddle the d_cell boundary, and the
+carry high ternary trit 2: thesecells straddle the d_cell boundary, and the
 canonical mode-0 parent convention places geographically adjacent cells on
 opposite sides of that boundary into different canonical lineages, exactly as the
 construction requires.
 
-*[Figure: Greenwich / central London with L4 hex boundaries and the addresses
-43483 / 43486 / 43527, the Prime Meridian drawn — the lineage jump made visible.
-(F6)]*
+![The split-cell lineage jump over central London and the Thames estuary (Equal Earth, EPSG:8857). Hexagons are labelled by Hex9 address; the bold **4348** and **4352** mark the two level-3 parent cells, and the heavy line is their boundary. Cell **43527** lies west of Greenwich yet belongs to the **4352** lineage, while its geographic neighbours **43486** and **43483** belong to **4348** — the canonical mode-0 convention placing adjacent cells across the c2 (Prime-Meridian) boundary into different lineages, exactly as §10b describes.^[Rendered in QGIS over an OpenStreetMap backdrop; hex boundaries and addresses from `hhg9`.]](paper_figures/f6_epsg8857_web.jpg){width=90%}
 
 ### 10c. Identity as Label
 
@@ -878,7 +869,7 @@ digit structure mirrors this: each split digit k+6 (k ∈ {0, 1, 2}) names the p
 of d_cells flanking interior child k, and the low ternary trit of every x_dig
 records the c2 orientation of the cell's long edge.
 
-*[Figure: 9-child x_cell tiling showing internal adjacency edges. (F7)]*
+![Sibling adjacency within a parent: each child t_cell edge is internal (blue, shared with a sibling) or external (red, cross-parent); a child's adjacency class is its red-edge count (interior 0, mid-edge 1, vertex 2).^[Generated by `examples/ex0400_anatomy.py`; classes verified against `region.py`'s neighbour builder.]](paper_figures/ex0400_anatomy_f7.png){width=85%}
 
 The same table classifies every cell's relationship to its parent boundary.
 Within each parent, cells fall into three classes: interior cells, whose
@@ -898,8 +889,6 @@ x_cells that form across this boundary are assembled by the same d_cell join rul
 as everywhere else. Seam-crossing adjacency is therefore not a special case — it
 is the same c2-edge query applied at the octant boundary.
 
-*[Figure: octant boundary with matching c2 edges across seam. (F8)]*
-
 In each case adjacency is a finite computation on the combinatorial structure of
 the refinement tree and the c2 edge table. No geometric distance query is needed,
 and no location in the grid requires a different procedure from any other.
@@ -917,18 +906,33 @@ theorem, a nested sequence of closed regions with diameters converging to zero
 has exactly one point in its intersection. An infinite Hex9 address sequence
 identifies exactly that point: not a region, but a location on the ellipsoid.
 
-This means Hex9 addresses behave like real-valued coordinates in the limit. A
-finite address identifies a region; an infinite address identifies a point. The
-discrete address space and the continuous ellipsoid surface are related by this
-convergence: increasing address length corresponds to increasing positional
-precision, with no discontinuity in the relationship between the two.
+This convergence lets a function recover position from an address to arbitrary
+precision: decoding an address of growing length yields a sequence of points
+converging to a unique location on the ellipsoid (Appendix A). A finite address
+identifies a region; a sufficiently long address identifies a location to any
+required tolerance.
 
-At any fixed finite resolution, Hex9 remains a discrete system — cells are
-regions, not points, and the bijection is between addresses and regions. The
-continuous behaviour emerges in the limit, not at any single level. This is
-consistent with the honest characterisation of §9: Hex9 is a discrete spatial
-reference system whose structure converges to a continuous one as resolution
-increases.
+This is not the same as being a coordinate reference system in the strict sense
+of ISO 19111, and we do not claim it is. Two limitations are intrinsic. First,
+the address alphabet is discrete: addresses form a totally disconnected sequence
+space, not a continuum, so they are not coordinates in the real-valued sense.
+Second, the point → address map is discontinuous on the measure-zero set of
+d_cell seams (the split-cell boundaries of §10b): arbitrarily close points on
+opposite sides of a seam receive addresses that differ in their leading digits.
+ISO 19111 presupposes continuous coordinates, and Hex9 does not meet that
+requirement.
+
+What Hex9 offers is better described, by analogy with its quasi-authalic
+geometry, as **quasi-continuous**: position is recoverable from the address by a
+function, to arbitrary precision, everywhere except on a measure-zero seam set,
+and the cell hierarchy converges to points rather than terminating at a finite
+floor. We are not aware of another DGGS whose cell identifier doubles as a
+position-recovery coordinate in this way, though we do not claim the property is
+unique. At any fixed finite resolution Hex9 remains a discrete system — cells are
+regions, the bijection is between addresses and regions — and the
+quasi-continuous behaviour emerges only in the limit. This is consistent with
+§9: Hex9 is a discrete spatial reference system that approaches, but does not
+attain, a continuous one.
 
 ### 10f. Seams and Valence Defects
 
@@ -945,7 +949,8 @@ edge) — form a half-hexagon (d_cell). A d_cell carries an intrinsic mode (0 or
 form a hexagonal cell (x_cell). The hexagonal grid emerges entirely from this
 sequence; no independent hex tiling is assumed.
 
-*[Figure: t_cells → d_cells → x_cells constructive sequence. (F3)]*
+*(The t_cell → d_cell → x_cell constructive sequence is the anatomy figure of
+§10.0.)*
 
 At an octant seam, the d_cell c2 alignment ensures that d_cells on either side of
 the shared octant edge meet long-edge to long-edge. This alignment is not
@@ -962,9 +967,6 @@ same vertex-loop transport closure established in §4. Even valence at the
 octahedral vertices (valence 4) satisfies the mode transport condition; the
 surrounding x_cells are formed by the same d_cell join rule. The resulting
 x_cells are fewer (4 rather than 6) but structurally identical in construction.
-
-*[Figure: octahedral vertex neighbourhood showing c2=0 d_cell arrangement.
-(F10)]*
 
 In both cases the construction proceeds without branching. The t_cell → d_cell →
 x_cell sequence applies uniformly across the entire globe — at seams, at defect
@@ -986,7 +988,31 @@ Three concerns are independent: (1) the combinatorial structure and hierarchy
 correction. Each can be understood, improved, or substituted without disturbing
 the others. The warp is ellipsoid-specific; the grid is not.
 
-*[Figure: pipeline b_raw → AuthalicWarp → b_oct → Hex9 address. (F11)]*
+```{=latex}
+\begin{figure}[h]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=8mm and 16mm, >={Latex[length=2mm]},
+  box/.style={draw, rounded corners, align=center, font=\small,
+    minimum height=10mm, inner sep=4pt},
+  op/.style={font=\footnotesize\itshape, align=center}]
+  \node[box] (g)   {Geodetic\\(WGS84 lat/lon)};
+  \node[box, right=of g]   (raw) {b\_raw\\(octant)};
+  \node[box, right=of raw] (oct) {b\_oct\\(warped)};
+  \node[box, right=34mm of oct] (adr) {Hex9 address\\(x\_adr / UUID)};
+  \draw[->] (g)   -- node[op, above]{AK projection\\(\S11a)} (raw);
+  \draw[->] (raw) -- node[op, above]{authalic warp\\(\S11b)} (oct);
+  \draw[->] (oct) -- node[op, above]{partition cycle\\(\S10a, \S13a)} (adr);
+  \draw[->, dashed] (adr.south) to[out=-150,in=-30]
+    node[op, below]{Newton--Raphson inverse warp $+$ decode} (g.south);
+\end{tikzpicture}}
+\caption{The geometric-realisation pipeline (\S11). A WGS84 geodetic coordinate
+reaches a combinatorial Hex9 address through the AK base projection, the authalic
+warp, and the partition cycle; the inverse (dashed) retraces the chain with a
+Newton--Raphson warp inversion. The three concerns --- combinatorial hierarchy,
+base projection, area correction --- are independent and separately substitutable.}
+\end{figure}
+```
 
 ### 11a. The Base Projection
 
@@ -1005,9 +1031,11 @@ needed at those locations. The 8 octant faces are mutually equivalent under a
 y-coordinate reflection, so one projection function serves all octants.
 
 No closed-form inverse exists. The backward pass — ellipsoid to octant — is
-realised by numerical root-finding (beam search or Newton-Raphson). The forward
-map is smooth and injective on each octant, so an inverse is guaranteed to exist;
-the numerical method is an implementation choice, not a structural requirement.
+realised by numerical root-finding; the fast path is a guarded Gauss–Newton
+iteration on the analytic Jacobian (§13f), with an exact beam search as the
+reference and as the fallback near seams and vertices. The forward map is smooth and injective
+on each octant, so an inverse is guaranteed to exist; the numerical method is an
+implementation choice, not a structural requirement.
 
 Without further correction, the AK projection introduces roughly ±20% area
 deviation across the octant face — larger apparent cells near octant corners,
@@ -1059,6 +1087,12 @@ derivation implicitly regularises against shear by minimising displacement: the
 result trades a small area residual for a smooth, low-distortion displacement
 field.
 
+![Per-hex area deviation, colour scale capped at ±1% (magnitude view). The cap reveals the structure: the interior is near-white — the equal-area result — while the small cells at the six octahedral vertices, whose residuals reach the ±4–5% extremes, saturate the scale. Cells beyond ±1% are clipped.^[Generated by `examples/ex0081w_warped_authalics.py` (`snow_globe`, `lim_pct=1.0`).]](paper_figures/ex0081wau_5_web.jpg){width=58%}
+
+![Per-hex area deviation, Mollweide, on a scale clipped to roughly the p1–p99 band (pattern view). The clip makes the spatial structure legible: a quiet near-white interior with the octant seam skeleton and six vertex blooms picked out. The colourbar is clipped and does **not** reach the true extremes (min −3.57%, max +4.80%).^[Generated by `examples/ex0118_mollweide.py` (L5).]](paper_figures/ex0118_mollweide_L5_web.jpg){width=92%}
+
+![The north-pole vertex at L5, where the "quasi" in quasi-authalic lives. Every hexagon is one L5 cell — about 720 km² (≈ 33 km across) on WGS84 — and almost all of them are white (equal-area to within the warp residual); only the small cluster abutting the pole vertex carries a visible ±area deviation. The residual is real, bounded, and confined to a handful of cells at the irreducible vertex singularity.^[Crop of the L5 grid at the north pole; generated by `examples/ex0081w_warped_authalics.py`. Each cell is an L5 Hex9 cell (510,065,622 km² / (12·9⁵) ≈ 720 km²; 708,588 cells globally).]](paper_figures/ex0081wau_NP_crop_l5.png){width=95%}
+
 Six irreducible vertex singularities remain at the octahedral poles — the
 geographic N and S poles and the four equatorial points at 0°, 90°, 180°, 270°E.
 This residual is topological in origin: the Gauss-Bonnet theorem requires
@@ -1088,9 +1122,7 @@ system rather than merely an indexing scheme: b_oct is a legitimate projection i
 its own right. Conventional geographic projections are derived from it, not the
 other way around.
 
-*[Figure 13: Tissot indicatrices on the b_oct butterfly net — circles of
-near-constant radius across the whole map demonstrate equal area and low shear;
-Mercator and geographic comparison panels to follow. (F13)]*
+![Tissot indicatrices on the AK+Warp b_oct butterfly net: near-constant-radius circles across the whole net demonstrate equal area, and their near-circularity the low shear the optimal-transport derivation buys (§11b). Mercator and geographic comparison panels are to follow.^[Generated by `examples/ex0121_tissot_svg.py`.]](paper_figures/ex0121_tissot_50_warp_file_butterfly_0500.pdf){width=95%}
 
 ### 11d. Projection Independence
 
@@ -1132,13 +1164,13 @@ on Hex9's claims.
 | Property | H3 | S2 | HEALPix | A5 | Hex9 |
 |---|---|---|---|---|---|
 | Base polyhedron | Icosahedron | Cube | (sphere-native) | Dodecahedron | Octahedron |
-| Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hex |
+| Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hex (+ 12 pentagons) |
 | Aperture | 7 | 4 | 4 | 5 then 4 | 9 (shifted) |
 | Equal area | No | No | Yes (strict) | Yes | Quasi (p99 < 0.005%) |
-| Strict ancestry at all levels | No | Yes | Yes | — | Yes |
-| Distance isotropy | Yes | No (√2) | Yes | No (elongated) | Yes |
-| Dual CRS/DGGS | No | No | No | No | Yes |
-| Reference body | Sphere | Sphere | Sphere | Ellipsoid | Ellipsoid (WGS84) |
+| Strict ancestry at all levels | No | Yes | Yes | — | Half-hex: yes; hex: by convention |
+| Distance isotropy | Yes | No ($\sqrt{2}$) | Yes | No (elongated) | Yes |
+| Dual DGGS/CRS | No | No | No | No | Yes (quasi-CRS) |
+| Reference body | Sphere | Sphere | Sphere | Ellipsoid | Any ellipsoid (per-body warp; WGS84 + sphere trained) |
 
 **Exception cells.** Euler's theorem requires exactly 12 topological pentagons —
 cells with five neighbours — in any spherical tiling by hexagons and pentagons,
@@ -1156,15 +1188,23 @@ addresses, are constructed by the same d_cell join rule as every other cell
 lie on the boundary of the coordinate space, so the defect cells straddle the
 edge of the map rather than appearing as interior anomalies.
 
-**Ancestry.** In Hex9 the canonical parent function is a well-defined map at
-every level, and the canonical prefix at level L−1 is a function of the canonical
-prefix at level L alone; by induction, two cells sharing a canonical ancestor at
-any level share canonical ancestors at all coarser levels. Multi-resolution
-roll-up is therefore exact. H3's aperture-7 subdivision does not nest children
-inside parents: a child hexagon may overlap two coarser cells, parent assignment
-is approximate, and a shared parent does not imply a shared grandparent. S2 and
-HEALPix have strict hierarchies; Hex9 matches them while retaining hexagonal
-cells.
+**Ancestry.** The strictly nested unit in Hex9 is the half-hexagon (d_cell), not
+the hexagon. The d_cell hierarchy is a single-parent tree: a d_cell address
+composes left-to-right, prefix-truncation always yields its unique ancestor, and
+no edge of the finest-level half-hexagon tiling crosses a coarser half-hexagon
+boundary. Hexagons are assembled from two half-hexagons, and 3 of the 9 child
+hexagons per level (digits 6–8) straddle a d_cell boundary and have two valid
+parents; the canonical mode-0 convention selects one, and the exact ancestor is
+recovered from the address tail (§10b). Under that convention the canonical
+parent function is well-defined at every level and multi-resolution roll-up is
+exact — but, unlike the unconditional quad hierarchies of S2 and HEALPix,
+hexagon roll-up requires deriving the canonical ancestor (via the tail) before
+truncating, and the split-cell ambiguity can nest: a run of split digits stays
+ambiguous until the tail resolves it. H3's aperture-7 subdivision is weaker still
+— it does not nest children inside parents at all: a child hexagon may overlap
+two coarser cells, parent assignment is approximate, and a shared parent does not
+imply a shared grandparent. In short, Hex9's half-hexagon hierarchy is exactly
+nested; its hexagon hierarchy is nested by convention.
 
 **Area.** HEALPix is strictly equal-area but pays in cell shape: its cells are
 quadrilaterals of visibly varying geometry. H3 and S2 are not equal-area; cell
@@ -1202,21 +1242,47 @@ at every level, and point membership reduces to a fixed set of linear
 inequalities (§10a). Comparisons of aperture across systems should note this
 distinction.
 
+We coin "shifted aperture 9" to be explicit about the offset. Each parent has
+exactly nine children — aperture 9 in the strict sense — but they carry a
+translational shift rather than sitting centred on the parent. This parallels
+H3, whose aperture-7 children carry a rotational offset between successive
+resolutions yet are still called aperture 7; we prefer to surface the offset in
+the name rather than leave it implicit.
+
 **Reference body.** H3, S2, and HEALPix are defined on the sphere; ellipsoidal
 use requires an auxiliary-latitude transformation with its own distortion budget.
-Hex9 is defined against the reference ellipsoid directly: the warp is computed
-from geodesic areas on WGS84, and recomputed for any other reference body (§11d).
+Hex9 is defined against any two-axis reference ellipsoid directly: the warp is
+computed from geodesic areas on that body and recomputed for any other (§11d).
+Trained warps currently exist for WGS84 and the sphere; the C implementation
+(libhex9) is tuned for WGS84. WGS84 is the default, not a constraint.
 
-*[Figure: side-by-side cell renderings of H3 / S2 / HEALPix / Hex9 over the same
-region, same nominal resolution — optional, if licensing permits. (F14)]*
+**Distance isotropy.** A hexagonal tiling gives every cell six neighbours at a
+single edge-to-edge distance, so the grid privileges no direction and
+nearest-neighbour and traversal distances are uniform. A quadrilateral grid does
+not: S2's edge neighbours and corner neighbours differ by a factor of $\sqrt{2}$, which
+biases distance and adjacency computations along the diagonal. Hex9 and H3 are
+isotropic in this sense; A5's pentagonal cells are markedly elongated
+(aspect ≈ 2.14), so their neighbour distances are not uniform.
+
+**Dual DGGS/CRS role.** This is the row no other system marks "yes", and it is
+the paper's central claim (§9, §10e, Appendix A): a single Hex9 address is a
+DGGS zone identifier when truncated at a level (OGC Topic 21), and in the limit a
+function recovers from it a point on the ellipsoid to arbitrary precision. We
+state this as the weaker, defensible claim — the addressing is *quasi-continuous*
+(§10e), not a strict ISO 19111 CRS: the recovery map is discrete-valued and jumps
+across a measure-zero set of seams, where continuity in the ISO sense fails. The
+distinction from the others is nonetheless real: H3, S2, and HEALPix are indexing
+schemes layered over a pre-existing CRS; they identify cells, but their
+identifiers do not double as position-recovery coordinates.
 
 ---
 
 ## 13. Implementation
 
-Three implementations exist at different stages of maturity: a Python reference
-implementation (the `hhg9` package), a C++ PROJ plugin (`h9_boct`), and a planned
-PostGIS extension wrapping the C++ core.
+Hex9 is implemented in **libhex9**, a C/C++ core library with several front-ends:
+a PostGIS extension, a Python accelerator binding, and a set of Python
+command-line tools. The earlier Python package (`hhg9`) remains as a readable
+reference implementation and produced the warp characterisation of §11b.
 
 ### 13a. The partition cycle
 
@@ -1234,49 +1300,84 @@ Decoding runs the cycle in reverse, with one structural caveat: the split cells
 of §10b make the x_list right-to-left, so the decoder first reads the tail to fix
 the terminal mode and then resolves canonical parentage upward in a single pass.
 
-### 13b. Address encodings
+### 13b. Address encoding
 
-Two packed forms cover the practical range:
+A Hex9 address packs into a single standard 128-bit UUID as 32 nibbles: the first
+30 carry the hierarchy path (layers 0–29, one base-9 digit per level), and the
+final two carry the tail (§10b). Those two tail nibbles take one of two forms. The
+**reversible** tail packs the terminal region (the d_cell id h), p_mo, p_c2 and
+r_mo — everything needed for an exact round trip to a representative point. The
+**bin** (key) tail packs only p_c2 and r_mo, with 0xF in the low nibble as a
+sentinel — enough to bin and join uniquely, but not to recover the exact terminal
+cell. A single 128-bit value therefore serves either as an exact reversible
+coordinate or as a pure spatial key, with no companion field.
 
-**UUID (128 bits).** Thirty-one nibbles carry the L0–L30 hierarchy path — one
-base-9 digit per level — and the final nibble carries the key tail (p_c2 and
-r_mo; §10b). At L30 the cell scale is sub-atomic, so 128 bits is effectively
-unlimited precision for any practical application. The format drops directly into
-any database, PostGIS column, or API that accepts a standard UUID; hierarchy
-traversal is nibble truncation, and spatial binning is prefix comparison, with no
-decoding step.
+The format drops directly into any database, PostGIS column, or API that accepts a
+standard UUID; hierarchy traversal is nibble truncation and spatial binning is
+prefix comparison, with no decoding step. The hierarchy reaches layer 29 — far
+below any geodetic resolution (a layer-29 cell is of nanometre scale) — so 128
+bits is effectively unlimited precision in practice.
 
-**(UUID, adr_byte) pair.** One companion byte (5 bits used: p_mo and the terminal
-d_cell id h) restores what the key tail discards, enabling the exact round trip to
-a representative point — full CRS behaviour. The separation is deliberate:
-spatial indexing needs the UUID alone; coordinate recovery needs the pair; most
-applications never touch the companion byte.
+### 13c. The core library and tooling
 
-### 13c. Python reference implementation
+The `libhex9` C/C++ core implements the full pipeline: the AK base projection
+with its analytic Jacobian, the authalic warp (Clough–Tocher interpolant,
+Newton–Raphson inverse), encoding and decoding, k-ring neighbour computation, and
+cell-polygon generation, with the trained WGS84 warp embedded in the library. A
+Python accelerator (`hex9_ext`) exposes the core to Python at native speed with
+OpenMP batch encoding, and two Python command-line tools wrap the common
+workflows: `h9_csv` appends a reversible `h9_uuid` column — and, optionally,
+canonical bin or label columns — to a latitude/longitude CSV, streaming so it
+handles large files; `h9_choropleth` turns a point CSV into an adaptive Hex9
+choropleth as a GeoJSON feature collection, with no PostGIS or QGIS in the loop.
+The `hhg9` Python package remains the readable reference: it produced the warp
+characterisation of §11b and the figures in this paper, with all grid operations
+vectorised over NumPy arrays.
 
-The `hhg9` package implements the full pipeline: domain and projection
-management, the AK base projection with its analytical Jacobian, the authalic
-warp (Clough-Tocher forward, Newton-Raphson inverse), encoding and decoding,
-neighbour computation, polygon generation, and GeoPackage/GeoTIFF export. All
-grid operations are vectorised over NumPy arrays. The warp characterisation of
-§11b is produced by this implementation.
+### 13d. PostGIS extension
 
-### 13d. PROJ plugin
+`libhex9` ships a PostGIS extension (`postgis_hex9`) that exposes the full surface
+in SQL: `h9_encode`/`h9_decode`, `h9_bin` and `h9_label`, the cell- and
+grid-polygon builders (`h9_cell`, `h9_grid`), neighbour queries (`h9_kring`,
+`h9_kdisk`, `h9_neighbors`), `h9_common_ancestor` for exact roll-up, and
+`h9_adaptive` for population-driven mixed-resolution layers — so a Hex9 address is
+a first-class spatial key inside the database. It is built on the C/C++ core
+rather than Python, since most managed PostGIS environments treat Python as an
+untrusted language. (Distribution is handled directly through `libhex9`: PostGIS
+is winding down its third-party extension distribution programme.)
 
-`h9_boct` is a C++ port of the hierarchy walk and warp inversion as a PROJ
-projection plugin, making Hex9 coordinates available to the standard geospatial
-toolchain (proj, GDAL, QGIS) as a CRS. Round-trip accuracy is within tens of
-nanometres of the Python reference; the residual difference traces to
-Newton-Raphson iteration depth in the inverse warp (see the precision note in
-§11b).
+### 13e. On not registering a CRS
 
-### 13e. PostGIS extension (planned)
+A PROJ/GDAL CRS plugin was prototyped (`h9_boct`, a C++ port of the hierarchy
+walk and warp inversion), and the round trip matches the reference to within tens
+of nanometres. We do not, however, pursue registering Hex9 as a PROJ/GDAL
+coordinate reference system. The reason is the one developed in §10e: Hex9 is
+quasi-continuous, not a strict ISO 19111 CRS, so presenting it through the CRS
+machinery would overstate what it is. Applications instead use the core library
+and its bindings directly, treating Hex9 as the discrete addressing system it is.
 
-A C extension wrapping the `h9_boct` core will expose encode, decode, binning,
-and neighbour functions inside PostGIS. The implementation deliberately excludes
-Python: most managed PostGIS environments treat it as an untrusted language. A
-working PostGIS extension is also evidence of implementability for the OGC
-submission path.
+### 13f. Inverse projection by guarded Gauss–Newton
+
+The base-projection inverse — ellipsoid point to octant face coordinate — is the
+one numerically non-trivial step. `libhex9` provides a fast analytic-Jacobian
+solver for it, root-identical to the exact beam search in the smooth interior, at
+one analytic forward-and-Jacobian evaluation per iteration instead of several
+finite-difference evaluations each running an ECEF→geodetic (Bowring) step. The
+unknowns are the two face coordinates $(f_x, f_y)$; the residual
+$r = P(f_x, f_y) - E$ is the 3-vector, in ECEF metres, between the AK forward map
+$P$ and the target point $E$ on the WGS84 ellipsoid. Because the forward map lands
+exactly on the ellipsoid, the least-squares root coincides with the true geodetic
+match — there is no auxiliary-latitude (Bowring) step inside the loop. Each
+iteration solves the $2\times2$ normal equations $(J^{\mathsf{T}}J)\,\delta =
+-J^{\mathsf{T}} r$ from the $3\times2$ Jacobian $J = \partial P/\partial(f_x,f_y)$,
+which is fully analytic: the chain of $\partial\mathrm{AK}/\partial(u,v,w)$
+(tangent-power derivatives and the ellipsoid-normalising quotient) composed with
+the affine $\partial(u,v,w)/\partial(f_x,f_y)$, and checked against central
+differences. A backtracking line search (halving the step until $\lVert r
+\rVert^2$ decreases) makes it a strictly damped, guarded Gauss–Newton iteration; a
+seam/vertex guard and a failure veto route the thin skin around seams and vertices
+to the exact beam search, which remains the reference. The implementation is
+`libhex9/tools/newton_invert_aj.h`.
 
 ---
 
@@ -1310,9 +1411,7 @@ population density (count per authalic cell area), so the fill is directly
 comparable across levels without area correction — a single coherent grid whose
 cells span seven levels at once.
 
-*[Figure 23: Thimphu, Bhutan — population-driven adaptive refinement spanning
-L5–L12 in one mixed-resolution Hex9 layer; fill is population density per
-authalic cell area [@hdx_bhutan_pop]. (F23)]*
+![Thimphu, Bhutan — population-driven adaptive refinement spanning L5–L12 in one mixed-resolution Hex9 layer; fill is population density per authalic cell area, directly comparable across levels without area correction.^[Rendered in QGIS via `h9_adaptive()` over the Bhutan population layer [@hdx_bhutan_pop].]](paper_figures/thimpu_chloropleth_web.jpg){width=80%}
 
 ### 14b. Spatial joins and multi-resolution analysis
 
@@ -1336,8 +1435,29 @@ renderer's, not the data's, and a bounds filter suffices. Second, at the six
 octahedral vertices the 4-valent cells are correct as constructed (§10f) and need
 no special-case rendering.
 
-*[Figure: the same Hex9 layer rendered in b_oct (regular), Mollweide, and
-Mercator — distortion belongs to the map. (F16)]*
+```{=latex}
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.9\linewidth]{ex0097_butterfly0500_2_web.jpg}\\[2pt]
+{\footnotesize (a) b\_oct (native): every cell a congruent regular hexagon.}\\[8pt]
+\begin{minipage}[t]{0.49\linewidth}\centering
+\includegraphics[width=\linewidth]{bm_mollweide_web.jpg}\\[2pt]
+{\footnotesize (b) Mollweide (equal-area): areas preserved, shapes shear.}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}\centering
+\includegraphics[width=\linewidth]{bm_mercator_web.jpg}\\[2pt]
+{\footnotesize (c) Mercator (conformal): cells balloon toward the poles.}
+\end{minipage}
+\caption{The same Hex9 layer in three projections --- the distortion belongs to
+the map, not the cells (\S14c). In the native b\_oct space (a) every cell is a
+congruent regular hexagon; an equal-area projection (b) keeps cell areas
+comparable while shearing their shapes; a conformal projection (c) preserves
+local angles but inflates the polar cells without bound (the largest are the
+octahedral-vertex cells). Sources: b\_oct butterfly from
+\texttt{examples/ex0097\_smp\_grid.py}; Mollweide and Mercator rendered in QGIS.
+Backdrop: NASA Blue Marble.}
+\end{figure}
+```
 
 ### 14d. Graticule alignment
 
@@ -1381,9 +1501,10 @@ them, and a variant making the other choice is the same mathematical object.
 
 Everything the system offers follows from that determinacy. Because no residual
 design freedom exists, cell identity is well-defined without reference to any
-prior coordinate system, and the address can serve as both DGGS cell identifier
-and, in the limit, CRS coordinate — the dual claim of §9 and §10e, formalised in
-Appendix A. The geometric realisation is a separable concern: the AK base
+prior coordinate system, and the address can serve as both a DGGS cell
+identifier and, in the limit, a position-recovery coordinate — quasi-continuous
+rather than a strict ISO 19111 CRS (§10e) — the dual role developed in §9 and
+§10e and formalised in Appendix A. The geometric realisation is a separable concern: the AK base
 projection and the optimal-transport warp place the abstract structure on WGS84
 with quasi-uniform areas, and either layer can be substituted without disturbing
 the grid.
@@ -1399,22 +1520,28 @@ six vertex singularities is a one-time, layer-independent measurement not yet
 made. Deeper-layer warps (L6+ derived rather than interpolated) would reduce the
 inter-mode residual further.
 
-**Implementation.** The PostGIS C extension is the main outstanding engineering
-item, and the strongest practical evidence for the standardisation path. Warp
-files for legacy ellipsoids (Bessel 1841, Clarke 1866) and at least one planetary
-body would demonstrate the generality claim concretely.
+**Implementation and maintenance.** The core engineering work — the `libhex9`
+C/C++ library, its PostGIS extension, the Python accelerator, and the CLI tools
+(§13) — is in place; the forward effort is supporting, hardening, and improving
+it rather than building new infrastructure. Warp files for legacy ellipsoids
+(Bessel 1841, Clarke 1866) and at least one planetary body would demonstrate the
+generality claim concretely.
 
 **Verification.** The R-rotation form of constraint B (§8) remains available as
 an independent cross-check of the tiling enumeration. The C1 continuity of the
 warp at octant boundaries is asserted from the construction and should be
 characterised explicitly.
 
-**Standardisation.** The intended path is publication, then engagement with the
-OGC DGGS Standards Working Group toward a Community Standard, with the PostGIS
-extension as the working-implementation evidence. The OGC/ISO terminology mapping
-is provided in Appendix B (§10.0, glossary); a final pass confirming the exact
-wording against the current editions of Topic 21 and ISO 19111 remains a
-pre-submission task.
+**Standardisation and community.** A formal channels considered earlier is no
+longer being pursued: registration as a PROJ/GDAL CRS; because Hex9 is 
+better identified as quasi-continuous rather than a strict ISO 19111 CRS 
+(§10e, §13e). Discussions with PostGIS likewise suggested that it is better to 
+persue PostGIS integration as a separate 3rd party rather than look to integrate
+into the core; and this thought has been readily accepted.
+The path remains open engagement with the discrete-global-grid community around
+the existing `libhex9` implementation, rather than a formal standards submission.
+The OGC/ISO terminology mapping of Appendix B is offered in that spirit — as a
+bridge for readers coming from those standards, not a claim of conformance.
 
 ---
 
@@ -1473,10 +1600,15 @@ seam points, exactly as decimal notation selects 0.5 over 0.4999….
 
 **The dual claim** follows: σ truncated to L digits names a compact cell of area
 510,065,622 km² / (12 · 9^L) on WGS84 (≈ 42.5 million km² at L0, 719.8 km² at L5)
-— a DGGS cell in the sense of OGC Topic 21; σ in the limit names a point — a
-coordinate in the sense of ISO 19111. The contraction ratio 1/3 is geometrically
-determined by the ternary subdivision, so the convergence rate is explicit: one
-address digit buys a factor-3 reduction in positional uncertainty.
+— a DGGS cell in the sense of OGC Topic 21; σ in the limit names a point, a
+position recoverable by a function to arbitrary precision. This is the
+quasi-continuous coordinate role of §10e, not a continuous ISO 19111 coordinate
+system: the recovery map is well-defined and continuous in the decode direction
+(infinite address → point), but the address alphabet is discrete and the encode
+direction jumps across the measure-zero seam set just established. The
+contraction ratio 1/3 is geometrically determined by the ternary subdivision, so
+the convergence rate is explicit: one address digit buys a factor-3 reduction in
+positional uncertainty.
 
 ---
 
@@ -1522,17 +1654,21 @@ This paper keeps "cell" in prose for readability; the OGC-facing term is "zone".
 |---|---|---|
 | WGS84 reference ellipsoid | ellipsoid / geodetic reference frame (datum) | C |
 | Prime Meridian anchoring (Axiom 7) | prime meridian | C |
-| `x_adr` carried to the limit (§10e, App. A) | coordinate (a point in a CRS) | C |
-| Hex9 as a locating system | coordinate reference system (CRS) | P |
+| `x_adr` carried to the limit (§10e, App. A) | position recoverable by a function (quasi-continuous; not a strict ISO coordinate) | P |
+| Hex9 as a locating system | coordinate reference system (CRS) — *quasi*, see §10e | P |
 | b_oct | a coordinate system realised by AK+Warp | P |
 | encode / decode (point ↔ address) | coordinate operation / conversion | P |
 | octant 2D plane coordinates | coordinate system (CS) axes | P |
 
-The dual claim of §9, §10e, and Appendix A is exactly the bridge between these
-two tables: one Hex9 address is a Topic 21 zone identifier when truncated at a
-level and an ISO 19111 coordinate in the limit. Final verification of the exact
-spec wording against the current editions of both standards is a pre-submission
-task (§15).
+The dual role of §9, §10e, and Appendix A is the bridge between these two tables:
+one Hex9 address is a Topic 21 zone identifier when truncated at a level and, in
+the limit, a position recoverable by a function to arbitrary precision. We make
+the weaker, defensible claim — *quasi-continuous*, by analogy with
+quasi-authalic — rather than asserting a strict ISO 19111 CRS: the address space
+is discrete and the point→address map is discontinuous on a measure-zero seam set
+(§10e), so continuity in the ISO sense does not hold. Final verification of the
+exact spec wording against the current editions of both standards is a
+pre-submission task (§15).
 
 ---
 
@@ -1551,60 +1687,27 @@ figures and their section anchors.
 | F5 | §10a | Classifier (c-layer): 96-slot c_grid, three band families → c_dig |
 | F6 | §10b | London / Prime Meridian split-cell example |
 | F7 | §10d / §10f | Sibling adjacency: internal vs cross-parent edges |
-| F8 | §10d / §10f | Octant seam: c2 edges matching across boundary |
-| F10 | §10f | Octahedral vertex neighbourhood (4 faces, c2=0) |
 | F11 | §11 | Pipeline diagram b_raw → warp → b_oct → address |
-| F12 | §11b | Area-deviation globe, diverging scale (magnitude view) |
+| F12 | §11b | Area-deviation globe, ±1% capped (magnitude view) |
 | F12b | §11b | Area-deviation Mollweide, clipped scale (pattern view: seam skeleton) |
+| F12c | §11b | North-pole L5 crop — where "quasi" lives |
 | F13 | §11c | Tissot indicatrices on the b_oct butterfly net (warp applied) |
-| F14 | §12 | (optional) H3 / S2 / HEALPix / Hex9 same-region cells |
 | F15 | §14a | Population heatmap binned to Hex9 |
 | F16 | §14c | Same layer in b_oct / Mollweide / Mercator |
-| F17 | Intro / §5 | Octant boundaries over political world map (chirality convention) |
 | F20 | §2 / §7 / §8 | Wallpaper group of the d_cell tiling (p31m) |
 | F21 | §9 / §10 (graphical abstract) | Seed solid (24 d_cell facets) + 12 root x_cells |
 | F23 | §14a | Thimphu adaptive refinement (L5–L12), population density choropleth |
 
 ---
 
-## References
+## Acknowledgements {.unnumbered}
 
-References are maintained in BibTeX at `references.bib`; the list below is for
-reading convenience.
+The octahedral base projection (§11a) is due to Anders Kaseorg
+[@kaseorg_octahedral]. Anthropic's Claude was used as a drafting and editing
+assistant; the author alone is responsible for all claims, derivations, and
+decisions in this work.
 
-- Kaseorg, A. (2025). *Analytic octahedral projection* (Mathematics Stack
-  Exchange answer; tangent substitution, coupling parameter α ≈ 3.2278).
-  https://math.stackexchange.com/questions/5016695/  [`kaseorg_octahedral`]
-- Sahr, K., White, D. & Kimerling, A. J. (2003). Geodesic Discrete Global Grid
-  Systems. *Cartography and Geographic Information Science* 30(2): 121–134.
-  [`sahr2003geodesic`]
-- Open Geospatial Consortium (2021). *OGC Abstract Specification Topic 21:
-  Discrete Global Grid Systems — Part 1*, 20-040r3. [`ogc_topic21`]
-- International Organization for Standardization (2019). *ISO 19111:2019
-  Geographic information — Referencing by coordinates*. [`iso19111`]
-- Grünbaum, B. & Shephard, G. C. (1987). *Tilings and Patterns*. W. H. Freeman.
-  [`grunbaum1987tilings`]
-- Palmer, F. (2024). *A5: A Pentagonal Global Grid System*. https://a5geo.org
-  (author/URL to be confirmed). [`a5`]
-- Uber Technologies (2018). *H3: A Hexagonal Hierarchical Geospatial Indexing
-  System*. https://h3geo.org  [`h3`]
-- Google (2017). *S2 Geometry*. https://s2geometry.io  [`s2`]
-- Górski, K. M. et al. (2005). HEALPix: A Framework for High-Resolution
-  Discretization and Fast Analysis of Data Distributed on the Sphere. *The
-  Astrophysical Journal* 622(2): 759–771. [`healpix`]
-- Snyder, J. P. (1987). *Map Projections — A Working Manual*. USGS Professional
-  Paper 1395. [`snyder1987map`]
-- Snyder, J. P. (1992). An Equal-Area Map Projection for Polyhedral Globes.
-  *Cartographica* 29(1): 10–21. [`snyder1992equal`]
-- Lee, L. P. (1965). Some Conformal Projections Based on Elliptic Functions.
-  *Geographical Review* 55(4): 563–580. [`lee1965conformal`]
-- Cuturi, M. (2013). Sinkhorn Distances: Lightspeed Computation of Optimal
-  Transport. *NeurIPS 26*: 2292–2300. [`cuturi2013sinkhorn`]
-- Clough, R. W. & Tocher, J. L. (1965). Finite Element Stiffness Matrices for
-  Analysis of Plates in Bending. *Proc. Conf. Matrix Methods in Structural
-  Mechanics*: 515–545. [`clough1965finite`]
-- Meta Data for Good & CIESIN, Columbia University (2020). *Bhutan: High
-  Resolution Population Density Maps + Demographic Estimates*. Humanitarian Data
-  Exchange. [`hdx_bhutan_pop`]
-- Perron, L. & Furnon, V. (2023). *OR-Tools*. Google.
-  https://developers.google.com/optimization  [`ortools`]
+## References {.unnumbered}
+
+::: {#refs}
+:::

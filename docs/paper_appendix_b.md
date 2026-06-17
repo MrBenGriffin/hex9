@@ -40,14 +40,18 @@ This paper keeps "cell" in prose for readability; the OGC-facing term is "zone".
 |---|---|---|
 | WGS84 reference ellipsoid | ellipsoid / geodetic reference frame (datum) | C |
 | Prime Meridian anchoring (Axiom 7) | prime meridian | C |
-| `x_adr` carried to the limit (§10e, App. A) | coordinate (a point in a CRS) | C |
-| Hex9 as a locating system | coordinate reference system (CRS) | P |
+| `x_adr` carried to the limit (§10e, App. A) | position recoverable by a function (quasi-continuous; not a strict ISO coordinate) | P |
+| Hex9 as a locating system | coordinate reference system (CRS) — *quasi*, see §10e | P |
 | b_oct | a coordinate system realised by AK+Warp | P |
 | encode / decode (point ↔ address) | coordinate operation / conversion | P |
 | octant 2D plane coordinates | coordinate system (CS) axes | P |
 
-The dual claim of §9, §10e, and Appendix A is exactly the bridge between these
-two tables: one Hex9 address is a Topic 21 zone identifier when truncated at a
-level and an ISO 19111 coordinate in the limit. Final verification of the exact
-spec wording against the current editions of both standards is a pre-submission
-task (§15).
+The dual role of §9, §10e, and Appendix A is the bridge between these two tables:
+one Hex9 address is a Topic 21 zone identifier when truncated at a level and, in
+the limit, a position recoverable by a function to arbitrary precision. We make
+the weaker, defensible claim — *quasi-continuous*, by analogy with
+quasi-authalic — rather than asserting a strict ISO 19111 CRS: the address space
+is discrete and the point→address map is discontinuous on a measure-zero seam set
+(§10e), so continuity in the ISO sense does not hold. Final verification of the
+exact spec wording against the current editions of both standards is a
+pre-submission task (§15).

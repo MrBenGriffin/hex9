@@ -1,93 +1,46 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" width="77.1mm" height="38.9mm" version="1.1" viewBox="0 0 218.5 110.4">
-  <!-- Generator: Adobe Illustrator 29.3.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 151)  -->
-  <defs>
-    <style>
-      .st0 {
-        fill: #f0f0f0;
-        stroke: #ccc;
-      }
-
-      .st0, .st1, .st2, .st3 {
-        stroke-width: .5px;
-      }
-
-      .st1 {
-        fill: #2ecc71;
-      }
-
-      .st1, .st2, .st3 {
-        stroke: #fff;
-      }
-
-      .st4 {
-        font-size: 8px;
-      }
-
-      .st4, .st5 {
-        font-family: CourierNewPSMT, 'Courier New';
-        isolation: isolate;
-      }
-
-      .st4, .st6 {
-        fill: #fff;
-      }
-
-      .st5 {
-        font-size: 10px;
-      }
-
-      .st2 {
-        fill: #5bacd8;
-      }
-
-      .st3 {
-        fill: #fb9837;
-      }
-    </style>
-  </defs>
-  <line class="st6" x1=".2" y1="110.2" x2=".2" y2=".2"/>
-  <rect class="st0" x=".2" y=".2" width="218" height="109.9" rx="3" ry="3"/>
-  <text class="st5" transform="translate(27.2 15.2)"><tspan x="0" y="0">044040222</tspan></text>
-  <g>
-    <polygon class="st1" points="99.2 101.2 69.2 101.2 84.2 75.2 99.2 101.2"/>
-    <text class="st4" transform="translate(81.8 96.6)"><tspan x="0" y="0">0</tspan></text>
-    <polygon class="st2" points="69.2 101.2 39.2 101.2 54.2 75.2 69.2 101.2"/>
-    <text class="st4" transform="translate(51.8 96.6)"><tspan x="0" y="0">4</tspan></text>
-    <polygon class="st2" points="39.2 101.2 9.2 101.2 24.2 75.2 39.2 101.2"/>
-    <text class="st4" transform="translate(21.8 96.6)"><tspan x="0" y="0">4</tspan></text>
-    <polygon class="st1" points="84.2 75.2 54.2 75.2 69.2 101.2 84.2 75.2"/>
-    <text class="st4" transform="translate(66.8 87.8)"><tspan x="0" y="0">0</tspan></text>
-    <polygon class="st2" points="54.2 75.2 24.2 75.2 39.2 101.2 54.2 75.2"/>
-    <text class="st4" transform="translate(36.8 87.8)"><tspan x="0" y="0">4</tspan></text>
-    <polygon class="st1" points="84.2 75.2 54.2 75.2 69.2 49.2 84.2 75.2"/>
-    <text class="st4" transform="translate(66.8 70.5)"><tspan x="0" y="0">0</tspan></text>
-    <polygon class="st3" points="54.2 75.2 24.2 75.2 39.2 49.2 54.2 75.2"/>
-    <text class="st4" transform="translate(36.8 70.5)"><tspan x="0" y="0">2</tspan></text>
-    <polygon class="st3" points="69.2 49.2 39.2 49.2 54.2 75.2 69.2 49.2"/>
-    <text class="st4" transform="translate(51.8 61.9)"><tspan x="0" y="0">2</tspan></text>
-    <polygon class="st3" points="69.2 49.2 39.2 49.2 54.2 23.2 69.2 49.2"/>
-    <text class="st4" transform="translate(51.8 44.5)"><tspan x="0" y="0">2</tspan></text>
+<svg xmlns="http://www.w3.org/2000/svg" width="658.0" height="109.9" viewBox="-4 -4 658.0 109.9">
+  <rect x="-4" y="-4" width="658.0" height="109.9" fill="white"/>
+  <rect x="-4.0" y="-4.0" width="218.0" height="109.9" rx="3" fill="#f0f0f0" stroke="#ccc" stroke-width="0.5"/>
+  <text x="50.0" y="11.0" font-size="10" text-anchor="middle" font-family="monospace">222040440</text>
+  <g transform="translate(5.00 19.00) rotate(180 45.00 38.97)">
+    <polygon points="0.00,0.00 30.00,0.00 15.00,25.98" fill="#2ecc71" stroke="white" stroke-width="0.5"/>
+    <text x="15.0" y="12.7" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 15.00 8.66)">0</text>
+    <polygon points="30.00,0.00 60.00,0.00 45.00,25.98" fill="#5bacd8" stroke="white" stroke-width="0.5"/>
+    <text x="45.0" y="12.7" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 45.00 8.66)">4</text>
+    <polygon points="60.00,0.00 90.00,0.00 75.00,25.98" fill="#5bacd8" stroke="white" stroke-width="0.5"/>
+    <text x="75.0" y="12.7" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 75.00 8.66)">4</text>
+    <polygon points="15.00,25.98 45.00,25.98 30.00,0.00" fill="#2ecc71" stroke="white" stroke-width="0.5"/>
+    <text x="30.0" y="21.3" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 30.00 17.32)">0</text>
+    <polygon points="45.00,25.98 75.00,25.98 60.00,0.00" fill="#5bacd8" stroke="white" stroke-width="0.5"/>
+    <text x="60.0" y="21.3" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 60.00 17.32)">4</text>
+    <polygon points="15.00,25.98 45.00,25.98 30.00,51.96" fill="#2ecc71" stroke="white" stroke-width="0.5"/>
+    <text x="30.0" y="38.6" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 30.00 34.64)">0</text>
+    <polygon points="45.00,25.98 75.00,25.98 60.00,51.96" fill="#fb9837" stroke="white" stroke-width="0.5"/>
+    <text x="60.0" y="38.6" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 60.00 34.64)">2</text>
+    <polygon points="30.00,51.96 60.00,51.96 45.00,25.98" fill="#fb9837" stroke="white" stroke-width="0.5"/>
+    <text x="45.0" y="47.3" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 45.00 43.30)">2</text>
+    <polygon points="30.00,51.96 60.00,51.96 45.00,77.94" fill="#fb9837" stroke="white" stroke-width="0.5"/>
+    <text x="45.0" y="64.6" font-size="8" text-anchor="middle" fill="white" font-family="monospace" transform="rotate(180 45.00 60.62)">2</text>
   </g>
-  <text class="st5" transform="translate(137.2 15.2)"><tspan x="0" y="0">442420200</tspan></text>
-  <g>
-    <polygon class="st2" points="119.2 23.2 149.2 23.2 134.2 49.2 119.2 23.2"/>
-    <text class="st4" transform="translate(131.8 36)"><tspan x="0" y="0">4</tspan></text>
-    <polygon class="st2" points="149.2 23.2 179.2 23.2 164.2 49.2 149.2 23.2"/>
-    <text class="st4" transform="translate(161.8 36)"><tspan x="0" y="0">4</tspan></text>
-    <polygon class="st3" points="179.2 23.2 209.2 23.2 194.2 49.2 179.2 23.2"/>
-    <text class="st4" transform="translate(191.8 36)"><tspan x="0" y="0">2</tspan></text>
-    <polygon class="st2" points="134.2 49.2 164.2 49.2 149.2 23.2 134.2 49.2"/>
-    <text class="st4" transform="translate(146.8 44.5)"><tspan x="0" y="0">4</tspan></text>
-    <polygon class="st3" points="164.2 49.2 194.2 49.2 179.2 23.2 164.2 49.2"/>
-    <text class="st4" transform="translate(176.8 44.5)"><tspan x="0" y="0">2</tspan></text>
-    <polygon class="st1" points="134.2 49.2 164.2 49.2 149.2 75.2 134.2 49.2"/>
-    <text class="st4" transform="translate(146.8 61.8)"><tspan x="0" y="0">0</tspan></text>
-    <polygon class="st3" points="164.2 49.2 194.2 49.2 179.2 75.2 164.2 49.2"/>
-    <text class="st4" transform="translate(176.8 61.8)"><tspan x="0" y="0">2</tspan></text>
-    <polygon class="st1" points="149.2 75.2 179.2 75.2 164.2 49.2 149.2 75.2"/>
-    <text class="st4" transform="translate(161.8 70.5)"><tspan x="0" y="0">0</tspan></text>
-    <polygon class="st1" points="149.2 75.2 179.2 75.2 164.2 101.2 149.2 75.2"/>
-    <text class="st4" transform="translate(161.8 87.8)"><tspan x="0" y="0">0</tspan></text>
+  <text x="160.0" y="11.0" font-size="10" text-anchor="middle" font-family="monospace">002024244</text>
+  <g transform="translate(115.00 19.00)">
+    <polygon points="0.00,0.00 30.00,0.00 15.00,25.98" fill="#5bacd8" stroke="white" stroke-width="0.5"/>
+    <text x="15.0" y="12.7" font-size="8" text-anchor="middle" fill="white" font-family="monospace">4</text>
+    <polygon points="30.00,0.00 60.00,0.00 45.00,25.98" fill="#5bacd8" stroke="white" stroke-width="0.5"/>
+    <text x="45.0" y="12.7" font-size="8" text-anchor="middle" fill="white" font-family="monospace">4</text>
+    <polygon points="60.00,0.00 90.00,0.00 75.00,25.98" fill="#fb9837" stroke="white" stroke-width="0.5"/>
+    <text x="75.0" y="12.7" font-size="8" text-anchor="middle" fill="white" font-family="monospace">2</text>
+    <polygon points="15.00,25.98 45.00,25.98 30.00,0.00" fill="#5bacd8" stroke="white" stroke-width="0.5"/>
+    <text x="30.0" y="21.3" font-size="8" text-anchor="middle" fill="white" font-family="monospace">4</text>
+    <polygon points="45.00,25.98 75.00,25.98 60.00,0.00" fill="#fb9837" stroke="white" stroke-width="0.5"/>
+    <text x="60.0" y="21.3" font-size="8" text-anchor="middle" fill="white" font-family="monospace">2</text>
+    <polygon points="15.00,25.98 45.00,25.98 30.00,51.96" fill="#2ecc71" stroke="white" stroke-width="0.5"/>
+    <text x="30.0" y="38.6" font-size="8" text-anchor="middle" fill="white" font-family="monospace">0</text>
+    <polygon points="45.00,25.98 75.00,25.98 60.00,51.96" fill="#fb9837" stroke="white" stroke-width="0.5"/>
+    <text x="60.0" y="38.6" font-size="8" text-anchor="middle" fill="white" font-family="monospace">2</text>
+    <polygon points="30.00,51.96 60.00,51.96 45.00,25.98" fill="#2ecc71" stroke="white" stroke-width="0.5"/>
+    <text x="45.0" y="47.3" font-size="8" text-anchor="middle" fill="white" font-family="monospace">0</text>
+    <polygon points="30.00,51.96 60.00,51.96 45.00,77.94" fill="#2ecc71" stroke="white" stroke-width="0.5"/>
+    <text x="45.0" y="64.6" font-size="8" text-anchor="middle" fill="white" font-family="monospace">0</text>
   </g>
 </svg>

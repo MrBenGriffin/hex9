@@ -11,14 +11,30 @@
   has exactly one point in its intersection. An infinite Hex9 address sequence
   identifies exactly that point: not a region, but a location on the ellipsoid.
 
-  This means Hex9 addresses behave like real-valued coordinates in the limit. A finite
-  address identifies a region; an infinite address identifies a point. The discrete
-  address space and the continuous ellipsoid surface are related by this convergence:
-  increasing address length corresponds to increasing positional precision, with no
-  discontinuity in the relationship between the two.
+  This convergence lets a function recover position from an address to arbitrary
+  precision: decoding an address of growing length yields a sequence of points
+  converging to a unique location on the ellipsoid (Appendix A). A finite address
+  identifies a region; a sufficiently long address identifies a location to any
+  required tolerance.
 
-  At any fixed finite resolution, Hex9 remains a discrete system — cells are regions,
-  not points, and the bijection is between addresses and regions. The continuous
-  behaviour emerges in the limit, not at any single level. This is consistent with
-  the honest characterisation of §9: Hex9 is a discrete spatial reference system
-  whose structure converges to a continuous one as resolution increases.
+  This is not the same as being a coordinate reference system in the strict sense
+  of ISO 19111, and we do not claim it is. Two limitations are intrinsic. First,
+  the address alphabet is discrete: addresses form a totally disconnected sequence
+  space, not a continuum, so they are not coordinates in the real-valued sense.
+  Second, the point → address map is discontinuous on the measure-zero set of
+  d_cell seams (the split-cell boundaries of §10b): arbitrarily close points on
+  opposite sides of a seam receive addresses that differ in their leading digits.
+  ISO 19111 presupposes continuous coordinates, and Hex9 does not meet that
+  requirement.
+
+  What Hex9 offers is better described, by analogy with its quasi-authalic
+  geometry, as **quasi-continuous**: position is recoverable from the address by a
+  function, to arbitrary precision, everywhere except on a measure-zero seam set,
+  and the cell hierarchy converges to points rather than terminating at a finite
+  floor. We are not aware of another DGGS whose cell identifier doubles as a
+  position-recovery coordinate in this way, though we do not claim the property is
+  unique. At any fixed finite resolution Hex9 remains a discrete system — cells are
+  regions, the bijection is between addresses and regions — and the
+  quasi-continuous behaviour emerges only in the limit. This is consistent with
+  §9: Hex9 is a discrete spatial reference system that approaches, but does not
+  attain, a continuous one.

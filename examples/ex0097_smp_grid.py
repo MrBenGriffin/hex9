@@ -86,7 +86,7 @@ def run(*, flavours=None, file='src/world360x180.png', scale=1350):
         out[py, px] = rgba
         plt.imshow(out, extent=[0, n_oct.wi, 0, n_oct.he], alpha=1.0, origin='upper', aspect='auto')
         lw = [2, 1]
-        for li, layer in enumerate([1, 2]):
+        for li, layer in enumerate([2]):
             hex_num, hex_v_k, hex_inv, counts = hex_reduce(b_pts, layer)
             # tails = tail_key_from_reversible(hex_v_k[:, -1])
             hex_par, hex_oid, scale = hex_parents(b_oct, hex_v_k, hex_num)

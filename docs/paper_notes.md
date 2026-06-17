@@ -83,9 +83,9 @@ Applying the lemma inductively: shared canonical ancestry at level L ⟹ shared 
 
 | Property | H3 | S2 | HEALPix | Hex9 |
 |---|---|---|---|---|
-| Cell shape | Hex (+ pentagons) | Quad | Mixed | Hex |
+| Cell shape | Hex (+ pentagons) | Quad | Mixed | Hex (+ 12 pentagons) |
 | Equal area | No | No | Yes (strict) | ~Yes (p99 < 0.005%; balanced ±4% tail at the 6 vertices; p99.99=0.43%) |
-| Strict ancestry at all levels | No | Yes | Yes | Yes |
+| Strict ancestry at all levels | No | Yes | Yes | Half-hex: yes; hex: by convention (tail) |
 | Distance isotropy | Yes | No (√2) | Yes | Yes |
 | Dual CRS/DGGS | No | No | No | Yes |
 | Reference body | Sphere | Sphere | Sphere | Ellipsoid (WGS84) |

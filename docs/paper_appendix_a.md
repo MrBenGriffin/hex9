@@ -56,8 +56,12 @@
 
   **The dual claim** follows: σ truncated to L digits names a compact cell of
   area 510,065,622 km² / (12 · 9^L) on WGS84 (≈ 42.5 million km² at L0,
-  719.8 km² at L5) — a DGGS cell in the sense of
-  OGC Topic 21; σ in the limit names a point — a coordinate in the sense of
-  ISO 19111. The contraction ratio 1/3 is geometrically determined by the
+  719.8 km² at L5) — a DGGS cell in the sense of OGC Topic 21; σ in the limit
+  names a point, a position recoverable by a function to arbitrary precision.
+  This is the quasi-continuous coordinate role of §10e, not a continuous ISO
+  19111 coordinate system: the recovery map is well-defined and continuous in the
+  decode direction (infinite address → point), but the address alphabet is
+  discrete and the encode direction jumps across the measure-zero seam set just
+  established. The contraction ratio 1/3 is geometrically determined by the
   ternary subdivision, so the convergence rate is explicit: one address digit
   buys a factor-3 reduction in positional uncertainty.

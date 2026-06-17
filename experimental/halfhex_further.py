@@ -454,7 +454,7 @@ def display_solution(name, positions, sols, pairs):
         lbl_x = ci * (t_w + gap) + t_w / 2
         lbl_y = ri * (t_h + label_h + gap) + label_h - 3
         els.append(f'  <text x="{lbl_x:.1f}" y="{lbl_y:.1f}" font-size="10" '
-                   f'text-anchor="middle" font-family="monospace">{sol}</text>')
+                   f'text-anchor="middle" font-family="monospace">{sol[::-1]}</text>')
         t_rot = f'' if sol != solutions[sol] else f' rotate(180 {ct[0]:.2f} {ct[1]:.2f})'
 
         els.append(f'  <g transform="translate({tx:.2f} {ty:.2f}){t_rot}">')

@@ -7,13 +7,13 @@
   | Property | H3 | S2 | HEALPix | A5 | Hex9 |
   |---|---|---|---|---|---|
   | Base polyhedron | Icosahedron | Cube | (sphere-native) | Dodecahedron | Octahedron |
-  | Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hex |
+  | Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hex (+ 12 pentagons) |
   | Aperture | 7 | 4 | 4 | 5 then 4 | 9 (shifted) |
   | Equal area | No | No | Yes (strict) | Yes | Quasi (p99 < 0.005%) |
-  | Strict ancestry at all levels | No | Yes | Yes | — | Yes |
+  | Strict ancestry at all levels | No | Yes | Yes | — | Half-hex: yes; hex: by convention |
   | Distance isotropy | Yes | No (√2) | Yes | No (elongated) | Yes |
-  | Dual CRS/DGGS | No | No | No | No | Yes |
-  | Reference body | Sphere | Sphere | Sphere | Ellipsoid | Ellipsoid (WGS84) |
+  | Dual DGGS/CRS | No | No | No | No | Yes (quasi-CRS) |
+  | Reference body | Sphere | Sphere | Sphere | Ellipsoid | Any ellipsoid (per-body warp; WGS84 + sphere trained) |
 
   **Exception cells.** Euler's theorem requires exactly 12 topological
   pentagons — cells with five neighbours — in any spherical tiling by hexagons
@@ -32,15 +32,24 @@
   the boundary of the coordinate space, so the defect cells straddle the edge
   of the map rather than appearing as interior anomalies.
 
-  **Ancestry.** In Hex9 the canonical parent function is a well-defined map at
-  every level, and the canonical prefix at level L−1 is a function of the
-  canonical prefix at level L alone; by induction, two cells sharing a
-  canonical ancestor at any level share canonical ancestors at all coarser
-  levels. Multi-resolution roll-up is therefore exact. H3's aperture-7
-  subdivision does not nest children inside parents: a child hexagon may
-  overlap two coarser cells, parent assignment is approximate, and a shared
-  parent does not imply a shared grandparent. S2 and HEALPix have strict
-  hierarchies; Hex9 matches them while retaining hexagonal cells.
+  **Ancestry.** The strictly nested unit in Hex9 is the half-hexagon (d_cell),
+  not the hexagon. The d_cell hierarchy is a single-parent tree: a d_cell
+  address composes left-to-right, prefix-truncation always yields its unique
+  ancestor, and no edge of the finest-level half-hexagon tiling crosses a
+  coarser half-hexagon boundary. Hexagons are assembled from two half-hexagons,
+  and 3 of the 9 child hexagons per level (digits 6–8) straddle a d_cell
+  boundary and have two valid parents; the canonical mode-0 convention selects
+  one, and the exact ancestor is recovered from the address tail (§10b). Under
+  that convention the canonical parent function is well-defined at every level
+  and multi-resolution roll-up is exact — but, unlike the unconditional quad
+  hierarchies of S2 and HEALPix, hexagon roll-up requires deriving the canonical
+  ancestor (via the tail) before truncating, and the split-cell ambiguity can
+  nest: a run of split digits stays ambiguous until the tail resolves it. H3's
+  aperture-7 subdivision is weaker still — it does not nest children inside
+  parents at all: a child hexagon may overlap two coarser cells, parent
+  assignment is approximate, and a shared parent does not imply a shared
+  grandparent. In short, Hex9's half-hexagon hierarchy is exactly nested; its
+  hexagon hierarchy is nested by convention.
 
   **Area.** HEALPix is strictly equal-area but pays in cell shape: its cells
   are quadrilaterals of visibly varying geometry. H3 and S2 are not
@@ -81,11 +90,40 @@
   reduces to a fixed set of linear inequalities (§10a). Comparisons of
   aperture across systems should note this distinction.
 
+  We coin "shifted aperture 9" to be explicit about the offset. Each parent has
+  exactly nine children — aperture 9 in the strict sense — but they carry a
+  translational shift rather than sitting centred on the parent. This parallels
+  H3, whose aperture-7 children carry a rotational offset between successive
+  resolutions yet are still called aperture 7; we prefer to surface the offset
+  in the name rather than leave it implicit.
+
   **Reference body.** H3, S2, and HEALPix are defined on the sphere;
   ellipsoidal use requires an auxiliary-latitude transformation with its own
-  distortion budget. Hex9 is defined against the reference ellipsoid directly:
-  the warp is computed from geodesic areas on WGS84, and recomputed for any
-  other reference body (§11d).
+  distortion budget. Hex9 is defined against any two-axis reference ellipsoid
+  directly: the warp is computed from geodesic areas on that body and recomputed
+  for any other (§11d). Trained warps currently exist for WGS84 and the sphere;
+  the C implementation (libhex9) is tuned for WGS84. WGS84 is the default, not a
+  constraint.
+
+  **Distance isotropy.** A hexagonal tiling gives every cell six neighbours at a
+  single edge-to-edge distance, so the grid privileges no direction and
+  nearest-neighbour and traversal distances are uniform. A quadrilateral grid
+  does not: S2's edge neighbours and corner neighbours differ by a factor of √2,
+  which biases distance and adjacency computations along the diagonal. Hex9 and
+  H3 are isotropic in this sense; A5's pentagonal cells are markedly elongated
+  (aspect ≈ 2.14), so their neighbour distances are not uniform.
+
+  **Dual DGGS/CRS role.** This is the row no other system marks "yes", and it is
+  the paper's central claim (§9, §10e, Appendix A): a single Hex9 address is a
+  DGGS zone identifier when truncated at a level (OGC Topic 21), and in the limit
+  a function recovers from it a point on the ellipsoid to arbitrary precision. We
+  state this as the weaker, defensible claim — the addressing is
+  *quasi-continuous* (§10e), not a strict ISO 19111 CRS: the recovery map is
+  discrete-valued and jumps across a measure-zero set of seams, where continuity
+  in the ISO sense fails. The distinction from the others is nonetheless real:
+  H3, S2, and HEALPix are indexing schemes layered over a pre-existing CRS; they
+  identify cells, but their identifiers do not double as position-recovery
+  coordinates.
 
   [Figure: side-by-side cell renderings of H3 / S2 / HEALPix / Hex9 over the
   same region, same nominal resolution — optional, if licensing permits]

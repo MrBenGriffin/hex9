@@ -14,9 +14,10 @@
 
   Everything the system offers follows from that determinacy. Because no
   residual design freedom exists, cell identity is well-defined without
-  reference to any prior coordinate system, and the address can serve as both
-  DGGS cell identifier and, in the limit, CRS coordinate — the dual claim of
-  §9 and §10e, formalised in Appendix A. The geometric realisation is a
+  reference to any prior coordinate system, and the address can serve as both a
+  DGGS cell identifier and, in the limit, a position-recovery coordinate —
+  quasi-continuous rather than a strict ISO 19111 CRS (§10e) — the dual role
+  developed in §9 and §10e and formalised in Appendix A. The geometric realisation is a
   separable concern: the AK base projection and the optimal-transport warp
   place the abstract structure on WGS84 with quasi-uniform areas, and either
   layer can be substituted without disturbing the grid.

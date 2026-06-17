@@ -106,10 +106,10 @@ def cull_backface(arr, axis):
 def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x', lim_pct: float = 5.0):
     """Display a 3D point cloud using matplotlib"""
     mpl.rcParams['path.simplify'] = False
-    fig = plt.figure(figsize=(15, 15), dpi=200, frameon=False)
+    fig = plt.figure(figsize=(15, 15), dpi=300, frameon=False)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
     ax = fig.add_subplot(111, projection='3d')
-    ax.view_init(elev=30, azim=40)
+    ax.view_init(elev=90, azim=0)
     axis = mplot_ax_vector(ax)
     all_polys = arr.coords.reshape(-1, poly_len, 3)
     mask = cull_backface(all_polys, axis)
@@ -124,12 +124,11 @@ def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x', lim_pct:
     sm = plt.cm.ScalarMappable(cmap=cmap_name, norm=norm)
     sm.set_array([])
     rgba, _norm = rgba_from(pct, cmap_name, norm=norm)
-    # pops = scores[mask]
     ax.set_proj_type('ortho')  # FOV = 0 deg
     if True:
-        ax.set_xlim(-4e+6, 4e+6)  # fill the area with the map.
-        ax.set_ylim(-4e+6, 4e+6)
-        ax.set_zlim(-4e+6, 4e+6)
+        ax.set_xlim(-2e+6, 2e+6)  # fill the area with the map.
+        ax.set_ylim(-2e+6, 2e+6)
+        ax.set_zlim(-3e+6, 3e+6)
     polys = [p for p in front]
 
     collection = Poly3DCollection(polys, ec='black', facecolors=rgba[mask], alpha=0.9, linewidth=0.02)
