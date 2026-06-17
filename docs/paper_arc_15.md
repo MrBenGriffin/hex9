@@ -46,5 +46,6 @@
   **Standardisation.** The intended path is publication, then engagement with
   the OGC DGGS Standards Working Group toward a Community Standard, with the
   PostGIS extension as the working-implementation evidence. The OGC/ISO
-  terminology mapping (§10.0, glossary) requires a systematic pass against
-  the current editions of Topic 21 and ISO 19111 before submission.
+  terminology mapping is provided in Appendix B (§10.0, glossary); a final
+  pass confirming the exact wording against the current editions of Topic 21
+  and ISO 19111 remains a pre-submission task.

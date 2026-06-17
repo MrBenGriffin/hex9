@@ -54,6 +54,13 @@ Applying the lemma inductively: shared canonical ancestry at level L ⟹ shared 
   | L4 + seam-band gradient | MAE ~0.45% | 300-iter gradient descent on seam ring |
   | L5 Sinkhorn (production, `WGS84_l5_warp_data`) | p99 0.0052%, σ=1.89×10⁻⁴ | re-measured 2026-06-10 via ex0080w; supersedes all earlier characterisations |
 
+- **SUPERSEDED 2026-06-12** — the block below is the pre-F6-retrain field. The
+  current canonical L5 field (deployed F6 retrain, measured via ex0081w; the
+  numbers used in the paper) is: mean exactly 0.000% (closure), min −3.57%, max
+  +4.80%, MAE 0.001%, log-ratio σ 1.99×10⁻⁴; |%dev| p50 0.0002% · p99 0.0044% ·
+  p99.99 0.43%. The old one-sided −6.93%/+0.078% spike is now a balanced ±4%
+  pair at the six octahedral vertices. Do not quote the figures below in prose.
+
 - **Current warp characterisation** (`WGS84_l5_warp_data.npz`, 708,588 hexagons, L5, WGS84 ≡ GRS80, measured 2026-06-10 via `ex0080w_warped_authalics.py`):
   - Area min/max/ideal: 669,935,030 / 720,395,109 / 719,833,841 m²
   - % dev min/mean/max: −6.932% / 0.000% (exact — confirms closure: areas sum to ellipsoid total) / +0.078%
@@ -77,7 +84,7 @@ Applying the lemma inductively: shared canonical ancestry at level L ⟹ shared 
 | Property | H3 | S2 | HEALPix | Hex9 |
 |---|---|---|---|---|
 | Cell shape | Hex (+ pentagons) | Quad | Mixed | Hex |
-| Equal area | No | No | Yes (strict) | ~Yes (p99 < 0.006%; vertex-cell tail to −6.9%; p99.99=0.28%) |
+| Equal area | No | No | Yes (strict) | ~Yes (p99 < 0.005%; balanced ±4% tail at the 6 vertices; p99.99=0.43%) |
 | Strict ancestry at all levels | No | Yes | Yes | Yes |
 | Distance isotropy | Yes | No (√2) | Yes | Yes |
 | Dual CRS/DGGS | No | No | No | Yes |
@@ -494,7 +501,7 @@ A strictly authalic projection has Jacobian determinant = 1 everywhere — area 
 
 The Sinkhorn/OT derivation avoids this. Optimal transport minimises *displacement* while achieving area equalisation — the minimum-displacement objective is an implicit regulariser against shear. It will not introduce large shape distortion just to hit det(J) = 1 exactly. Snyder's octahedral equal-area projection achieves strict det(J) = 1 analytically but with no constraint on the Jacobian's eccentricity.
 
-The result: Hex9's quasi-authalic warp trades a small area residual (p99 < 0.006%; deep tail at the six vertex singularities reaching −6.9%) for a smooth, low-shear displacement field whose distortion is bounded and characterised. For DGGS use cases:
+The result: Hex9's quasi-authalic warp trades a small area residual (p99 < 0.005%; balanced ±4% tail at the six vertex singularities) for a smooth, low-shear displacement field whose distortion is bounded and characterised. For DGGS use cases:
 - **Point binning / density**: the ~0.066% area residual is negligible; strict authalic confers no practical advantage
 - **Distance / shape operations within a cell**: low-shear cells are preferable to elongated equal-area cells
 

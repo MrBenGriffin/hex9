@@ -4,16 +4,16 @@
   documented in the literature; this section makes only the comparisons that
   bear on Hex9's claims.
 
-  | Property | H3 | S2 | HEALPix | Hex9 |
-  |---|---|---|---|---|
-  | Base polyhedron | Icosahedron | Cube | (sphere-native) | Octahedron |
-  | Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Hex |
-  | Aperture | 7 | 4 | 4 | 9 (shifted) |
-  | Equal area | No | No | Yes (strict) | Quasi (p99 < 0.006%) |
-  | Strict ancestry at all levels | No | Yes | Yes | Yes |
-  | Distance isotropy | Yes | No (√2) | Yes | Yes |
-  | Dual CRS/DGGS | No | No | No | Yes |
-  | Reference body | Sphere | Sphere | Sphere | Ellipsoid (WGS84) |
+  | Property | H3 | S2 | HEALPix | A5 | Hex9 |
+  |---|---|---|---|---|---|
+  | Base polyhedron | Icosahedron | Cube | (sphere-native) | Dodecahedron | Octahedron |
+  | Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hex |
+  | Aperture | 7 | 4 | 4 | 5 then 4 | 9 (shifted) |
+  | Equal area | No | No | Yes (strict) | Yes | Quasi (p99 < 0.005%) |
+  | Strict ancestry at all levels | No | Yes | Yes | — | Yes |
+  | Distance isotropy | Yes | No (√2) | Yes | No (elongated) | Yes |
+  | Dual CRS/DGGS | No | No | No | No | Yes |
+  | Reference body | Sphere | Sphere | Sphere | Ellipsoid | Ellipsoid (WGS84) |
 
   **Exception cells.** Euler's theorem requires exactly 12 topological
   pentagons — cells with five neighbours — in any spherical tiling by hexagons
@@ -49,6 +49,26 @@
   is quasi-authalic by construction of the warp (§11b): the residual is
   bounded, characterised, and confined to the neighbourhoods of the six
   vertex singularities.
+
+  **Shape and area, independently surveyed.** An independent survey of cell
+  geometry — enclosing-cone aspect ratio and WGS84 geodesic cell area over
+  N = 5000 uniformly-sampled cells per system — places the four systems into
+  two area tiers separated by roughly 100×. A5 and Hex9 form an equal-area
+  tier (area coefficient of variation 0.01% and 0.10% respectively); H3 and S2
+  do not (12.5% and 14.5%), and the gap is a step, not a gradient. The survey
+  reproduces Hex9's warp characterisation independently — worst cell ≈ +4.8%,
+  mean absolute deviation 0.001%, all residual pooled at the twelve
+  octahedral-vertex defects — on a third-party tool and against the WGS84
+  datum, corroborating §11b. On cell shape the order is H3 (aspect ratio 1.06,
+  roundest) < S2 (1.24) < Hex9 (1.37) < A5 (2.14): Hex9 reaches the equal-area
+  tier while staying markedly rounder than the only other equal-area system in
+  the comparison. Both metrics are resolution-invariant (reproduced to four
+  decimals five levels coarser), and the dispersion ranking
+  A5 < Hex9 < H3 < S2 is the same under every statistic tested (CV, p90, p95,
+  max/min). Hex9 is therefore the better combined shape-and-area cell among the
+  equal-area systems; A5 distributes a hair of residual more evenly
+  (max/min 1.009 vs Hex9's 1.059), but does so with substantially less round
+  cells.
 
   **Aperture.** Hex9's aperture is 9, but the subdivision is not the centred
   aperture-9 scheme of the DGGS literature. In a centred scheme one child sits

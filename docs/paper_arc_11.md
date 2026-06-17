@@ -76,14 +76,14 @@
   relevance, and comfortably under the 7 nm design threshold.
 
   The achieved area uniformity (L5, all 708,588 hexagons, WGS84, production warp
-  file, geodesic areas measured 2026-06-10): mean deviation exactly 0.000%
-  (confirming closure: the cell areas sum to the ellipsoid surface area); area
-  deviation min −6.93%, max +0.078%; log-ratio standard deviation 1.89×10⁻⁴.
-  Half of all cells are within 0.0007% of ideal area; 99% within 0.0052%;
-  99.9% within 0.039%; 99.99% within 0.28%. The extreme minimum affects a very
-  small number of cells immediately adjacent to seam and vertex locations; the
-  bulk distribution is highly uniform. The warp is quasi-authalic
-  rather than strictly authalic. A strictly authalic projection constrains only
+  file, geodesic areas): mean deviation exactly 0.000% (confirming closure: the
+  cell areas sum to the ellipsoid surface area); area deviation min −3.57%, max
+  +4.80%; mean absolute deviation 0.001%; log-ratio standard deviation
+  1.99×10⁻⁴. Half of all cells are within 0.0002% of ideal area; 99% within
+  0.0044%; 99.99% within 0.43%. The extreme values are a balanced ±4% pair
+  affecting a very small number of cells immediately adjacent to the six
+  octahedral vertices; the bulk distribution is highly uniform. The warp is
+  quasi-authalic rather than strictly authalic. A strictly authalic projection constrains only
   the Jacobian determinant, permitting severe shear and cell elongation. The
   optimal-transport derivation implicitly regularises against shear by minimising
   displacement: the result trades a small area residual for a smooth, low-distortion

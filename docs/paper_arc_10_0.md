@@ -17,8 +17,9 @@
   slope). Adjacent triangles agree on the c2 value of their common edge, and
   the c2 progression around any triangle is clockwise regardless of mode.
   *Etymology:* "c2" is shorthand for **"colouring 2"** — one of the two distinct
-  three-colourings of the wallpaper group **p31m** (Grünbaum & Shephard 1986,
-  *Tilings and Patterns*, §8.3 "Color Pattern Types", p. 433, type IH38;
+  three-colourings of the wallpaper group **p31m** (Grünbaum & Shephard 1987
+  [@grunbaum1987tilings], *Tilings and Patterns*, §8.3 "Color Pattern Types",
+  p. 433, type IH38;
   PP25[3]₁/p31m[3]₁ and PP25[3]₂/p31m[3]₂ — see the `grunbaum_shephard_*`
   figures, the second with the Hex9 d_cell overlay aligned). Note a **very 
   early naming mismatch**: despite the "2", the Hex9 c2 labelling actually 

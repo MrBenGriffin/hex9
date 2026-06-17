@@ -19,7 +19,7 @@
   system as input. A separable geometric realisation — an analytical
   octahedral base projection composed with an optimal-transport-derived
   area-correcting warp — places the grid on WGS84 with quasi-uniform cell
-  areas: at level 5, 99% of the 708,588 cells lie within 0.006% of ideal
+  areas: at level 5, 99% of the 708,588 cells lie within 0.005% of ideal
   area, with residual deviation confined to the six octahedral vertices
   required by the topology. The combinatorial grid is projection- and
   ellipsoid-independent; only the warp is specific to the reference body, and

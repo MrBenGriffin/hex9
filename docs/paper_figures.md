@@ -4,32 +4,32 @@ Every `[Figure: …]` placeholder in the arcs, plus recommended additions.
 "Source" names the existing example believed closest; ✳ marks figures that
 likely need bespoke (but small) plotting code.
 
-| # | Section | Working title | Source                                                                   |
-|---|---|---|--------------------------------------------------------------------------|
-| F1 | §8 / §2 (Foundations) | The 49 tilings, Hex9 pair highlighted | `experimental/halfhex_further.py` (emits `hh.hh.svg`)                    |
-| F2 | §8 | The two equilateral tilings (L/R chiral pair) | same script (`eq.hh.svg`)                                                |
-| F3 | §10.0 | Anatomy of one parent triangle: t/c2/d/x | ✳ `examples/ex0400_anatomy.py` (primitives validated; layout WIP)         |
-| F4 | §10a | x-layer: x_dig 0–8 children, high-trit colouring + shared c-regions overlay | `examples/ex0400_anatomy.py` `figure_f4` → `ex0400_anatomy_f4.png` (supersedes `f4_hex_outline.png`/`f4_better.png`) |
-| F7 | §10d/§10f | Sibling adjacency: internal vs cross-parent edges (blue/red) | `examples/ex0400_anatomy.py` `figure_f7` → `ex0400_anatomy_f7.png` |
-| F5 | §10a | Classifier (c-layer): 96-slot c_grid, three band families → c_dig | `f5.png` (exists, amended) — the c-layer counterpart to F4's x-layer |
-| F6 | §10b | London / Prime Meridian split-cell example | `ex0262_greenwich_seam.py` / `ex0263_…_zoom.py`                          |
-| F7 | §10d | Sibling adjacency classes within a parent | ✳ (F4 with class colouring)                                              |
-| F8 | §10d / §10f | Octant seam: c2 edges matching across boundary | `ex0262_greenwich_seam.py`                                               |
-| F9 | §10f | merged into F3 (four-panel nested progression) | — see F3                                                                 |
-| F10 | §10f | Octahedral vertex neighbourhood (4 faces, c2=0) | `ex0063b_octant.py` or polar crop of `ex0118_mollweide.py`               |
-| F11 | §11 | Pipeline diagram b_raw → warp → b_oct → address | ✳ schematic (draw.io/TikZ, not generated)                                |
-| F12 | §11b | Area-deviation globe, RdBu diverging (magnitude view) | `ex0081w_warped_authalics.py` — `snow_globe()` → `ex0081wau_5.png` (exists) |
-| F12b | §11b | Area-deviation Mollweide, clipped scale (pattern view: seam skeleton) | `ex0118_mollweide.py` → `ex0118_mollweide_L5.png` (exists)               |
-| F13 | §11c | Tissot indicatrices on the b_oct butterfly net (warp applied) | `ex0121_tissot_svg.py` → `ex0121_tissot_50_warp_file_butterfly_0500.svg` (exists) |
-| F14 | §12 | (optional) H3/S2/HEALPix/Hex9 same-region cells | external libs; licensing check                                           |
-| F15 | §14a | Population heatmap binned to Hex9 | `ex0301_heatmap.py` + `examples/hh_heatmaps` (GBR/BTN/BHS data)          |
-| F16 | §14c | Same layer in b_oct / Mollweide / Mercator | `ex0118_mollweide.py` + `ex0300_backdrop.py`                             |
-| F17 | Intro/§5 | Octant boundaries over political world map (chirality convention) | `ex0118_mollweide.py` with country backdrop                              |
-| F18 | (optional) | Butterfly/net unfolding of the octahedral grid | `butterfly.png` (exists)                                                 |
-| F19 | (optional, §10e) | Zoom sequence strip: one point through L1→L7 | `ex0098_zoom_sequence.py`                                                |
-| F20 | §2/§7/§8 (Foundations) | Wallpaper group of the d_cell tiling (p31m, confirmed) | `p31m.png` (exists)                                                      |
-| F21 | §9/§10 or graphical abstract | Seed solid (24 d_cell facets) + 12 root x_cells coloured | `symmetry.png` (exists)                                                  |
-| F23 | §14a | Thimphu adaptive refinement (L5–L12), population density choropleth | `thimpu_chloropleth.png` (exists, from QGIS via `h9_adaptive()`)                                                  |
+| # | Section | Working title                                                                                                                         | Source                                                                   |
+|---|---|---------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| F1 | §8 / §2 (Foundations) | The 49 tilings, Hex9 pair highlighted                                                                                                 | `experimental/halfhex_further.py` (emits `hh.hh.svg`)                    |
+| F2 | §8 | The two equilateral tilings (L/R chiral pair)                                                                                         | same script (`eq.hh.svg`)                                                |
+| F3 | §10.0 | Anatomy of one parent triangle: t/c2/d/x                                                                                              | ✳ `examples/ex0400_anatomy.py` (primitives validated; layout WIP)         |
+| F4 | §10a | x-layer: x_dig 0–8 children, high-trit colouring + shared c-regions overlay                                                           | `examples/ex0400_anatomy.py` `figure_f4` → `ex0400_anatomy_f4.png` (supersedes `f4_hex_outline.png`/`f4_better.png`) |
+| F7 | §10d/§10f | Sibling adjacency: internal vs cross-parent edges (blue/red)                                                                          | `examples/ex0400_anatomy.py` `figure_f7` → `ex0400_anatomy_f7.png` |
+| F5 | §10a | Classifier (c-layer): 96-slot c_grid, three band families → c_dig                                                                     | `f5.png` (exists, amended) — the c-layer counterpart to F4's x-layer |
+| F6 | §10b | London / Prime Meridian split-cell example                                                                                            | `ex0262_greenwich_seam.py` / `ex0263_…_zoom.py`                          |
+| F7 | §10d | Sibling adjacency classes within a parent                                                                                             | ✳ (F4 with class colouring)                                              |
+| F8 | §10d / §10f | Octant seam: c2 edges matching across boundary                                                                                        | `ex0262_greenwich_seam.py`                                               |
+| F9 | §10f | merged into F3 (four-panel nested progression)                                                                                        | — see F3                                                                 |
+| F10 | §10f | Octahedral vertex neighbourhood (4 faces, c2=0)                                                                                       | `ex0063b_octant.py` or polar crop of `ex0118_mollweide.py`               |
+| F11 | §11 | Pipeline diagram b_raw → warp → b_oct → address                                                                                       | ✳ schematic (draw.io/TikZ, not generated)                                |
+| F12 | §11b | Area-deviation globe, RdBu diverging (magnitude view)                                                                                 | `ex0081w_warped_authalics.py` — `snow_globe()` → `ex0081wau_5.png` (exists) |
+| F12b | §11b | Area-deviation Mollweide, clipped scale (pattern view: seam skeleton)                                                                 | `ex0118_mollweide.py` → `ex0118_mollweide_L5.png` (exists)               |
+| F13 | §11c | Tissot indicatrices on the b_oct butterfly net (warp applied)                                                                         | `ex0121_tissot_svg.py` → `ex0121_tissot_50_warp_file_butterfly_0500.svg` (exists) |
+| F14 | §12 | (optional) H3/S2/HEALPix/Hex9 same-region cells                                                                                       | external libs; licensing check                                           |
+| F15 | §14a | Population heatmap binned to Hex9                                                                                                     | `ex0301_heatmap.py` + `examples/hh_heatmaps` (GBR/BTN/BHS data)          |
+| F16 | §14c | Same layer in b_oct / Mollweide / Mercator                                                                                            | `ex0118_mollweide.py` + `ex0300_backdrop.py`                             |
+| F17 | Intro/§5 | Octant boundaries over political world map (chirality convention)                                                                     | `ex0118_mollweide.py` with country backdrop                              |
+| F18 | (optional) | Butterfly/net unfolding of the octahedral grid                                                                                        | `butterfly.png` (exists)                                                 |
+| F19 | (optional, §10e) | Zoom sequence strip: one point through L1→L7                                                                                          | `ex0098_zoom_sequence.py`                                                |
+| F20 | §2/§7/§8 (Foundations) | Wallpaper group of the d_cell tiling (p31m, confirmed)                                                                                | `p31m.png` (exists)                                                      |
+| F21 | §9/§10 or graphical abstract | Seed solid (24 d_cell facets) + 12 root x_cells coloured. At L0, Hex9 and A5 share a dodecahedral base of 12 pentagonal cells — Hex9 as a pyritohedron (Tₕ), A5 as a regular dodecahedron (Iₕ).| `symmetry.png` (exists)                                                  |
+| F23 | §14a | Thimphu adaptive refinement (L5–L12), population density choropleth                                                                   | `thimpu_chloropleth.png` (exists, from QGIS via `h9_adaptive()`)                                                  |
 
 ## Content requirements per figure
 
