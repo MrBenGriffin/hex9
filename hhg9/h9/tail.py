@@ -64,8 +64,9 @@ def tail_unpack_reversible(tail_ids: NDArray[np.uint8] | np.uint8):
 
 
 def tail_pack_key(
-        p_c2: NDArray[np.uint8] | np.uint8,  # terminating hex c2 of parent region
         r_mo: NDArray[np.uint8] | np.uint8,  # root region net_mode
+        p_mo: NDArray[np.uint8] | np.uint8,  # [0,1]   terminating hex net_mode of parent region
+        p_c2: NDArray[np.uint8] | np.uint8,  # terminating hex c2 of parent region
 ) -> NDArray[np.uint8]:
     """Pack key tail (binning-safe) into one uint8 byte.
 
@@ -73,23 +74,32 @@ def tail_pack_key(
     value), low nibble = (p_c2 << 1) | r_mo. Matches uuid_address.py
     docstring's "F: bin" placement and the C++ bin emission.
     """
-    p_c2 = np.asarray(p_c2, dtype=np.uint8)
     r_mo = np.asarray(r_mo, dtype=np.uint8)
-    return (np.uint8(0xF0) | ((p_c2 & 0x03) << 1) | (r_mo & 0x01)).astype(np.uint8)
+    p_mo = np.asarray(p_mo, dtype=np.uint8)
+    p_c2 = np.asarray(p_c2, dtype=np.uint8)
+    # new stack p_c2 r_mo p_mo
+    tail = (((p_c2 & 0x03) << 2) | ((r_mo & 0x01) << 1) | (p_mo & 0x01)).astype(np.uint8)
+    return tail
+
+    #return (np.uint8(0x00) | ((p_c2 & 0x03) << 1) | (r_mo & 0x01)).astype(np.uint8)
+    # return (np.uint8(0xF0) | ((p_c2 & 0x03) << 1) | (r_mo & 0x01)).astype(np.uint8)
 
 
 def tail_unpack_key(short_tail: NDArray[np.uint8] | np.uint8):
     """Unpack key tail into (p_c2, r_mo).
 
     Layout must match `tail_pack_key`:
-      bits 7..4: sentinel (0xF)
+      bits 7..4: sentinel (0xF) # old
+      bits 3:    p_mo # new
       bits 2..1: p_c2
       bit  0:    r_mo
     """
+    # Must mirror tail_pack_key: tail = (p_c2 << 2) | (r_mo << 1) | p_mo
     short_tail = np.asarray(short_tail, dtype=np.uint8)
-    p_c2 = ((short_tail >> 1) & 0x03).astype(np.uint8)
-    r_mo = (short_tail & 0x01).astype(np.uint8)
-    return p_c2, r_mo
+    p_c2 = ((short_tail >> 2) & 0x03).astype(np.uint8)
+    r_mo = ((short_tail >> 1) & 0x01).astype(np.uint8)
+    p_mo = (short_tail & 0x01).astype(np.uint8)
+    return p_c2, r_mo, p_mo
 
 
 def tail_key_from_reversible(tail_ids: NDArray[np.uint8] | np.uint8) -> NDArray[np.uint8]:

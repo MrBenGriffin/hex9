@@ -1,0 +1,42 @@
+# Build the Hex9 review document.
+#   make -f Makefile.paper          # -> paper.pdf
+#   make -f Makefile.paper tex      # -> paper.tex (editable LaTeX)
+#   make -f Makefile.paper figures  # (re)generate PDF/web figure derivatives
+#   make -f Makefile.paper clean
+#
+# Requires: pandoc, tectonic, cairosvg, and macOS `sips` (for PNG downsampling).
+
+PANDOC   := pandoc
+DEFAULTS := paper.defaults.yaml
+SRC      := paper.md
+DEPS     := $(DEFAULTS) header.tex references.bib
+
+FIGDIR   := paper_figures
+# SVG figures embedded as vector PDF
+SVG_PDF  := $(FIGDIR)/f1.pdf $(FIGDIR)/f2.pdf \
+            $(FIGDIR)/ex0121_tissot_50_warp_file_butterfly_0500.pdf
+# Large raster figures downsampled for a mailable PDF (originals untouched)
+WEB_PNG  := $(FIGDIR)/ex0081wau_5_web.png \
+            $(FIGDIR)/ex0118_mollweide_L5_web.png \
+            $(FIGDIR)/thimpu_chloropleth_web.png
+
+.PHONY: all tex figures clean
+all: paper.pdf
+
+figures: $(SVG_PDF) $(WEB_PNG)
+
+$(FIGDIR)/%.pdf: $(FIGDIR)/%.svg
+	cairosvg $< -o $@
+
+$(FIGDIR)/%_web.png: $(FIGDIR)/%.png
+	sips -Z 1800 $< --out $@ >/dev/null
+
+paper.pdf: $(SRC) $(DEPS) figures
+	$(PANDOC) --defaults=$(DEFAULTS) $(SRC) -o $@
+
+tex: $(SRC) $(DEPS)
+	$(PANDOC) --defaults=$(DEFAULTS) $(SRC) -o paper.tex
+
+clean:
+	rm -f paper.pdf paper.tex paper_smoke.pdf paper_smoke.tex err.log \
+	      $(SVG_PDF) $(WEB_PNG)

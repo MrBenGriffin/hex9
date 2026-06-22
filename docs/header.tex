@@ -1,0 +1,76 @@
+% ===== Hex9 paper — LaTeX preamble additions (pandoc include-in-header) =====
+% Engine: XeLaTeX via tectonic. Font-independent Unicode handling below.
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% --- Unicode glyphs used in the prose, routed to LaTeX so they render in text
+%     mode on any font. Deferred to \AtBeginDocument so these win over
+%     unicode-math (which the pandoc xelatex template loads and which otherwise
+%     makes these chars math-mode-only -> "Missing $" in running text). ---
+\usepackage{newunicodechar}
+\AtBeginDocument{%
+  \newunicodechar{→}{\ensuremath{\rightarrow}}%
+  \newunicodechar{↦}{\ensuremath{\mapsto}}%
+  \newunicodechar{↔}{\ensuremath{\leftrightarrow}}%
+  \newunicodechar{≈}{\ensuremath{\approx}}%
+  \newunicodechar{≤}{\ensuremath{\leq}}%
+  \newunicodechar{≥}{\ensuremath{\geq}}%
+  \newunicodechar{∈}{\ensuremath{\in}}%
+  \newunicodechar{∩}{\ensuremath{\cap}}%
+  \newunicodechar{⊂}{\ensuremath{\subset}}%
+  \newunicodechar{∞}{\ensuremath{\infty}}%
+  \newunicodechar{×}{\ensuremath{\times}}%
+  \newunicodechar{±}{\ensuremath{\pm}}%
+  \newunicodechar{−}{\ensuremath{-}}%
+  \newunicodechar{√}{\ensuremath{\surd}}%
+  \newunicodechar{∇}{\ensuremath{\nabla}}%
+  \newunicodechar{ℤ}{\ensuremath{\mathbb{Z}}}%
+  \newunicodechar{ℝ}{\ensuremath{\mathbb{R}}}%
+  \newunicodechar{Ω}{\ensuremath{\Omega}}%
+  \newunicodechar{Σ}{\ensuremath{\Sigma}}%
+  \newunicodechar{Λ}{\ensuremath{\Lambda}}%
+  \newunicodechar{α}{\ensuremath{\alpha}}%
+  \newunicodechar{σ}{\ensuremath{\sigma}}%
+  \newunicodechar{…}{\ldots}%
+  \newunicodechar{′}{\ensuremath{{}^\prime}}%
+  \newunicodechar{·}{\textperiodcentered}%
+  \newunicodechar{°}{\ensuremath{^\circ}}%
+  \newunicodechar{²}{\textsuperscript{2}}%
+  \newunicodechar{³}{\textsuperscript{3}}%
+  \newunicodechar{¹}{\textsuperscript{1}}%
+  \newunicodechar{⁴}{\textsuperscript{4}}%
+  \newunicodechar{⁵}{\textsuperscript{5}}%
+  \newunicodechar{⁶}{\textsuperscript{6}}%
+  \newunicodechar{⁷}{\textsuperscript{7}}%
+  \newunicodechar{⁸}{\textsuperscript{8}}%
+  \newunicodechar{⁹}{\textsuperscript{9}}%
+  \newunicodechar{⁰}{\textsuperscript{0}}%
+  \newunicodechar{⁻}{\textsuperscript{\textminus}}%
+  \newunicodechar{₀}{\textsubscript{0}}%
+  \newunicodechar{₁}{\textsubscript{1}}%
+  \newunicodechar{₂}{\textsubscript{2}}%
+  \newunicodechar{₃}{\textsubscript{3}}%
+  \newunicodechar{₄}{\textsubscript{4}}%
+  \newunicodechar{₅}{\textsubscript{5}}%
+}
+
+% (Footnotes inside floats are handled by pandoc's footnotehyper; no extra
+%  package needed — loading `footnote` here clashes with it.)
+
+% --- Wide tables (comparison, c/t/d/x taxonomy, OGC mapping): shrink font ---
+\usepackage{etoolbox}
+\AtBeginEnvironment{longtable}{\footnotesize}
+
+% --- Graphics ---
+\usepackage{graphicx}
+\graphicspath{{paper_figures/}}
+
+% --- TikZ (for the schematic pipeline figure) ---
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+
+% --- Marginal line numbers for review/comment (load last) ---
+\usepackage{lineno}
+\setlength{\linenumbersep}{1.2em}
+\AtBeginDocument{\linenumbers}

@@ -1,0 +1,24 @@
+# pandoc defaults for the Hex9 review PDF.
+# Build:  pandoc --defaults=paper.defaults.yaml paper.md -o paper.pdf
+#         pandoc --defaults=paper.defaults.yaml paper.md -o paper.tex
+from: markdown
+standalone: true
+pdf-engine: tectonic
+toc: true
+toc-depth: 2
+number-sections: false      # headings already carry manual section numbers
+citeproc: true
+bibliography: references.bib
+include-in-header:
+  - header.tex
+metadata:
+  link-citations: true
+variables:
+  documentclass: article
+  papersize: a4
+  fontsize: 11pt
+  geometry: "margin=2.4cm"
+  colorlinks: true
+  linkcolor: RoyalBlue
+  citecolor: RoyalBlue
+  urlcolor: RoyalBlue

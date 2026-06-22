@@ -37,7 +37,7 @@ if __name__ == '__main__':
     # name = 'Null Antipodes'
     # name = 'Greenwich test'
     ll = np.atleast_2d([
-        [0.0, -90.0]
+        [32.8010970000000000, -19.4490900000000000]
         # [55.94480923423753, -3.187282666241978]
         # [52.520933833691204,   13.405313674395048970],
     #   43486836-6783-ffff-ffff-fffffffffff2
@@ -59,32 +59,34 @@ if __name__ == '__main__':
     print(f'OCTA: {boc.coords[0, 0]:.8f},{boc.coords[0, 1]:.8f},{boc.coords[0, 2]:.8f}, face:{boc.oid[0]} (via AK)')
 
     brw = reg.project(boc, ['c_oct', 'b_oct', 'b_raw'])
-    oc, mo = brw.cm()
-    print(f'BRAW: {brw.coords[0, 0]:.8f},{brw.coords[0, 1]:.8f}, octant:{oc}, mode:{mo}')
+    oc0, mo0 = brw.cm()
+    print(f'BRAW: {brw.coords[0, 0]:.8f},{brw.coords[0, 1]:.8f}, octant:{oc0}, mode:{mo0}')
 
     bro = reg.project(boc, ['c_oct', 'b_oct'])
-    oc, mo = bro.cm()
-    print(f'BARY: {bro.coords[0, 0]:.8f},{bro.coords[0, 1]:.8f}, octant:{oc}, mode:{mo}')
+    oc1, mo1 = bro.cm()
+    print(f'BARY: {bro.coords[0, 0]:.8f},{bro.coords[0, 1]:.8f}, octant:{oc1}, mode:{mo1}')
 
     bry = reg.project(pos, [g_gcd, b_oct])  #
-    oc, mo = bry.cm()
-    print(f'Direct: {bry.coords[0,0]:.8f},{bry.coords[0, 1]:.8f}, octant:{oc}, mode:{mo}')
+    oc2, mo2 = bry.cm()
+    print(f'Direct: {bry.coords[0,0]:.8f},{bry.coords[0, 1]:.8f}, octant:{oc2}, mode:{mo2}')
 
     uuid = h9_enc(bry)
-    print(f'UUID: {uuid}')
+    print(f'UUID FD: {uuid}')
     rxd = h9_dec(uuid, b_oct)
-    oc, mo = rxd.cm()
-    print(f'UUID round-trip: {rxd.coords[0,0]:.8f},{rxd.coords[0, 1]:.8f}, octant:{oc}, mode:{mo}')
+    uuid_rt = h9_enc(rxd)
+    print(f'UUID RT: {uuid_rt}')
+    oc3, mo3 = rxd.cm()
+    print(f'UUID b_oct RT: {rxd.coords[0, 0]:.8f},{rxd.coords[0, 1]:.8f}, octant:{oc3}, mode:{mo3}')
 
-    cxx = rg.xy_regions(bry.coords, mo)
+    cxx = rg.xy_regions(bry.coords, mo3)
     cl = ' '.join([f'{i:02x}' for i in list(cxx[0])])
     print(f'Cells: {cl}')
     rxx = H9_RA.cell2rid[cxx]
     cl = ' '.join([f'{i:01X}' for i in list(rxx[0])])
     print(f'Regions: {cl}')
 
-    hxr = reg_hex_digits(cxx, oc, b_oct, TailStyle.reversible)   # TailStyle.reversible = default.
-    hxk = reg_hex_digits(cxx, oc, b_oct, TailStyle.key)
+    hxr = reg_hex_digits(cxx, oc3, b_oct, TailStyle.reversible)   # TailStyle.reversible = default.
+    hxk = reg_hex_digits(cxx, oc3, b_oct, TailStyle.key)
     xr = ' '.join([f'{i:01X}' for i in list(hxr[0])])
     xk = ' '.join([f'{i:01X}' for i in list(hxk[0])])
     print(f'Hex digits (rev): {xr}')
@@ -93,9 +95,9 @@ if __name__ == '__main__':
     rtp = reg.project(bry, [b_oct, g_gcd])  # sph rt..
     dif = wgs84(pos.coords, rtp.coords) * 1e+9
 
-    cxx = rg.xy_regions(bry.coords, mo)
+    cxx = rg.xy_regions(bry.coords, mo3)
     xym = rg.regions_xy(cxx)
-    uvr = Points(xym[:, :2], oid=oc, domain=b_oct)
+    uvr = Points(xym[:, :2], oid=oc3, domain=b_oct)
     rgx = [H9_RA.cell2rid[i] for i in cxx]
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r35')
@@ -115,12 +117,11 @@ if __name__ == '__main__':
     print(f'∂{lif[0]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
     print(f'H9.adr:{bry:h9}')
     print(f'H9.key:{bry:h9.k}')
-    uid = h9_enc(bry)
-    print(f'UUID: {uid[0]}')
-    bbk = h9_dec(uid, b_oct)
+    # uid = h9_enc(bry)
+    bbk = h9_dec(uuid, b_oct)
     ltp = reg.project(bbk, [b_oct, g_gcd])
     uif = wgs84(pos.coords, ltp.coords) * 1e+9
-    print(f'UUID-RT: {uif[0]}nm')
+    print(f'UUID ∂x: {uif[0]}nm')
     for layer in range(10, 14):
         uid = h9_bin_pts(bry, layer)
         print(f'UUID.bin; L{layer}:{uid[0]}')

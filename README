@@ -8,6 +8,7 @@ Examples and further documentation may be found on the git repository.
 
 #### Changelog
 ```
+0.1.3a0 This uses a new UUID (breaking change) mechanism
 0.1.2a0 Better PostGIS SQL functions - offering support in PostGIS and QGIS.
         Current focus is now on PROJ9.8 - CRS and projections.
         A few deep bug-fixes. All examples should be working.

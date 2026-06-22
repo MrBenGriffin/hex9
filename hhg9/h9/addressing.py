@@ -62,7 +62,7 @@ from numpy.typing import NDArray
 from hhg9.h9 import H9R, H9C, H9K
 from hhg9.h9.protocols import RegionAddressLike, AddressPackerLike, H9CellLike, HexLUTLike, H9RegionLike, BaryLoc
 from hhg9.h9.tail import TailStyle, tail_pack_reversible, tail_pack_key, tail_unpack_reversible, \
-    tail_key_from_reversible
+    tail_key_from_reversible, tail_unpack_key
 
 
 @unique
@@ -672,8 +672,8 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     depth = cols - 1
 
     # Mode per point (from octant); we could have used the region root, but we need oc.
-    mo = H9O.oid_mo[oc]
-    c2 = H9R.mcc2[mo, cx[:, 1]]
+    r_mo = H9O.oid_mo[oc]
+    c2 = H9R.mcc2[r_mo, cx[:, 1]]
 
     # Points whose root cell is the invalid-region sentinel (0x5F) cannot be addressed.
     # These arise when neighbours() coalesces a point that lands exactly on a simplex
@@ -701,17 +701,22 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
             bdy[:, ri - 1] = hx
             p, c = c, h
             p_mo = scheme.modes[p]
-
+        # now looped- normalise the tail.
+        t_h = np.array([[6, 10, 8], [7, 11, 9]])[p_mo, c2]  # This is region of hex 3.
+        hx_c2 = reg_hex[p_mo, p, t_h]
+        c2 = hx_c2[:, 1]
         # Tail metadata uses one byte:
         # bit7: parent-net_mode of terminating region (par_mode)
         # bits6..5: terminating c2
         # bit4: root net_mode (mo)
         # bits3..0: terminating region id (h)
         if tail_style is TailStyle.reversible:
-            tail_ids = tail_pack_reversible(p_mo, c2, mo, h)
+            # Single-nibble tail: p_mo is pinned 0 (canonical home); decode
+            # supplies a fixed terminal region from c2, so only (c2, r_mo) ship.
+            tail_ids = tail_pack_key(r_mo, p_mo, c2)
             return np.column_stack([bdy, tail_ids])
         if tail_style is TailStyle.key:
-            tail_ids = tail_pack_key(c2, mo)
+            tail_ids = tail_pack_key(r_mo, p_mo, c2)
             return np.column_stack([bdy, tail_ids])
         if tail_style is TailStyle.none:
             return bdy
@@ -732,7 +737,10 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
         tuple: (octants, region_chain)
     """
     from hhg9.h9 import H9O
-    hx = np.asarray(hx, dtype=np.uint8)
+    # c3 = np.full((hx.shape[0], 2), [3, 4], dtype=np.uint8)
+    c3 = np.full((hx.shape[0], 1), 3, dtype=np.uint8)
+    hx = np.append(hx, c3, axis=1)
+    # hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
         raise ValueError("hex_points must be (hex_layer, L[+1]):")
 
@@ -746,8 +754,16 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     else:
         body = hx
 
-    # unpack meta-tail: net_mode + tail region-id (RegionIdScheme id)
-    c_mo, c2, r_mo, tail_h = tail_unpack_reversible(tail)
+    # unpack the single-nibble key tail (c2, r_mo). p_mo is not stored: encode
+    # pinned it to 0 (canonical home), so decode seeds c_mo = 0 and supplies a
+    # fixed canonical terminal region as a function of c2.
+    c2, r_mo, c_mo = tail_unpack_key(tail)
+    # tail_h = np.array([2, 0, 4])[c2]  # 0:49, 4:21, 2:2b (region 4 on mode 0)
+    # c_mo = np.zeros_like(r_mo)
+    # 6: 26; 7: 3a; B: 35; 9: 2a;  A: 3a; B: 25;
+    #                   26 3a 35   39  25  2a
+    tail_h = np.array([[6, 10, 8], [7, 11, 9]])[c_mo, c2]  # This is region 3.
+    # c_mo = np.array([0, 1])[r_mo] # region 3.
 
     layer = body.shape[1]
 
@@ -765,8 +781,10 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
     # I think that c2=0 is stable, but c2=1/c2=2 might be swapped under 1 net_mode.
     # body[:, 0] = oct_c2[:, 1]  # This should be correct.
 
-    # Bottom-up reconstruction: [tail, ..., proto]
-    depth = layer + 1
+    # Bottom-up reconstruction: [terminal, ..., proto]. The terminal region is
+    # the fixed canonical child supplied from c2 (tail_h); the body digits then
+    # invert via hex_reg seeded by (c_mo=0, c2) from the tail.
+    depth = layer + 2
     regs = np.full((sz, depth), oob, dtype=np.uint8)
     regs[:, layer] = tail_h
 

@@ -54,7 +54,8 @@ from hhg9.h9.protocols import RegionAddressLike
 #   xy_regions(depth=30) -> addresses shape (N, 32)
 #   reg_hex_digits sees cols=32, depth=31 -> bdy has 30 cols (L0...L29)
 #   key pack: 30 body nibbles + 2 key_tail nibbles = 32 nibbles = 128 bits
-UUID_DEPTH: int = 29
+#   WAS 29
+UUID_DEPTH: int = 30
 
 
 # ---------- 128-bit packing helpers ----------------------------------------
@@ -117,7 +118,8 @@ def h9_enc(
     hx = hex_digits(b_pts, layer=UUID_DEPTH, tail_style=TailStyle.reversible, scheme=scheme)
     body = hx[:, :-1]   # (N, 30): L0...L29 as nibble values
     tail_byte = hx[:, -1]
-    tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
+    tail_n = np.stack([tail_byte & 0x0F], axis=1)
+    # tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
     uuid_nibbles = np.concatenate([body, tail_n], axis=1)
     return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibbles)])
 
@@ -141,7 +143,8 @@ def h9_enc_ext(b_pts, oc, mo) -> list[uuid_mod.UUID]:
     hx = reg_hex_digits(xy_r, oc, b_pts.domain)   # TailStyle.reversible = default.
     body = hx[:, :-1]   # (N, 30): L0...L29 as nibble values
     tail_byte = hx[:, -1]
-    tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
+    # tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
+    tail_n = np.stack([tail_byte & 0x0F], axis=1)  # (N, 2)
     uuid_nibbles = np.concatenate([body, tail_n], axis=1)
     return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibbles)])
 
@@ -172,10 +175,13 @@ def h9_dec(
     from hhg9 import Points
     uuid_ints = [u.int for u in uuids]
     uuid_nibbles = _batch_int_to_nibbles(uuid_ints, n=32)   # (N, 32)
-    key_nibbles = uuid_nibbles[:, -2:]
-    key_tail = (key_nibbles[:, 0] << 4) + key_nibbles[:, 1]
-    body = uuid_nibbles[:, :-2]                           # (N, 30) nibble values
-    oc, cells = hex_digits_reg(b_oct, body, tail=key_tail)
+    # new alternative.
+    key_tail = uuid_nibbles[:, -1]
+    oc, cells = hex_digits_reg(b_oct, uuid_nibbles[:, :-1], tail=key_tail)
+    # key_nibbles = uuid_nibbles[:, -2:]
+    # key_tail = (key_nibbles[:, 0] << 4) + key_nibbles[:, 1]
+    # body = uuid_nibbles[:, :-2]                           # (N, 30) nibble values
+    # oc, cells = hex_digits_reg(b_oct, body, tail=key_tail)
     xy_m = rg.regions_xy(cells)
     return Points(xy_m[:, :2], domain=b_oct, oid=oc)
 

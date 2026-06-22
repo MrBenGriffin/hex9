@@ -103,7 +103,8 @@ def run(reg, logger, refs, b_oct):
     u_rtp = reg.project(uuid_rt, ['b_oct', 'g_gcd'])
     print('calculating ∂-distances wgs84 distances between reference and reverted uuid b_oct in nm (nanometres)')
     u_deltas = wgs84(refs.coords, u_rtp.coords) * 1e+9
-    print('storing results in csv')
+    max_delta = np.max(u_deltas)
+    print(f'Max uuid ∂: {max_delta}; storing results in csv')
     for i in range(refs.coords.shape[0]):
         # Now write to the logger.
         logger.write({
