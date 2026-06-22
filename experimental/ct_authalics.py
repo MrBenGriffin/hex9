@@ -197,7 +197,7 @@ def hexify(reg: Registrar, b_pts: Points, warp=None, layers: int = 4):
 
     w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
     gm2 = ellipsoid_area_wgs84() # total surface area of WGS-84 (m²)
-    bins = 12*9**layers           # number of hexes at this layer
+    bins = 12*(9**layers)        # number of hexes at this layer
     w_area_m2_ideal = gm2/bins    # ideal equal-area per hex
     w_adj = np.abs(w_area_m2 / w_area_m2_ideal)
     score = np.log(w_adj + 1e-16)  # authalic log-density ℓ

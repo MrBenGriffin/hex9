@@ -734,7 +734,8 @@ def xy_regions(xy: NDArray[np.float64], mode: NDArray[int] = None, depth: int = 
     return addresses
 
 
-def regions_xy(uri_address: NDArray[np.uint8], ctx: H9Context = None) -> NDArray[np.float64]:
+def regions_xy(uri_address: NDArray[np.uint8], ctx: H9Context = None,
+               seed: NDArray[np.float64] = None) -> NDArray[np.float64]:
     """
     REVERSE: Convert Region IDs back into (x, y) coordinates.
 
@@ -754,8 +755,17 @@ def regions_xy(uri_address: NDArray[np.uint8], ctx: H9Context = None) -> NDArray
     offs_ẋ = h9c.off_ẋy[:, 0].astype(np.float64, copy=False)
     offs_y = h9c.off_ẋy[:, 1].astype(np.float64, copy=False)
 
-    ẋ = np.zeros(num_points, dtype=np.float64)
-    y = np.zeros(num_points, dtype=np.float64)
+    # Optional per-row seed (ẋ, y): the position *within* the deepest cell. With
+    # seed=0 the walk lands on the cell's origin vertex; seeding the cell's
+    # centroid offset (scaled by Ü) makes it land on the cell centroid instead.
+    # The seed is divided by 3 once per real layer, so it sits at the cell's own
+    # scale automatically (incl. L0, where there are no real layers to divide it).
+    if seed is None:
+        ẋ = np.zeros(num_points, dtype=np.float64)
+        y = np.zeros(num_points, dtype=np.float64)
+    else:
+        ẋ = np.ascontiguousarray(seed[:, 0], dtype=np.float64).copy()
+        y = np.ascontiguousarray(seed[:, 1], dtype=np.float64).copy()
 
     # Walk from the last *real* hex_layer down to 1
     for i in range(depth - 1, 0, -1):

@@ -713,7 +713,7 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
         if tail_style is TailStyle.reversible:
             # Single-nibble tail: p_mo is pinned 0 (canonical home); decode
             # supplies a fixed terminal region from c2, so only (c2, r_mo) ship.
-            tail_ids = tail_pack_key(r_mo, p_mo, c2)
+            tail_ids = tail_pack_reversible(r_mo, p_mo, c2)
             return np.column_stack([bdy, tail_ids])
         if tail_style is TailStyle.key:
             tail_ids = tail_pack_key(r_mo, p_mo, c2)
@@ -724,7 +724,7 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     return bdy
 
 
-def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
+def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA, place_terminal=True):
     """
     Inverts `reg_hex_digits` (Hex -> Regions).
 
@@ -732,75 +732,77 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA):
         hx: (hex_layer, L) hex-digit addresses.
         dom: Domain object.
         tail: Optional (hex_layer,) meta-tail nibble. If None, expects it in the last column of `hex_points`.
+        place_terminal: if True (default) append the canonical "3" terminal regions
+            (a shared-vertex geometry proxy) below the body. Set False to omit them
+            so the caller can instead seed regions_xy at the cell centroid; the
+            backward walk (and hence the recovered cell chain) is identical either
+            way, only the within-cell geometry placement differs.
 
     Returns:
         tuple: (octants, region_chain)
     """
     from hhg9.h9 import H9O
-    # c3 = np.full((hx.shape[0], 2), [3, 4], dtype=np.uint8)
-    c3 = np.full((hx.shape[0], 1), 3, dtype=np.uint8)
-    hx = np.append(hx, c3, axis=1)
-    # hx = np.asarray(hx, dtype=np.uint8)
+    hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
         raise ValueError("hex_points must be (hex_layer, L[+1]):")
-
-    sz, cols = hx.shape
-    if cols < 2 and tail is None:
+    if hx.shape[1] < 2 and tail is None:
         raise ValueError("hex_points must contain at least one hex digit and one tail nibble")
 
     if tail is None:
         body = hx[:, :-1]  # (hex_layer, L): root + hex_layer hex digits
-        tail = hx[:, -1]  # (hex_layer,): meta-tail
+        tail = hx[:, -1]   # (hex_layer,): meta-tail
     else:
         body = hx
+    sz, ncols = body.shape
 
-    # unpack the single-nibble key tail (c2, r_mo). p_mo is not stored: encode
-    # pinned it to 0 (canonical home), so decode seeds c_mo = 0 and supplies a
-    # fixed canonical terminal region as a function of c2.
-    c2, r_mo, c_mo = tail_unpack_key(tail)
-    # tail_h = np.array([2, 0, 4])[c2]  # 0:49, 4:21, 2:2b (region 4 on mode 0)
-    # c_mo = np.zeros_like(r_mo)
-    # 6: 26; 7: 3a; B: 35; 9: 2a;  A: 3a; B: 25;
-    #                   26 3a 35   39  25  2a
-    tail_h = np.array([[6, 10, 8], [7, 11, 9]])[c_mo, c2]  # This is region 3.
-    # c_mo = np.array([0, 1])[r_mo] # region 3.
+    # Unpack the tail. p_mo is read (not forced to 0) so RAW chains still decode;
+    # canonical addresses simply carry p_mo == 0. c2 seeds the backward walk.
+    c2, r_mo, c_mo = tail_unpack_reversible(tail)
+    c2 = np.asarray(c2).astype(np.intp)
+    c_mo = np.asarray(c_mo).astype(np.intp)
 
-    layer = body.shape[1]
-
-    # Recover canonical octant from root hex + net_mode
-    root_hex = body[:, 0]
     hex_reg = HEX_LUTS.hex_reg
     oob = HEX_LUTS.hex_oob
 
+    # Recover canonical octant from root hex + net_mode
+    root_hex = body[:, 0]
     oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (hex_layer, 2): [face_id, c2_root]
     r_oct = oct_c2[:, 0]
-    # r_c2 = oct_c2[:, 1]
-    # body[:, 0] = r_c2
-    # ROOT super-regions mark hex digits as 0,1,2 in line with nominal-c2.
-    # However, Hex-L0 c2 is a bit odd and this might need looking at.
-    # I think that c2=0 is stable, but c2=1/c2=2 might be swapped under 1 net_mode.
-    # body[:, 0] = oct_c2[:, 1]  # This should be correct.
 
-    # Bottom-up reconstruction: [terminal, ..., proto]. The terminal region is
-    # the fixed canonical child supplied from c2 (tail_h); the body digits then
-    # invert via hex_reg seeded by (c_mo=0, c2) from the tail.
-    depth = layer + 2
-    regs = np.full((sz, depth), oob, dtype=np.uint8)
-    regs[:, layer] = tail_h
+    # Per-row layer = the deepest non-sentinel body nibble. Full addresses have no
+    # sentinel (-> ncols-1); a bin carries 0xF beyond its layer, so this is how
+    # the same decoder handles both (the "skip 0xF" the bin case needs).
+    is_real = body != oob
+    real_layer = (ncols - 1) - np.argmax(is_real[:, ::-1], axis=1)
 
-    i = layer - 1
-    while True:
-        if i < 1:
-            break
-        hx_d = body[:, i]
-        rmc = hex_reg[hx_d, c_mo, c2]
-        regs[:, i] = rmc[:, 0]
-        c_mo = rmc[:, 1]
-        c2 = rmc[:, 2]
-        i -= 1
+    # Canonical "3" terminal: undo the 3-step (hex_reg[3, c_mo, c2]) to recover the
+    # (c_mo, c2) context AT the deepest real body level, and record the 3-region
+    # (geometry proxy at the shared vertex) just below the body. Both sit at the
+    # row's own depth so a bin decodes to its own L-cell.
+    tail_h = np.array([[6, 10, 8], [7, 11, 9]], dtype=np.uint8)[c_mo, c2]   # region "3"
+    e3 = hex_reg[3, c_mo, c2]
+    seed_reg = e3[:, 0]
+    cm = e3[:, 1].astype(np.intp)
+    cc = e3[:, 2].astype(np.intp)
+
+    rows = np.arange(sz)
+    regs = np.full((sz, ncols + 2), oob, dtype=np.uint8)
+    if place_terminal:
+        regs[rows, real_layer + 1] = seed_reg
+        regs[rows, real_layer + 2] = tail_h
+
+    # Backward walk: each row starts at its own real_layer (rows in their sentinel
+    # zone stay inactive and keep their seed context untouched).
+    for i in range(int(real_layer.max()), 0, -1):
+        active = i <= real_layer
+        d = np.where(active, body[:, i], 0)          # avoid indexing hex_reg with 0xF
+        e = hex_reg[d, cm, cc]
+        regs[active, i] = e[active, 0]
+        cm = np.where(active, e[:, 1], cm)
+        cc = np.where(active, e[:, 2], cc)
 
     regs[:, 0] = r_mo
-    cells = scheme.rid2cell[regs]  # But now it is.
+    cells = scheme.rid2cell[regs]
     return r_oct, cells
 
 

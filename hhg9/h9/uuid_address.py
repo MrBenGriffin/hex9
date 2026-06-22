@@ -57,6 +57,12 @@ from hhg9.h9.protocols import RegionAddressLike
 #   WAS 29
 UUID_DEPTH: int = 30
 
+# Hexagon centroid offset in lattice units, indexed [mode][c2] (see polygon.py).
+# Mode 0: c2 0,1,2 -> (1,1),(1,-1),(-2,0); mode 1 is the same set rotated.
+# Used by h9_dec to seed regions_xy at the cell centroid (scaled by Ü).
+_HEX_CENTROID = np.array([[(1, 1), (1, -1), (-2, 0)],
+                          [(1, -1), (-2, 0), (1, 1)]], dtype=np.float64)
+
 
 # ---------- 128-bit packing helpers ----------------------------------------
 
@@ -92,10 +98,48 @@ def _batch_int_to_nibbles(values: list[int], n: int = 32) -> NDArray[np.uint8]:
 
 
 # ---------- Core encode/decode ---------------------------------------------
-#     dom = pts.domain
-#     oc, mo = pts.cm()
-#     cx = rg.xy_regions(pts.coords, mo, layer)  # regions are length 2+'depth'
-#     return reg_hex_digits(cx, oc, dom, tail_style, scheme=scheme)
+
+def _coalesce_bin(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA):
+    """Canonical layer-L key for each point — the single source of truth shared by
+    binning AND encoding (a full UUID is just the canonical bin at UUID_DEPTH).
+
+    Coalesces the half-hex triangles into their canonical full hexagon in
+    region-space: the three half-hexes meeting at a vertex (the mode-1 parent
+    "splits") share one binning hexagon. After the fold every cell has a mode-0
+    terminal parent (p_mo == 0), so the (c2, r_mo) key tail alone identifies it —
+    which is exactly why address == bin and bins are invertible.
+    """
+    from hhg9.h9 import H9O, H9C, H9K
+    from hhg9.h9.region import region_neighbours
+    from hhg9.h9.classifier import location
+    from hhg9.h9.protocols import BaryLoc
+    oc = np.asarray(oc).copy()
+    x, y = coords[:, 0], coords[:, 1]
+    regions = xy_regions(coords, mo, layer)                     # (N, layer+2)
+    # Folding is a property of the *cell* (a mode-1 half-hex), independent of
+    # where the point sits, so EDGE/VERTEX points fold too; only out-of-scope
+    # (EXT/UDF) points are left untouched.
+    locs = location(H9K.R3 * x, y, mo)
+    active = ((locs != BaryLoc.EXT) & (locs != BaryLoc.UDF) & (H9C.mode[regions[:, -2]] == 1))
+    if np.any(active):
+        idx = np.flatnonzero(active)
+        nbr, c2 = region_neighbours(regions[idx])
+        hopped = regions[idx, 0] != nbr[:, 0]                   # octant-spanning fold
+        regions[idx[~hopped]] = nbr[~hopped]
+        if np.any(hopped):
+            hidx = idx[hopped]
+            oc_h = H9O.oid_nb[oc[hidx], c2[hopped]]             # neighbour octant
+            flipped = np.column_stack([x[hidx], -y[hidx]])      # seam = inverted y-axis
+            regions[hidx] = xy_regions(flipped, H9O.oid_mo[oc_h], layer)
+            oc[hidx] = oc_h
+    hx = reg_hex_digits(regions, oc, dom, TailStyle.key, scheme=scheme)
+    body = hx[:, :-1]
+    uuid_nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)  # nibbles layer+1..30 = 0xF
+    uuid_nibs[:, :layer + 1] = body                            # body L0..L_layer
+    uuid_nibs[:, -1] = hx[:, -1] & 0x0F                        # key tail at nibble 31
+    return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)])
+
+
 def h9_enc(
         b_pts,
         scheme: RegionAddressLike = H9_RA,
@@ -113,15 +157,13 @@ def h9_enc(
 
     Returns
     -------
-    uuids     : list[uuid.UUID]  — 128-bit key addresses, one per point
+    uuids     : list[uuid.UUID]  — 128-bit canonical addresses, one per point
+
+    A full UUID is the canonical bin at UUID_DEPTH: encode == bin(., UUID_DEPTH),
+    so every address is invertible and h9_bin(addr, L) is a pure truncation.
     """
-    hx = hex_digits(b_pts, layer=UUID_DEPTH, tail_style=TailStyle.reversible, scheme=scheme)
-    body = hx[:, :-1]   # (N, 30): L0...L29 as nibble values
-    tail_byte = hx[:, -1]
-    tail_n = np.stack([tail_byte & 0x0F], axis=1)
-    # tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
-    uuid_nibbles = np.concatenate([body, tail_n], axis=1)
-    return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibbles)])
+    oc, mo = b_pts.cm()
+    return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, UUID_DEPTH, scheme=scheme)
 
 
 def h9_enc_ext(b_pts, oc, mo) -> list[uuid_mod.UUID]:
@@ -136,17 +178,9 @@ def h9_enc_ext(b_pts, oc, mo) -> list[uuid_mod.UUID]:
     scheme : RegionAddressLike (normally H9_RA)
     Returns
     -------
-    uuids     : list[uuid.UUID]  — 128-bit key addresses, one per point
+    uuids     : list[uuid.UUID]  — 128-bit canonical addresses, one per point
     """
-    from hhg9.h9.region import xy_regions
-    xy_r = xy_regions(b_pts.coords, mo, UUID_DEPTH)  # regions are length 2+'depth'
-    hx = reg_hex_digits(xy_r, oc, b_pts.domain)   # TailStyle.reversible = default.
-    body = hx[:, :-1]   # (N, 30): L0...L29 as nibble values
-    tail_byte = hx[:, -1]
-    # tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
-    tail_n = np.stack([tail_byte & 0x0F], axis=1)  # (N, 2)
-    uuid_nibbles = np.concatenate([body, tail_n], axis=1)
-    return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibbles)])
+    return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, UUID_DEPTH)
 
 
 def h9_dec(
@@ -173,16 +207,21 @@ def h9_dec(
     """
     import hhg9.h9.region as rg
     from hhg9 import Points
+    from hhg9.h9 import H9K
+    from hhg9.h9.tail import tail_unpack_reversible
     uuid_ints = [u.int for u in uuids]
     uuid_nibbles = _batch_int_to_nibbles(uuid_ints, n=32)   # (N, 32)
-    # new alternative.
+    # Single-nibble tail at [31]; body at [0..30]. hex_digits_reg is layer-aware
+    # (skips 0xF sentinels), so this decodes full addresses and truncated bins alike.
     key_tail = uuid_nibbles[:, -1]
-    oc, cells = hex_digits_reg(b_oct, uuid_nibbles[:, :-1], tail=key_tail)
-    # key_nibbles = uuid_nibbles[:, -2:]
-    # key_tail = (key_nibbles[:, 0] << 4) + key_nibbles[:, 1]
-    # body = uuid_nibbles[:, :-2]                           # (N, 30) nibble values
-    # oc, cells = hex_digits_reg(b_oct, body, tail=key_tail)
-    xy_m = rg.regions_xy(cells)
+    # Decode to the cell CENTROID, not the cell origin: omit the "3" vertex proxy
+    # and seed regions_xy at the hexagon centroid (in lattice units, scaled by Ü).
+    # Centroid offset by (mode, c2) — see polygon.py; the seed divides by 3 per
+    # layer so it lands at the cell's own scale (incl. octant-sized L0).
+    c2, _r_mo, c_mo = tail_unpack_reversible(key_tail)
+    cent = _HEX_CENTROID[c_mo.astype(np.intp), c2.astype(np.intp)] * H9K.Ü
+    oc, cells = hex_digits_reg(b_oct, uuid_nibbles[:, :-1], tail=key_tail, place_terminal=False)
+    xy_m = rg.regions_xy(cells, seed=cent)
     return Points(xy_m[:, :2], domain=b_oct, oid=oc)
 
 
@@ -268,20 +307,31 @@ def h9_decode(
 
 
 def h9_bin_pts(b_pts: Points, layer: int):
-    """Given a b_oct Points, return the layer-L bin UUIDs."""
-    # hex_dig = hex_digits(pts, layer=layer, tail_style=TailStyle.key)
-    # dom = b_pts.domain
+    """Given a b_oct Points, return the layer-L bin UUIDs.
+
+    Shares the canonical coalesce with h9_enc (a full address is just the bin at
+    UUID_DEPTH); see _coalesce_bin. L0 is handled directly because
+    region_neighbours degenerates at the root.
+    """
     oc, mo = b_pts.cm()
-    xy_r = xy_regions(b_pts.coords, mo, layer)  # regions are length 2+'depth'
-    hx = reg_hex_digits(xy_r, oc, b_pts.domain, TailStyle.key)   # TailStyle.reversible = default.
-    body = hx[:, :-1]   # (N, 30): L0...L29 as nibble values
-    tail_byte = hx[:, -1]
-    # tail_n = np.stack([(tail_byte >> 4) & 0x0F, tail_byte & 0x0F], axis=1)  # (N, 2)
-    uuid_nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)
-    uuid_nibs[:, :layer + 1] = body                      # body at layer L
-    uuid_nibs[:, -1] = tail_byte & 0x0F                  # key always at nibble 31
-    uuid_nibs[:, -2] = (tail_byte >> 4) & 0x0F           # key always at nibble 30
-    return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)])
+    if layer == 0:
+        # L0 is the degenerate root for region_neighbours (no parent to cascade,
+        # halves span octant *edges*). But the root-hex nibble is already a clean
+        # bijection to the 12 bent hexagons, so canonicalise straight to the
+        # mode-0 octant rep (r_mo=0): each physical hexagon -> exactly one key.
+        from hhg9.h9 import H9O, H9R
+        cx = xy_regions(b_pts.coords, mo, 0)
+        c2 = H9R.mcc2[mo, cx[:, 1]]
+        c2 = np.where(c2 == 0x5F, np.uint8(0), c2)
+        root_hex = H9O.l0hex_by_id[oc, c2]
+        c2_canon = H9O.l0hex_back[root_hex, 0][:, 1]            # mode-0 rep c2
+        tail = ((c2_canon & 0x03) << 2).astype(np.uint8)        # r_mo=0, p_mo=0
+        uuid_nibs = np.full((len(root_hex), 32), 0x0F, dtype=np.uint8)
+        uuid_nibs[:, 0] = root_hex
+        uuid_nibs[:, -1] = tail & 0x0F
+        return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)])
+
+    return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, layer)
 
 
 def h9_bin(
@@ -327,6 +377,24 @@ def h9_bin(
 #   key  : single hex char for the key nibble at position 31
 # Example: UUID for a layer-5 hex → '32343.2'
 # Full-depth (layer 30) addresses have no sentinel so all 31 body nibbles appear.
+
+def h9_layer(uuids):
+    """The hierarchical layer of an H9 UUID/bin, derived by counting 0xF sentinels.
+
+    Body digits are 0..11 (L0) / 0..8 (L1+) and never 0xF, so a 0xF nibble is
+    unambiguously a sentinel. The layer is the index of the deepest non-sentinel
+    body nibble (nibbles 0..30): a full address has none -> UUID_DEPTH; a bin
+    truncated to L carries sentinels in nibbles L+1..30 -> L.
+
+    Accepts a single uuid.UUID (returns int) or an iterable (returns an int array).
+    """
+    single = isinstance(uuids, uuid_mod.UUID)
+    items = [uuids] if single else list(uuids)
+    body = _batch_int_to_nibbles([u.int for u in items], n=32)[:, :UUID_DEPTH + 1]
+    is_real = body != 0x0F
+    layer = UUID_DEPTH - np.argmax(is_real[:, ::-1], axis=1)
+    return int(layer[0]) if single else layer
+
 
 def h9_label(u: uuid_mod.UUID) -> str:
     """Convert an H9 UUID to a human-readable label string.
