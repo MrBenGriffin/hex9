@@ -176,7 +176,7 @@ def hexify(reg: Registrar, b_pts: Points, warp_m=None, layers: int = 4):
 
     # Now calculate their area as a metric. (ignore pops).
     gm2 = ellipsoid_area_wgs84() # total surface area of WGS-84 (m²) about 510_065_621_724km
-    bins = 12*9**layers          # number of hexes at this layer
+    bins = 12*(9**layers)          # number of hexes at this layer
     w_area_m2_mean = gm2/bins    # ideal equal-area per hex
     h_pts = pts.copy()
     c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.

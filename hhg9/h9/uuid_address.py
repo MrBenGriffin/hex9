@@ -325,7 +325,7 @@ def h9_bin_pts(b_pts: Points, layer: int):
         c2 = np.where(c2 == 0x5F, np.uint8(0), c2)
         root_hex = H9O.l0hex_by_id[oc, c2]
         c2_canon = H9O.l0hex_back[root_hex, 0][:, 1]            # mode-0 rep c2
-        tail = ((c2_canon & 0x03) << 2).astype(np.uint8)        # r_mo=0, p_mo=0
+        tail = ((c2_canon & 0x03) << 1).astype(np.uint8)        # (p_c2<<1)|r_mo; r_mo=0, p_mo=0
         uuid_nibs = np.full((len(root_hex), 32), 0x0F, dtype=np.uint8)
         uuid_nibs[:, 0] = root_hex
         uuid_nibs[:, -1] = tail & 0x0F
