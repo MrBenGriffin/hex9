@@ -319,7 +319,7 @@ class Compositor:
 
         tails = tail_key_from_reversible(hex_v_k[:, -1])
         hex_par, hex_oid, scale = hex_parents(self.b_oct, hex_v_k, n_keep)
-        xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+        xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
 
         # Centroids in b_oct (carry octant components for source callables)
         ctrs_b = ctr_from_pars(self.b_oct, hex_par, hex_oid, scale, tails)
