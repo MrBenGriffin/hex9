@@ -25,15 +25,20 @@ class OctahedralH9(PointFormat):
         super().__init__(registrar, 'h9')
         self.scheme = adr.H9_RA
         self.width = 34  # default printed width
+        # Canonicalise u64 addresses by default: a hex address should be a reliable
+        # unique bin (address == bin). Set False for raw (non-folded) representatives.
+        self.u64_canonical = True
         u64 = False
         self.subs = {
-            'k': adr.TailStyle.key,
+            'k': adr.TailStyle.key,        # hex-string key tail (:h9.k) — NOT the u64 style
             'x': adr.Style.HEX,
             'i': adr.Style.NUMERIC,
-            'uk': adr.Style.UH64K,
-            'ua': adr.Style.UH64A,
+            'ua': adr.Style.UH64A,         # canonical u64 bin
             'r': adr.Style.UR64,
         }
+        # 'uk'/UH64K (u64 key) is REMOVED: it was redundant (canonical 'ua' is the
+        # unique bin) and buggy (its key tail packed as 0). Legacy 'uk' now aliases
+        # to the canonical 'ua' bin (see _select_style).
 
 
     def is_valid(self, address: str) -> bool:
@@ -53,10 +58,16 @@ class OctahedralH9(PointFormat):
                 arr = [address]
             if style not in [adr.Style.HEX]:
                 if ';' in arr[0]:
+                    # Multiword u64 (width > 16 nibbles): rejoin the words, strip the
+                    # trailing zero padding u64_pack adds, and decode the nibble row
+                    # with the single-nibble reversible tail (mirrors hex_pack — the
+                    # last used nibble is the tail). hex_str_decode is NOT used here
+                    # because it assumes the legacy 2-char tail.
                     farr = [a.replace(';', '') for a in arr]
-                    width = max(np.array([len(ref.rstrip('0')) for ref in farr]))
-                    arr = np.array([f[:width] for f in farr])
-                    style = adr.Style.HEX
+                    width = max(len(ref.rstrip('0')) for ref in farr)
+                    nibs = np.array([[int(c, 16) for c in f[:width]] for f in farr], dtype=np.uint8)
+                    b_oct = self.registrar.domain('b_oct')
+                    return adr.hex_decode(nibs, b_oct, self.scheme)
                 else:
                     # Nibble-string input (e.g. numeric / raw digits): pack nibbles into u64 words.
                     dgt = [([int(a, 16) for a in adx]) for adx in arr]
@@ -69,8 +80,6 @@ class OctahedralH9(PointFormat):
                 result = adr.hex_str_decode(arr, b_oct)
             case adr.Style.UH64A:
                 result = adr.hex_unpack(arr, adr.TailStyle.reversible, self.registrar, self.scheme)
-            case adr.Style.UH64K:
-                result = adr.hex_unpack(arr, adr.TailStyle.key, self.registrar, self.scheme)
             case adr.Style.NUMERIC:
                 result = adr.hex_unpack(arr, adr.TailStyle.key, self.registrar, self.scheme)
             case adr.Style.UR64:  # This is a REGION-based style.
@@ -87,18 +96,12 @@ class OctahedralH9(PointFormat):
         # Parse sub: optional style letter(s) + optional integer width
         if sub:
             if sub.startswith('u'):
-                if sub.startswith('ua'):
-                    width = 13
-                    style = self.subs['ua']
-
-                    sub = sub[2:]
-                else:
-                    if sub.startswith('uk'):  # adr.Style.UH64K,
-                        sub = sub[2:]
-                    else:
-                        sub = sub[1:]
-                    width = 14
-                    style = self.subs['uk']
+                # Any 'u…' maps to the canonical u64 bin (UH64A). Legacy 'uk' is a
+                # deprecated alias for 'ua' (UH64K was removed). L0..L14 body +
+                # single-nibble tail = one full u64 (sub-metre).
+                width = 14
+                style = self.subs['ua']
+                sub = sub[2:] if (sub.startswith('ua') or sub.startswith('uk')) else sub[1:]
 
             elif sub.startswith('r'):
                 width = 14
@@ -130,13 +133,13 @@ class OctahedralH9(PointFormat):
         tail_style = adr.TailStyle.reversible
         count = len(pts)
         style, width = self._select_style(sub)
-        if style == adr.TailStyle.key or style == adr.Style.UH64K:
+        if style == adr.TailStyle.key:
             tail_style = adr.TailStyle.key
 
-        if style == adr.Style.UH64K or style == adr.Style.UH64A:
+        if style == adr.Style.UH64A:
             # fmt = f'0{int(np.rint(width / 16)) * 16}x'
             fmt = f'016x'
-            u64 = adr.hex_pack(pts, width, tail_style, self.scheme)  #
+            u64 = adr.hex_pack(pts, width, tail_style, self.scheme, canonical=self.u64_canonical)
             strs = [';'.join([f'{u:{fmt}}' for u in v]) for v in u64]
             if count < 2:
                 return strs[0]

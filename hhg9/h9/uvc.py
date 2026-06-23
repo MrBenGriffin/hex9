@@ -135,10 +135,13 @@ def hex_digits_to_uvc(
 
     hr = HEX_LUTS.hex_reg
     # Walk leaf -> root, collecting net_mode-0 UV at each layer.
+    # body layout is [root(L0), L1, L2, ..., L_{layer-1}]: column 0 is the root
+    # hex (carried by the octant, not the UV) and columns 1..layer-1 are the real
+    # region digits. So accumulate L1..L_{layer-1} (stop at 1, exclude only col 0).
     uv_stack = []
     c_mo_t = c_mo.copy()
     c2_t = c2.copy()
-    for i in range(layer - 1, 1, -1):  # stop at 2; body[:,1] is the proto sentinel (0x0F), not a digit
+    for i in range(layer - 1, 0, -1):  # i = layer-1 .. 1  (L_{layer-1} .. L1)
         d = body[:, i]
         uv = _LUT[d, c_mo_t, c2_t].astype(np.int32)  # (N, 2)
         uv_stack.append(uv)
@@ -333,15 +336,16 @@ def hex_step(
         v_new = int(v_all[n]) + dv * scale
         r_mo_val = int(r_mo_all[n])
 
-        found = _solve_uvc(u_new, v_new, r_mo_val, depth - 1)
+        found = _solve_uvc(u_new, v_new, r_mo_val, depth)
         if found is None:
             print(f'  [WARN] hex_step: pt {n} has no neighbour (octant boundary?)')
             continue
 
         digs, leaf_cm, leaf_c2v, leaf_h = found
-        # Fill body columns 2..depth-1 (skip col 0 = root hex, col 1 = proto sentinel 0x0F)
+        # Fill body columns 1..depth-1 (L1..L_{depth-1}); col 0 (root hex) is
+        # carried by the octant and left unchanged.
         for k, d in enumerate(reversed(digs)):
-            result[n, k + 2] = d
+            result[n, k + 1] = d
         # Rebuild tail (single-nibble: r_mo, p_mo, c2). h is reclaimed into the body.
         new_tail = tail_pack_reversible(
             np.uint8(r_mo_val), np.uint8(leaf_cm), np.uint8(leaf_c2v),

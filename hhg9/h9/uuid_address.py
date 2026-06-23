@@ -44,7 +44,7 @@ from hhg9.h9.region import xy_regions
 if TYPE_CHECKING:
     from hhg9 import Points, Registrar
 
-from hhg9.h9.addressing import hex_digits, hex_decode, H9_RA, hex_digits_reg, reg_hex_digits
+from hhg9.h9.addressing import hex_digits, hex_decode, H9_RA, hex_digits_reg, reg_hex_digits, canonicalise
 from hhg9.h9.tail import TailStyle, tail_pack_reversible, tail_unpack_reversible
 from hhg9.h9.protocols import RegionAddressLike
 
@@ -109,29 +109,9 @@ def _coalesce_bin(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA)
     terminal parent (p_mo == 0), so the (c2, r_mo) key tail alone identifies it —
     which is exactly why address == bin and bins are invertible.
     """
-    from hhg9.h9 import H9O, H9C, H9K
-    from hhg9.h9.region import region_neighbours
-    from hhg9.h9.classifier import location
-    from hhg9.h9.protocols import BaryLoc
-    oc = np.asarray(oc).copy()
-    x, y = coords[:, 0], coords[:, 1]
-    regions = xy_regions(coords, mo, layer)                     # (N, layer+2)
-    # Folding is a property of the *cell* (a mode-1 half-hex), independent of
-    # where the point sits, so EDGE/VERTEX points fold too; only out-of-scope
-    # (EXT/UDF) points are left untouched.
-    locs = location(H9K.R3 * x, y, mo)
-    active = ((locs != BaryLoc.EXT) & (locs != BaryLoc.UDF) & (H9C.mode[regions[:, -2]] == 1))
-    if np.any(active):
-        idx = np.flatnonzero(active)
-        nbr, c2 = region_neighbours(regions[idx])
-        hopped = regions[idx, 0] != nbr[:, 0]                   # octant-spanning fold
-        regions[idx[~hopped]] = nbr[~hopped]
-        if np.any(hopped):
-            hidx = idx[hopped]
-            oc_h = H9O.oid_nb[oc[hidx], c2[hopped]]             # neighbour octant
-            flipped = np.column_stack([x[hidx], -y[hidx]])      # seam = inverted y-axis
-            regions[hidx] = xy_regions(flipped, H9O.oid_mo[oc_h], layer)
-            oc[hidx] = oc_h
+    # The half-hex -> mode-0 fold is the packer-agnostic canonicaliser; a full
+    # UUID is just the canonical bin at UUID_DEPTH. Shared with every other packer.
+    regions, oc = canonicalise(coords, oc, mo, dom, layer, scheme=scheme)
     hx = reg_hex_digits(regions, oc, dom, TailStyle.key, scheme=scheme)
     body = hx[:, :-1]
     uuid_nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)  # nibbles layer+1..30 = 0xF

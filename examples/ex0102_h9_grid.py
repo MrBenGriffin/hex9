@@ -73,7 +73,7 @@ def run(layout, scale, depths):
     for layer in depths:
         hex_num, hex_v_k, hex_inv, _ = hex_reduce(ref, layer)
         hex_par, hex_oid, scale = hex_parents(b_oct, hex_v_k, hex_num)
-        xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+        xpm, xc2, _ = tail_unpack_reversible(hex_v_k[:, -1])
 
         verts_n2 = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct)
 

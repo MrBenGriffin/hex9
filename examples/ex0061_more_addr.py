@@ -250,13 +250,11 @@ if __name__ == '__main__':
     rgx = [H9_RA.cell2rid[i] for i in cxx]
     rga = [''.join([f'{a:x}' for a in p]) for p in rgx]
     hxx = h9f.format(bry, None, 'r36')
-    h64k = h9f.format(bry, None, 'uk')
     h64a = h9f.format(bry, None, 'ua')
     ha36 = h9f.format(bry, None, 'ua36')
     h36 = h9f.format(bry, None, '36')
     r36_str = h9f.revert(h36)                 # from full H9 layer-36 string
-    ruk = h9f.revert(h64k, Style.UH64K)       # key/id (representative)
-    rua = h9f.revert(h64a, Style.UH64A)       # reversible u64 (representative)
+    rua = h9f.revert(h64a, Style.UH64A)       # single-word u64 canonical bin (L14, sub-metre)
     r36_u64 = h9f.revert(ha36, Style.UH64A)   # u64 version of layer-36 (representative)
 
     g36 = reg.project(r36_str, [b_oct, g_gcd])
@@ -265,10 +263,9 @@ if __name__ == '__main__':
 
     d36 = wgs84(pos.coords, g36.coords) * 1e+9
     dmf = wgs84(pos.coords, u36.coords) * 1e+9
-    daf = wgs84(pos.coords, atp.coords)
+    daf = wgs84(pos.coords, atp.coords) * 1e+9
     l36 = h36.split('\n')
     l64a = h64a.split('\n')
-    l64k = h64k.split('\n')
 
     bcc, bmo = bry.cm()
 
@@ -297,15 +294,15 @@ if __name__ == '__main__':
         print(f'{nm} {pos[idx]:dms} (Reference Coordinates)')
         print(f'{nm} {rtp[idx]:dms} (Reverted Coordinates)')
         print(f'{nm} {l36[idx]} (H9 Layer 36)')
-        print(f'{nm} {l64a[idx]} (U64A Address)')
-        print(f'{nm} {l64k[idx]} (U64K Identity)')
+        print(f'{nm} {l64a[idx]} (U64A canonical bin)')
 
         print(f'∂{dxr[idx]:.6f}nm (roundtrip via GCD<->Barycentric<->GCD)')
         print(f'∂{dif[idx]:.6f}nm (roundtrip via GCD<->Barycentric)')
         print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->Bary Regions)')
         print(f'∂{d36[idx]:.6f}nm (roundtrip via GCD<->H9 Layer 36)')
         print(f'∂{dmf[idx]:.6f}nm (roundtrip via GCD<->H9 U64 36)')
-        print(f'∂{daf[idx]:.6f}m (roundtrip via GCD<->H9 U64 Reversible)')
+        # Single 64-bit representative (L14): lossy by design, sub-metre — shown in metres.
+        print(f'∂{daf[idx] / 1e9:.6f}m  (roundtrip via GCD<->H9 L14 UINT64 single-word representative)')
 
         # print(f'H9.adr:{bry[i]:h9}')
         # print(f'H9.key:{bry[i]:h9.k}')

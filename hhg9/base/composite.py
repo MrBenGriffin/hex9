@@ -41,13 +41,26 @@ class CompositeDomain(Domain, ABC):
 
             if np.any(finite_mask):
                 cf = c[finite_mask]
-                cf[cf == 0] = np.finfo(cf.dtype).tiny
-                s = np.sign(cf)
-                oids[finite_mask] = (
-                    ((s[:, 2] < 0).astype(np.uint8) << 2) |
-                    ((s[:, 1] < 0).astype(np.uint8) << 1) |
-                    (s[:, 0] < 0).astype(np.uint8)
+                # Octant from coordinate signs. On a seam a coordinate is exactly 0
+                # and its axis-bit is "free"; the design convention is that on-seam
+                # points belong to a mode-0 octant (popcount(oid) even). So instead
+                # of forcing zeros to the positive side, choose the free bit(s) to
+                # make the popcount even. (Negatives set the bit; zeros default to 0
+                # and are flipped up only when needed to reach an even popcount.)
+                zero = (cf == 0)
+                oid = (
+                    ((cf[:, 2] < 0).astype(np.uint8) << 2) |
+                    ((cf[:, 1] < 0).astype(np.uint8) << 1) |
+                    (cf[:, 0] < 0).astype(np.uint8)
                 )
+                odd = (np.bitwise_count(oid) & np.uint8(1)).astype(bool)
+                fix = odd & zero.any(axis=1)
+                if np.any(fix):
+                    axes = np.array([0, 1, 2], dtype=np.int8)
+                    hi_zero = np.where(zero, axes, np.int8(-1)).max(axis=1)  # highest zero axis
+                    rows = np.flatnonzero(fix)
+                    oid[rows] |= (np.uint8(1) << hi_zero[rows].astype(np.uint8))
+                oids[finite_mask] = oid
             pts.oid = oids
         else:
             raise NotImplementedError(f'{self.name} needs to bin {self.axes} axes')

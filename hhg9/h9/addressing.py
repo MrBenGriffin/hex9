@@ -77,7 +77,7 @@ class Style(Enum):
     HEX = 0
     NUMERIC = 4
     U64 = 6
-    UH64K = 7  # identifying uint64 address
+    UH64K = 7  # DEPRECATED & unwired (redundant + buggy key tail); use UH64A canonical bin
     UH64A = 8  # reversible uint64 address
     UR64 = 9
 
@@ -724,6 +724,50 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
     return bdy
 
 
+def canonicalise(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA):
+    """Fold mode-1 leaf half-hexes to their canonical mode-0 parent ("bin" form).
+
+    Packer-agnostic core of the canonical layer-L key. The three half-hexes
+    meeting at a vertex (a mode-1 parent "split") share one binning hexagon, so
+    after the fold every cell has a mode-0 terminal parent (p_mo == 0) and the
+    (c2, r_mo) tail alone identifies it — which is why address == bin and bins are
+    invertible. Folding is a property of the *cell*, so EDGE/VERTEX points fold
+    too; only out-of-scope (EXT/UDF) points are left untouched. The fold is fully
+    symbolic: the canonical chain is region_neighbours' own neighbour chain, and a
+    fold that crosses an octant seam additionally switches the octant via
+    H9O.oid_nb (no geometric y-flip / re-decomposition).
+
+    Args:
+        coords: (N, 2) b_oct coordinates.
+        oc, mo: octant id and net_mode (e.g. from Points.cm()).
+        dom:    b_oct domain.
+        layer:  hierarchy depth.
+        scheme: RegionAddressLike (normally H9_RA).
+
+    Returns:
+        (regions, oc): the canonical region chain (N, layer+2) and the
+        possibly-octant-switched octant id. Feed to reg_hex_digits / reg_pack /
+        the UUID packer — the single source of truth for canonical addresses.
+    """
+    from hhg9.h9 import H9O
+    from hhg9.h9.region import region_neighbours, xy_regions
+    from hhg9.h9.classifier import location
+    oc = np.asarray(oc).copy()
+    x, y = coords[:, 0], coords[:, 1]
+    regions = xy_regions(coords, mo, layer)                     # (N, layer+2)
+    locs = location(H9K.R3 * x, y, mo)
+    active = ((locs != BaryLoc.EXT) & (locs != BaryLoc.UDF) & (H9C.mode[regions[:, -2]] == 1))
+    if np.any(active):
+        idx = np.flatnonzero(active)
+        nbr, c2 = region_neighbours(regions[idx])
+        hopped = regions[idx, 0] != nbr[:, 0]                   # octant-spanning fold
+        regions[idx] = nbr                                      # symbolic fold (both branches)
+        if np.any(hopped):                                      # seam: switch octant symbolically
+            hidx = idx[hopped]
+            oc[hidx] = H9O.oid_nb[oc[hidx], c2[hopped]]         # neighbour octant via oid_nb
+    return regions, oc
+
+
 def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA, place_terminal=True):
     """
     Inverts `reg_hex_digits` (Hex -> Regions).
@@ -918,7 +962,8 @@ def hex_key(hx: NDArray[np.uint8], *, copy: bool = True) -> NDArray[np.uint8]:
     return out
 
 
-def hex_pack(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
+def hex_pack(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible,
+             scheme: RegionAddressLike = H9_RA, canonical: bool = True):
     """
     Convert Points to packed UInt64 (Hex Address Format).
 
@@ -928,15 +973,25 @@ def hex_pack(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible,
         pts (Points): Input points.
         depth (int): Depth of address.
         tail_style (TailStyle): Controls how the tail metadata is packed.
-            - reversible: tail is packed as two nibbles (full reversible metadata).
+            - reversible: tail is packed as one nibble (full reversible metadata;
+              p_mo is canonically 0 so (p_c2, r_mo) fit a single nibble).
             - key: tail is packed as one nibble (high nibble only, binning key).
             - none: no tail is packed.
+        canonical (bool): When True (default), fold mode-1 leaves to their mode-0
+            parent first, so the address is a reliable unique BIN (address == bin):
+            two points in the same hexagon pack to the same u64. Set False for the
+            raw representative that preserves the exact terminal half-hex.
     Returns:
         NDArray[uint64]: Packed integers.
     """
     from hhg9.algorithms.packing import u64_pack
 
-    hx = hex_digits(pts, layer=depth, tail_style=tail_style, scheme=scheme)
+    if canonical:
+        oc, mo = pts.cm()
+        regions, oc = canonicalise(pts.coords, oc, mo, pts.domain, depth, scheme=scheme)
+        hx = reg_hex_digits(regions, oc, pts.domain, tail_style, scheme=scheme)
+    else:
+        hx = hex_digits(pts, layer=depth, tail_style=tail_style, scheme=scheme)
     hx = np.asarray(hx, dtype=np.uint8)
     if hx.ndim != 2:
         raise ValueError("expected hex digits as (hex_layer, L) or (hex_layer, L+1)")
@@ -952,9 +1007,14 @@ def hex_pack(pts, depth: int = 36, tail_style: TailStyle = TailStyle.reversible,
     tail_ids = hx[:, -1]
 
     if tail_style is TailStyle.reversible:
-        tail_hi = ((tail_ids >> 4) & 0x0F).astype(np.uint8)
+        # The reversible tail is a SINGLE nibble (see reg_hex_digits /
+        # tail_pack_reversible: (p_mo<<3)|(p_c2<<1)|r_mo, values 0..13). It was
+        # historically split into hi/lo nibbles, but the high nibble is always 0,
+        # so packing it wasted one nibble — and at uint64 width that costs a whole
+        # layer at the worst point. Pack the single tail nibble directly so a
+        # single u64 reaches one layer deeper (sub-metre vs metre representatives).
         tail_lo = (tail_ids & 0x0F).astype(np.uint8)
-        nibbles = np.column_stack([body, tail_hi, tail_lo]).astype(np.uint8)
+        nibbles = np.column_stack([body, tail_lo]).astype(np.uint8)
         return u64_pack(nibbles)
 
     if tail_style is TailStyle.key:
@@ -1006,12 +1066,12 @@ def hex_unpack(pts, tail_style: TailStyle = TailStyle.reversible, reg=None, sche
         raise ValueError("hex_unpack cannot invert TailStyle.none: no tail metadata")
 
     if tail_style is TailStyle.reversible:
-        if last < 2:
+        if last < 1:
             raise ValueError("not enough nibbles to recover reversible tail")
-        tail_lo = nibbles[:, last]
-        tail_hi = nibbles[:, last - 1]
-        body = nibbles[:, :last - 1]
-        tail_ids = ((tail_hi << 4) | tail_lo).astype(np.uint8)
+        # Single-nibble reversible tail (mirror of hex_pack): the final used nibble
+        # is the tail; everything before it is the body.
+        tail_ids = nibbles[:, last].astype(np.uint8)
+        body = nibbles[:, :last]
         hx = np.column_stack([body, tail_ids])
         oc, cells = hex_digits_reg(dom, hx, scheme=scheme)
 

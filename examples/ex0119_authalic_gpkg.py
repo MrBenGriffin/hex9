@@ -33,7 +33,7 @@ import argparse
 import os
 import numpy as np
 from hhg9 import Registrar
-from hhg9.algorithms.distance import wgs84_area
+from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84
 from hhg9.h9.grid import HexMesh
 from hhg9.geo.export import HexLayer, layers_to_gpkg
 os.makedirs('output', exist_ok=True)
@@ -45,7 +45,7 @@ def build_gpkg(reg: Registrar, depth: int) -> None:
     pts = mesh.pts
     faces = mesh.faces
 
-    gm2 = ellipsoid_area_wgs84() # 510_065_621_724_088.509
+    gm2 = ellipsoid_area_wgs84()  # 510_065_621_724_088.509
     bins = 12 * 9 ** depth
     ideal_m2 = gm2 / bins
 
