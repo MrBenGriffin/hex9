@@ -732,10 +732,8 @@ def canonicalise(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA):
     after the fold every cell has a mode-0 terminal parent (p_mo == 0) and the
     (c2, r_mo) tail alone identifies it — which is why address == bin and bins are
     invertible. Folding is a property of the *cell*, so EDGE/VERTEX points fold
-    too; only out-of-scope (EXT/UDF) points are left untouched. The fold is fully
-    symbolic: the canonical chain is region_neighbours' own neighbour chain, and a
-    fold that crosses an octant seam additionally switches the octant via
-    H9O.oid_nb (no geometric y-flip / re-decomposition).
+    too; only out-of-scope (EXT/UDF) points are left untouched. A fold that
+    crosses an octant seam switches the octant via H9O.oid_nb (+ y-flip).
 
     Args:
         coords: (N, 2) b_oct coordinates.
@@ -761,10 +759,13 @@ def canonicalise(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA):
         idx = np.flatnonzero(active)
         nbr, c2 = region_neighbours(regions[idx])
         hopped = regions[idx, 0] != nbr[:, 0]                   # octant-spanning fold
-        regions[idx] = nbr                                      # symbolic fold (both branches)
-        if np.any(hopped):                                      # seam: switch octant symbolically
+        regions[idx[~hopped]] = nbr[~hopped]
+        if np.any(hopped):
             hidx = idx[hopped]
-            oc[hidx] = H9O.oid_nb[oc[hidx], c2[hopped]]         # neighbour octant via oid_nb
+            oc_h = H9O.oid_nb[oc[hidx], c2[hopped]]             # neighbour octant
+            flipped = np.column_stack([x[hidx], -y[hidx]])      # seam = inverted y-axis
+            regions[hidx] = xy_regions(flipped, H9O.oid_mo[oc_h], layer)
+            oc[hidx] = oc_h
     return regions, oc
 
 
