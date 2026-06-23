@@ -160,7 +160,7 @@ def h9_enc(
     uuids     : list[uuid.UUID]  — 128-bit canonical addresses, one per point
 
     A full UUID is the canonical bin at UUID_DEPTH: encode == bin(., UUID_DEPTH),
-    so every address is invertible and h9_bin(addr, L) is a pure truncation.
+    so every address is invertible.
     """
     oc, mo = b_pts.cm()
     return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, UUID_DEPTH, scheme=scheme)

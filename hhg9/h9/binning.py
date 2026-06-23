@@ -66,7 +66,7 @@ def ctr_from_pars(dom, hex_par, hex_oid, scale, tail):
     """
     from hhg9 import Points
     from hhg9.h9.polygon import H9P
-    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
+    xc2, xrm, xpm = tail_unpack_reversible(tail)   # (c2, r_mo, p_mo); canonical -> p_mo=0
     hex_all = H9P.hx[xpm, xc2]
     hex_pts = hex_par[:, None, :] + hex_all * scale  # (H, 6, 2)
     hex_ctr = np.mean(hex_pts, axis=1)
@@ -78,7 +78,7 @@ def hex_from_pars(dom, hex_par, hex_oid, scale, tail):
     from hhg9 import Points
     from hhg9.h9 import H9O
     from hhg9.h9.polygon import H9P
-    xpm, xc2, xrm, rgn = tail_unpack_reversible(tail)
+    xc2, xrm, xpm = tail_unpack_reversible(tail)   # (c2, r_mo, p_mo); canonical -> p_mo=0
     hex_all = H9P.hx[xpm, xc2]
     hex_pts = hex_par[:, None, :] + hex_all * scale  # (H, 6, 2)
 

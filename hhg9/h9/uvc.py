@@ -131,7 +131,7 @@ def hex_digits_to_uvc(
     tail = hx[:, -1]
 
     sz, layer = body.shape
-    c_mo, c2, _r_mo, _tail_h = tail_unpack_reversible(tail)
+    c2, _r_mo, c_mo = tail_unpack_reversible(tail)   # (c2, r_mo, p_mo)
 
     hr = HEX_LUTS.hex_reg
     # Walk leaf -> root, collecting net_mode-0 UV at each layer.
@@ -320,7 +320,7 @@ def hex_step(
     layer = depth                   # alias used by uvc functions
 
     u_all, v_all, c2_all = hex_digits_to_uvc(hx)
-    p_mo_all, _c2t, r_mo_all, _h = tail_unpack_reversible(tail_col)
+    _c2t, r_mo_all, p_mo_all = tail_unpack_reversible(tail_col)   # (c2, r_mo, p_mo)
 
     # Place value of column `target_layer` = 3^(depth-1-target_layer)
     scale = 3 ** (depth - 1 - target_layer)
@@ -342,10 +342,9 @@ def hex_step(
         # Fill body columns 2..depth-1 (skip col 0 = root hex, col 1 = proto sentinel 0x0F)
         for k, d in enumerate(reversed(digs)):
             result[n, k + 2] = d
-        # Rebuild tail
+        # Rebuild tail (single-nibble: r_mo, p_mo, c2). h is reclaimed into the body.
         new_tail = tail_pack_reversible(
-            np.uint8(leaf_cm), np.uint8(leaf_c2v),
-            np.uint8(r_mo_val), np.uint8(leaf_h),
+            np.uint8(r_mo_val), np.uint8(leaf_cm), np.uint8(leaf_c2v),
         )
         result[n, -1] = new_tail
 
