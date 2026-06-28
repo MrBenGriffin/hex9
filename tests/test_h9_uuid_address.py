@@ -1,0 +1,152 @@
+# Part of the Hex9 (H9) Project
+# Copyright ©2025, Ben Griffin
+# Licensed under the Apache License, Version 2.0
+"""
+Round-trip and invariant tests for the UUID address layer
+(``hhg9.h9.uuid_address``).
+
+The modern contract (see module docstring): a full H9 UUID is the canonical bin
+at ``UUID_DEPTH`` with a single-nibble reversible tail — it is self-inverting,
+so ``h9_decode(h9_encode(...))`` recovers lat/lon and no companion bytes exist.
+
+Covered:
+  * nibble ↔ int packing
+  * h9_encode/h9_decode (lat/lon) and h9_enc/h9_dec/h9_enc_ext (b_oct)
+  * h9_bin / h9_bin_pts — layer validation, idempotence, coarsening monotonicity
+  * h9_layer inference
+  * h9_label / h9_from_label string round-trip
+"""
+import uuid as uuid_mod
+
+import numpy as np
+import pytest
+
+from hhg9 import Registrar, Points
+import hhg9.h9.uuid_address as ua
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def reg():
+    return Registrar()
+
+
+_LL = np.array([
+    [51.5,  -0.12],
+    [40.7, -74.00],
+    [-33.9, 151.2],
+    [0.0,    0.0],
+])
+
+
+@pytest.fixture(scope="module")
+def ll():
+    return _LL.copy()
+
+
+@pytest.fixture(scope="module")
+def uuids(reg, ll):
+    return ua.h9_encode(ll[:, 0], ll[:, 1], reg=reg)
+
+
+@pytest.fixture(scope="module")
+def cluster_uuids(reg):
+    """200 points tightly clustered near London — collapse at coarse layers."""
+    rng = np.random.default_rng(1)
+    lat = 51.5 + rng.normal(0, 0.01, 200)
+    lon = -0.12 + rng.normal(0, 0.01, 200)
+    return ua.h9_encode(lat, lon, reg=reg)
+
+
+# ---------------------------------------------------------------------------
+# 1. nibble ↔ int packing
+# ---------------------------------------------------------------------------
+
+def test_nibble_int_batch_roundtrip():
+    nb = np.random.default_rng(0).integers(0, 16, size=(5, 32)).astype(np.uint8)
+    ints = ua.batch_nibbles_to_int(nb)
+    np.testing.assert_array_equal(ua._batch_int_to_nibbles(ints, 32), nb)
+
+
+def test_nibble_int_single_matches_batch():
+    nb = np.arange(32, dtype=np.uint8) % 16   # one 32-nibble row
+    assert ua._nibbles_to_int(nb) == ua.batch_nibbles_to_int(nb.reshape(1, 32))[0]
+
+
+def test_uuid_depth_constant():
+    assert ua.UUID_DEPTH == 30
+
+
+# ---------------------------------------------------------------------------
+# 2. encode / decode round-trips
+# ---------------------------------------------------------------------------
+
+def test_encode_returns_uuid_list(uuids, ll):
+    assert isinstance(uuids, list)
+    assert len(uuids) == len(ll)
+    assert all(isinstance(u, uuid_mod.UUID) for u in uuids)
+
+
+def test_lat_lon_roundtrip(reg, uuids, ll):
+    lat, lon = ua.h9_decode(uuids, reg=reg)
+    assert np.abs(lat - ll[:, 0]).max() < 1e-10
+    assert np.abs(lon - ll[:, 1]).max() < 1e-10
+
+
+def test_b_oct_paths_agree(reg, ll, uuids):
+    """h9_enc (b_oct) and h9_enc_ext must match the lat/lon wrapper h9_encode."""
+    g, b = reg.domain('g_gcd'), reg.domain('b_oct')
+    pb = reg.project(Points(ll, domain=g), [g, b])
+    oc, mo = pb.cm()
+    assert list(ua.h9_enc(pb)) == list(uuids)
+    assert list(ua.h9_enc_ext(pb, oc, mo)) == list(uuids)
+
+
+def test_full_uuid_layer_is_uuid_depth(uuids):
+    np.testing.assert_array_equal(ua.h9_layer(uuids), ua.UUID_DEPTH)
+
+
+# ---------------------------------------------------------------------------
+# 3. binning
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("layer", [0, 2, 5, 15, 30])
+def test_bin_reports_its_layer(uuids, layer):
+    bins = ua.h9_bin(list(uuids), layer)
+    np.testing.assert_array_equal(ua.h9_layer(bins), layer)
+
+
+@pytest.mark.parametrize("layer", [0, 3, 12])
+def test_bin_is_idempotent(uuids, layer):
+    once = ua.h9_bin(list(uuids), layer)
+    twice = ua.h9_bin(list(once), layer)
+    assert once == twice
+
+
+@pytest.mark.parametrize("bad_layer", [-1, 31, 100])
+def test_bin_rejects_out_of_range_layer(uuids, bad_layer):
+    with pytest.raises(ValueError):
+        ua.h9_bin(list(uuids), bad_layer)
+
+
+def test_bin_coarsening_is_monotonic(cluster_uuids):
+    """Finer layers can only split, never merge: |unique bins| is non-decreasing
+    in layer, and a tight cluster collapses to a single bin at coarse layers."""
+    counts = [len(set(ua.h9_bin(list(cluster_uuids), L))) for L in (0, 2, 5, 10, 20)]
+    assert counts == sorted(counts)
+    assert counts[0] == 1                 # all in one hex at L0
+    assert counts[-1] == len(cluster_uuids)  # all distinct by L20
+
+
+# ---------------------------------------------------------------------------
+# 4. label round-trip
+# ---------------------------------------------------------------------------
+
+def test_label_roundtrip(uuids):
+    for u in uuids:
+        label = ua.h9_label(u)
+        assert isinstance(label, str)
+        assert ua.h9_from_label(label) == u

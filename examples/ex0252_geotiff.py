@@ -12,7 +12,7 @@ a small number of raster pixels; any per-raster-pixel variance within a hex
 is negligible at that scale.
 
 Last Tested
-16 Jun 2026 0.1.3a0 (fail)
+23 Jun 2026 0.1.3a0 (passed)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2026 0.1.0a4 (passed)
 """
@@ -43,13 +43,16 @@ def create_nlcd_lut() -> np.ndarray:
 
 if __name__ == '__main__':
     print('Initialising')
+
     from hhg9.h9.region import recover_stats_reset, recover_stats_report
 
+    # b_oct
     gdal.UseExceptions()
     rg = Registrar()
     g_gcd = rg.domain('g_gcd')
     c_ell = rg.domain('c_ell')
     b_oct = rg.domain('b_oct')
+    b_oct.no_lib()
     c_oct = rg.domain('c_oct')
     n_oct = rg.domain('n_oct:diamonds')  # diamonds keeps north pole north
     recover_stats_reset()

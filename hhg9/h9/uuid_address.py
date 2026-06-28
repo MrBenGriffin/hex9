@@ -22,12 +22,14 @@ Layout (32 nibbles = 128 bits):
     p_c2 = ((adr_byte >> 1) & 0x03).astype(np.uint8)
     r_mo =  (adr_byte       & 0x01).astype(np.uint8)
 
-The UUID alone is sufficient for spatial indexing and hexbin at any layer.
-The (UUID, adr) pair enables exact reconstruction of the b_oct coordinate
-and therefore round-trip to lat/lon.
+A full UUID is the canonical bin at UUID_DEPTH and carries a single-nibble
+reversible tail, so the UUID *alone* is sufficient for spatial indexing, hexbin
+at any layer, AND exact round-trip to lat/lon — it is self-inverting. (Earlier
+revisions returned a companion ``adr`` byte for reconstruction; that is no
+longer needed and has been removed.)
 
 Public API:
-    h9_encode(lats, lons)              -> (uuids, adr_bytes)
+    h9_encode(lats, lons)              -> uuids
     h9_decode(uuids)                   -> (lats, lons)
     h9_bin(uuids, layer)               -> uuids
 """
@@ -117,7 +119,7 @@ def _coalesce_bin(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA)
     uuid_nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)  # nibbles layer+1..30 = 0xF
     uuid_nibs[:, :layer + 1] = body                            # body L0..L_layer
     uuid_nibs[:, -1] = hx[:, -1] & 0x0F                        # key tail at nibble 31
-    return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)])
+    return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)]
 
 
 def h9_enc(
@@ -176,8 +178,7 @@ def h9_dec(
 
     Parameters
     ----------
-    uuids     : list[uuid.UUID] — key UUIDs from h9_enc
-    adr_bytes : array-like uint8 — companion adr bytes from h9_enc
+    uuids     : list[uuid.UUID] — key UUIDs from h9_enc (self-inverting)
     b_oct     : b_oct domain instance
     scheme    : RegionAddressLike (normally H9_RA)
 
@@ -210,7 +211,7 @@ def h9_encode(
         lons,
         reg=None,
         scheme: RegionAddressLike = H9_RA,
-) -> tuple[list[uuid_mod.UUID], NDArray[np.uint8]]:
+) -> list[uuid_mod.UUID]:
     """
     Encode geographic coordinates to H9 UUID addresses.
 
@@ -226,9 +227,9 @@ def h9_encode(
 
     Returns
     -------
-    uuids : list[uuid.UUID]  — 128-bit key addresses, one per point
-    adr_bytes : NDArray[uint8] — companion byte enabling round-trip decode,
-                packed as (p_mo << 4) | h
+    uuids : list[uuid.UUID]  — 128-bit canonical addresses, one per point.
+            Each UUID is the canonical bin at UUID_DEPTH and is self-inverting,
+            so no companion adr bytes are returned (see module docstring).
     """
     from hhg9 import Registrar, Points
 
@@ -286,7 +287,7 @@ def h9_decode(
     return lats, lons
 
 
-def h9_bin_pts(b_pts: Points, layer: int):
+def h9_bin_pts(b_pts: Points, layer: int) -> list[uuid_mod.UUID]:
     """Given a b_oct Points, return the layer-L bin UUIDs.
 
     Shares the canonical coalesce with h9_enc (a full address is just the bin at
@@ -309,7 +310,7 @@ def h9_bin_pts(b_pts: Points, layer: int):
         uuid_nibs = np.full((len(root_hex), 32), 0x0F, dtype=np.uint8)
         uuid_nibs[:, 0] = root_hex
         uuid_nibs[:, -1] = tail & 0x0F
-        return np.array([uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)])
+        return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(uuid_nibs)]
 
     return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, layer)
 

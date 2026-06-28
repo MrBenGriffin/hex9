@@ -164,13 +164,13 @@ if __name__ == '__main__':
             for anc_level in anc_levels:
                 anc_num, anc_v, _, _ = hex_reduce(ctr, anc_level)
                 anc_par, anc_oid, anc_scale = hex_parents(b_oct, anc_v, anc_num, anc_level)
-                anc_xpm, anc_xc2, _ = tail_unpack_reversible(anc_v[:, -1])
+                anc_xc2, _, anc_xpm = tail_unpack_reversible(anc_v[:, -1])   # (c2, r_mo, p_mo)
                 verts.append(hex_verts_in_noct(anc_par, anc_oid, anc_xpm, anc_xc2, anc_scale, n_oct))
 
             hd = np.array(list(''.join([f'{a:0x}' for a in sub_adr[i]]) for i in range(sub_adr.shape[0])))
 
             # Build hex vertices directly in n_oct via per-face rigid transform.
-            xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+            xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
             verts.append(hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, n_oct))
             ctr_n = rg.project(ctr, [b_oct, n_oct])
             plot_hex(verts, prefix_str, f'{layer}_{threshold}', ctrs=ctr_n.coords, labels=hd)

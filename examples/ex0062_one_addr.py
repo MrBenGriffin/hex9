@@ -29,6 +29,7 @@ if __name__ == '__main__':
     h9f = OctahedralH9(reg)  # formatter.
     dms = DMS(reg)
     b_oct = reg.domain('b_oct')
+    b_oct.no_lib()
     g_gcd = reg.domain('g_gcd')
     b_oct.register_format(h9f)
     g_gcd.register_format(dms)
@@ -37,7 +38,8 @@ if __name__ == '__main__':
     # name = 'Null Antipodes'
     # name = 'Greenwich test'
     ll = np.atleast_2d([
-        [32.8010970000000000, -19.4490900000000000]
+        [0.014836,   179.99999]
+        #[32.8010970000000000, -19.4490900000000000]
         # [55.94480923423753, -3.187282666241978]
         # [52.520933833691204,   13.405313674395048970],
     #   43486836-6783-ffff-ffff-fffffffffff2
@@ -117,14 +119,15 @@ if __name__ == '__main__':
     print(f'∂{lif[0]:.6f}nm (roundtrip via GCD<->Hex9 Label)')
     print(f'H9.adr:{bry:h9}')
     print(f'H9.key:{bry:h9.k}')
-    # uid = h9_enc(bry)
-    bbk = h9_dec(uuid, b_oct)
-    ltp = reg.project(bbk, [b_oct, g_gcd])
-    uif = wgs84(pos.coords, ltp.coords) * 1e+9
-    print(f'UUID ∂x: {uif[0]}nm')
-    for layer in range(10, 14):
-        uid = h9_bin_pts(bry, layer)
-        print(f'UUID.bin; L{layer}:{uid[0]}')
+    uuid = h9_enc(bry)
+    bbk = h9_dec(uuid, b_oct) # decode from uuid of h9_enc
+    for layer in range(30, 0, -1):
+        uuid_b = h9_bin_pts(bbk, layer)
+        pt_b = h9_dec(uuid_b, b_oct)
+        ltp = reg.project(pt_b, [b_oct, g_gcd])
+        uif = wgs84(pos.coords, ltp.coords)
+        print(f'UUID {uuid} - binned to L{layer}: {uuid_b} ∂x: {uif[0]:.18f}m')
+
 
     print(f'Reference BRY: {bry.coords[0, 0]:.18f},{bry.coords[0, 1]:.18f}')
     print(f'Label RT  BRY: {uvr.coords[0, 0]:.18f},{uvr.coords[0, 1]:.18f}')

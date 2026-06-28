@@ -183,7 +183,7 @@ def stage(file: str,
     for anc_level in range(layer_range[0], L_final):
         anc_num, anc_v, _, _ = hex_reduce(ctr_pts, anc_level)
         anc_par, anc_oid, anc_scale = hex_parents(b_oct, anc_v, anc_num, anc_level)
-        anc_xpm, anc_xc2, _, _ = tail_unpack_reversible(anc_v[:, -1])
+        anc_xc2, _, anc_xpm = tail_unpack_reversible(anc_v[:, -1])   # (c2, r_mo, p_mo)
         verts = _hex_verts_b(anc_par, anc_xpm, anc_xc2, anc_scale)
         # Rotate into aligned frame
         flat = (verts.reshape(-1, 2) - centroid) @ matrix + centroid
@@ -192,7 +192,7 @@ def stage(file: str,
             print(f"[pr0007] L{anc_level}: {anc_num} ancestor hexes")
 
     # Final (population) layer
-    xpm, xc2, _, _ = tail_unpack_reversible(hex_v[:, -1])
+    xc2, _, xpm = tail_unpack_reversible(hex_v[:, -1])   # (c2, r_mo, p_mo)
     verts = _hex_verts_b(hex_par, xpm, xc2, scale)
     flat = (verts.reshape(-1, 2) - centroid) @ matrix + centroid
     final_polys.append(flat.reshape(verts.shape))

@@ -74,7 +74,7 @@ def _hex_at_layer(poi_b, layer, b_oct, n_oct, reg):
     `layer` containing poi_b."""
     h_num, h_v, _, _ = hex_reduce(poi_b, layer)
     h_par, h_oid, h_scale = hex_parents(b_oct, h_v, h_num)
-    xpm, xc2, _ = tail_unpack_reversible(h_v[:, -1])
+    xc2, _, xpm = tail_unpack_reversible(h_v[:, -1])   # (c2, r_mo, p_mo)
     verts_n = hex_verts_in_noct(h_par, h_oid, xpm, xc2, h_scale, n_oct)
     ctr_b = Points(h_par, b_oct, oid=h_oid)
     ctr_n = reg.project(ctr_b, [b_oct, n_oct])
@@ -567,7 +567,7 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             if hex_v_k is None or len(hex_v_k) == 0:
                 continue
             hex_par, hex_oid, hex_scale = hex_parents(b_oct, hex_v_k, hex_num)
-            xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+            xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
             verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, hex_scale, n_oct)
             hexes = verts_n.coords.reshape(-1, 6, 2)
             # Finest (newest) layer fades in; all others at full opacity

@@ -37,7 +37,7 @@ Issues = "https://github.com/MrBenGriffin/hex9/issues"
 Changelog = "https://github.com/MrBenGriffin/hex9/releases"
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-cov"]
 geo = ["pyproj>=3.0.0", "gdal>=3.0"]
 
 [tool.setuptools.packages.find]
@@ -46,3 +46,21 @@ include = ["hhg9*"]
 
 [tool.setuptools.package-data]
 "hhg9" = ["data/*.npz", "h9/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Run coverage on demand with:  pytest --cov
+# (kept out of addopts so the default `pytest` stays fast)
+[tool.coverage.run]
+source = ["hhg9"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+]

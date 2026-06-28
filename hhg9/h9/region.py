@@ -703,6 +703,16 @@ Generator[StepEventXY, None, NDArray[np.uint8]]:
 
         yield StepEventXY(i=i, phase='pre', addresses=addresses, pmo=p_mo, cid=cid, bad=bad, y=y, ẋ=ẋ)
         cid = _recover(cid, ẋ, y, p_mo, bad, h9cl, h9k, h9c)
+        # Canonicalise out-of-scope results to the single invalid_region sentinel.
+        # classify_mode_cell returns the raw classifier code (0x00..0x5F); for a
+        # point outside its supercell that code is mode-dependent — Up overflow
+        # yields 0x0F (top apex), Down yields 0x5F (bottom apex). Both are real
+        # geometric cells with finite offsets, so without this step the 0x0F leak
+        # is NOT recognised as invalid by regions_xy and decodes to garbage,
+        # whereas 0x5F happens to match invalid_region. Collapse both here.
+        still_bad = ~h9c.in_mode[p_mo, cid]
+        if np.any(still_bad):
+            cid[still_bad] = invalid_region
         addresses[:, i + 1] = cid
         ẋ = (ẋ - offs_ẋ[cid]) * 3.0
         y = (y - offs_y[cid]) * 3.0

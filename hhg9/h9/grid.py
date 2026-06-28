@@ -1695,7 +1695,7 @@ def h9_postgis_hexagons(
 
     # Full depth-30 UUID: encode the representative sample for each unique hex.
     # hex_v only covers layer+2 nibbles so we re-encode from lat/lon.
-    full_uuids, _ = h9_encode(sample_lats[_idx], sample_lons[_idx], reg=reg)
+    full_uuids = h9_encode(sample_lats[_idx], sample_lons[_idx], reg=reg)
 
     # Project hexagon vertices (H*6 points) back to lon/lat.
     g_hex = reg.project(hx_pts, [b_oct, g_gcd])

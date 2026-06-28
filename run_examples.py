@@ -68,6 +68,7 @@ SLOW_EXAMPLES: dict[str, int] = {
     'ex0101_h9_grid.py': 2000,
     'ex0115_hex_mesh.py': 5000,  # >120s
     'ex0117_hexgrid_data.py': 5000,  # >120s
+    'ex0119_authalic_gpkg.py': 5000,  # >120s
     'ex0118_mollweide.py': 5000,  # >120s
     'ex0121_tissot_svg.py': 5000,  # >120s
     'ex0250_geotiff.py': 5000,  # >120s

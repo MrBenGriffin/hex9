@@ -492,7 +492,7 @@ def _hexes_for_layer_scanline(vp_merc, layer, n_oct, b_oct, c_oct, c_ell, g_gcd,
         return [], np.empty((0,), dtype=int)
 
     hex_par, hex_oid, hex_scale = hex_parents(b_oct, hex_v_k, hex_num)
-    xpm, xc2, _, _ = tail_unpack_reversible(hex_v_k[:, -1])
+    xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
     verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, hex_scale, n_oct)
 
     H = len(hex_par)
@@ -526,7 +526,7 @@ def _hex_at_poi_merc(poi_b, layer, n_oct, b_oct, c_oct, c_ell, g_gcd, reg):
     """Return a (K, 2) Mercator polygon for the hex at `layer` containing the POI."""
     h_num, h_v, _, _ = hex_reduce(poi_b, layer)
     h_par, h_oid, h_scale = hex_parents(b_oct, h_v, h_num)
-    xpm, xc2, _ = tail_unpack_reversible(h_v[:, -1])
+    xc2, _, xpm = tail_unpack_reversible(h_v[:, -1])   # (c2, r_mo, p_mo)
     verts_n = hex_verts_in_noct(h_par, h_oid, xpm, xc2, h_scale, n_oct)
 
     side = hex_props(layer)[1]
