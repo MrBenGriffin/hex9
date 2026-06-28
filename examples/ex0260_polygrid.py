@@ -56,6 +56,17 @@ B_DLL = np.array([
     [50.72448838777691, 5.4044368907702074],
 ])
 
+# A NON-CONVEX C-shaped northern band spanning all FOUR northern octants
+# (0,1,2,3).  Crucially it is OPEN over the Pacific, so it does NOT enclose the
+# north pole (a cone vertex) — the four octants therefore unfold into one
+# continuous arc with no tear.  (A *closed* ring round the pole would be forced
+# to cut: the pole's 240° of face-angle cannot lie flat.)  Rendered at a coarse
+# layer since it spans a quarter of the globe.  [lat, lon].
+C_BAND = np.array([
+    [68, -170], [68, -90], [68, 0], [68, 90], [68, 115],     # outer arc (65°N)
+    [42, 115], [42, 90], [42, 0], [42, -90], [42, -170],      # inner arc (42°N)
+])
+
 
 def common_prefix(hex_strs, cap):
     """Longest shared leading substring across hex_strs, capped at *cap* chars."""
@@ -108,14 +119,48 @@ def plot_polygrid(mesh, world, clip_xy, prefix, labels, ctrs_xy, name):
                                      edgecolors='#d55e00', linewidths=1.0,
                                      linestyles='--'))
 
-    for pt, lab in zip(ctrs_xy, labels):
-        ax.text(pt[0], pt[1], lab, color='k', fontsize=4, ha='center', va='center')
-    ax.text(xmax, ymin, f'prefix: {prefix}', color='k', fontsize=18,
+    if labels is not None:
+        for pt, lab in zip(ctrs_xy, labels):
+            ax.text(pt[0], pt[1], lab, color='k', fontsize=4,
+                    ha='center', va='center')
+    ax.text(xmax, ymin, f'prefix: {prefix!r}', color='k', fontsize=18,
             ha='right', va='bottom')
 
     fig.savefig(f'output/ex0260_hx_{name}.png', dpi=200, bbox_inches='tight')
     print(f'fig saved at output/ex0260_hx_{name}.png')
     plt.close(fig)
+
+
+def run_case(rg, b_oct, g_gcd, n_oct, polygon, finest, name, with_labels=True):
+    """Clip, lay flat on a dynamic local net, address, and plot one polygon."""
+    nest = list(range(max(0, finest - 2), finest + 1))   # ancestry nest
+    mesh = HexMesh.create_clipped(nest, polygon, rg)
+    print(f'{name}: {mesh}')
+
+    # Dynamic local net for the touched octants; lay the mesh flat.
+    oids = np.asarray(mesh.pts.oid)
+    octs = sorted(set(oids.tolist()))
+    layout = n_oct.local_layout(octs)
+    print(f'  octants {octs}: seam residual {layout.residual:.2e}, '
+          f'unreached {layout.unreached}')
+    world = n_oct.place(mesh.pts.coords, oids, layout.layout)
+
+    # H9 UUID address per finest-layer hex (aligned with mesh[finest]).
+    fine_addrs = [a.hex for a in mesh.addr(finest)]
+    path_len = finest + 1                            # leading nibbles = H9 path
+    prefix = common_prefix([a[:path_len] for a in fine_addrs], path_len)
+    print(f'  finest L{finest}: {len(fine_addrs)} hexes, common prefix '
+          f'{prefix!r} ({len(prefix)} nibbles)')
+
+    if with_labels:
+        labels = [a[len(prefix):path_len] for a in fine_addrs]   # per-hex suffix
+        ctrs_xy = world[mesh[finest]].mean(axis=1)
+    else:
+        labels, ctrs_xy = None, None                 # too many to draw legibly
+
+    clip_pts = rg.project(Points(polygon, g_gcd), [g_gcd, b_oct])
+    clip_xy = n_oct.place(clip_pts.coords, clip_pts.oid, layout.layout)
+    plot_polygrid(mesh, world, clip_xy, prefix, labels, ctrs_xy, name)
 
 
 if __name__ == '__main__':
@@ -124,36 +169,10 @@ if __name__ == '__main__':
     b_oct = rg.domain('b_oct')
     n_oct = rg.domain('n_oct:butterfly')
 
-    finest = 6
-    nest = list(range(finest - 2, finest + 1))      # ancestry nest: L4..L6
+    # Two-octant non-convex region (Britain–Belgium), fine layer + labels.
+    run_case(rg, b_oct, g_gcd, n_oct, B_DLL, finest=6, name='L6')
 
-    # Area-proportional, non-convex-aware clip; no global enumeration.
-    mesh = HexMesh.create_clipped(nest, B_DLL, rg)
-    print(mesh)
-
-    # Dynamic local net for the touched octants; lay the mesh flat.
-    oids = np.asarray(mesh.pts.oid)
-    octs = sorted(set(oids.tolist()))
-    layout = n_oct.local_layout(octs)
-    print(f'octants {octs}: seam residual {layout.residual:.2e}, '
-          f'unreached {layout.unreached}')
-    world = n_oct.place(mesh.pts.coords, oids, layout.layout)
-
-    # H9 UUID address per finest-layer hex (aligned with mesh[finest]).
-    fine_addrs = [a.hex for a in mesh.addr(finest)]
-    path_len = finest + 1                            # leading nibbles = H9 path
-    prefix = common_prefix([a[:path_len] for a in fine_addrs], path_len)
-    plen = len(prefix)
-    labels = [a[plen:path_len] for a in fine_addrs]  # per-hex suffix
-    print(f'finest L{finest}: {len(fine_addrs)} hexes, common prefix '
-          f'{prefix!r} ({plen} nibbles)')
-    for a in mesh.addr(finest)[:5]:
-        print(f'  {a}')
-
-    ctrs_xy = world[mesh[finest]].mean(axis=1)
-
-    # Clip polygon outline in the same local-net frame.
-    clip_pts = rg.project(Points(B_DLL, g_gcd), [g_gcd, b_oct])
-    clip_xy = n_oct.place(clip_pts.coords, clip_pts.oid, layout.layout)
-
-    plot_polygrid(mesh, world, clip_xy, prefix, labels, ctrs_xy, f'L{finest}')
+    # Four-octant non-convex C-band (no pole enclosed) — dropped to a coarse
+    # layer since it spans a quarter of the globe; labels omitted for legibility.
+    run_case(rg, b_oct, g_gcd, n_oct, C_BAND, finest=3, name='cband_L3',
+             with_labels=False)
