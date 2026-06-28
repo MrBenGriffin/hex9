@@ -26,6 +26,8 @@ Usage:
   python ex0121_tissot_svg.py --flavour butterfly:0500
 
 Last Tested
+28 Jun 2026 0.1.3a0 (passed) — octant-clip fills; butterfly clean, rhombus
+            (c2-split) fills guarded/skipped pending c2/cell clip.
 16 Jun 2026 0.1.3a0 (passed) 158.4s
 20 Apr 2026
 """
@@ -42,7 +44,7 @@ from hhg9.h9 import H9O, H9P, H9K
 from hhg9.h9.grid import HexMesh
 from hhg9.geo.vector import (load_shape_polygons, graticule_paths,
                              tissot_circle, project_path, split_path_at_seams,
-                             tile_vertices_noct, close_seam_polygons)
+                             clip_polygon_to_octants, is_c2_split)
 
 os.makedirs('output', exist_ok=True)
 
@@ -138,38 +140,30 @@ def run(flavour: str = FLAVOUR, pixels: int = PIXELS) -> None:
     g_hex2 = Group(id='hex_l2')
     g_hex3 = Group(id='hex_l3')
 
-    oct_verts = tile_vertices_noct(n_oct)  # snap targets for seam closure
-    # ── 1a. Land polygons ─────────────────────────────────────────────────────
-    print('Land polygons...')
-    rings = load_shape_polygons(LAND_FILE)
-    for ring in rings:
-        segs = proj(ring, STEP_LAND_M, closed=True)
-        segs = close_seam_polygons(segs, oct_verts)
-        for seg in segs:
-            pts = seg * scale
-            g_land.append(_poly(pts,
-                                fill=LAND_FILL, stroke=LAND_STROKE,
-                                stroke_width=0))
-    # ── 1b. OCEANS────────────────────────────────────────────────────────
-    oceans = load_shape_polygons(SEAS_FILE)
-    for ring in oceans:
-        segs = proj(ring, STEP_LAND_M, closed=True)
-        segs = close_seam_polygons(segs, oct_verts)
-        for seg in segs:
-            pts = seg * scale
-            g_seas.append(_poly(pts,
-                                fill=SEA_FILL, stroke=LAND_STROKE,
-                                stroke_width=0))
-    # ── 1c. LAKEs ─────────────────────────────────────────────────────────
-    lakes = load_shape_polygons(LAKE_FILE)
-    for ring in lakes:
-        segs = proj(ring, STEP_LAND_M, closed=True)
-        segs = close_seam_polygons(segs, oct_verts)
-        for seg in segs:
-            pts = seg * scale
-            g_lakes.append(_poly(pts,
-                                fill=SEA_FILL, stroke=LAND_STROKE,
-                                stroke_width=0))
+    # Octant-clip fills are only correct for simple (non-c2-split) layouts.
+    # c2-split layouts (e.g. rhombus) have seams *inside* an octant, so the
+    # octant is not a fine enough clip fundamental — skip fills there until a
+    # c2/cell-level clip exists, rather than emit broken fan artifacts.
+    fills_ok = not is_c2_split(n_oct)
+    if not fills_ok:
+        print(f'WARNING: layout "{flavour}" is c2-split — octant-clip fills not '
+              'yet supported (needs c2/cell clip). Skipping land/ocean/lake/tissot fills.')
+
+    def fill_group(shp_file, grp, fill):
+        """Octant-clip each ring, project, and append closed fills to grp."""
+        for ring in load_shape_polygons(shp_file):
+            for sub in clip_polygon_to_octants(ring):
+                for seg in proj(sub, STEP_LAND_M, closed=True):
+                    grp.append(_poly(seg * scale,
+                                     fill=fill, stroke=LAND_STROKE,
+                                     stroke_width=0))
+
+    # ── 1a/b/c. Land / ocean / lake polygons ──────────────────────────────────
+    if fills_ok:
+        print('Land polygons...')
+        fill_group(LAND_FILE, g_land, LAND_FILL)
+        fill_group(SEAS_FILE, g_seas, SEA_FILL)
+        fill_group(LAKE_FILE, g_lakes, SEA_FILL)
     # ── 2. Graticule ─────────────────────────────────────────────────────────
     print('Graticule...')
     for path in graticule_paths(GRAT_STEP, GRAT_STEP):
@@ -180,20 +174,17 @@ def run(flavour: str = FLAVOUR, pixels: int = PIXELS) -> None:
                                 stroke_width=GRAT_WIDTH))
 
     # ── 3. Tissot circles ────────────────────────────────────────────────────
-    print('Tissot circles...')
-    for lat in TISSOT_LATS:
-        for lon in TISSOT_LONS:
-            circle = tissot_circle(lat, lon, TISSOT_R_M, TISSOT_PTS)
-            segs = proj(circle, STEP_TISS_M, closed=True)
-            for seg in segs:
-                pts = seg * scale
-                # closed arc → Polygon; open arc → Polyline
-                elem = (_poly(pts, fill=TISS_FILL, stroke=TISS_STROKE,
-                              stroke_width=TISS_WIDTH, alpha=0.25)
-                        if len(segs) == 1
-                        else _line(pts, fill=TISS_FILL, stroke=TISS_STROKE,
-                                   stroke_width=TISS_WIDTH, alpha=0.25))
-                g_tiss.append(elem)
+    if fills_ok:
+        print('Tissot circles...')
+        for lat in TISSOT_LATS:
+            for lon in TISSOT_LONS:
+                circle = tissot_circle(lat, lon, TISSOT_R_M, TISSOT_PTS)
+                # octant-clip so seam-straddling circles close cleanly per octant
+                for sub in clip_polygon_to_octants(circle):
+                    for seg in proj(sub, STEP_TISS_M, closed=True):
+                        g_tiss.append(_poly(seg * scale,
+                                            fill=TISS_FILL, stroke=TISS_STROKE,
+                                            stroke_width=TISS_WIDTH, alpha=0.25))
 
     # ── 4 & 5. Hex overlay ───────────────────────────────────────────────────
     print('Hex overlay...')

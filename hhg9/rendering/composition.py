@@ -132,6 +132,92 @@ def make_backdrop(
     return out.reshape(px_h, px_w, C)
 
 
+def _coherent_mask(polys: NDArray, factor: float = 3.0) -> NDArray:
+    """Boolean per-hex mask: True where a placed hex (N,6,2) has a compact
+    footprint.  A hex straddling an unclosed local-net seam is placed with verts
+    in far-apart octants, giving an edge far longer than the layer's typical hex
+    edge — those are flagged False.  Robust to a minority of such slivers via the
+    median edge length.
+    """
+    if len(polys) == 0:
+        return np.zeros(0, dtype=bool)
+    edges = np.linalg.norm(polys - polys[:, [1, 2, 3, 4, 5, 0]], axis=2)   # (N,6)
+    med = float(np.median(edges))
+    if med == 0:
+        return np.ones(len(polys), dtype=bool)
+    return edges.max(axis=1) <= factor * med
+
+
+def _point_in_tri(pts: NDArray, tri: NDArray) -> NDArray:
+    """Boolean mask: which *pts* (N,2) lie inside triangle *tri* (3,2). Winding-free."""
+    a, b, c = tri
+    v0, v1 = b - a, c - a
+    v2 = pts - a
+    d00, d01, d11 = v0 @ v0, v0 @ v1, v1 @ v1
+    den = d00 * d11 - d01 * d01
+    if den == 0:
+        return np.zeros(len(pts), dtype=bool)
+    d20 = v2 @ v0
+    d21 = v2 @ v1
+    u = (d11 * d20 - d01 * d21) / den
+    v = (d00 * d21 - d01 * d20) / den
+    eps = 1e-9
+    return (u >= -eps) & (v >= -eps) & (u + v <= 1 + eps)
+
+
+def make_local_backdrop(
+        reg,
+        b_oct,
+        layout: dict,
+        bbox: tuple,
+        px_w: int,
+        px_h: int,
+        sampler: Callable[[Points], NDArray],
+) -> NDArray:
+    """Rasterise a backdrop in a *dynamic local net* frame (companion to
+    :func:`make_backdrop`, which works in the fixed n_oct net).
+
+    Each pixel of the *bbox* grid is mapped to the octant whose placed triangle
+    contains it, inverted to b_oct via that octant's ``(matrix, offset)``, and
+    passed to *sampler*.  Pixels outside every placed octant are left zero.
+
+    Args:
+        reg:     Registrar (unused directly; kept for signature symmetry / future use).
+        b_oct:   Barycentric-octahedral domain.
+        layout:  The ``layout`` dict from :meth:`OctahedralNet.local_layout`.
+        bbox:    ``(top, left, bottom, right)`` in local-net units.
+        px_w:    Output width in pixels.
+        px_h:    Output height in pixels.
+        sampler: Callable ``(pts: Points) -> NDArray`` — same contract as
+                 :attr:`LayerSpec.source` / :func:`make_backdrop`.
+    """
+    from hhg9.h9 import H9P, H9O
+    from hhg9.base.points import OID_INVALID
+
+    tp, lt, bt, rt = bbox
+    gx, gy = np.meshgrid(np.linspace(lt, rt, px_w), np.linspace(bt, tp, px_h))
+    pix = np.stack([gx.ravel(), gy.ravel()], axis=1)
+    n = pix.shape[0]
+    b_xy = np.zeros((n, 2))
+    oids = np.full(n, OID_INVALID, dtype=np.uint8)
+
+    for oid, (mtx, off) in layout.items():
+        side = H9O.oid_str[oid]
+        tri = np.asarray(H9P.sv[b_oct.sides[side].mode]) @ mtx + off    # placed corners
+        inside = _point_in_tri(pix, tri) & (oids == OID_INVALID)
+        if not inside.any():
+            continue
+        b_xy[inside] = (pix[inside] - off) @ np.linalg.inv(mtx)
+        oids[inside] = oid
+
+    valid = oids != OID_INVALID
+    colours = np.asarray(sampler(Points(b_xy[valid], domain=b_oct, oid=oids[valid])))
+    C = colours.shape[1]
+    out = np.zeros((n, C), dtype=colours.dtype)
+    out[valid] = colours
+    return out.reshape(px_h, px_w, C)
+
+
 # n_oct physical scale: earth equatorial circumference in n_oct = 4√2,
 # so 1 metre ≈ 4√2 / (2π R_earth) n_oct units along the equator.
 _N_OCT_PER_METRE = 4.0 * np.sqrt(2.0) / (2.0 * np.pi * 6_378_137.0)  # ≈ 1.412e-7
@@ -269,7 +355,10 @@ class Compositor:
         # hinged from a fundamental octant so a bounded region spanning a seam is
         # laid flat tear-free.  local=False (default) uses the fixed n_oct net.
         self.local = local
-        self.local_residual = None      # set after a local run() (seam-closure)
+        self.local_residual = None      # tree seam-closure after a local run()
+        self.local_cut = None           # cut_residual: >0 ⇒ region wraps a cone vertex
+        self.layout = None              # LocalLayout from the last local run()
+        self.local_dropped = 0          # hexes dropped for straddling an open seam
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -393,17 +482,33 @@ class Compositor:
             geos.append((bs, verts_b))
 
         layout = self.n_oct.local_layout(sorted(octs))
+        self.layout = layout
         self.local_residual = layout.residual
+        self.local_cut = layout.cut_residual
 
-        results = []
+        results, dropped = [], 0
         for bs, verts_b in geos:
-            verts_n = Points(
-                self.n_oct.place(verts_b.coords, verts_b.oid, layout.layout),
-                domain=self.n_oct)
-            ctrs_n = Points(
-                self.n_oct.place(bs.ctrs_b.coords, bs.ctrs_b.oid, layout.layout),
-                domain=self.n_oct)
-            results.append(self._compose(bs, verts_n, ctrs_n))
+            polys = self.n_oct.place(
+                verts_b.coords, verts_b.oid, layout.layout).reshape(-1, 6, 2)
+            ctrs = self.n_oct.place(bs.ctrs_b.coords, bs.ctrs_b.oid, layout.layout)
+
+            # Hex-level holonomy guard: a hex straddling an UNCLOSED seam has its
+            # verts placed in octants that ended up far apart in the local net, so
+            # its footprint is not compact (a long sliver).  Drop those — they
+            # cannot be drawn coherently in this frame.
+            keep = _coherent_mask(polys)
+            dropped += int((~keep).sum())
+            polys, ctrs = polys[keep], ctrs[keep]
+
+            labels = bs.labels[keep] if bs.labels is not None else None
+            values = bs.values[keep] if bs.values is not None else None
+            key_tails = bs.key_tails[keep] if bs.key_tails is not None else None
+            results.append(ComposedLayer(
+                spec=bs.spec,
+                verts=Points(polys.reshape(-1, 2), domain=self.n_oct),
+                ctrs=Points(ctrs, domain=self.n_oct),
+                prefix=bs.prefix, labels=labels, values=values, key_tails=key_tails))
+        self.local_dropped = dropped
         return results
 
 

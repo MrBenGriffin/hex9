@@ -105,6 +105,35 @@ def test_split_path_at_seams():
     assert len(V.split_path_at_seams(smooth, threshold=1.0)) == 1
 
 
+def test_clip_polygon_to_octants():
+    pytest.importorskip("shapely", reason="shapely not installed")
+    from shapely.geometry import Polygon
+
+    # ring as (lat, lon); a box straddling the prime meridian (lon 0)
+    ring = np.array([[10.0, -10.0], [10.0, 10.0], [30.0, 10.0], [30.0, -10.0]])
+    pieces = V.clip_polygon_to_octants(ring)
+    assert len(pieces) == 2                       # split at lon 0 into 2 octants
+
+    src_area = Polygon(ring[:, ::-1]).area
+    tot = 0.0
+    for p in pieces:
+        lat, lon = p[:, 0], p[:, 1]
+        # each piece lies in a single octant band
+        assert lat.min() >= 0.0 and lat.max() <= 90.0
+        assert (lon.min() >= -90.0 and lon.max() <= 0.0) or \
+               (lon.min() >= 0.0 and lon.max() <= 90.0)
+        tot += Polygon(p[:, ::-1]).area
+    # clipping conserves total area
+    np.testing.assert_allclose(tot, src_area, rtol=1e-6)
+
+    # a ring wholly inside one octant comes back as a single piece
+    inside = np.array([[10.0, 10.0], [10.0, 40.0], [40.0, 40.0], [40.0, 10.0]])
+    one = V.clip_polygon_to_octants(inside)
+    assert len(one) == 1
+    np.testing.assert_allclose(Polygon(one[0][:, ::-1]).area,
+                               Polygon(inside[:, ::-1]).area, rtol=1e-6)
+
+
 # ---------------------------------------------------------------------------
 # gdal.py — WKT GeoTIFF loading / CRS registration
 # ---------------------------------------------------------------------------

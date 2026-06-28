@@ -18,12 +18,18 @@ from hhg9.algorithms.geometry import inside_convex_polygon_cw
 
 
 # A dynamic ("local") net unfolding for a chosen subset of octants.
-#   layout    : {oid: (matrix (2,2), offset (2,))} placing each octant in the plane.
-#   residual  : worst seam-closure error across hinges (≈0 ⇒ exact; large ⇒ a
-#               reused per-octant matrix is mis-oriented for its hinge, i.e. the
-#               flavour cut this pair apart — see project_local_net approach (b)).
-#   unreached : octants requested but not connected to the fundamental via oid_nb.
-LocalLayout = namedtuple('LocalLayout', 'layout residual unreached')
+#   layout       : {oid: (matrix (2,2), offset (2,))} placing each octant in the plane.
+#   residual     : worst seam-closure error across the BFS spanning-tree hinges
+#                  (≈0 ⇒ the tree unfolds exactly; large ⇒ a reused per-octant
+#                  matrix is mis-oriented for its hinge, i.e. the flavour cut this
+#                  pair apart — see project_local_net approach (b)).
+#   unreached    : octants requested but not connected to the fundamental via oid_nb.
+#   cut_residual : worst seam-closure over ALL adjacency seams incl. non-tree
+#                  (cycle) ones.  >0 ⇒ the octant set is vertex-complete (wraps a
+#                  cone vertex) and cannot tile flat without a cut; hexes that
+#                  occupy that cut are dropped at render time by the hex-level
+#                  guard (Compositor.local_dropped).  ≈0 ⇒ no cut needed.
+LocalLayout = namedtuple('LocalLayout', 'layout residual unreached cut_residual')
 
 
 class OctantNet(ComponentDomain):
@@ -268,12 +274,14 @@ class OctahedralNet(CompositeDomain):
             tol:         g_gcd coincidence tolerance (degrees) for shared corners.
 
         Returns:
-            :class:`LocalLayout` (layout, residual, unreached).
+            :class:`LocalLayout` (layout, residual, unreached, cut_residual).
+            ``cut_residual`` > 0 warns the octant set wraps a cone vertex (a cut
+            is unavoidable); ``residual`` ≈ 0 still means the tree unfolds cleanly.
         """
         from hhg9 import Points
         octants = list(dict.fromkeys(int(o) for o in octants))
         if not octants:
-            return LocalLayout({}, 0.0, [])
+            return LocalLayout({}, 0.0, [], 0.0)
         if fundamental is None:
             fundamental = octants[0]
         g_gcd = self._registrar.domain('g_gcd')
@@ -292,6 +300,17 @@ class OctahedralNet(CompositeDomain):
             cg[oid] = self._registrar.project(
                 Points(corners, self.b_oct, oid), [self.b_oct, g_gcd]).coords
 
+        def shared_corners(a, b):
+            """Indices (ia, ib) of the corners a and b share (g_gcd coincidence)."""
+            ia, ib = [], []
+            for i in range(3):
+                d = np.linalg.norm(cg[b] - cg[a][i], axis=1)
+                j = int(np.argmin(d))
+                if d[j] < tol:
+                    ia.append(i)
+                    ib.append(j)
+            return ia, ib
+
         off = {fundamental: np.zeros(2)}
         queue = [fundamental]
         residual = 0.0
@@ -301,13 +320,7 @@ class OctahedralNet(CompositeDomain):
                 b = int(H9O.oid_nb[a, c2])
                 if b not in mat or b in off:
                     continue
-                ia, ib = [], []                                # shared corners
-                for i in range(3):
-                    d = np.linalg.norm(cg[b] - cg[a][i], axis=1)
-                    j = int(np.argmin(d))
-                    if d[j] < tol:
-                        ia.append(i)
-                        ib.append(j)
+                ia, ib = shared_corners(a, b)
                 if len(ia) < 2:                                # not edge-adjacent
                     continue
                 world_a = cb[a][ia] @ mat[a] + off[a]
@@ -317,9 +330,33 @@ class OctahedralNet(CompositeDomain):
                     np.linalg.norm(cand - off[b], axis=1).max()))
                 queue.append(b)
 
+        # Holonomy / cut check: with all offsets fixed, re-measure EVERY adjacency
+        # seam among placed octants.  Tree seams close (~0 by construction); a
+        # non-tree (cycle) seam that does NOT close means the octant set is
+        # vertex-complete — it wraps a cone vertex and cannot tile flat without a
+        # cut.  cut_residual is the worst such mismatch (≈0 ⇒ no cut needed).
+        cut_residual = 0.0
+        seen = set()
+        for a in off:
+            for c2 in range(3):
+                b = int(H9O.oid_nb[a, c2])
+                if b not in off:
+                    continue
+                key = frozenset((a, b))
+                if key in seen:
+                    continue
+                seen.add(key)
+                ia, ib = shared_corners(a, b)
+                if len(ia) < 2:
+                    continue
+                wa = cb[a][ia] @ mat[a] + off[a]
+                wb = cb[b][ib] @ mat[b] + off[b]
+                cut_residual = max(cut_residual, float(
+                    np.linalg.norm(wa - wb, axis=1).max()))
+
         layout = {o: (mat[o], off[o]) for o in off}
         unreached = [o for o in octants if o not in off]
-        return LocalLayout(layout, residual, unreached)
+        return LocalLayout(layout, residual, unreached, cut_residual)
 
     def place(self, coords: NDArray, oids: NDArray, layout: dict) -> NDArray:
         """Apply a local-net *layout* to b_oct *coords*: ``coords·matrix + offset``

@@ -74,7 +74,15 @@ def test_matrices_are_isometric(n_oct):
         assert abs(abs(np.linalg.det(mtx)) - 1.0) < 1e-12
 
 
-def test_place_absent_octant_is_nan(n_oct):
+def test_cut_residual_flags_vertex_complete_sets(n_oct):
+    """cut_residual ≈0 when the octant set tiles flat; large when it is
+    vertex-complete (wraps a cone vertex), even if the BFS tree residual is ~0."""
+    pair = n_oct.local_layout([0, 2])                # two octants, no cycle
+    assert pair.residual < 1e-12 and pair.cut_residual < 1e-9
+
+    pole = n_oct.local_layout([0, 1, 2, 3])          # all four N faces -> N pole
+    assert pole.residual < 1e-12                     # tree still closes cleanly
+    assert pole.cut_residual > 0.1                   # but the cycle seam cannot
     ll = n_oct.local_layout([0, 2])
     coords = np.array([[0.1, 0.1], [0.2, 0.2]])
     oids = np.array([0, 5])             # 5 not in the layout
@@ -113,6 +121,34 @@ def test_compositor_local_matches_fixed_and_closes(reg, n_oct):
     polys = local[-1].verts.coords.reshape(-1, 6, 2)                  # regular hexes
     edges = np.linalg.norm(polys - polys[:, [1, 2, 3, 4, 5, 0]], axis=2).ravel()
     assert_allclose(edges, np.median(edges), rtol=1e-9)
+
+
+def test_compositor_local_drops_open_seam_straddlers(reg, n_oct):
+    """A coarse hex straddling the open Pacific seam of the 4-octant C-band is
+    dropped by the hex-level coherence guard; survivors are all compact."""
+    from hhg9 import Points
+    from hhg9.rendering.composition import LayerSpec, Compositor
+    b_oct = reg.domain('b_oct')
+    g_gcd = reg.domain('g_gcd')
+
+    # C-band over the four northern octants, open over the Pacific.
+    c_band = np.array([[68, -170], [68, -90], [68, 0], [68, 90], [68, 115],
+                       [42, 115], [42, 90], [42, 0], [42, -90], [42, -170]])
+    polygon_n = reg.project(Points(c_band, g_gcd), [g_gcd, b_oct, n_oct])
+
+    # The sliver only appears once a finer layer drives the scan, as in ex0260.
+    specs = [LayerSpec(level=1, kind='outline'),
+             LayerSpec(level=2, kind='outline'),
+             LayerSpec(level=3, kind='outline')]
+    comp = Compositor(reg, b_oct, n_oct, specs, local=True)
+    layers = comp.run(polygon_n)
+
+    assert sorted(comp.layout.layout) == [0, 1, 2, 3]
+    assert comp.local_dropped >= 1                    # at least the coarse sliver
+    for cl in layers:                                 # all survivors compact
+        polys = cl.verts.coords.reshape(-1, 6, 2)
+        edges = np.linalg.norm(polys - polys[:, [1, 2, 3, 4, 5, 0]], axis=2)
+        assert edges.max() <= 3.0 * np.median(edges)
 
 
 def test_end_to_end_hexmesh_seam_and_isometry(reg, n_oct):

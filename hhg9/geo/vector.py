@@ -24,15 +24,19 @@ graticule_paths
 load_land_polygons
     Load a land-polygon shapefile (Natural Earth, OSM) and return rings as
     (lat°, lon°) arrays ready for project_path.
+clip_polygon_to_octants
+    Clip a lat/lon polygon ring to the 8 octahedral octants (lat/lon
+    rectangles) so each resulting piece lies within a single octant and
+    projects without crossing a net seam — the robust replacement for the
+    seam-split + snap heuristic when rendering *filled* polygons.
+is_c2_split
+    True when a net layout subdivides octants into c2 sub-triangles (rhombus),
+    for which octant-level clipping is not a fine enough fundamental to close
+    fills.  Render guards should check this.
 tile_vertices_noct
     Return the unique tile-corner positions in n_oct space for any net layout.
     For simple layouts these are the 6 octahedral face corners; for c2-split
-    layouts (e.g. rhombus) also includes c2 sub-triangle joints.  Used as snap
-    targets for polygon closure.
-close_seam_polygons
-    For closed polygon rings split at seams, snap each segment's endpoints
-    to the nearest tile vertex so filled polygons close cleanly at the
-    face corners (e.g. Antarctica closing at the South Pole vertex).
+    layouts (e.g. rhombus) also includes c2 sub-triangle joints.
 """
 
 import numpy as np
@@ -219,8 +223,92 @@ def load_shape_polygons(path: str,
 
 
 # ---------------------------------------------------------------------------
+# Geographic octant clipping
+# ---------------------------------------------------------------------------
+
+# The 8 octahedral octants are exactly the lat/lon rectangles split at the
+# meridians {-180, -90, 0, 90, 180} and the equator.  This follows from the
+# octahedral projection assigning octant identity from the sign of the ECEF
+# coordinates (x=cos·cos(lon), y=cos·sin(lon), z=sin(lat)) — see
+# hhg9/projections/ak_octahedral.py — so there is no theta rotation in
+# geographic space.
+_OCTANT_BOXES = [(lon0, lat0, lon0 + 90.0, lat0 + 90.0)
+                 for lat0 in (-90.0, 0.0)
+                 for lon0 in (-180.0, -90.0, 0.0, 90.0)]
+
+
+def clip_polygon_to_octants(ring_latlon: np.ndarray) -> list:
+    """Clip a lat/lon polygon ring to the 8 octahedral octants.
+
+    Each returned sub-ring lies entirely within a single octant, so it
+    projects through the H9 pipeline without crossing a net seam and is
+    already closed along the octant edges that cut it (meridians ±90/0/180
+    and the equator).  This is the robust replacement for the
+    seam-split + nearest-vertex-snap heuristic when rendering *filled*
+    polygons: clip in geographic space *before* projection.
+
+    Closure direction (interior vs exterior) and concavity are handled by
+    shapely's intersection — no manual winding logic required.
+
+    Parameters
+    ----------
+    ring_latlon : (N, 2) ndarray  [lat°, lon°]
+        A single polygon ring, as produced by :func:`load_shape_polygons`.
+
+    Returns
+    -------
+    list of (M, 2) ndarray  [lat°, lon°]
+        One sub-ring per octant the polygon touches.  A ring already inside
+        a single octant returns a single piece.  Empty input or a degenerate
+        ring returns an empty list.
+    """
+    from shapely.geometry import Polygon, MultiPolygon, GeometryCollection, box
+
+    if len(ring_latlon) < 3:
+        return []
+
+    # ring is (lat, lon); shapely works in (x=lon, y=lat)
+    poly = Polygon(ring_latlon[:, ::-1])
+    if not poly.is_valid:
+        poly = poly.buffer(0)          # repair self-intersections
+    if poly.is_empty:
+        return []
+
+    pieces = []
+    for bounds in _OCTANT_BOXES:
+        clipped = poly.intersection(box(*bounds))
+        if clipped.is_empty:
+            continue
+        if isinstance(clipped, (MultiPolygon, GeometryCollection)):
+            geoms = clipped.geoms
+        else:
+            geoms = [clipped]
+        for geom in geoms:
+            if not isinstance(geom, Polygon) or geom.is_empty:
+                continue
+            xy = np.asarray(geom.exterior.coords)
+            pieces.append(xy[:, ::-1])  # back to (lat, lon)
+    return pieces
+
+
+# ---------------------------------------------------------------------------
 # Tile vertex positions in n_oct
 # ---------------------------------------------------------------------------
+
+def is_c2_split(n_oct) -> bool:
+    """True if the net layout subdivides each octant into c2 sub-triangles.
+
+    c2-split layouts (e.g. ``rhombus``) introduce seams *inside* an octant's
+    geographic extent, so octant-level geographic clipping
+    (:func:`clip_polygon_to_octants`) is not a fine enough fundamental to close
+    filled polygons there — the c2 sub-triangle is.  Callers rendering fills
+    should guard on this until a c2/cell-level clip is available.
+
+    Detected from ``n_oct.face_polys``: simple layouts contribute one triangle
+    per octant, c2-split layouts contribute three.
+    """
+    return any(len(polys) > 1 for polys in n_oct.face_polys.values())
+
 
 def tile_vertices_noct(n_oct) -> np.ndarray:
     """Return unique tile-corner positions in n_oct coordinates.
@@ -250,56 +338,6 @@ def tile_vertices_noct(n_oct) -> np.ndarray:
         if np.any(np.linalg.norm(raw[:i] - raw[i], axis=1) < 1e-6):
             keep[i] = False
     return raw[keep]
-
-
-# ---------------------------------------------------------------------------
-# Seam polygon closure
-# ---------------------------------------------------------------------------
-
-def close_seam_polygons(segments: list,
-                        verts_noct: np.ndarray) -> list:
-    """Snap seam-split polygon segments to their nearest octant vertex.
-
-    When a closed polygon ring (land area, Tissot circle) is split at net
-    seams, each resulting segment has two "raw" cut endpoints that land
-    somewhere on a face boundary.  To render the segment as a filled polygon
-    that closes cleanly at the face corner (e.g. Antarctica → South Pole
-    vertex), this function appends the nearest octant vertex to the end of
-    each segment and prepends it to the start, then closes the ring.
-
-    For a single un-split segment (polygon entirely within one face), the
-    segment is returned unchanged.
-
-    Parameters
-    ----------
-    segments : list of (N, 2) ndarray
-        Output of :func:`split_path_at_seams` for a closed polygon ring.
-    verts_noct : (V, 2) ndarray
-        Octant vertex positions from :func:`octant_vertices_noct`.
-
-    Returns
-    -------
-    list of (N, 2) ndarray
-        Each segment closed through its nearest octant vertex.
-    """
-    if len(segments) <= 1:
-        return segments
-
-    def _nearest(pt):
-        return verts_noct[np.linalg.norm(verts_noct - pt, axis=1).argmin()]
-
-    result = []
-    for seg in segments:
-        v_start = _nearest(seg[0])
-        v_end   = _nearest(seg[-1])
-        if np.allclose(v_start, v_end, atol=1e-6):
-            # both ends snap to same vertex — fan polygon closing at that corner
-            closed = np.vstack([v_start, seg, v_end])
-        else:
-            # ends snap to different vertices — include both
-            closed = np.vstack([v_start, seg, v_end])
-        result.append(closed)
-    return result
 
 
 # ---------------------------------------------------------------------------
