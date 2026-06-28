@@ -47,6 +47,7 @@ is a rendering concern left to the caller.
 
 from __future__ import annotations
 
+from collections import namedtuple
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -55,8 +56,15 @@ from numpy.typing import NDArray
 
 from hhg9 import Points
 from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
-from hhg9.h9.binning import hex_reduce, hex_parents, ctr_from_pars
+from hhg9.h9.binning import hex_reduce, hex_parents, ctr_from_pars, hex_from_pars
 from hhg9.h9.grid import poly_net_field, hex_verts_in_noct
+
+
+# One spec, binned to b_oct geometry but not yet placed in the net.  Shared by
+# the fixed-n_oct and dynamic-local-net placement paths.
+BinnedSpec = namedtuple(
+    'BinnedSpec',
+    'spec hex_v_k hex_par hex_oid scale ctrs_b prefix labels values key_tails')
 
 
 # ---------------------------------------------------------------------------
@@ -252,11 +260,16 @@ class Compositor:
         specs:  Ordered list of :class:`LayerSpec` describing the composition.
     """
 
-    def __init__(self, reg, b_oct, n_oct, specs: list[LayerSpec]):
+    def __init__(self, reg, b_oct, n_oct, specs: list[LayerSpec], local: bool = False):
         self.reg = reg
         self.b_oct = b_oct
         self.n_oct = n_oct
         self.specs = specs
+        # local=True places hexes on a *dynamic local net* (n_oct.local_layout),
+        # hinged from a fundamental octant so a bounded region spanning a seam is
+        # laid flat tear-free.  local=False (default) uses the fixed n_oct net.
+        self.local = local
+        self.local_residual = None      # set after a local run() (seam-closure)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -292,6 +305,9 @@ class Compositor:
             oid=b_pts.oid[valid],
         )
 
+        if self.local:
+            return self._run_local(b_pts)
+
         results = []
         for spec in self.specs:
             layer = self._run_spec(b_pts, spec)
@@ -303,8 +319,8 @@ class Compositor:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _run_spec(self, b_pts: Points, spec: LayerSpec) -> Optional[ComposedLayer]:
-        """Bin b_pts to spec.level and build one ComposedLayer."""
+    def _bin_spec(self, b_pts: Points, spec: LayerSpec) -> Optional[BinnedSpec]:
+        """Bin b_pts to spec.level -> b_oct geometry + addresses (no placement)."""
         hex_num, hex_v, hex_inv, _ = hex_reduce(b_pts, spec.level)
         if hex_num == 0:
             return None
@@ -319,14 +335,8 @@ class Compositor:
 
         tails = tail_key_from_reversible(hex_v_k[:, -1])
         hex_par, hex_oid, scale = hex_parents(self.b_oct, hex_v_k, n_keep)
-        xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
-
         # Centroids in b_oct (carry octant components for source callables)
         ctrs_b = ctr_from_pars(self.b_oct, hex_par, hex_oid, scale, tails)
-
-        # Vertices and centroids in n_oct
-        verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, scale, self.n_oct)
-        ctrs_n = self.reg.project(ctrs_b, [self.b_oct, self.n_oct])
 
         # Common prefix from path digits (tail column excluded)
         prefix, short_addrs = _extract_prefix(hex_v_k)
@@ -345,18 +355,56 @@ class Compositor:
         if spec.source is not None:
             values = np.asarray(spec.source(ctrs_b))
 
-        if spec.reference:
-            reference = spec.level
+        return BinnedSpec(spec, hex_v_k, hex_par, hex_oid, scale,
+                          ctrs_b, prefix, labels, values, tails)
 
+    def _compose(self, bs: BinnedSpec, verts_n: Points, ctrs_n: Points) -> ComposedLayer:
         return ComposedLayer(
-            spec=spec,
-            verts=verts_n,
-            ctrs=ctrs_n,
-            prefix=prefix,
-            labels=labels,
-            values=values,
-            key_tails=tails,
-        )
+            spec=bs.spec, verts=verts_n, ctrs=ctrs_n, prefix=bs.prefix,
+            labels=bs.labels, values=bs.values, key_tails=bs.key_tails)
+
+    def _run_spec(self, b_pts: Points, spec: LayerSpec) -> Optional[ComposedLayer]:
+        """Build one ComposedLayer in the fixed n_oct net."""
+        bs = self._bin_spec(b_pts, spec)
+        if bs is None:
+            return None
+        xc2, _, xpm = tail_unpack_reversible(bs.hex_v_k[:, -1])   # (c2, r_mo, p_mo)
+        verts_n = hex_verts_in_noct(bs.hex_par, bs.hex_oid, xpm, xc2, bs.scale, self.n_oct)
+        ctrs_n = self.reg.project(bs.ctrs_b, [self.b_oct, self.n_oct])
+        return self._compose(bs, verts_n, ctrs_n)
+
+    def _run_local(self, b_pts: Points) -> list[ComposedLayer]:
+        """Build all ComposedLayers on a dynamic local net.
+
+        Bins every spec to b_oct geometry (``hex_from_pars`` reflects seam-straddle
+        verts into the neighbour octant), gathers the octants actually used, builds
+        one :meth:`OctahedralNet.local_layout` for them, and places every layer
+        through it so the region lies flat and seam-continuous.
+        """
+        binned = [b for b in (self._bin_spec(b_pts, s) for s in self.specs) if b]
+        if not binned:
+            return []
+
+        geos, octs = [], set()
+        for bs in binned:
+            verts_b = hex_from_pars(self.b_oct, bs.hex_par, bs.hex_oid,
+                                    bs.scale, bs.hex_v_k[:, -1])
+            octs.update(int(o) for o in np.unique(verts_b.oid))
+            geos.append((bs, verts_b))
+
+        layout = self.n_oct.local_layout(sorted(octs))
+        self.local_residual = layout.residual
+
+        results = []
+        for bs, verts_b in geos:
+            verts_n = Points(
+                self.n_oct.place(verts_b.coords, verts_b.oid, layout.layout),
+                domain=self.n_oct)
+            ctrs_n = Points(
+                self.n_oct.place(bs.ctrs_b.coords, bs.ctrs_b.oid, layout.layout),
+                domain=self.n_oct)
+            results.append(self._compose(bs, verts_n, ctrs_n))
+        return results
 
 
 # ---------------------------------------------------------------------------

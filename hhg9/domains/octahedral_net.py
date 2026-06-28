@@ -6,6 +6,7 @@
 This is 'n_oct' flattened octahedron net xy
 """
 
+from collections import namedtuple
 import numpy as np
 from numpy.typing import NDArray
 from hhg9.base.composite import CompositeDomain, ComponentDomain
@@ -14,6 +15,15 @@ from hhg9.projections import BaryNet
 from hhg9.domains.nets import net_layouts
 from hhg9.h9 import H9K, H9P, H9O
 from hhg9.algorithms.geometry import inside_convex_polygon_cw
+
+
+# A dynamic ("local") net unfolding for a chosen subset of octants.
+#   layout    : {oid: (matrix (2,2), offset (2,))} placing each octant in the plane.
+#   residual  : worst seam-closure error across hinges (≈0 ⇒ exact; large ⇒ a
+#               reused per-octant matrix is mis-oriented for its hinge, i.e. the
+#               flavour cut this pair apart — see project_local_net approach (b)).
+#   unreached : octants requested but not connected to the fundamental via oid_nb.
+LocalLayout = namedtuple('LocalLayout', 'layout residual unreached')
 
 
 class OctantNet(ComponentDomain):
@@ -60,6 +70,7 @@ class OctahedralNet(CompositeDomain):
         super().__init__(registrar, net_name, 2)
         tp = H9P.sv  # net_mode vertices
         self.face_polys = {}
+        self._registrar = registrar
         self.c_oct = c_oct
         self.b_oct = b_oct
         self.global_theta = self.base_theta * self.RT
@@ -230,6 +241,103 @@ class OctahedralNet(CompositeDomain):
     def binning(self, pts: Points, sig: tuple = None):
         """Identify the octant id of each point."""
         pts.oid = self.pt_face(pts.coords)
+
+    def local_layout(self, octants, fundamental=None, tol=1e-7) -> LocalLayout:
+        """Build a *dynamic* net unfolding for the given octants.
+
+        Where the fixed ``net_layouts`` choose one global unfolding, this lays a
+        chosen subset of octants flat by hinging them out from a fundamental
+        octant — so a bounded region spanning a seam (which has no single b_oct
+        plot) becomes a tear-free plane.
+
+        Each octant keeps its own ``proj.matrix`` (so hexes stay regular); only
+        the offset is recomputed relative to the fundamental.  Because every
+        octant is a √2-side equilateral preserved in n_oct, the hinge across a
+        shared edge is a pure translation:
+
+            offset_B = offset_A + (matrix_A·xA_shared − matrix_B·xB_shared)
+
+        constant along the seam.  Adjacency is ``H9O.oid_nb[A, c2] = B``; the two
+        shared corners are found by g_gcd coincidence of the octant corner
+        triangles (``H9P.sv``).  The worst seam-closure error is returned as
+        ``residual`` — ≈0 confirms translation-only suffices for these octants.
+
+        Args:
+            octants:     iterable of octant ids (oid) to place.
+            fundamental: octant to fix at the origin; defaults to the first.
+            tol:         g_gcd coincidence tolerance (degrees) for shared corners.
+
+        Returns:
+            :class:`LocalLayout` (layout, residual, unreached).
+        """
+        from hhg9 import Points
+        octants = list(dict.fromkeys(int(o) for o in octants))
+        if not octants:
+            return LocalLayout({}, 0.0, [])
+        if fundamental is None:
+            fundamental = octants[0]
+        g_gcd = self._registrar.domain('g_gcd')
+
+        mat, cb, cg = {}, {}, {}
+        for oid in octants:
+            side = H9O.oid_str[oid]
+            proj = self.projs[side]
+            if proj.c2trans is not None:
+                raise NotImplementedError(
+                    'local_layout: c2-split nets (e.g. rhombus) not yet supported; '
+                    'use a non-c2 flavour such as butterfly.')
+            mat[oid] = np.asarray(proj.matrix, dtype=float)
+            corners = np.asarray(H9P.sv[self.b_oct.sides[side].mode], dtype=float)
+            cb[oid] = corners                                   # (3, 2) b_oct
+            cg[oid] = self._registrar.project(
+                Points(corners, self.b_oct, oid), [self.b_oct, g_gcd]).coords
+
+        off = {fundamental: np.zeros(2)}
+        queue = [fundamental]
+        residual = 0.0
+        while queue:
+            a = queue.pop(0)
+            for c2 in range(3):
+                b = int(H9O.oid_nb[a, c2])
+                if b not in mat or b in off:
+                    continue
+                ia, ib = [], []                                # shared corners
+                for i in range(3):
+                    d = np.linalg.norm(cg[b] - cg[a][i], axis=1)
+                    j = int(np.argmin(d))
+                    if d[j] < tol:
+                        ia.append(i)
+                        ib.append(j)
+                if len(ia) < 2:                                # not edge-adjacent
+                    continue
+                world_a = cb[a][ia] @ mat[a] + off[a]
+                cand = world_a - cb[b][ib] @ mat[b]            # offset candidates
+                off[b] = cand.mean(0)
+                residual = max(residual, float(
+                    np.linalg.norm(cand - off[b], axis=1).max()))
+                queue.append(b)
+
+        layout = {o: (mat[o], off[o]) for o in off}
+        unreached = [o for o in octants if o not in off]
+        return LocalLayout(layout, residual, unreached)
+
+    def place(self, coords: NDArray, oids: NDArray, layout: dict) -> NDArray:
+        """Apply a local-net *layout* to b_oct *coords*: ``coords·matrix + offset``
+        per octant.  Octants absent from the layout map to NaN.
+
+        Args:
+            coords: (N, 2) b_oct coordinates.
+            oids:   (N,) octant id per coordinate.
+            layout: the ``layout`` dict from :meth:`local_layout`.
+        """
+        coords = np.asarray(coords, dtype=float)
+        oids = np.asarray(oids)
+        out = np.full_like(coords, np.nan)
+        for oid, (mtx, off) in layout.items():
+            m = oids == oid
+            if np.any(m):
+                out[m] = coords[m] @ mtx + off
+        return out
 
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""

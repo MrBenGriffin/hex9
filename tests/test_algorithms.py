@@ -204,3 +204,37 @@ def test_ell_rnd_uniform_on_ellipsoid(reg):
     # deterministic under seed
     ecef2, _ = PK.ell_rnd_uniform(reg, 300, seed=1, return_latlon=True)
     np.testing.assert_array_equal(ecef, ecef2)
+
+
+def test_ell_rnd_quick_on_ellipsoid(reg):
+    q = PK.ell_rnd_quick(reg, 200)
+    assert q.shape == (200, 3)
+    ell = reg.domain('c_ell')
+    a, b = ell.a, ell.b
+    f = q[:, 0]**2 / a**2 + q[:, 1]**2 / a**2 + q[:, 2]**2 / b**2
+    np.testing.assert_allclose(f, 1.0, atol=1e-9)
+
+
+def test_geodesic_cap_rnd_ecef_within_radius(reg):
+    import hhg9.algorithms.distance as D
+    from hhg9 import Points
+    cap = PK.geodesic_cap_rnd_ecef(reg, 51.5, -0.1, 80, 100_000.0, seed=3)
+    assert isinstance(cap, Points)
+    assert cap.coords.shape == (80, 2)
+    d = D.ell_distance(np.full((80, 2), [51.5, -0.1]), cap.coords)
+    assert d.max() <= 100_000.0 * 1.001          # all inside the cap
+    # deterministic under seed
+    cap2 = PK.geodesic_cap_rnd_ecef(reg, 51.5, -0.1, 80, 100_000.0, seed=3)
+    np.testing.assert_array_equal(cap.coords, cap2.coords)
+
+
+def test_ell_rnd_uniform_sphere_fallback():
+    """A zero-flattening ellipsoid takes the near-sphere fallback branch."""
+    from hhg9 import Registrar
+    reg = Registrar()
+    reg.set_ellipsoid(a=6_371_000.0, f=0.0, name='Sphere')
+    ecef, latlon = PK.ell_rnd_uniform(reg, 100, seed=1, return_latlon=True)
+    assert ecef.shape == (100, 3)
+    assert latlon.shape == (100, 2)
+    # on the sphere of radius a
+    np.testing.assert_allclose(np.linalg.norm(ecef, axis=1), 6_371_000.0, rtol=1e-9)

@@ -3,31 +3,35 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-Polygon -> hex grid + H9 addresses, rendered in b_oct.
+Polygon -> hex grid + H9 addresses, rendered on a *dynamic local net*.
 
 Given a NON-CONVEX lat/lon polygon and a finest hex layer, build the clipped hex
-grid with its ancestry "nest" (coarser border-levels behind the finest) and
-generate an H9 UUID address for every hex.
+grid with its ancestry "nest" and an H9 UUID address per hex, then lay it flat.
 
-This is the addressing / non-convex-clipping showcase of the polygrid trio:
-  * ex0260 (this)           -- HexMesh -> b_oct, UUID addresses + common-prefix
-                               labels, non-convex clip, ancestry nest.
-  * ex0261_polygrid_mesh.py -- the same HexMesh source rendered in g_gcd (lat/lon).
-  * ex0261_polygrid.py      -- a simpler grid via hex_poly_layer.
+The Britain–Belgium polygon spans two octants (0 & 2), so it has no single b_oct
+plot — the octants live in disjoint per-octant frames.  Instead of the full fixed
+n_oct net, we build a *dynamic* net for just the touched octants:
 
-Why HexMesh: ``HexMesh.create_clipped`` keeps a hex when its centroid lies inside
-the polygon (matplotlib ``Path.contains_points``), so CONCAVE boundaries are
-honoured and cost scales with the polygon's area, not the globe.  The previous
-inline ``poly_net_field`` scan filled only the polygon's convex hull.
+    layout = n_oct.local_layout(octants)          # hinge from a fundamental
+    world  = n_oct.place(mesh.pts.coords, oids, layout.layout)
 
-Addresses come straight from the mesh (``mesh.addr(L)`` -> one ``uuid.UUID`` per
-hex, aligned with ``mesh[L]``).  The leading ``L+1`` nibbles of each UUID are the
-H9 path, so a common prefix is shared across a clipped region; labels show the
-per-hex suffix beyond that prefix.
+Each octant keeps its own proj.matrix (regular hexes) and only its offset is
+recomputed relative to the fundamental, so the seam closes exactly and the region
+lays flat with no tear.  This is n_oct, dynamic rather than defined.
+
+Companions:
+  ex0261_polygrid_mesh.py -- the same HexMesh source rendered in g_gcd (lat/lon).
+  ex0261_polygrid.py      -- a simpler grid via hex_poly_layer.
+
+Why HexMesh: ``create_clipped`` keeps a hex when its centroid lies inside the
+polygon (matplotlib ``Path.contains_points``), so CONCAVE boundaries are honoured
+and cost scales with the polygon's area.  Addresses come from ``mesh.addr(L)``
+(one ``uuid.UUID`` per hex, aligned with ``mesh[L]``); the leading ``L+1`` UUID
+nibbles are the H9 path, so the clipped region shares a common prefix.
 
 Last Tested
 -----------
-28 Jun 2026 0.1.3a0 (migrated to HexMesh; b_oct render, UUID addresses)
+28 Jun 2026 0.1.3a0 (dynamic local net; HexMesh + OctahedralNet.local_layout)
 13 Mar 2026 0.1.1a1 (passed, inline n_oct version)
 26 Dec 2025 0.1.0a4 (working well)
 """
@@ -36,10 +40,9 @@ from matplotlib import pyplot as plt
 from matplotlib.collections import PolyCollection
 
 from hhg9 import Points, Registrar
-from hhg9.h9 import H9K
 from hhg9.h9.grid import HexMesh
 
-# [birmingham-bristol-london-belgium] NON-CONVEX polygon, [lat, lon] degrees.
+# [birmingham-bristol-london-belgium] NON-CONVEX polygon, [lat, lon]; spans octant 0 & 2.
 B_DLL = np.array([
     [51.084464524954795, -3.4462861844929585],
     [52.68223344923537, -2.189458562294672],
@@ -52,12 +55,6 @@ B_DLL = np.array([
     [51.29190823165293, 5.4859054058927266],
     [50.72448838777691, 5.4044368907702074],
 ])
-
-
-def bary_to_xy(uv: np.ndarray) -> np.ndarray:
-    """Equilateral embedding of barycentric b_oct (u, v) into cartesian (x, y)."""
-    u, v = uv[..., 0], uv[..., 1]
-    return np.stack([u + v / 2.0, v * (H9K.R3 / 2.0)], axis=-1)
 
 
 def common_prefix(hex_strs, cap):
@@ -75,14 +72,13 @@ def common_prefix(hex_strs, cap):
     return p
 
 
-def plot_polygrid(mesh, clip_xy, prefix, labels, ctrs_xy, name):
-    """Draw the ancestry nest (finest on top) in b_oct, with suffix labels."""
+def plot_polygrid(mesh, world, clip_xy, prefix, labels, ctrs_xy, name):
+    """Draw the ancestry nest (finest on top) on the local net, with labels."""
     layers = mesh.layers
     finest = mesh.fine
     n_layers = len(layers)
-    pts_xy = bary_to_xy(mesh.pts.coords)
 
-    fine_v = pts_xy[mesh[finest]].reshape(-1, 2)
+    fine_v = world[mesh[finest]].reshape(-1, 2)
     xmin, xmax = float(fine_v[:, 0].min()), float(fine_v[:, 0].max())
     ymin, ymax = float(fine_v[:, 1].min()), float(fine_v[:, 1].max())
     ratio = (xmax - xmin) / (ymax - ymin) if ymax > ymin else 1.0
@@ -100,11 +96,10 @@ def plot_polygrid(mesh, clip_xy, prefix, labels, ctrs_xy, name):
         faces = mesh[L]
         if len(faces) == 0:
             continue
-        polys = pts_xy[faces]
         lw = 0.2 * ((n_layers - 1 - i) + 1)
         edge = 'black' if L == finest else '#0072b4a0'
         face = '#0072b420' if L == finest else 'none'
-        ax.add_collection(PolyCollection(polys, linewidths=lw,
+        ax.add_collection(PolyCollection(world[faces], linewidths=lw,
                                          facecolors=face, edgecolors=edge))
         print(f'  layer {L}: {len(faces)} hexes')
 
@@ -127,13 +122,22 @@ if __name__ == '__main__':
     rg = Registrar()
     g_gcd = rg.domain('g_gcd')
     b_oct = rg.domain('b_oct')
+    n_oct = rg.domain('n_oct:butterfly')
 
     finest = 6
     nest = list(range(finest - 2, finest + 1))      # ancestry nest: L4..L6
 
-    # Area-proportional, non-convex-aware clip; no global enumeration, no n_oct cast.
+    # Area-proportional, non-convex-aware clip; no global enumeration.
     mesh = HexMesh.create_clipped(nest, B_DLL, rg)
     print(mesh)
+
+    # Dynamic local net for the touched octants; lay the mesh flat.
+    oids = np.asarray(mesh.pts.oid)
+    octs = sorted(set(oids.tolist()))
+    layout = n_oct.local_layout(octs)
+    print(f'octants {octs}: seam residual {layout.residual:.2e}, '
+          f'unreached {layout.unreached}')
+    world = n_oct.place(mesh.pts.coords, oids, layout.layout)
 
     # H9 UUID address per finest-layer hex (aligned with mesh[finest]).
     fine_addrs = [a.hex for a in mesh.addr(finest)]
@@ -146,12 +150,10 @@ if __name__ == '__main__':
     for a in mesh.addr(finest)[:5]:
         print(f'  {a}')
 
-    # Centroids (b_oct -> cartesian) for label placement.
-    pts_xy = bary_to_xy(mesh.pts.coords)
-    ctrs_xy = pts_xy[mesh[finest]].mean(axis=1)
+    ctrs_xy = world[mesh[finest]].mean(axis=1)
 
-    # Clip polygon outline in the same b_oct cartesian view.
-    clip_b = rg.project(Points(B_DLL, g_gcd), [g_gcd, b_oct]).coords
-    clip_xy = bary_to_xy(clip_b)
+    # Clip polygon outline in the same local-net frame.
+    clip_pts = rg.project(Points(B_DLL, g_gcd), [g_gcd, b_oct])
+    clip_xy = n_oct.place(clip_pts.coords, clip_pts.oid, layout.layout)
 
-    plot_polygrid(mesh, clip_xy, prefix, labels, ctrs_xy, f'L{finest}')
+    plot_polygrid(mesh, world, clip_xy, prefix, labels, ctrs_xy, f'L{finest}')
