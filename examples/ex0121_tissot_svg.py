@@ -26,8 +26,11 @@ Usage:
   python ex0121_tissot_svg.py --flavour butterfly:0500
 
 Last Tested
-28 Jun 2026 0.1.3a0 (passed) — octant-clip fills; butterfly clean, rhombus
-            (c2-split) fills guarded/skipped pending c2/cell clip.
+28 Jun 2026 0.1.3a0 (passed) — project_fill_to_noct: clip→project(whole rings,
+            holes preserved)→confine to octant triangle→union. Joins dissolved,
+            real seams split, no cone-point bleed; antimeridian handled; ocean
+            cuts out continents and keeps endorheic seas (Caspian). _fill draws
+            holes via evenodd Path. butterfly clean; rhombus (c2-split) guarded.
 16 Jun 2026 0.1.3a0 (passed) 158.4s
 20 Apr 2026
 """
@@ -37,14 +40,15 @@ import os
 from pathlib import Path
 
 import numpy as np
-from svgelements import SVG, Group, Polygon, Polyline, Matrix
+from svgelements import SVG, Group, Polygon, Polyline, Path, Matrix
 
 from hhg9 import Registrar
 from hhg9.h9 import H9O, H9P, H9K
 from hhg9.h9.grid import HexMesh
-from hhg9.geo.vector import (load_shape_polygons, graticule_paths,
-                             tissot_circle, project_path, split_path_at_seams,
-                             clip_polygon_to_octants, is_c2_split)
+from hhg9.geo.vector import (load_shape_polygons, load_shape_geoms,
+                             graticule_paths, tissot_circle, project_path,
+                             split_path_at_seams, project_fill_to_noct,
+                             is_c2_split)
 
 os.makedirs('output', exist_ok=True)
 
@@ -102,6 +106,24 @@ def _line(pts_scaled, **style):
     return Polyline(*pts_scaled.tolist(), **style)
 
 
+def _fill(group, poly, scale, **style):
+    """Append a shapely Polygon (n_oct coords) to *group* as an SVG path.
+
+    Exterior plus interior rings (holes) are emitted as sub-paths with
+    fill-rule evenodd, so e.g. continents are cut out of the ocean fill.
+    """
+    def ring_d(coords):
+        c = np.asarray(coords) * scale
+        return 'M ' + ' L '.join(f'{x:.3f},{y:.3f}' for x, y in c) + ' Z'
+
+    d = ring_d(poly.exterior.coords)
+    for hole in poly.interiors:
+        d += ' ' + ring_d(hole.coords)
+    p = Path(d, **style)
+    p.values['fill-rule'] = 'evenodd'
+    group.append(p)
+
+
 def _scale_flip(segs, scale, img_h):
     """Scale n_oct coords to pixels and flip y for SVG."""
     return [(s * scale) * np.array([1, -1]) + np.array([0, img_h])
@@ -149,21 +171,28 @@ def run(flavour: str = FLAVOUR, pixels: int = PIXELS) -> None:
         print(f'WARNING: layout "{flavour}" is c2-split — octant-clip fills not '
               'yet supported (needs c2/cell clip). Skipping land/ocean/lake/tissot fills.')
 
-    def fill_group(shp_file, grp, fill):
-        """Octant-clip each ring, project, and append closed fills to grp."""
-        for ring in load_shape_polygons(shp_file):
-            for sub in clip_polygon_to_octants(ring):
-                for seg in proj(sub, STEP_LAND_M, closed=True):
-                    grp.append(_poly(seg * scale,
-                                     fill=fill, stroke=LAND_STROKE,
-                                     stroke_width=0))
+    def fill_group(srcs, grp, fill):
+        """Project each source (ring or shapely polygon) and append n_oct fills.
+
+        Holes are preserved (see project_fill_to_noct / _fill), so the ocean
+        polygon cuts out continents while keeping endorheic seas (Caspian).
+        """
+        for src in srcs:
+            for poly in project_fill_to_noct(src, reg, n_oct,
+                                             max_step_m=STEP_LAND_M,
+                                             threshold=SEAM_THRESH):
+                _fill(grp, poly, scale,
+                      fill=fill, stroke=LAND_STROKE, stroke_width=0)
 
     # ── 1a/b/c. Land / ocean / lake polygons ──────────────────────────────────
+    # Draw order (canvas append below): land, then seas *over* land — the ocean
+    # polygon carries continents as holes (so land shows through) while endorheic
+    # seas (Caspian) overlay land.  Lakes paint over land last.
     if fills_ok:
         print('Land polygons...')
-        fill_group(LAND_FILE, g_land, LAND_FILL)
-        fill_group(SEAS_FILE, g_seas, SEA_FILL)
-        fill_group(LAKE_FILE, g_lakes, SEA_FILL)
+        fill_group(load_shape_polygons(LAND_FILE), g_land, LAND_FILL)
+        fill_group(load_shape_geoms(SEAS_FILE), g_seas, SEA_FILL)
+        fill_group(load_shape_polygons(LAKE_FILE), g_lakes, SEA_FILL)
     # ── 2. Graticule ─────────────────────────────────────────────────────────
     print('Graticule...')
     for path in graticule_paths(GRAT_STEP, GRAT_STEP):
@@ -179,12 +208,13 @@ def run(flavour: str = FLAVOUR, pixels: int = PIXELS) -> None:
         for lat in TISSOT_LATS:
             for lon in TISSOT_LONS:
                 circle = tissot_circle(lat, lon, TISSOT_R_M, TISSOT_PTS)
-                # octant-clip so seam-straddling circles close cleanly per octant
-                for sub in clip_polygon_to_octants(circle):
-                    for seg in proj(sub, STEP_TISS_M, closed=True):
-                        g_tiss.append(_poly(seg * scale,
-                                            fill=TISS_FILL, stroke=TISS_STROKE,
-                                            stroke_width=TISS_WIDTH, alpha=0.25))
+                # clip→project→confine→union: whole across joins, split at seams
+                for poly in project_fill_to_noct(circle, reg, n_oct,
+                                                 max_step_m=STEP_TISS_M,
+                                                 threshold=SEAM_THRESH):
+                    _fill(g_tiss, poly, scale,
+                          fill=TISS_FILL, stroke=TISS_STROKE,
+                          stroke_width=TISS_WIDTH, alpha=0.25)
 
     # ── 4 & 5. Hex overlay ───────────────────────────────────────────────────
     print('Hex overlay...')

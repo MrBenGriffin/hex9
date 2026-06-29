@@ -55,9 +55,37 @@ import numpy as np
 from numpy.typing import NDArray
 
 from hhg9 import Points
+from hhg9.h9 import H9O
 from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
 from hhg9.h9.binning import hex_reduce, hex_parents, ctr_from_pars, hex_from_pars
 from hhg9.h9.grid import poly_net_field, hex_verts_in_noct
+
+
+def _str_prefix(strs: list[str], cap: int) -> str:
+    """Longest shared leading substring across *strs*, capped at *cap* chars."""
+    if not strs:
+        return ''
+    p = strs[0][:cap]
+    for s in strs[1:]:
+        i, m = 0, min(len(p), len(s))
+        while i < m and p[i] == s[i]:
+            i += 1
+        p = p[:i]
+        if not p:
+            break
+    return p
+
+
+def _addr_labels(addrs: list[str], prefix: str, path_len: int, spec) -> Optional[NDArray]:
+    """Per-hex labels from H9 address strings, honouring ``spec.labels`` (mirrors
+    the fixed path's label scheme: None/False, 'layer' digit, or the full suffix)."""
+    if spec.labels in (None, False):
+        return None
+    short = [a[len(prefix):path_len] for a in addrs]
+    if spec.labels == 'layer':
+        idx = spec.level - len(prefix)
+        return np.array([s[idx] if 0 <= idx < len(s) else '' for s in short])
+    return np.array(short)
 
 
 # One spec, binned to b_oct geometry but not yet placed in the net.  Shared by
@@ -364,13 +392,22 @@ class Compositor:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def run(self, polygon_n: Points) -> list[ComposedLayer]:
+    def run(self, polygon: Points) -> list[ComposedLayer]:
         """
-        Compose all layers for *polygon_n*.
+        Compose all layers for the boundary *polygon*.
 
         Args:
-            polygon_n: Boundary polygon as :class:`~hhg9.Points` in n_oct.
-                       Only the convex hull is used for the scanline fill.
+            polygon: Boundary as :class:`~hhg9.Points` in **g_gcd** (lat/lon),
+                     **b_oct**, or **n_oct** — the input is converted as needed.
+
+                     - ``local=False`` (fixed net): the polygon is taken in n_oct
+                       and filled by :func:`poly_net_field` (convex hull only).
+                     - ``local=True`` (dynamic net): the polygon is taken in
+                       g_gcd and clipped by :meth:`HexMesh.create_clipped`
+                       (frame-neutral, true non-convex, area-proportional).  Note
+                       n_oct input is *avoided* here: it has already baked the
+                       polygon into a fixed flavour position, which is circular
+                       for the dynamic net.
 
         Returns:
             One :class:`ComposedLayer` per spec (in the same order as
@@ -379,23 +416,32 @@ class Compositor:
         if not self.specs:
             return []
 
-        max_level = max(s.level for s in self.specs)
+        g_gcd = self.reg.domain('g_gcd')
+        dom = polygon.domain
 
-        # One scanline pass at the finest level needed
-        scn = poly_net_field(polygon_n, max_level)
+        if self.local:
+            # Frame-neutral: get the boundary as lat/lon for create_clipped.
+            if dom.name == 'g_gcd':
+                ll = np.asarray(polygon.coords)
+            elif dom.name == 'b_oct':
+                ll = self.reg.project(polygon, [self.b_oct, g_gcd]).coords
+            else:
+                ll = self.reg.project(polygon, [dom, self.b_oct, g_gcd]).coords
+            return self._run_local(np.asarray(ll))
 
-        # Project candidates to b_oct and drop any that missed all faces
+        # Fixed path: ensure n_oct, then scanline-fill the convex hull.
+        if dom is self.n_oct:
+            poly_n = polygon
+        elif dom.name == 'b_oct':
+            poly_n = self.reg.project(polygon, [self.b_oct, self.n_oct])
+        else:
+            poly_n = self.reg.project(polygon, [dom, self.b_oct, self.n_oct])
+
+        scn = poly_net_field(poly_n, max(s.level for s in self.specs))
         b_pts = self.reg.project(scn, [self.n_oct, self.b_oct])
         from hhg9.base.points import OID_INVALID
         valid = b_pts.oid != OID_INVALID
-        b_pts = Points(
-            b_pts.coords[valid],
-            domain=self.b_oct,
-            oid=b_pts.oid[valid],
-        )
-
-        if self.local:
-            return self._run_local(b_pts)
+        b_pts = Points(b_pts.coords[valid], domain=self.b_oct, oid=b_pts.oid[valid])
 
         results = []
         for spec in self.specs:
@@ -462,52 +508,72 @@ class Compositor:
         ctrs_n = self.reg.project(bs.ctrs_b, [self.b_oct, self.n_oct])
         return self._compose(bs, verts_n, ctrs_n)
 
-    def _run_local(self, b_pts: Points) -> list[ComposedLayer]:
-        """Build all ComposedLayers on a dynamic local net.
+    def _run_local(self, ll_polygon: NDArray) -> list[ComposedLayer]:
+        """Build all ComposedLayers on a dynamic local net from a lat/lon polygon.
 
-        Bins every spec to b_oct geometry (``hex_from_pars`` reflects seam-straddle
-        verts into the neighbour octant), gathers the octants actually used, builds
-        one :meth:`OctahedralNet.local_layout` for them, and places every layer
-        through it so the region lies flat and seam-continuous.
+        Frame-neutral: clips with :meth:`HexMesh.create_clipped` (centroid-in-
+        polygon — true non-convex; ``LayerSpec.threshold`` is ignored here),
+        builds one :meth:`OctahedralNet.local_layout` for the touched octants, and
+        places every layer through it.  The hex-level guard drops any hex that
+        straddles an unclosed seam (``self.local_dropped``).  ``key_tails`` is
+        ``None`` in this mode (GIS export uses the fixed path).
         """
-        binned = [b for b in (self._bin_spec(b_pts, s) for s in self.specs) if b]
-        if not binned:
-            return []
+        from hhg9.h9.grid import HexMesh
 
-        geos, octs = [], set()
-        for bs in binned:
-            verts_b = hex_from_pars(self.b_oct, bs.hex_par, bs.hex_oid,
-                                    bs.scale, bs.hex_v_k[:, -1])
-            octs.update(int(o) for o in np.unique(verts_b.oid))
-            geos.append((bs, verts_b))
+        levels = sorted({int(s.level) for s in self.specs})
+        mesh = HexMesh.create_clipped(levels, ll_polygon, self.reg)
+        pts_b = np.asarray(mesh.pts.coords)
+        pts_oid = np.asarray(mesh.pts.oid)
+
+        octs = set()
+        for L in levels:
+            f = mesh[L]
+            if len(f):
+                octs.update(int(o) for o in np.unique(pts_oid[f]))
+        if not octs:
+            self.layout, self.local_dropped = None, 0
+            self.local_residual = self.local_cut = 0.0
+            return []
 
         layout = self.n_oct.local_layout(sorted(octs))
         self.layout = layout
         self.local_residual = layout.residual
         self.local_cut = layout.cut_residual
+        placed = self.n_oct.place(pts_b, pts_oid, layout.layout)   # pool -> local net
 
         results, dropped = [], 0
-        for bs, verts_b in geos:
-            polys = self.n_oct.place(
-                verts_b.coords, verts_b.oid, layout.layout).reshape(-1, 6, 2)
-            ctrs = self.n_oct.place(bs.ctrs_b.coords, bs.ctrs_b.oid, layout.layout)
-
-            # Hex-level holonomy guard: a hex straddling an UNCLOSED seam has its
-            # verts placed in octants that ended up far apart in the local net, so
-            # its footprint is not compact (a long sliver).  Drop those — they
-            # cannot be drawn coherently in this frame.
+        for spec in self.specs:
+            faces = mesh[spec.level]
+            if len(faces) == 0:
+                continue
+            polys = placed[faces]                                  # (N, 6, 2)
             keep = _coherent_mask(polys)
             dropped += int((~keep).sum())
-            polys, ctrs = polys[keep], ctrs[keep]
+            kidx = np.where(keep)[0]
+            polys, fk = polys[keep], faces[keep]
 
-            labels = bs.labels[keep] if bs.labels is not None else None
-            values = bs.values[keep] if bs.values is not None else None
-            key_tails = bs.key_tails[keep] if bs.key_tails is not None else None
+            # b_oct centroid from own-octant (match-mo) verts, then place to net.
+            cb, co = pts_b[fk], pts_oid[fk]
+            match = (H9O.oid_mo[co] == H9O.oid_mo[co][:, :1])
+            cen_b = (cb * match[:, :, None]).sum(1) / match.sum(1, keepdims=True)
+            cen_oid = co[:, 0].astype(np.int32)
+            ctrs_b = Points(cen_b, domain=self.b_oct, oid=cen_oid)
+            ctrs_n = Points(self.n_oct.place(cen_b, cen_oid, layout.layout),
+                            domain=self.n_oct)
+
+            # Addresses: leading level+1 UUID nibbles are the H9 path.
+            al = mesh.addr(spec.level)
+            addrs = [al[i].hex for i in kidx]
+            path_len = spec.level + 1
+            prefix = _str_prefix([a[:path_len] for a in addrs], path_len)
+            labels = _addr_labels(addrs, prefix, path_len, spec)
+            values = (np.asarray(spec.source(ctrs_b))
+                      if spec.source is not None else None)
+
             results.append(ComposedLayer(
-                spec=bs.spec,
-                verts=Points(polys.reshape(-1, 2), domain=self.n_oct),
-                ctrs=Points(ctrs, domain=self.n_oct),
-                prefix=bs.prefix, labels=labels, values=values, key_tails=key_tails))
+                spec=spec, verts=Points(polys.reshape(-1, 2), domain=self.n_oct),
+                ctrs=ctrs_n, prefix=prefix, labels=labels, values=values,
+                key_tails=None))
         self.local_dropped = dropped
         return results
 

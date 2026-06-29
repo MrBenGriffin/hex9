@@ -3,57 +3,64 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-Seam-zoom: prime-meridian crossing at higher resolution.
+Seam-zoom near the north pole (≈89°N), rendered in a local ECEF tangent plane.
 
-A tight rectangle inside Greenwich Park straddles the prime meridian
-(lon = 0).  This exercises the same cross-seam stitching as ex0262 but
-at L15, where individual hexes are ~30 m across, making the seam
-continuity easy to inspect visually.
+A small window straddling the prime meridian at ~89°N crosses an octant seam
+right next to the north-pole cone vertex.  In g_gcd (lat/lon) this renders with a
+badly distorted shape — at 89°N a degree of longitude is ~60× shorter on the
+ground than a degree of latitude, so an equal-aspect lon/lat plot squashes the
+hexes.  Instead we project the shared vertex pool to ECEF (c_ell, EPSG:4978) and
+flatten it onto the plane tangent to the surface at the window centroid (an ENU
+local frame), so distances are metric and the hexes keep their true shape.
 
-Hexes that span the prime meridian (vertices on both sides of lon = 0)
-are drawn in red so the stitching is immediately visible.
+Hexes that span the prime meridian (vertices on both sides of lon = 0) are drawn
+in red so the cross-seam stitching is visible.
 
-Companion to ex0262_greenwich_seam.py.
+Companion to ex0262_greenwich_seam.py (prime-meridian close-seam test) and
+ex0263_bhutan_big.py (a different seam, with population data).
 
 Last Tested
 -----------
-16 Jun 2026 0.1.3a0 (passed) 13.2s
-23 May 2026
+28 Jun 2026 0.1.3a0 (ECEF tangent-plane rendering)
 """
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import PolyCollection
 
-from hhg9 import Registrar
+from hhg9 import Points, Registrar
 from hhg9.h9.grid import HexMesh
 
-# Tiny rectangle straddling lon = 0 inside Greenwich Park.
-# At L20, each hex ≈ 3.5 mm²; this ~22 mm × 21 mm patch yields ~130 L20 cells.
-# lat ∈ [51.4799999, 51.4800001]  (span ≈ 22 mm)
-# lon ∈ [-1.5e-7, +1.5e-7]       (span ≈ 21 mm)
-# 0.005 89.0999, 0.005 89.1001, -0.005 89.1001, -0.005 89.0999, 0.005 89.0999
+# Window straddling lon = 0 just below the north pole (≈89°N).
 SEAM_WINDOW = np.array([
-    [89.09999, -0.001],
-    [89.09999,  0.001],
-    [89.10001,  0.001],
-    [89.10001, -0.001],
+    [88.98, -0.5],
+    [88.98,  0.5],
+    [89.02,  0.5],
+    [89.02, -0.5],
 ])
 
 
-def plot_seam_zoom(mesh, lonlat, polygon, name):
-    """Draw the nested hex layers; highlight hexes that cross lon = 0."""
+def tangent_xy(ecef: np.ndarray, origin: np.ndarray) -> np.ndarray:
+    """Flatten ECEF points onto the ENU plane tangent to the sphere at *origin*."""
+    up = origin / np.linalg.norm(origin)
+    east = np.cross([0.0, 0.0, 1.0], up)
+    east /= np.linalg.norm(east)
+    north = np.cross(up, east)
+    rel = ecef - origin
+    return np.column_stack([rel @ east, rel @ north])      # metres
+
+
+def plot_seam_zoom(mesh, xy, lonlat, poly_xy, name):
+    """Draw nested hex layers in the local tangent plane; flag seam crossers."""
     layers = mesh.layers
     finest = mesh.fine
 
-    plon, plat = polygon[:, 1], polygon[:, 0]
-    xmin, xmax = plon.min(), plon.max()
-    ymin, ymax = plat.min(), plat.max()
-    ratio = (xmax - xmin) / (ymax - ymin)
+    xmin, xmax = poly_xy[:, 0].min(), poly_xy[:, 0].max()
+    ymin, ymax = poly_xy[:, 1].min(), poly_xy[:, 1].max()
+    ratio = (xmax - xmin) / (ymax - ymin) if ymax > ymin else 1.0
 
     fig = plt.figure(figsize=(ratio * 12, 12), dpi=200)
     ax = fig.add_subplot(111)
-    pad_x = 0.08 * (xmax - xmin)
-    pad_y = 0.08 * (ymax - ymin)
+    pad_x, pad_y = 0.08 * (xmax - xmin), 0.08 * (ymax - ymin)
     ax.set_xlim(xmin - pad_x, xmax + pad_x)
     ax.set_ylim(ymin - pad_y, ymax + pad_y)
     ax.set_aspect('equal', adjustable='box')
@@ -64,14 +71,12 @@ def plot_seam_zoom(mesh, lonlat, polygon, name):
         faces = mesh[L]
         if len(faces) == 0:
             continue
-        polys = lonlat[faces][:, :, ::-1]          # (N, 6, 2) lon-lat order
+        polys = xy[faces]                              # (N, 6, 2) metres
         lw = 0.06 * (n_layers - i)
 
         if L == finest:
-            # Split finest layer: seam-crossing vs normal.
-            lons = polys[:, :, 0]
+            lons = lonlat[faces][:, :, 1]             # g_gcd lon per vertex
             crosses = (lons.min(axis=1) < 0) & (lons.max(axis=1) > 0)
-
             ax.add_collection(PolyCollection(
                 polys[~crosses], linewidths=lw,
                 facecolors='#33994420', edgecolors='#444444'))
@@ -79,21 +84,21 @@ def plot_seam_zoom(mesh, lonlat, polygon, name):
                 polys[crosses], linewidths=lw * 0.25,
                 facecolors='#ff000030', edgecolors='#cc0000'))
             print(f'  layer {L}: {len(faces)} hexes '
-                  f'({crosses.sum()} cross the seam)')
+                  f'({int(crosses.sum())} cross the seam)')
         else:
-            edge = '#1f77b4a0'
             ax.add_collection(PolyCollection(
-                polys, linewidths=lw, facecolors='none', edgecolors=edge))
+                polys, linewidths=lw, facecolors='none', edgecolors='#1f77b4a0'))
             print(f'  layer {L}: {len(faces)} hexes')
 
-    # Prime meridian.
-    ax.axvline(0.0, color='#cc0000', lw=0.1, ls='--', alpha=0.6, zorder=5)
-
-    # Clip rectangle outline.
+    # Clip rectangle outline (in the same tangent plane).
     ax.add_collection(PolyCollection(
-        [np.column_stack([plon, plat])],
-        facecolors='none', edgecolors='#888888',
-        linewidths=0.15, linestyles='--'))
+        [poly_xy], facecolors='none', edgecolors='#888888',
+        linewidths=0.4, linestyles='--'))
+
+    # Scale bar (100 m).
+    ax.plot([xmin, xmin + 100.0], [ymin, ymin], color='k', lw=1.5)
+    ax.text(xmin + 50.0, ymin + 0.01 * (ymax - ymin), '100 m',
+            ha='center', va='bottom', fontsize=8)
 
     fig.savefig(f'output/{name}.png', dpi=200, bbox_inches='tight')
     print(f'fig saved at output/{name}.png')
@@ -104,17 +109,23 @@ if __name__ == '__main__':
     reg = Registrar()
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
+    c_oct = reg.domain('c_oct')
+    c_ell = reg.domain('c_ell')
 
-    finest = 15
-    # nest = list(range(finest - 6, finest + 1))      # L18, L19, L20
+    finest = 11
     nest = [finest]
-
     mesh = HexMesh.create_clipped(nest, SEAM_WINDOW, reg)
     print(mesh)
 
-    lonlat = reg.project(mesh.pts, [b_oct, g_gcd]).coords
+    ecef = reg.project(mesh.pts, [b_oct, c_oct, c_ell]).coords      # (M, 3) metres
+    lonlat = reg.project(mesh.pts, [b_oct, g_gcd]).coords           # for seam test
 
-    plot_seam_zoom(mesh, lonlat, SEAM_WINDOW, f'ex0263_891_zoom_L{finest}')
+    origin = ecef.mean(axis=0)
+    xy = tangent_xy(ecef, origin)
+    poly_ecef = reg.project(Points(SEAM_WINDOW, g_gcd), [g_gcd, c_ell]).coords
+    poly_xy = tangent_xy(poly_ecef, origin)
+
+    plot_seam_zoom(mesh, xy, lonlat, poly_xy, f'ex0263_89_zoom_L{finest}')
 
     addrs = mesh.addrs
     print(f'finest layer L{finest}: {len(addrs)} hexes, '

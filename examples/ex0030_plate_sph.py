@@ -44,6 +44,8 @@ def run():
     reg = Registrar()  # Manage Domains & Projections
     p_pix = reg.domain('p_pix')  # PlatePixel
 
+
+    # img = image.imread(f'src/ex0101pc.jpg', 'jpg')
     img = image.imread(f'src/bm_3600x1800.jpg', 'jpg')
     pc_extent = (-180.0, -90.0, 180.0, 90.0)
     pc_px = p_pix.adopt(img, extent=pc_extent, y_up=True, center=False)

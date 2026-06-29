@@ -134,6 +134,20 @@ def test_clip_polygon_to_octants():
                                Polygon(inside[:, ::-1]).area, rtol=1e-6)
 
 
+def test_clip_polygon_to_octants_antimeridian():
+    # a small ring centred on the ±180 antimeridian must NOT become a
+    # globe-spanning polygon — each piece stays contiguous (lon-span << 360).
+    pytest.importorskip("shapely", reason="shapely not installed")
+    circ = V.tissot_circle(20.0, 180.0, radius_m=500_000.0, n_pts=72)
+    pieces = V.clip_polygon_to_octants(circ)
+    assert len(pieces) >= 2                       # split across the antimeridian
+    for p in pieces:
+        span = p[:, 1].max() - p[:, 1].min()
+        assert span < 90.0                        # contiguous, not wrapped
+        # each piece sits against the ±180 meridian
+        assert np.isclose(np.abs(p[:, 1]).max(), 180.0, atol=1e-6)
+
+
 # ---------------------------------------------------------------------------
 # gdal.py — WKT GeoTIFF loading / CRS registration
 # ---------------------------------------------------------------------------
@@ -221,6 +235,54 @@ def test_project_path_returns_noct_subpaths(reg_mod):
     segs = V.project_path(parallel, reg_mod, n_oct, max_step_m=200_000.0)
     assert len(segs) >= 1
     assert all(s.shape[1] == 2 for s in segs)
+
+
+def test_project_fill_dissolves_joins(reg_mod):
+    # A small circle straddling the prime-meridian octant boundary is split by
+    # clip_polygon_to_octants into 2 pieces; in butterfly that boundary is a
+    # *join*, so project_fill_to_noct must union them back into ONE whole
+    # polygon (not leave a visible split chord).
+    pytest.importorskip("shapely", reason="shapely not installed")
+    n_oct = reg_mod.domain('n_oct:butterfly')
+    circ = V.tissot_circle(30.0, 0.0, radius_m=500_000.0, n_pts=72)
+    assert len(V.clip_polygon_to_octants(circ)) == 2          # split by the clip
+    fills = V.project_fill_to_noct(circ, reg_mod, n_oct, max_step_m=20_000.0)
+    assert len(fills) == 1                                    # join dissolved
+    assert fills[0].geom_type == 'Polygon' and fills[0].area > 0
+
+
+def test_project_fill_confined_to_net(reg_mod):
+    # A large ring filling a southern octant (around a cone point) must NOT
+    # bleed into the net's angle-deficit "impossible space": every fill polygon
+    # stays within the union of face triangles.
+    pytest.importorskip("shapely", reason="shapely not installed")
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    n_oct = reg_mod.domain('n_oct:butterfly')
+    # robust net: buffer each face triangle before union (avoids dropped faces)
+    net = unary_union([Polygon(t).buffer(1e-7)
+                       for polys in n_oct.face_polys.values() for t in polys])
+    ring = np.array([[-80.0, -175.0], [-80.0, -95.0],
+                     [-5.0, -95.0], [-5.0, -175.0]])      # southern octant box
+    fills = V.project_fill_to_noct(ring, reg_mod, n_oct, max_step_m=50_000.0)
+    assert len(fills) >= 1                                 # shapely Polygons
+    bleed = sum(pg.difference(net).area for pg in fills)
+    assert bleed < 1e-3                                    # confined to the net
+
+
+def test_project_fill_preserves_holes(reg_mod):
+    # A polygon-with-hole (e.g. the ocean's continent holes) must keep its hole
+    # through clip→project→confine→union so the interior is cut out.
+    pytest.importorskip("shapely", reason="shapely not installed")
+    from shapely.geometry import Polygon
+    n_oct = reg_mod.domain('n_oct:butterfly')
+    # shapely polygon in (lon, lat) within a single octant, with a hole
+    outer = [(10, 10), (80, 10), (80, 80), (10, 80)]
+    hole = [(30, 30), (60, 30), (60, 60), (30, 60)]
+    poly = Polygon(outer, [hole])
+    fills = V.project_fill_to_noct(poly, reg_mod, n_oct, max_step_m=100_000.0)
+    assert len(fills) >= 1
+    assert any(len(p.interiors) >= 1 for p in fills)        # hole carried through
 
 
 def test_tile_vertices_noct_dedup(reg_mod):

@@ -256,17 +256,19 @@ class OctahedralNet(CompositeDomain):
         octant — so a bounded region spanning a seam (which has no single b_oct
         plot) becomes a tear-free plane.
 
-        Each octant keeps its own ``proj.matrix`` (so hexes stay regular); only
-        the offset is recomputed relative to the fundamental.  Because every
-        octant is a √2-side equilateral preserved in n_oct, the hinge across a
-        shared edge is a pure translation:
+        Net-independent: the fundamental keeps its **native** b_oct orientation
+        (identity matrix — a pole at the apex/nadir, equator flat), and each
+        further octant is hinged onto its parent across their shared edge by the
+        det +1 rotation that maps the child's two shared corners exactly onto the
+        parent's (so hexes stay regular and are never mirrored).  This does NOT
+        use the host net's per-face matrices, so the result depends only on the
+        chosen *fundamental*, not on which net flavour the method is called on.
 
-            offset_B = offset_A + (matrix_A·xA_shared − matrix_B·xB_shared)
-
-        constant along the seam.  Adjacency is ``H9O.oid_nb[A, c2] = B``; the two
-        shared corners are found by g_gcd coincidence of the octant corner
-        triangles (``H9P.sv``).  The worst seam-closure error is returned as
-        ``residual`` — ≈0 confirms translation-only suffices for these octants.
+        Adjacency is ``H9O.oid_nb[A, c2] = B``; the two shared corners are found
+        by g_gcd coincidence of the octant corner triangles (``H9P.sv``).
+        ``residual`` is the worst tree-seam closure error (≈0 by construction);
+        ``cut_residual`` flags the real obstruction (a vertex-complete set whose
+        cycle cannot close flat — see below).
 
         Args:
             octants:     iterable of octant ids (oid) to place.
@@ -286,7 +288,7 @@ class OctahedralNet(CompositeDomain):
             fundamental = octants[0]
         g_gcd = self._registrar.domain('g_gcd')
 
-        mat, cb, cg = {}, {}, {}
+        cb, cg = {}, {}
         for oid in octants:
             side = H9O.oid_str[oid]
             proj = self.projs[side]
@@ -294,9 +296,8 @@ class OctahedralNet(CompositeDomain):
                 raise NotImplementedError(
                     'local_layout: c2-split nets (e.g. rhombus) not yet supported; '
                     'use a non-c2 flavour such as butterfly.')
-            mat[oid] = np.asarray(proj.matrix, dtype=float)
             corners = np.asarray(H9P.sv[self.b_oct.sides[side].mode], dtype=float)
-            cb[oid] = corners                                   # (3, 2) b_oct
+            cb[oid] = corners                                   # (3, 2) native b_oct
             cg[oid] = self._registrar.project(
                 Points(corners, self.b_oct, oid), [self.b_oct, g_gcd]).coords
 
@@ -311,6 +312,13 @@ class OctahedralNet(CompositeDomain):
                     ib.append(j)
             return ia, ib
 
+        # Native-fundamental, rotation-hinge unfold: the fundamental keeps its
+        # native b_oct frame (identity); each child is hinged onto its parent's
+        # placed shared edge by the det +1 rotation that maps the child's two
+        # shared corners exactly onto the parent's.  Net-independent — only the
+        # fundamental fixes the frame.  (Adjacent octants have opposite oid_mo,
+        # so the child always falls on the far side of the edge: no overlap.)
+        mat = {fundamental: np.eye(2)}
         off = {fundamental: np.zeros(2)}
         queue = [fundamental]
         residual = 0.0
@@ -318,16 +326,23 @@ class OctahedralNet(CompositeDomain):
             a = queue.pop(0)
             for c2 in range(3):
                 b = int(H9O.oid_nb[a, c2])
-                if b not in mat or b in off:
+                if b not in cb or b in mat:
                     continue
                 ia, ib = shared_corners(a, b)
                 if len(ia) < 2:                                # not edge-adjacent
                     continue
-                world_a = cb[a][ia] @ mat[a] + off[a]
-                cand = world_a - cb[b][ib] @ mat[b]            # offset candidates
-                off[b] = cand.mean(0)
+                wa = cb[a][ia] @ mat[a] + off[a]               # parent shared corners
+                wb = cb[b][ib]                                 # child native corners
+                va, vb = wa[1] - wa[0], wb[1] - wb[0]
+                ang = np.arctan2(va[1], va[0]) - np.arctan2(vb[1], vb[0])
+                # right-multiplied row-vector rotation by +ang (R.T form)
+                r = np.array([[np.cos(ang), np.sin(ang)],
+                              [-np.sin(ang), np.cos(ang)]])
+                mat[b] = r
+                off[b] = wa[0] - wb[0] @ r
+                placed = cb[b][ib] @ mat[b] + off[b]
                 residual = max(residual, float(
-                    np.linalg.norm(cand - off[b], axis=1).max()))
+                    np.linalg.norm(placed - wa, axis=1).max()))
                 queue.append(b)
 
         # Holonomy / cut check: with all offsets fixed, re-measure EVERY adjacency

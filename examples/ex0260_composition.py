@@ -73,9 +73,10 @@ if __name__ == '__main__':
         return bm[row, col]
 
     def run_case(polygon, specs, name, target_m, title, desc, north=True):
-        polygon_n = rg.project(Points(polygon, g_gcd), [g_gcd, b_oct, n_oct])
+        # Frame-neutral input: the boundary is given in g_gcd (lat/lon); the
+        # local Compositor clips it with HexMesh — no fixed-flavour n_oct baking.
         comp = Compositor(rg, b_oct, n_oct, specs, local=True)
-        layers = comp.run(polygon_n)
+        layers = comp.run(Points(polygon, g_gcd))
         layout = comp.layout.layout
         cut = '' if comp.local_cut < 1e-9 else \
             f' — wraps a cone vertex (cut_residual {comp.local_cut:.2f})'
