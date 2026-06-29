@@ -213,8 +213,8 @@ sections that follow constitute its proof:
    *k*; the admissible aperture class is {*k*² : *k* odd, *k* > 1}, of which
    **9 is minimal** (Axioms 4–5; §6).
 3. **Hex emergence.** The dual carries the 12 units of topological defect
-   required by the Euler characteristic of S² as 4-valent cells at the 6
-   octahedral vertices, not as face anomalies (Axiom 9; §7).
+   required by the Euler characteristic of S² as twelve five-neighbour hexagons at
+   the six octahedral vertices, not as a distinct cell type (Axiom 9; §7).
 4. **Orientation.** The residual orientation freedom collapses to a single
    chiral pair (Axiom 6; §8).
 5. **Identity.** Every cell carries a unique hierarchical address from which its
@@ -501,13 +501,15 @@ becomes a dual node, and each vertex becomes a dual face whose valence equals
 the vertex degree.
 
 In the refined octahedral triangulation, interior vertices attain valence 6,
-producing hexagonal dual cells. The six vertices of the octahedral seed
-constitute the only non-uniform elements of the triangulation; their deviation
-from valence 6 induces the only non-hexagonal dual cells in the system — six
-four-sided dual cells, one per seed vertex, each carrying a valence deficit of
-2, together accounting for the total defect of 12 required by the Euler
-characteristic (§4). Refinement spreads regular valence-6 structure throughout
-the interior while localising irregularity to the seed.
+producing regular hexagonal dual cells. The six vertices of the octahedral seed
+constitute the only non-uniform elements of the triangulation; each is 4-valent, a
+vertex deficit of 2, together accounting for the total defect of 12 required by
+the Euler characteristic (§4). The dual cells remain hexagons throughout: the
+deficit is carried not by a different cell shape but by twelve hexagons — two
+meeting at each seed vertex — that there have only five distinct neighbours, two
+of their sides folding together across the vertex. Refinement spreads regular
+valence-6 structure throughout the interior while localising this irregularity to
+the six seed vertices.
 
 It follows that the hexagonal lattice is not imposed but emerges as the dual of
 the locally regular simplicial field. The octahedral embedding provides the
@@ -591,7 +593,7 @@ The system defined by Axioms 1–9 and constructed through the preceding steps i
 reference ellipsoid, with a cell hierarchy in which every cell has a distinct
 address, derived from simplicial coherence requirements alone.
 
-![The seed solid and the 12 root cells. Left: the octahedron with each octant face creased into its three d_cell facets (24 faces, the diploid form that names the d_cell). Right: coloured per root x_cell, hue by octahedral axis, light/dark for the mode-0/mode-1 halves — at L0 every root cell is one of the 12 topological pentagons. The faceting is illustrative; the cells live on the smooth ellipsoid.^[Source figure `paper_figures/f21.png`.]](paper_figures/f21.png){width=92%}
+![The seed solid and the 12 root cells. Left: the octahedron with each octant face creased into its three d_cell facets (24 faces, the diploid form that names the d_cell). Right: coloured per root x_cell, hue by octahedral axis, light/dark for the mode-0/mode-1 halves — at L0 every root cell is one of the 12 five-neighbour hexagons that meet at the octahedral vertices (appearing pentagonal once projected onto a reference ellipsoid). The faceting is illustrative; the cells live on the smooth ellipsoid.^[Source figure `paper_figures/f21.png`.]](paper_figures/f21.png){width=92%}
 
 Each Hex9 cell is identified by its octant (one of 8) and its path through the
 refinement hierarchy. This pair is not a coordinate computed from a prior
@@ -1164,7 +1166,7 @@ on Hex9's claims.
 | Property | H3 | S2 | HEALPix | A5 | Hex9 |
 |---|---|---|---|---|---|
 | Base polyhedron | Icosahedron | Cube | (sphere-native) | Dodecahedron | Octahedron |
-| Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hex (+ 12 pentagons) |
+| Cell shape | Hex (+ 12 pentagons) | Quadrilateral | Mixed quad | Pentagon | Hexagon (no exception cells) |
 | Aperture | 7 | 4 | 4 | 5 then 4 | 9 (shifted) |
 | Equal area | No | No | Yes (strict) | Yes | Quasi (p99 < 0.005%) |
 | Strict ancestry at all levels | No | Yes | Yes | — | Half-hex: yes; hex: by convention |
@@ -1172,21 +1174,25 @@ on Hex9's claims.
 | Dual DGGS/CRS | No | No | No | No | Yes (quasi-CRS) |
 | Reference body | Sphere | Sphere | Sphere | Ellipsoid | Any ellipsoid (per-body warp; WGS84 + sphere trained) |
 
-**Exception cells.** Euler's theorem requires exactly 12 topological pentagons —
-cells with five neighbours — in any spherical tiling by hexagons and pentagons,
-at every refinement level, independent of resolution. No hexagonal DGGS escapes
-this; the systems differ in where the obligation lands. H3 places its 12
-pentagons at the icosahedral vertices, where they are first-class exception
-cells: five children instead of seven, a distinct geometry, and an
-`is_pentagon()` guard that every correct H3 implementation must carry. The
-pentagons are the topological price of odd vertex valence — a 5-valent vertex
-cannot sustain the face two-colouring on which a consistent hexagonal subdivision
-depends (§4). Hex9's 12 topological pentagons sit at the six octahedral vertices
-(two per vertex), where the 4-valent geometry absorbs them: they carry ordinary
-addresses, are constructed by the same d_cell join rule as every other cell
-(§10f), and require no API guard. In Hex9's native planar domain the six vertices
-lie on the boundary of the coordinate space, so the defect cells straddle the
-edge of the map rather than appearing as interior anomalies.
+**Exception cells.** Euler's theorem requires exactly 12 units of topological
+defect — twelve cells short of a full six neighbours — in any hexagonal tiling of
+the sphere, at every refinement level, independent of resolution. No hexagonal
+DGGS escapes this; the systems differ in where the obligation lands. H3 pays it as
+genuine pentagon cells: 12 of them at the icosahedral vertices, first-class
+exceptions with five children instead of seven, a distinct geometry, and an
+`is_pentagon()` guard that every correct H3 implementation must carry — the price
+of odd vertex valence, where a 5-valent vertex cannot sustain the face
+two-colouring a consistent hexagonal subdivision depends on (§4). Hex9 introduces
+no exceptional cell type at all: every cell is a hexagon. The same obligation
+appears instead as twelve five-neighbour hexagons, two at each of the six
+octahedral vertices, where two of a hexagon's six sides fold together across the
+seam to meet the same opposing hexagon. They carry ordinary addresses, are
+constructed by the same d_cell join rule as every other cell (§10f), and require
+no API guard. On the flat net they are plain hexagons; projected onto a reference
+ellipsoid one of their six corners falls collinear, so they render as pentagons
+while remaining hexagons combinatorially. In Hex9's native planar net the six
+vertices lie on the boundary of the coordinate space, so these singular cells
+straddle the edge rather than appearing as interior anomalies.
 
 **Ancestry.** The strictly nested unit in Hex9 is the half-hexagon (d_cell), not
 the hexagon. The d_cell hierarchy is a single-parent tree: a d_cell address
@@ -1200,11 +1206,23 @@ parent function is well-defined at every level and multi-resolution roll-up is
 exact — but, unlike the unconditional quad hierarchies of S2 and HEALPix,
 hexagon roll-up requires deriving the canonical ancestor (via the tail) before
 truncating, and the split-cell ambiguity can nest: a run of split digits stays
-ambiguous until the tail resolves it. H3's aperture-7 subdivision is weaker still
-— it does not nest children inside parents at all: a child hexagon may overlap
-two coarser cells, parent assignment is approximate, and a shared parent does not
-imply a shared grandparent. In short, Hex9's half-hexagon hierarchy is exactly
-nested; its hexagon hierarchy is nested by convention.
+ambiguous until the tail resolves it. H3's aperture-7 subdivision is exact in the
+index — every cell has one deterministic parent, and parents compose transitively
+— but it bears no consistent relation to geometric containment, and the
+divergence compounds with depth. Of a parent's seven children only the central one
+lies inside it; a generation further down, boundary grandchildren straddle the
+parent edge roughly half-and-half; another generation down, index-descendants
+appear that lie entirely outside the ancestor whose address they extend.^[Demonstrated
+by `docs/h3/h3_nesting.py` (reference `h3` and `shapely` libraries): the index
+hierarchy is single-valued and transitive, yet index-descendants become geometrically
+disjoint from their ancestor by the third generation.] The
+systems trade off differently rather than one being weaker: Hex9's half-hexagon
+hierarchy is exactly nested in area, while its hexagon hierarchy carries a genuine
+split-cell ambiguity resolved by the mode-0 convention through the tail; H3's
+hierarchy is an exact index laid over grids that never geometrically refine one
+another.
+
+![H3's index hierarchy is not geometric containment. An H3 cell *H* (heavy outline) with its index-descendants three resolutions finer, coloured by overlap with *H*: blue lie inside, gold straddle the boundary, and red lie **entirely outside** the ancestor whose address they extend. The exchange is mutual — for every descendant of *H* that leaves, a descendant of a neighbouring cell enters, so the levels swap territory across the boundary rather than nest. Generated by `docs/h3/h3_nesting.py`.](h3/h3_nesting.png){width=70%}
 
 **Area.** HEALPix is strictly equal-area but pays in cell shape: its cells are
 quadrilaterals of visibly varying geometry. H3 and S2 are not equal-area; cell
@@ -1216,8 +1234,15 @@ confined to the neighbourhoods of the six vertex singularities.
 **Shape and area, independently surveyed.** An independent survey of cell
 geometry — enclosing-cone aspect ratio and WGS84 geodesic cell area over N = 5000
 uniformly-sampled cells per system — places the four systems into two area tiers
-separated by roughly 100×. A5 and Hex9 form an equal-area tier (area coefficient
-of variation 0.01% and 0.10% respectively); H3 and S2 do not (12.5% and 14.5%),
+separated by roughly 100×.^[Generated by libhex9 `tools/dggs_survey_hex9.py`
+(N = 5000 cells per system, seed `0xc0ffee`); <https://github.com/MrBenGriffin/libhex9>.
+Cell areas are WGS84 geodesic areas (geographiclib); H3, S2 and A5 are measured through
+their own reference libraries. The surveyed Hex9 polygon is the hexagonal cell (the
+x_cell of §10a), the same footprint class as an H3 hexagon, not the internal
+half-hexagon.] A5 and Hex9 form an equal-area tier — A5 exactly
+equal-area by construction (measured coefficient of variation 0.00%, the residual
+at the geodesic-area measurement floor), Hex9 equal-area to a coefficient of
+variation of 0.10% through its corrective warp; H3 and S2 do not (12.5% and 14.5%),
 and the gap is a step, not a gradient. The survey reproduces Hex9's warp
 characterisation independently — worst cell ≈ +4.8%, mean absolute deviation
 0.001%, all residual pooled at the twelve octahedral-vertex defects — on a
@@ -1228,8 +1253,10 @@ only other equal-area system in the comparison. Both metrics are
 resolution-invariant (reproduced to four decimals five levels coarser), and the
 dispersion ranking A5 < Hex9 < H3 < S2 is the same under every statistic tested
 (CV, p90, p95, max/min). Hex9 is therefore the better combined shape-and-area
-cell among the equal-area systems; A5 distributes a hair of residual more evenly
-(max/min 1.009 vs Hex9's 1.059), but does so with substantially less round cells.
+cell among the equal-area systems: A5 attains exact equal area but with markedly
+elongated cells (aspect 2.14), whereas Hex9 holds equal area to a mean absolute
+deviation of 0.001% — its residual pooled at the twelve octahedral-vertex defects
+(max/min 1.059) — while keeping cells far rounder (aspect 1.37).
 
 **Aperture.** Hex9's aperture is 9, but the subdivision is not the centred
 aperture-9 scheme of the DGGS literature. In a centred scheme one child sits

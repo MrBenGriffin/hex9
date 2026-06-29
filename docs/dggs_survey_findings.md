@@ -39,29 +39,33 @@ representative choice.
 
 | system | levels | CV% WGS84 | p50/μ  | p90/μ  | p95/μ  | max/min | CV% sphere |
 |--------|:------:|----------:|-------:|-------:|-------:|--------:|-----------:|
-| A5     |  0–30  |      0.01 | 1.0000 | 1.0000 | 1.0000 | 1.009   |       0.40 |
+| A5     |  0–30  |      0.00 | 1.0000 | 1.0000 | 1.0000 | 1.000   |       0.40 |
 | hex9   |  0–29  |      0.10 | 1.0000 | 1.0001 | 1.0001 | 1.059   |       0.41 |
 | H3     |  0–15  |     12.47 | 1.0153 | 1.1513 | 1.1669 | 2.002   |      12.46 |
 | S2     |  0–30  |     14.48 | 1.0190 | 1.1828 | 1.2067 | 2.080   |      14.47 |
 
 **A5 and hex9 form a genuine equal-area tier; H3 and S2 are not equal-area** — the
-gap is ~100×, not a smooth gradient. A5 CV 0.01 %, hex9 CV 0.10 % (MAE 0.001 % over
-the full L5 grid of 708,588 cells); H3 and S2 sit at 12–15 %.
+gap is ~100×, not a smooth gradient. A5 is exactly equal-area by construction
+(measured CV 0.00 %, the residual sitting at the geodesic-area measurement floor);
+hex9 reaches CV 0.10 % (MAE 0.001 % over the full L5 grid of 708,588 cells) through
+its corrective warp; H3 and S2 sit at 12–15 %.
 
 Both equal-area grids are authalic on the **WGS84 ellipsoid**, not the sphere:
-measuring on the sphere understates each (A5 0.40→0.01, hex9 0.41→0.10), and H3/S2
+measuring on the sphere understates each (A5 0.40→0.00, hex9 0.41→0.10), and H3/S2
 are datum-insensitive because they are not equal-area on either surface. (The
 datum question is what surfaced this: skar and the vec3 step are purely spherical,
 but the grids' I/O is WGS84 lon/lat.)
 
-A5 vs hex9 is a fine distinction of *where the residual lives*. A5 spreads a hair
-of deviation evenly — tightest worst-case (max/min 1.009). hex9 is **bulk-exact**:
-p95/μ = 1.0001 (95 % of cells within 0.01 % of the mean), with all error pooled at
-the **12 octahedral-vertex defects** (max/min 1.059, worst ≈ +4.8 % on the full
-grid). Two shapes of "equal-area," both excellent — and hex9 reaches it while
-staying far rounder than A5 (aspect 1.37 vs 2.14). So **hex9 is A5-tier on area
-with markedly better shape**: among the equal-area pair it is the better combined
-shape-and-area cell. (Aspect ratio is spherical throughout — skar is a spherical
+A5 vs hex9 is a distinction of *how* each reaches equal area. A5 is exactly
+equal-area by construction (CV 0.00 %, max/min 1.000) — its cells are equal-area on
+the ellipsoid by design, the measured residual sitting at the geodesic-area floor.
+hex9 is **bulk-exact** numerically through the warp: p95/μ = 1.0001 (95 % of cells
+within 0.01 % of the mean), with all error pooled at the **12 octahedral-vertex
+defects** (max/min 1.059, worst ≈ +4.8 % on the full grid). Two routes to
+"equal-area," both excellent — and hex9 reaches it while staying far rounder than
+A5 (aspect 1.37 vs 2.14). So **hex9 is A5-tier on area with markedly better
+shape**: among the equal-area pair it is the better combined shape-and-area
+cell. (Aspect ratio is spherical throughout — skar is a spherical
 solver and circularity is essentially datum-insensitive; the warp reshapes the
 hex9 distribution slightly — median 1.37→1.41, p99 tightens, worst-case defects
 elongate — but leaves the mean at 1.37.)
