@@ -150,3 +150,92 @@ def test_label_roundtrip(uuids):
         label = ua.h9_label(u)
         assert isinstance(label, str)
         assert ua.h9_from_label(label) == u
+
+
+# ---------------------------------------------------------------------------
+# 5. hierarchy traversal: h9_ancestors / h9_descendants
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def bpts(reg, ll):
+    """The fixture lat/lons as b_oct Points."""
+    g_gcd = reg.domain('g_gcd')
+    b_oct = reg.domain('b_oct')
+    return reg.project(Points(ll.copy(), g_gcd), [g_gcd, b_oct])
+
+
+@pytest.mark.parametrize("at_layer,g", [(8, 1), (8, 3), (5, 5)])
+def test_ancestors_match_relative_bin(bpts, at_layer, g):
+    anc = ua.h9_ancestors(bpts, at_layer, g)
+    expect = ua.h9_bin_pts(bpts, at_layer - g)
+    assert anc == expect
+
+
+def test_ancestors_g0_is_anchor(bpts):
+    assert ua.h9_ancestors(bpts, 6, 0) == ua.h9_bin_pts(bpts, 6)
+
+
+@pytest.mark.parametrize("at_layer,gu", [(2, 3), (0, 1), (30, 31)])
+def test_ancestors_reject_out_of_range(bpts, at_layer, gu):
+    with pytest.raises(ValueError):
+        ua.h9_ancestors(bpts, at_layer, gu)
+
+
+@pytest.mark.parametrize("at_layer,g", [(2, 1), (3, 2)])
+def test_descendants_nest_and_layer(reg, bpts, at_layer, g):
+    anchors = ua.h9_bin_pts(bpts, at_layer)
+    desc = ua.h9_descendants(bpts, at_layer, g, reg=reg)
+    target = at_layer + g
+    assert len(desc) == len(anchors)
+    for anchor, kids in zip(anchors, desc):
+        assert kids, "non-empty descendant set expected"
+        assert len(set(k.int for k in kids)) == len(kids)        # unique
+        assert all(int(ua.h9_layer(k)) == target for k in kids)  # at target layer
+        backs = ua.h9_bin(list(kids), at_layer, reg=reg)
+        assert all(b.int == anchor.int for b in backs)           # every kid nests
+        assert len(kids) <= 9 ** g                               # bounded by 9^g
+
+
+def test_descendants_g0_is_anchor(reg, bpts):
+    anchors = ua.h9_bin_pts(bpts, 4)
+    desc = ua.h9_descendants(bpts, 4, 0, reg=reg)
+    assert [d[0] for d in desc] == list(anchors)
+    assert all(len(d) == 1 for d in desc)
+
+
+@pytest.mark.parametrize("at_layer,g", [(-1, 1), (5, 30), (10, -1)])
+def test_descendants_reject_out_of_range(bpts, at_layer, g):
+    with pytest.raises(ValueError):
+        ua.h9_descendants(bpts, at_layer, g)
+
+
+def test_descendants_complete_vs_bruteforce(reg):
+    """The descendant set is exactly the target hexes binning to the anchor.
+
+    Cross-check against a dense in-anchor sample: every layer-(L+g) hex whose
+    own bin at L equals the anchor must appear, and nothing else."""
+    from hhg9.h9 import H9O
+    from hhg9.h9.classifier import in_scope, H9CL
+    from hhg9.h9 import H9K
+    at_layer, g = 2, 1
+    g_gcd, b_oct = reg.domain('g_gcd'), reg.domain('b_oct')
+    pt = reg.project(Points(np.array([[51.1789, -1.8262]]), g_gcd), [g_gcd, b_oct])
+    anchor = ua.h9_bin_pts(pt, at_layer)[0]
+
+    desc = set(d.int for d in ua.h9_descendants(pt, at_layer, g, reg=reg)[0])
+
+    # brute force: dense grid inside the anchor, keep hexes binning to anchor
+    ac = ua.h9_dec([anchor], b_oct).coords[0]
+    oc0 = int(pt.cm()[0][0])
+    mode0 = np.uint8(H9O.oid_mo[oc0])
+    span = 0.55 * 3.0 ** -at_layer
+    gx, gy = np.meshgrid(np.linspace(-span, span, 250), np.linspace(-span, span, 250))
+    sx, sy = ac[0] + gx.ravel(), ac[1] + gy.ravel()
+    md = np.full(sx.shape, mode0)
+    ok = in_scope(H9K.R3 * sx, sy, md, H9CL)
+    spts = Points(np.column_stack([sx[ok], sy[ok]]), b_oct, oid=np.full(int(ok.sum()), oc0))
+    fine = ua.h9_bin_pts(spts, at_layer + g)
+    back = ua.h9_bin(fine, at_layer, reg=reg)
+    brute = set(f.int for f, b in zip(fine, back) if b.int == anchor.int)
+
+    assert desc == brute

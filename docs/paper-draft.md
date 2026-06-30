@@ -10,9 +10,10 @@ abstract: |
   vertex closure, refinement commutativity — and show that these requirements,
   taken together, essentially determine the grid. The admissible cell primitive
   is the triangle; the admissible seed is the octahedral triangulation of S²;
-  admissible refinement has odd linear factor, minimally aperture 9; and the
-  hexagonal dual lattice admits exactly one orientation per chirality — a result
-  established by machine-verified exhaustive enumeration. The structure that
+  admissible refinement is uniquely aperture 9 — the only factor whose octant
+  hexagonalises by half-hexagons, and uniquely up to chirality at that, so the
+  hexagonal dual lattice admits exactly one orientation per chirality — both fixed
+  by the same machine-verified exhaustive enumeration. The structure that
   survives is a shifted-aperture-9 hexagonal hierarchy in which every cell
   carries a unique address derived from the construction alone: truncated at
   level L, the address is a DGGS cell identifier in the sense of OGC Topic 21;
@@ -135,9 +136,11 @@ follows directly.
 Any refinement operator must preserve this consistency. Failure to do so
 introduces a transport defect.
 
-*Consequence (proved in §6): refinements satisfying this condition have odd
-linear subdivision factor k; the admissible aperture class is {k² : k odd,
-k > 1}, and aperture 9 is minimal.*
+*Consequence (proved in §6): a refinement hexagonalises only if its octant tiles
+by half-hexagons, and aperture 9 (linear factor 3) is the unique factor that does
+so uniquely up to chirality — apertures 4, 16, 25, 49 cannot tile at all; 36, 81,
+… tile in many inequivalent ways. Aperture 9 is therefore not merely minimal but
+the only refinement that determines a grid.*
 
 ### Axiom 5 — Refinement Invariance
 
@@ -179,9 +182,13 @@ structure: a cell's address encodes its position in the refinement hierarchy,
 and the parent–child relationship is recoverable directly from address
 structure.
 
-Geographic identity is read directly from combinatorial position. No coordinate
-transformation is required to infer location from address or address from
-location.
+Combinatorial position is read directly from the address: cell identity and the
+parent–child hierarchy require no transformation. Geographic location follows from
+that position through the system's own canonical realisation (§11), a fixed map
+that adds no degrees of freedom — so no prior or external coordinate reference
+system is required as input. The grid fixes the discrete structure; the
+realisation supplies the metric embedding; the two are separable concerns
+(§11) composed to recover a location from an address.
 
 ### Axiom 9 — Dual Consistency (Hex Emergence)
 
@@ -209,9 +216,11 @@ sections that follow constitute its proof:
 1. **Carrier.** The discrete carrier is a simplicial complex, and the only
    triangulation of S² with even, uniform valence and no exceptional cells is
    the octahedral triangulation (Axioms 2–4; §§1–5).
-2. **Aperture.** Refinements preserving mode transport have odd linear factor
-   *k*; the admissible aperture class is {*k*² : *k* odd, *k* > 1}, of which
-   **9 is minimal** (Axioms 4–5; §6).
+2. **Aperture.** A hexagonalisation requires the octant to tile by half-hexagons,
+   and **only aperture 9 (linear factor 3) does so uniquely up to chirality** — the
+   same exhaustive enumeration that fixes the chiral pair (Axiom 6). Apertures 4,
+   16, 25, 49 cannot tile at all; 36, 81, … tile in many inequivalent ways.
+   Aperture 9 is the unique refinement that determines a grid (Axioms 4–6; §6).
 3. **Hex emergence.** The dual carries the 12 units of topological defect
    required by the Euler characteristic of S² as twelve five-neighbour hexagons at
    the six octahedral vertices, not as a distinct cell type (Axiom 9; §7).
@@ -337,6 +346,12 @@ What this implies for the global topology is the subject of §4.
 
 ## 4. Vertex Closure
 
+Before the argument, its conclusion: we do not pick the octahedron from a menu of
+base shapes. It is the only one on which a true hexagonal grid can both wrap a
+closed surface and unfold flat to the plane without contradiction. What can read
+as a self-imposed constraint is really the absence of alternatives — the rounder
+shapes other grids build on do not support the same coherent hexagonal hierarchy.
+
 Section 3 established that mode transport must be flat — any closed loop must
 return the mode to its starting value. Vertices are where this condition is most
 constraining: at every vertex, a ring of triangular faces meets, and traversing
@@ -435,6 +450,25 @@ orientation, dual cells — is built over this seed. The octahedral embedding is
 not one possible global frame among many; it is the frame the coherence
 requirements construct.
 
+**Is this a loss of flexibility?** It can read as one — why commit to a single
+base polyhedron when others give rounder cells? — but the flexibility is largely
+illusory. No hexagonal grid tiles a sphere at all without defects (Euler), and
+demanding one that *both* closes on a folded polyhedron *and* unfolds coherently
+to the plane, carrying the same two-colouring through every refinement, is a
+genuinely narrow requirement: §§4–5 show the octahedron is the seed that survives,
+not one rounder option among many that we set aside. What the commitment then buys
+is the coherence the rest of the paper rests on — the two-colouring (mode
+transport) is what produces the half-hexagon hierarchy and its exact,
+self-inverting nesting (§7, §10e, §13b), the property §12 sets against iterated
+hexagonal indices — together with an economy of realisation: the eight octant
+faces are all equivalent by symmetry, so a single projection and warp serve the
+whole globe (§11), and the unavoidable defect sits at six vertices rather than the
+twelve of an icosahedral grid. The one real cost is cell shape — an octahedral
+seed is less round per cell than icosahedral or dodecahedral grids (aspect 1.37 vs
+H3's 1.06; §12) — but those rounder grids do not deliver the same coherent,
+exactly-nested hexagonal hierarchy. The choice is between different objects, not a
+menu of equivalents.
+
 ---
 
 ## 6. Refinement Commutativity
@@ -461,36 +495,40 @@ the mode of every child triangle agrees with the mode inherited from its parent
 at every induced edge (a homomorphism of the ℤ₂ transport structure, in
 algebraic terms).
 
-For even k, the refinement fails this test. Consider k=2: a mode-0 parent
-produces 4 children — 3 corner children of mode 0 and 1 inverted central child
-of mode 1. At the boundary between two adjacent parents (which have opposite
-modes), this places mode-0 children of the mode-0 parent adjacent to mode-0
-children of the mode-1 parent — directly contradicting the required mode flip at
-that boundary. The transport operator disagrees with itself across the
-inter-parent edge. This breaks the flatness of mode transport across the
-refinement, violating commutativity with global indexing.
+The mode two-colouring alone does not single out a factor: a parent's children
+carry both modes at every scale, for every k, so mode transport is consistently
+inherited regardless. What singles out the aperture is a stronger requirement —
+that the refinement actually **hexagonalise**, and do so unambiguously.
 
-For odd k, the refinement preserves parity alignment between parent and child
-simplices, ensuring that mode transport is consistently inherited at all scales.
-Admissible values of k are therefore restricted to odd integers within this
-refinement class: **k ∈ {1, 3, 5, 7, …}**
+Two conditions settle it, and a single exhaustive enumeration supplies both
+(verified by `experimental/halfhex_verify.py`, swept over k by
+`experimental/aperture_tiling.py`). First, the subdivided octant — a side-k
+triangle of k² triangular cells — must tile by half-hexagons (the d_cells of §7),
+each three cells, which is possible only when 3 divides k. Second, and decisively,
+that tiling must be **unique up to chirality**; otherwise the refinement admits
+several inequivalent grids and addressing is not stable under composition.
 
-When restricted to refinements that preserve mode transport consistency and
-commute with global indexing, composing two valid refinements always yields a
-valid refinement (the admissible class forms a semigroup, in algebraic terms).
-Within this class, odd integers define valid scales, and the minimal non-trivial
-scale is k = 3.
+The enumeration is sharp. Apertures 4, 16, 25 and 49 (factors 2, 4, 5, 7) cannot
+tile the octant by half-hexagons at all. Apertures 36, 81 and larger *can* tile,
+but in many inequivalent ways — 220 distinct tilings already at aperture 36 —
+fixing no canonical grid. **Aperture 9 alone (factor 3) tiles uniquely up to
+chirality: exactly two tilings, a single mirror pair.** This is not a separate
+fact from the chirality result — it is the same enumeration: the two tilings *are*
+the chiral pair that Axiom 6 resolves (revisited in §8).
 
-We therefore select k = 3 as the base refinement operator. Higher-scale
-refinements are obtained by composing this operator, yielding a hierarchy
-indexed by powers of 3.
+Aperture 9 is therefore not merely the smallest admissible refinement; it is the
+only one that determines a grid. We take k = 3 as the base refinement operator,
+and compose it for finer scales, yielding the aperture-9 hierarchy.
 
 In the k=3 case, refinement introduces a systematic lateral displacement of
 child simplex centroids relative to the parent geometry. This displacement is
 not an artefact of embedding, but the geometric manifestation of
 parity-preserving refinement under ℤ₂ transport. In the dual structure, this
 offset becomes visible as the characteristic shift in the induced hexagonal
-lattice, giving rise to the **shifted-aperture-9 hierarchy**.
+lattice, giving rise to the **shifted-aperture-9 hierarchy**. Intuitively, the
+parent's centroid falls on the shared long edge of its two half-hexagons rather
+than on any one child, so the nine children cannot sit concentrically; they take
+the offset arrangement of §8, and that offset is the displacement.
 
 ---
 
@@ -798,8 +836,10 @@ The tail fields in summary:
 | p_mo | 1 | actual parent mode of the terminal region (reversible tail only) | decoder returns the canonical mode-0 representative, not the exact cell |
 | h | 4 | terminal d_cell id, 0–11 (reversible tail only) | reconstruction returns the x_cell centre, not the exact d_cell centroid |
 
-The key tail (p_c2, r_mo) suffices for unique binning; the reversible tail (all
-four fields) gives an exact round trip to a representative point.
+Both tails are invertible: the key (bin) tail round-trips to the bin cell's
+representative point, the full tail (all four fields) to the terminal cell's. The
+difference is *which* cell's representative is recovered — never the original
+source point — not whether one is recoverable at all.
 
 One caution follows directly. Truncating an address to length K always
 identifies a valid ancestor at the corresponding level, but not necessarily the
@@ -939,8 +979,9 @@ attain, a continuous one.
 ### 10f. Seams and Valence Defects
 
 The Euler characteristic of S² requires that any triangulation of the globe carry
-topological defects. In Hex9 these are absorbed at the six octahedral vertices,
-each of which is surrounded by 4 hexagonal cells rather than 6. Understanding why
+topological defects. In Hex9 these are absorbed at the six octahedral vertices —
+each a 4-valent point of the triangulation, where the hexagonal grid carries its
+defect as the five-neighbour cells of §12. Understanding why
 neither these defects nor octant seams require special handling requires tracing
 the constructive sequence: t_cells → d_cells → x_cells.
 
@@ -962,13 +1003,16 @@ The x_cells that straddle the seam are formed by the same d_cell joining rule
 that applies everywhere else. The seam is a boundary in the refinement tree, not
 a discontinuity in the construction.
 
-At an octahedral vertex, four octant faces meet rather than six. The surrounding
+At an octahedral vertex, four octant faces meet — the six seed vertices are
+4-valent, where every interior vertex of the refined triangulation is 6-valent. The surrounding
 d_cells at this vertex have c2=0 — the flat (horizontal) edge — as their shared
 long edge. This is the c2=0 convention: not a patch, but the consequence of the
 same vertex-loop transport closure established in §4. Even valence at the
 octahedral vertices (valence 4) satisfies the mode transport condition; the
-surrounding x_cells are formed by the same d_cell join rule. The resulting
-x_cells are fewer (4 rather than 6) but structurally identical in construction.
+surrounding x_cells are formed by the same d_cell join rule. The cells meeting at
+the vertex are the five-neighbour hexagons of §12, structurally identical in
+construction to every other x_cell — each a hexagon that, projected onto the
+ellipsoid, presents one collinear corner and so appears pentagonal.
 
 In both cases the construction proceeds without branching. The t_cell → d_cell →
 x_cell sequence applies uniformly across the entire globe — at seams, at defect
@@ -1057,7 +1101,9 @@ reduced magnitude. At L5 and finer it is negligible for practical use.
 
 ### 11b. The Authalic Warp
 
-The warp corrects the area deviation left by the base projection. It is derived
+The warp corrects the area deviation left by the base projection. ("Authalic"
+means equal-area: the warp is not itself a projection but the corrective
+deformation that renders the composite octahedral map area-true.) It is derived
 by Sinkhorn optimal transport [@cuturi2013sinkhorn]: treating the L4 (or L5)
 triangle vertices as a discrete mass distribution on the octant, the Sinkhorn
 iteration finds the minimal-displacement redistribution that equalises projected
@@ -1113,11 +1159,17 @@ irreducible vertex residuals). b_oct is the natural coordinate space for Hex9
 computation; it is where the inequality evaluations of §10a operate and where
 address digits correspond to regular geometric subdivisions.
 
-Any shape variation that appears when Hex9 cells are rendered in a conventional
-map projection — elongated cells near the poles in Mercator, apparent distortion
-in geographic lat/lon — is a consequence of that reprojection, not a property of
-the cells. The distortion belongs to the map. The cells, in their native space,
-are what they are by construction.
+Much of the shape variation that appears when Hex9 cells are rendered in a
+conventional map projection — elongated cells near the poles in Mercator, apparent
+distortion in geographic lat/lon — is a consequence of that reprojection, not a
+property of the cells: in their native b_oct space the cells are regular by
+construction, and that added distortion belongs to the map. This is not to claim
+the cells are distortion-free on the ellipsoid itself — laying an *equal-area*
+hexagonal grid on a curved surface costs some bounded shape distortion (the
+octahedral and warp distortion of §12, aspect ≈ 1.37), and that part is intrinsic.
+The narrower point holds: a conventional projection *adds* its own distortion on
+top, and that addition — not the grid — is what a Mercator or lat/lon plot mostly
+shows.
 
 This is the practical meaning of the claim in §9 that Hex9 is a spatial reference
 system rather than merely an indexing scheme: b_oct is a legitimate projection in
@@ -1137,7 +1189,8 @@ the octahedron to the ellipsoid can be composed with the addressing scheme to
 produce a valid Hex9 coordinate system. The Lee conformal projection
 [@lee1965conformal] produces angle-preserving cells at the cost of non-uniform
 area; the Snyder octahedral equal-area projection [@snyder1992equal] achieves
-strict det(J) = 1 analytically. Both compose cleanly with the Hex9 hierarchy; the
+strict det(J) = 1 analytically and offers a closed-form inverse. Both compose
+cleanly with the Hex9 hierarchy; the
 cell identity, digit assignment, and adjacency structure are unchanged across
 projection choices.
 
@@ -1159,7 +1212,7 @@ area correction be treated as distinct concerns from the outset.
 
 ## 12. Comparison with Prior Art
 
-The differences between the established systems — H3, S2, HEALPix — are well
+The differences between the established systems — H3, S2, HEALPix, A5 — are well
 documented in the literature; this section makes only the comparisons that bear
 on Hex9's claims.
 
@@ -1170,7 +1223,7 @@ on Hex9's claims.
 | Aperture | 7 | 4 | 4 | 5 then 4 | 9 (shifted) |
 | Equal area | No | No | Yes (strict) | Yes | Quasi (p99 < 0.005%) |
 | Strict ancestry at all levels | No | Yes | Yes | — | Half-hex: yes; hex: by convention |
-| Distance isotropy | Yes | No ($\sqrt{2}$) | Yes | No (elongated) | Yes |
+| Adjacency isotropy (combinatorial) | Yes | No ($\sqrt{2}$) | Yes | No (elongated) | Yes |
 | Dual DGGS/CRS | No | No | No | No | Yes (quasi-CRS) |
 | Reference body | Sphere | Sphere | Sphere | Ellipsoid | Any ellipsoid (per-body warp; WGS84 + sphere trained) |
 
@@ -1233,7 +1286,8 @@ confined to the neighbourhoods of the six vertex singularities.
 
 **Shape and area, independently surveyed.** An independent survey of cell
 geometry — enclosing-cone aspect ratio and WGS84 geodesic cell area over N = 5000
-uniformly-sampled cells per system — places the four systems into two area tiers
+uniformly-sampled cells per system (H3, S2, A5, and Hex9; HEALPix is covered
+qualitatively under *Area*, below) — places the four systems into two area tiers
 separated by roughly 100×.^[Generated by libhex9 `tools/dggs_survey_hex9.py`
 (N = 5000 cells per system, seed `0xc0ffee`); <https://github.com/MrBenGriffin/libhex9>.
 Cell areas are WGS84 geodesic areas (geographiclib); H3, S2 and A5 are measured through
@@ -1283,13 +1337,17 @@ computed from geodesic areas on that body and recomputed for any other (§11d).
 Trained warps currently exist for WGS84 and the sphere; the C implementation
 (libhex9) is tuned for WGS84. WGS84 is the default, not a constraint.
 
-**Distance isotropy.** A hexagonal tiling gives every cell six neighbours at a
-single edge-to-edge distance, so the grid privileges no direction and
-nearest-neighbour and traversal distances are uniform. A quadrilateral grid does
-not: S2's edge neighbours and corner neighbours differ by a factor of $\sqrt{2}$, which
-biases distance and adjacency computations along the diagonal. Hex9 and H3 are
-isotropic in this sense; A5's pentagonal cells are markedly elongated
-(aspect ≈ 2.14), so their neighbour distances are not uniform.
+**Adjacency isotropy.** As a graph, a hexagonal tiling gives every cell six
+neighbours related by symmetry, with no distinguished direction — where a
+quadrilateral grid distinguishes edge from corner neighbours (S2's differ by a
+factor of $\sqrt{2}$), forcing distance and adjacency operations to treat the
+diagonal as a special case. This is a *combinatorial* property of the grid graph,
+not a metric one: once cells are placed on the ellipsoid, the base projection and
+the area-correcting warp make geodesic neighbour distances vary — **no DGGS, Hex9
+included, is metrically isotropic on the globe**. What the hexagonal adjacency buys
+is algorithmic — traversal, $k$-ring, and neighbour queries carry no preferred
+axis. Hex9 and H3 share this adjacency isotropy; S2 does not (the diagonal
+$\sqrt{2}$); A5's pentagonal cells additionally vary in shape (aspect ≈ 2.14).
 
 **Dual DGGS/CRS role.** This is the row no other system marks "yes", and it is
 the paper's central claim (§9, §10e, Appendix A): a single Hex9 address is a
@@ -1298,9 +1356,13 @@ function recovers from it a point on the ellipsoid to arbitrary precision. We
 state this as the weaker, defensible claim — the addressing is *quasi-continuous*
 (§10e), not a strict ISO 19111 CRS: the recovery map is discrete-valued and jumps
 across a measure-zero set of seams, where continuity in the ISO sense fails. The
-distinction from the others is nonetheless real: H3, S2, and HEALPix are indexing
-schemes layered over a pre-existing CRS; they identify cells, but their
-identifiers do not double as position-recovery coordinates.
+distinction from the others is real but one of design, not exclusive capability:
+H3, S2, and HEALPix are bounded cell indices defined over a pre-existing CRS, and
+as used their identifiers label cells rather than recover positions. A
+cleanly-nesting index such as S2's quadtree could in principle be extended to the
+same position-recovery role (§10e claims no uniqueness for the property). What is
+intrinsic to Hex9 is that a single address is, by construction, both the cell
+identifier and the position-recovery coordinate.
 
 ---
 
@@ -1329,21 +1391,31 @@ the terminal mode and then resolves canonical parentage upward in a single pass.
 
 ### 13b. Address encoding
 
-A Hex9 address packs into a single standard 128-bit UUID as 32 nibbles: the first
-30 carry the hierarchy path (layers 0–29, one base-9 digit per level), and the
-final two carry the tail (§10b). Those two tail nibbles take one of two forms. The
-**reversible** tail packs the terminal region (the d_cell id h), p_mo, p_c2 and
-r_mo — everything needed for an exact round trip to a representative point. The
-**bin** (key) tail packs only p_c2 and r_mo, with 0xF in the low nibble as a
-sentinel — enough to bin and join uniquely, but not to recover the exact terminal
-cell. A single 128-bit value therefore serves either as an exact reversible
-coordinate or as a pure spatial key, with no companion field.
+A Hex9 address packs into a single standard 128-bit UUID as 32 nibbles: 30 carry
+the hierarchy path (one base-9 digit per level, reaching layer 30) and the final
+two carry the tail (§10b). Because the canonical mode-0 fold (§10b) gives every
+cell a single representative, the UUID is **self-inverting**: a full address and
+any coarser **bin** of it are the same kind of object — each decodes, with no
+companion field, to its *own* cell's representative point on the ellipsoid. The
+two tail forms (a marker nibble distinguishes a bin key from a full address)
+differ only in *which* cell is recovered: a bin inverts to the bin cell's
+position, a full address to the terminal cell's; neither recovers the original
+source point, which binning necessarily discards. (This supersedes an earlier
+design in which only the full address was reversible and a bin was an opaque,
+non-invertible key.)
 
 The format drops directly into any database, PostGIS column, or API that accepts a
 standard UUID; hierarchy traversal is nibble truncation and spatial binning is
-prefix comparison, with no decoding step. The hierarchy reaches layer 29 — far
-below any geodetic resolution (a layer-29 cell is of nanometre scale) — so 128
-bits is effectively unlimited precision in practice.
+prefix comparison, with no decoding step. The hierarchy reaches layer 30 — far
+below any geodetic resolution (a layer-30 cell is of sub-nanometre scale) — so 128
+bits is effectively unlimited precision in practice. The same canonical fit packs
+an address into a standard **64-bit** integer just as readily — as the Python
+library does — reaching about layer 14, or sub-metre cells (micrometre with denser
+packing). The 128-bit UUID remains the default rather than a liability:
+PostgreSQL and comparable databases treat a UUID as a first-class, natively
+indexed type, so its width is no obstacle; the 64-bit form is offered for
+pipelines that require an integer column, not because the narrower key is
+intrinsically preferable.
 
 ### 13c. The core library and tooling
 
@@ -1436,7 +1508,10 @@ adaptive refinement across L5 to L12 — coarse L5 cells over empty terrain,
 refining to L12 along the inhabited valley floors. Each cell is shaded by
 population density (count per authalic cell area), so the fill is directly
 comparable across levels without area correction — a single coherent grid whose
-cells span seven levels at once.
+cells span seven levels at once. The layer is still a partition, not an overlay:
+each location lies in exactly one cell, because a finer cell is wholly contained
+in its coarser ancestor and the refinement keeps only the level its stopping rule
+selects — so cells of different levels tile without overlap.
 
 ![Thimphu, Bhutan — population-driven adaptive refinement spanning L5–L12 in one mixed-resolution Hex9 layer; fill is population density per authalic cell area, directly comparable across levels without area correction.^[Rendered in QGIS via `h9_adaptive()` over the Bhutan population layer [@hdx_bhutan_pop].]](paper_figures/thimpu_chloropleth_web.jpg){width=80%}
 
@@ -1454,12 +1529,14 @@ that would otherwise need a spatial index.
 ### 14c. Display and rendering
 
 The canonical cell polygon is the regular hexagon in b_oct; everything else is
-reprojection (§11c). For display in a conventional CRS, cell edges are densified
-and reprojected — the curvature that appears belongs to the target projection.
+reprojection (§11c). The equal-area realisation on the ellipsoid already departs
+from that regularity by the bounded amount of §12; a display in a conventional CRS
+adds more — cell edges are densified and reprojected, and the *additional*
+curvature that appears belongs to the target projection.
 Two practical notes. First, hexes straddling the antimeridian render incorrectly
 in naive geographic plots (drawn across the full map width); the defect is the
 renderer's, not the data's, and a bounds filter suffices. Second, at the six
-octahedral vertices the 4-valent cells are correct as constructed (§10f) and need
+octahedral vertices the vertex cells are correct as constructed (§10f) and need
 no special-case rendering.
 
 ```{=latex}
@@ -1475,8 +1552,8 @@ no special-case rendering.
 \includegraphics[width=\linewidth]{bm_mercator_web.jpg}\\[2pt]
 {\footnotesize (c) Mercator (conformal): cells balloon toward the poles.}
 \end{minipage}
-\caption{The same Hex9 layer in three projections --- the distortion belongs to
-the map, not the cells (\S14c). In the native b\_oct space (a) every cell is a
+\caption{The same Hex9 layer in three projections --- the distortion a
+conventional projection adds belongs to the map, not the cells (\S14c). In the native b\_oct space (a) every cell is a
 congruent regular hexagon; an equal-area projection (b) keeps cell areas
 comparable while shearing their shapes; a conformal projection (c) preserves
 local angles but inflates the polar cells without bound (the largest are the

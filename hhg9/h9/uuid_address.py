@@ -9,7 +9,7 @@ Provides a stable 128-bit (UUID) representation of a hex9 address at maximum
 practical depth, plus a companion byte that enables exact round-trip to lat/lon.
 
 Layout (32 nibbles = 128 bits):
-    nibbles 0..29 : hex body (L0..L29) — hierarchical hex digits
+    nibbles 0..30 : hex body (L0..L30) — hierarchical hex digits
     byte 15       : tail byte, split as nibble 30 (high) and nibble 31 (low)
       bits [7..4] : h    — terminal region id (0..11). 0xF = bin, 0xE = key
       bit  [3]    : p_mo — parent's mode (or 0 if key)
@@ -29,9 +29,11 @@ revisions returned a companion ``adr`` byte for reconstruction; that is no
 longer needed and has been removed.)
 
 Public API:
-    h9_encode(lats, lons)              -> uuids
-    h9_decode(uuids)                   -> (lats, lons)
-    h9_bin(uuids, layer)               -> uuids
+    h9_encode(lats, lons)                       -> uuids
+    h9_decode(uuids)                            -> (lats, lons)
+    h9_bin(uuids, layer)                        -> uuids
+    h9_ancestors(b_pts, at_layer, gens_up)     -> uuids   (one per point)
+    h9_descendants(b_pts, at_layer, gens_down) -> list of uuid lists
 """
 
 from __future__ import annotations
@@ -54,9 +56,8 @@ from hhg9.h9.protocols import RegionAddressLike
 
 # The layer parameter passed to hex_digits that yields 32 nibbles:
 #   xy_regions(depth=30) -> addresses shape (N, 32)
-#   reg_hex_digits sees cols=32, depth=31 -> bdy has 30 cols (L0...L29)
+#   reg_hex_digits sees cols=32, depth=31 -> bdy has 31 cols (L0...L30)
 #   key pack: 30 body nibbles + 2 key_tail nibbles = 32 nibbles = 128 bits
-#   WAS 29
 UUID_DEPTH: int = 30
 
 # Hexagon centroid offset in lattice units, indexed [mode][c2] (see polygon.py).
@@ -350,6 +351,138 @@ def h9_bin(
     b_oct = reg.domain('b_oct')
     pts = h9_dec(uuids, b_oct)
     return h9_bin_pts(pts, layer)
+
+
+# ---------- Hierarchy traversal (relative generations) ---------------------
+# These express the H9 "direct per-layer contract": descendants(H, L+i) is not an
+# iterated parent/child walk (which would propagate the split-cell ambiguity), it
+# is the set of layer-(L+i) hexagons that bin to H at layer L. See
+# docs/h3/dggs_nesting.py for the motivation. Input is a b_oct Points; the anchor
+# is the layer-`at_layer` bin of each point.
+
+def h9_ancestors(
+        b_pts: 'Points',
+        at_layer: int,
+        generations_up: int,
+        reg=None,
+) -> list[uuid_mod.UUID]:
+    """Coarser-layer ancestor bin of each point, ``generations_up`` layers up.
+
+    A point lies in exactly one hexagon per layer, so the ancestor is just the
+    coarser bin: ``h9_bin_pts(b_pts, at_layer - generations_up)``. Returns one
+    UUID per input point.
+
+    Parameters
+    ----------
+    b_pts : Points in b_oct domain
+    at_layer : int — the layer at which each point's anchor hexagon is taken
+    generations_up : int — how many layers coarser to go (>= 0)
+    reg : unused (kept for signature symmetry with h9_descendants)
+    """
+    target = at_layer - generations_up
+    if not (0 <= target <= at_layer <= UUID_DEPTH):
+        raise ValueError(
+            f"need 0 <= at_layer - generations_up <= at_layer <= {UUID_DEPTH}; "
+            f"got at_layer={at_layer}, generations_up={generations_up}")
+    return h9_bin_pts(b_pts, target)
+
+
+def _anchor_hex_latlon(anchor: uuid_mod.UUID, at_layer: int, reg, inflate: float = 1.03):
+    """The anchor hexagon's lat/lon ring, built from its UUID via H9P.hx.
+
+    Slightly inflated (``inflate``) so the clip region is a strict superset of the
+    true hexagon — completeness is then guaranteed by the downstream bin filter,
+    which removes any extra hexes the larger polygon admitted.
+    """
+    from hhg9.h9 import H9P
+    from hhg9 import Points
+    b_oct = reg.domain('b_oct')
+    g_gcd = reg.domain('g_gcd')
+    dpts = h9_dec([anchor], b_oct)
+    centroid = dpts.coords[0]
+    oid = int(dpts.oid[0])
+    c2, _r_mo, p_mo = tail_unpack_reversible(np.array([anchor.int & 0xF], dtype=np.uint8))
+    hx = H9P.hx[int(p_mo[0]), int(c2[0])]                       # (6, 2) parent-origin-relative
+    ring_rel = (hx - hx.mean(axis=0)) * (3.0 ** -at_layer) * inflate
+    verts = centroid[None, :] + ring_rel                        # (6, 2) b_oct
+    ll = reg.project(Points(verts, b_oct, oid=np.full(6, oid)), [b_oct, g_gcd]).coords
+    return ll                                                   # (6, 2) [lat, lon]
+
+
+def h9_descendants(
+        b_pts: 'Points',
+        at_layer: int,
+        generations_down: int,
+        reg=None,
+) -> list[list[uuid_mod.UUID]]:
+    """Layer-(at_layer+generations_down) hexagons that bin to each point's anchor.
+
+    The descendant set is the H9 per-layer contract: every layer-`target` hexagon
+    whose own ``h9_bin(., at_layer)`` equals the anchor (the point's layer-`at_layer`
+    bin). The protruding split hexagons are exactly those that still bin to the
+    anchor; splits that bin to a neighbour belong to that neighbour, not here.
+
+    Reuses the proven pruned descent in ``HexMesh.create_clipped`` over the anchor
+    hexagon, re-bins each descendant centroid to a canonical UUID, then filters on
+    the bin test. Returns one list of UUIDs per input point.
+
+    Parameters
+    ----------
+    b_pts : Points in b_oct domain
+    at_layer : int — layer of the anchor hexagon
+    generations_down : int — how many layers finer (>= 0)
+    reg : Registrar (created if None)
+    """
+    target = at_layer + generations_down
+    if not (0 <= at_layer <= target <= UUID_DEPTH):
+        raise ValueError(
+            f"need 0 <= at_layer <= at_layer + generations_down <= {UUID_DEPTH}; "
+            f"got at_layer={at_layer}, generations_down={generations_down}")
+    if reg is None:
+        from hhg9 import Registrar
+        reg = Registrar()
+    from hhg9.h9 import H9O
+    from hhg9.h9.grid import HexMesh
+    from hhg9 import Points
+
+    b_oct = reg.domain('b_oct')
+    anchors = h9_bin_pts(b_pts, at_layer)
+    if generations_down == 0:
+        return [[a] for a in anchors]
+
+    out: list[list[uuid_mod.UUID]] = []
+    # Cache per distinct anchor: points sharing an anchor share descendants.
+    cache: dict[int, list[uuid_mod.UUID]] = {}
+    for anchor in anchors:
+        key = anchor.int
+        if key in cache:
+            out.append(cache[key])
+            continue
+        poly = _anchor_hex_latlon(anchor, at_layer, reg)
+        mesh = HexMesh.create_clipped([target], poly, reg)
+        faces = mesh[target]
+        if len(faces) == 0:
+            cache[key] = []
+            out.append([])
+            continue
+        # Mode-safe centroid (seam hexes mix mode-0/mode-1 octant coords).
+        oid_v = mesh.pts.oid[faces]
+        mo_v = H9O.oid_mo[oid_v]
+        match = (mo_v == mo_v[:, :1])
+        cv = mesh.pts.coords[faces]
+        cent = (cv * match[:, :, None]).sum(axis=1) / match.sum(axis=1, keepdims=True)
+        cpts = Points(cent, b_oct, oid=oid_v[:, 0].astype(np.int32))
+        canon = h9_bin_pts(cpts, target)
+        # Keep only hexes that bin to the anchor; dedup, stable order.
+        back = h9_bin(canon, at_layer, reg=reg)
+        seen, kept = set(), []
+        for d, a in zip(canon, back):
+            if a.int == anchor.int and d.int not in seen:
+                seen.add(d.int)
+                kept.append(d)
+        cache[key] = kept
+        out.append(kept)
+    return out
 
 
 # ---------- Human-readable label format ------------------------------------
