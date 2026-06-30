@@ -8,7 +8,15 @@ Examples and further documentation may be found on the git repository.
 
 #### Changelog
 ```
-0.1.3a0 This uses a new UUID (breaking change) mechanism
+0.2.0a0 New UUID address mechanism (BREAKING): addresses are now a 128-bit
+        UUID with a single-nibble key tail; 0.1.x addresses do not decode.
+        Compact uint64 addresses now reach layer 14 (was 13).
+        Authalic warp retrained (WGS84 + Sphere) - area deviation now under
+        0.1% globally, with the residual at the six octahedral vertices.
+        Optional libhex9 C++ backend (~70x faster lat/lon -> address).
+        New HexMesh shared-vertex hex grids and a Composition layer-overlay
+        class. Distribution trimmed of stale warp data. 464 tests passing.
+0.1.3a0 This uses a new UUID (breaking change) mechanism (unreleased).
 0.1.2a0 Better PostGIS SQL functions - offering support in PostGIS and QGIS.
         Current focus is now on PROJ9.8 - CRS and projections.
         A few deep bug-fixes. All examples should be working.
@@ -50,12 +58,10 @@ Examples and further documentation may be found on the git repository.
   reduce some of these constraints while remaining early-stage and not yet
   production-ready (Autumn 2025).
   Where does it fail?
-  The main concern is that the current Hex9 octahedral projection is not amazingly
-  equal-area, especially across a global level.  However, it's hexagons are (for the main part)
-  pretty round, and the area is pretty stable (±7% or so, globally), however local variation is
-  far more stable.  For example, when examining nations,
-  the variation is not so strong  (ok maybe not so much Russia, or Canada).
-  The authalicity example reveals global variation very clearly.
+  With the authalic warp in place, the Hex9 octahedral projection is now very close
+  to equal-area: area deviation is under 0.1% globally, with the small residual
+  concentrated at the six octahedral vertices.  The hexagons are also (for the main
+  part) pretty round.  The authalicity example reveals the remaining variation clearly.
 
 ### Why Hex9
 #### Grid-Projection Decoupling

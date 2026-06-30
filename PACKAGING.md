@@ -12,7 +12,7 @@ This repository is set up to publish the `hhg9` package from the repository root
 
 3. **Pre-release sanity checks.**
    - Verify dependency bounds are accurate for all supported Python versions (`>=3.10`).
-   - Tag the release in version control and ensure `version = "0.1.0a3"` is 
+   - Tag the release in version control and ensure `version = "0.2.0a0"` is 
      updated when publishing.
    - Consider adding `project.urls` (e.g., documentation, repository, issue tracker) for better PyPI metadata.
 

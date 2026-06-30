@@ -12,7 +12,7 @@ __all__ = [
     "Registrar",
 ]
 
-__version__ = "0.1.0a0"
+__version__ = "0.2.0a0"
 __author__ = "Ben Griffin"
 __copyright__ = "Copyright ©2025, Ben Griffin"
 __license__ = "https://www.apache.org/licenses/LICENSE-2.0"

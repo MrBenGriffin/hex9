@@ -67,88 +67,95 @@ The display is decoupled from the grid — the net projection (`b_oct → n_oct`
 handles rendering, not addressing.
 
 #### Addressing
-The Great Pyramid at Giza (29°58′45.82″N, 31°8′3.46″E) at layer 36:
+A location encodes to a 128-bit **UUID** — the canonical Hex9 address.
+The Great Pyramid at Giza (29°58′45.82″N, 31°8′3.46″E) encodes to:
 ```
-0070143470686461861005464283175018506
+00701523-8841-1584-7742-040444242844
 ```
-Breaking it down:
+The same address as a Hex9 *label* (`body.key`):
 ```
-0 - 0701434706864618610054642831750185 - 06
-│   ╰──────────── 35 layer digits ───────────╯   ╰─ 2-digit metadata tail
+0070152388411584774204044424284 . 4
+│╰──────────── 31 body digits (layers 0–30) ────╯   ╰─ single-nibble key
 ╰─ root hexagon (0–B, 12 global roots)
 ```
-The root hexagon is one of 12 that cover the Earth. Each subsequent digit
-subdivides the enclosing hexagon by 9. The two-digit tail carries the
-minimum metadata needed to reverse the address back to geodetic coordinates.
+The first digit is one of 12 root hexagons that cover the Earth; each
+subsequent digit subdivides the enclosing hexagon by 9, down to layer 30.
+The single key nibble carries the minimum metadata — the `c2` identity and
+octant face mode — needed to reverse the address back to geodetic
+coordinates, so the UUID alone is self-inverting.
 
-There is also a *key* form — used for hex-binning — where the tail encodes
-only containment, not full reversal.  The Great Pyramid key at layer 36 is:
+The same point truncated to a **bin** at the first 11 layers:
 ```
-0070143470686461861005464283175018500
+ 0:  0.0
+ 1:  00.2
+ 2:  007.2
+ 3:  0070.4
+ 4:  00701.2
+ 5:  007015.4
+ 6:  0070152.4
+ 7:  00701523.4
+ 8:  007015238.0
+ 9:  0070152388.2
+10:  00701523884.0
 ```
-Truncating a key to a shorter length does **not** directly yield the parent-layer
-key; the `c2` identity and octant face mode must be carried explicitly.
+The key nibble (after the dot) is recomputed at each layer: truncating a
+deeper address does **not** directly yield the parent-layer bin — the `c2`
+identity and octant face mode must be carried explicitly.
 
-First 11 layers of the pyramid address key:
+#### Accuracy
+
+Hex9 addresses are **binned** — a coordinate resolves to the cell that
+contains it, and every point in that cell shares one address. The cell area
+at layer *L* is *E* / (12 × 9^L) for total Earth surface area *E*, so:
+
+* **UUID** (layer 30) resolves to ≈ 1,000 nm² (≈ 30 nm across).
+* **uint64** (layer 14) resolves to ≈ 1.9 m² (≈ 1.4 m across).
+
+For maximum positional fidelity, a **raw representative** string at layer 35
+round-trips to within **7 nm** globally — projection-limited, since the
+layer-35 cell itself is far smaller (≈ 0.02 nm²). ('nm' here is SI
+nanometres, not nautical miles.)
+
+**Great Pyramid** — layer-35 raw
 ```
- 0:  00
- 1:  002
- 2:  0072
- 3:  00704
- 4:  007012
- 5:  0070140
- 6:  00701430
- 7:  007014344
- 8:  0070143474
- 9:  00701434700
-10:  007014347064
+reference : 29°58'45.817792004858"N, 31°8'3.457294813097"E
+address   : 00701523884115847742040444242847137308
+∂ 1.029 nm  geodesic round-trip error
 ```
 
-#### Round-trip accuracy — globally < 7 nm
-(here, 'nm' is being used in its SI context- so it means nanometres and not nautical miles!)
-
-**Great Pyramid**
+**Stonehenge** — layer-35 raw
 ```
-29°58'45.817792004858"N, 31°8'3.457294813097"E  (reference)
-29°58'45.817792004871"N, 31°8'3.457294813071"E  (round-trip)
-0070143470686461861005464283175018506  (L35 address)
-∂ 0.984 nm  geodesic error
-```
-
-**Stonehenge**
-```
-51°10'43.672800075871"N, 1°49'34.283450385600"W  (reference)
-51°10'43.672800075845"N, 1°49'34.283450385640"W  (round-trip)
-4352164061084274326815104253457062812  (L35 address)
-∂ 1.315 nm  geodesic error
+reference : 51°10'43.672800075871"N, 1°49'34.283450385600"W
+address   : 4352166438362084635124244718646587130d
+∂ 3.162 nm  geodesic round-trip error
 ```
 
 #### Compact uint64 addresses
 
 A Nazca Spiral at 14.680°S, 75.102°W has the uint64 address
-`0x8515044362475050`.  Reading the hex nibbles from the top:
+`0xB404155374658884`.  Reading the hex nibbles from the top:
 
 ```
-0x8515044362475050
+0xB404155374658884
   ↑↑↑↑↑
-  ||||└─── Layer 4, hexagon 0
-  |||└──── Layer 3, hexagon 5
-  ||└───── Layer 2, hexagon 1
-  |└────── Layer 1, hexagon 5
-  └─────── Layer 0, hexagon 8
+  ||||└─── Layer 4, hexagon 1
+  |||└──── Layer 3, hexagon 4
+  ||└───── Layer 2, hexagon 0
+  |└────── Layer 1, hexagon 4
+  └─────── Layer 0, hexagon B (root)
 ```
 
-When written in hex, the first digits of the address spell out the root-to-leaf
-path through the hierarchy — the address is directly eye-readable with a crib.
-See the image below for the first five regions 8 → 5 → 1 → 5 → 0, each
-covering 1/9 the area of the preceding layer.
+When written in hex, the leading digits spell out the root-to-leaf path
+through the hierarchy — the address is directly eye-readable with a crib:
+the first regions B → 4 → 0 → 4 → 1 each cover 1/9 the area of the
+preceding layer.
 
 The layer area formula: for total Earth surface area *E*, a hexagon at layer *L*
 covers *E* / (12 × 9^L).
 
 Hex9 natively supports:
-* **uint128** string addresses (32 hex nibbles) — indexes to layer 28 and beyond.
-* **uint64** integer addresses (16 hex nibbles) — layer 13 by default.
+* **UUID / uint128** (128-bit, 32 hex nibbles) — canonical address to layer 30.
+* **uint64** (64-bit, 16 hex nibbles) — compact address to layer 14.
 
 At layer 30, a single hexagon covers roughly 1,000 nm² (one thousand square nanometres).
 
