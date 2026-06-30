@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hhg9"
-version = "0.1.3a0"
-description = "Hierarchical hexagonal grid on an octahedral earth projection"
+version = "0.2.0a0"
+description = "Hierarchical hexagonal grid on an octahedral reference ellipsoid"
 readme = { file = "README", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = "Apache-2.0"
