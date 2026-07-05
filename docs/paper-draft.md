@@ -1,7 +1,7 @@
 ---
 title: "Hex9: A Quasi-Authalic, Quasi-Continuous Hexagonal DGGS on the Reference Ellipsoid"
 author: Ben Griffin
-date: June 2026
+date: July 2026
 abstract: |
   Discrete global grid systems are conventionally designed over a prior
   coordinate reference system and inherit its compromises. Hex9 inverts the
@@ -1287,7 +1287,7 @@ routes are distinguished only when layers must be *related* — roll-up,
 drill-down, joining datasets binned at different resolutions — which is the work
 a hierarchy exists to do. Measured over 10,000 uniformly distributed points,
 each system through its own native operations and with no polygon geometry
-uinvolved,^[`docs/dggs/dggs_commute.py` (N = 10⁴, fixed seed); binning at each
+involved,^[`docs/dggs/dggs_commute.py` (N = 10⁴, fixed seed); binning at each
 system's maximum depth (`--deep`) reproduces the constant rates and the Hex9
 decay law.] the two routes
 disagree in H3 for a near-constant ≈ 6.5% of points at every depth k = 1…6 —
