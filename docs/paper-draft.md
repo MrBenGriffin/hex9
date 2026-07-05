@@ -16,12 +16,12 @@ abstract: |
   by the same machine-verified exhaustive enumeration. The structure that
   survives is a shifted-aperture-9 hexagonal hierarchy in which every cell
   carries a unique address derived from the construction alone: truncated at
-  level L, the address is a DGGS cell identifier in the sense of OGC Topic 21;
+  level L, the address is a DGGS zonal identifier in the sense of OGC Topic 21;
   carried to the limit, a function recovers from it a point on the reference
   ellipsoid to arbitrary precision. The addressing is quasi-continuous — position
   is recoverable everywhere except on a measure-zero set of seams — rather than
   continuous in the strict ISO 19111 sense; the same mathematical object serves
-  as both cell identifier and position-recovery coordinate, with no prior
+  as both zonal identifier and position-recovery coordinate, with no prior
   coordinate reference system as input. A separable geometric realisation — an
   analytical octahedral base projection composed with an
   optimal-transport-derived area-correcting warp — places the grid on WGS84 with
@@ -643,9 +643,10 @@ location is recovered directly from combinatorial structure; no external
 coordinate transformation is required to establish it.
 
 Hex9 is a discrete spatial reference system in the sense of OGC Abstract
-Specification Topic 21 [@ogc_topic21], which characterises a DGGS as a spatial
-reference system that partitions and addresses the globe through a hierarchical
-tessellation of cells. What distinguishes Hex9 within this class is the
+Specification Topic 21 [@ogc_topic21], which defines a DGGS as an integrated
+system comprising a hierarchy of discrete global grids, spatio-temporal
+referencing by zonal identifiers, and functions for quantization and zonal
+query (its clause 4.13; Appendix B maps the vocabularies). What distinguishes Hex9 within this class is the
 direction of derivation. The conventional workflow — select a coordinate
 reference system, then design a grid over it — is inverted. Here, the geometric
 coherence requirements of §§1–8 define the structure; the structure constitutes
@@ -968,7 +969,7 @@ What Hex9 offers is better described, by analogy with its quasi-authalic
 geometry, as **quasi-continuous**: position is recoverable from the address by a
 function, to arbitrary precision, everywhere except on a measure-zero seam set,
 and the cell hierarchy converges to points rather than terminating at a finite
-floor. We are not aware of another DGGS whose cell identifier doubles as a
+floor. We are not aware of another DGGS whose zonal identifier doubles as a
 position-recovery coordinate in this way, though we do not claim the property is
 unique. At any fixed finite resolution Hex9 remains a discrete system — cells are
 regions, the bijection is between addresses and regions — and the
@@ -1404,7 +1405,7 @@ $\sqrt{2}$); A5's pentagonal cells additionally vary in shape (aspect ≈ 2.14).
 
 **Dual DGGS/CRS role.** This is the row no other system marks "yes", and it is
 the paper's central claim (§9, §10e, Appendix A): a single Hex9 address is a
-DGGS zone identifier when truncated at a level (OGC Topic 21), and in the limit a
+DGGS zonal identifier when truncated at a level (OGC Topic 21), and in the limit a
 function recovers from it a point on the ellipsoid to arbitrary precision. We
 state this as the weaker, defensible claim — the addressing is *quasi-continuous*
 (§10e), not a strict ISO 19111 CRS: the recovery map is discrete-valued and jumps
@@ -1786,7 +1787,7 @@ seam points, exactly as decimal notation selects 0.5 over 0.4999….
 
 **The dual claim** follows: σ truncated to L digits names a compact cell of area
 510,065,622 km² / (12 · 9^L) on WGS84 (≈ 42.5 million km² at L0, 719.8 km² at L5)
-— a DGGS cell in the sense of OGC Topic 21; σ in the limit names a point, a
+— a DGGS zone in the sense of OGC Topic 21; σ in the limit names a point, a
 position recoverable by a function to arbitrary precision. This is the
 quasi-continuous coordinate role of §10e, not a continuous ISO 19111 coordinate
 system: the recovery map is well-defined and continuous in the decode direction
@@ -1807,55 +1808,69 @@ also published as ISO 19170-1:2021 — for the DGGS role, and ISO 19111:2019
 is maintained in the implementation glossary; the tables here cover the terms a
 standards reviewer needs.
 
-Status codes: **C** — confident (the standard defines the term with a direct
-correspondence); **P** — provisional (a reasonable correspondence whose exact
-wording is to be confirmed against the spec text); **—** — Hex9-specific, with no
-standard equivalent.
+Status codes: **C** — confirmed (the standard defines the term; the cited clause
+was checked against the published text); **A** — analogous (checked against the
+published text; the correspondence is real but approximate, as noted); **—** —
+Hex9-specific, with no standard equivalent. Clause numbers refer to OGC 20-040r3
+and to OGC 18-005r4 (the OGC publication of ISO 19111:2019) respectively.
 
-A vocabulary note on Topic 21: the 2021 edition (Part 1) renamed the 2017
-edition's *cell* to *zone*, and a cell identifier to a *zone identifier* (ZID).
-This paper keeps "cell" in prose for readability; the OGC-facing term is "zone".
+A vocabulary note on Topic 21: the 2021 edition does not simply rename *cell* to
+*zone* — it distinguishes them. A **zone** is a "particular region of space-time"
+(4.52), the unit that is identified; a **cell** is the "unit of geometry …
+associated with a zone" (4.2). "While the terms cell and zone are often used
+interchangeably, strictly zone is the preferred term. Cell is entirely
+appropriate when specifically discussing a zone's geometry or topology" (4.2,
+Note 3). This paper's use of "cell" falls within that licence — Hex9 cells
+appear chiefly as geometry; where identification is meant, the Topic 21 term is
+*zonal identifier* (4.50).
 
 ### Hex9 → OGC Topic 21 (DGGS)
 
 | Hex9 term | OGC Topic 21 term | Status |
 |---|---|---|
-| Hex9 (the system) | Discrete Global Grid System (DGGS) | C |
-| `x_grid` at level L | Discrete Global Grid (DGG) — one tessellation / level | C |
-| `x_cell` | zone (2021); cell (2017) | C |
-| `x_adr` / `x_list` | zone identifier (ZID) | C |
-| octant (8 seed faces) | base polyhedron face / level-0 partition | P |
-| 12 root `x_cells` | level-0 zones | C |
-| refinement level L | refinement level / resolution | C |
-| aperture 9 (shifted) | aperture (refinement ratio) | C |
-| `x_dig` | sub-zone index within a parent zone | P |
-| parent/child `x_cell` | zone hierarchy / containment | C |
-| AK+Warp realisation | DGGS Reference Frame (cell geometry on the globe) | P |
+| Hex9 (the system) | discrete global grid system (4.13) | C |
+| `x_grid` at level L | discrete global grid — one tessellation per level (4.12) | C |
+| `x_cell` | zone (4.52); its geometry, a cell (4.2) | C |
+| `x_adr` / `x_list` | zonal identifier (4.50) | C |
+| octant (8 seed faces) | face of the base unit polyhedron (4.27) | C |
+| 12 root `x_cells` | initial discrete global grid, refinement level 0 (4.27, 4.37) | C |
+| refinement level L | refinement level (4.37) | C |
+| aperture 9 (shifted) | refinement ratio 9 (4.38; Note 3 there records "aperture" as earlier DGGS-literature usage) | C |
+| binning (`h9_bin`) | quantization (4.36) | C |
+| parent/child `x_cell` | parent cell / child cell (4.33, 4.4) | C |
+| split `x_cell` (digits 6–8) | child cell "overlapped by multiple parent cells" (4.4, Note 1) | C |
+| `x_dig` | — (ordinal of a child within its parent; no Topic 21 term) | — |
+| AK+Warp realisation | surface model of the Earth (4.27); cf. Part 1's Equal Area Earth Reference System (Hex9 is quasi-equal-area, §11b) | A |
 | mode (0/1 parity) | — (internal face orientation) | — |
-| `c2` edge label | sub-face identifier | P |
+| `c2` edge label | — (sub-face structure) | — |
 | `d_cell` (half-hexagon) | — (sub-cell primitive) | — |
 
 ### Hex9 → ISO 19111:2019 (referencing by coordinates)
 
 | Hex9 term | ISO 19111 term | Status |
 |---|---|---|
-| WGS84 reference ellipsoid | ellipsoid / geodetic reference frame (datum) | C |
-| Prime Meridian anchoring (Axiom 7) | prime meridian | C |
-| `x_adr` carried to the limit (§10e, App. A) | position recoverable by a function (quasi-continuous; not a strict ISO coordinate) | P |
-| Hex9 as a locating system | coordinate reference system (CRS) — *quasi*, see §10e | P |
-| b_oct | a coordinate system realised by AK+Warp | P |
-| encode / decode (point ↔ address) | coordinate operation / conversion | P |
-| octant 2D plane coordinates | coordinate system (CS) axes | P |
+| WGS84 reference ellipsoid | ellipsoid / geodetic reference frame (3.1.34) | C |
+| Prime Meridian anchoring (Axiom 7) | prime meridian (3.1.50) | C |
+| `x_adr` at a fixed level | spatial reference "in the form of a label, code" (3.1.56); a geographic identifier in the ISO 19112 sense (via Topic 21 4.50, Note 1) | C |
+| `x_adr` carried to the limit (§10e, App. A) | approaches the role of a coordinate — "one of a sequence of numbers designating the position of a point" (3.1.5) — quasi-continuous, not a strict ISO coordinate | A |
+| Hex9 as a locating system | coordinate reference system (3.1.9) — *quasi*, see §10e | A |
+| b_oct over WGS84, realised by AK+Warp | projected CRS (3.1.51, §9.2.2); map projection — "coordinate conversion from an ellipsoidal coordinate system to a plane" (3.1.40) | C |
+| encode / decode (point ↔ address) | coordinate conversion (3.1.6) for the geodetic ↔ b_oct leg; the address leg assigns a spatial reference (3.1.56), not a coordinate tuple | A |
+| octant 2D plane coordinates | coordinate system / axes (3.1.11) | C |
 
 The dual role of §9, §10e, and Appendix A is the bridge between these two tables:
-one Hex9 address is a Topic 21 zone identifier when truncated at a level and, in
-the limit, a position recoverable by a function to arbitrary precision. We make
-the weaker, defensible claim — *quasi-continuous*, by analogy with
+one Hex9 address is a Topic 21 zonal identifier when truncated at a level and, in
+the limit, converges to naming a point — the role ISO 19111 reserves for
+coordinates (3.1.5). The standards themselves mark the boundary the dual claim
+crosses: Topic 21 notes that in a DGGS "locations have dimension greater than
+one, and so are not points" (4.31, Note 2), and that a zonal identifier "may be a
+geographic identifier" in the ISO 19112 sense (4.50, Note 1) — a label, not a
+coordinate. Hex9's finite-level behaviour sits squarely in that zonal world; the
+limit behaviour of Appendix A is what reaches toward ISO 19111, and we make the
+weaker, defensible claim for it — *quasi-continuous*, by analogy with
 quasi-authalic — rather than asserting a strict ISO 19111 CRS: the address space
 is discrete and the point→address map is discontinuous on a measure-zero seam set
-(§10e), so continuity in the ISO sense does not hold. Final verification of the
-exact spec wording against the current editions of both standards is a
-pre-submission task (§15).
+(§10e), so continuity in the ISO sense does not hold.
 
 ---
 

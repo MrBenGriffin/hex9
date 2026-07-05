@@ -29,6 +29,8 @@ Last Tested
 16 Jun 2026 0.1.3a0 (passed) 895.7s
 28 Mar 2026 (new)
 """
+import os
+
 import numpy as np
 from matplotlib import image, pyplot as plt
 from matplotlib.collections import PolyCollection
@@ -51,8 +53,8 @@ from hhg9.h9.tail import tail_unpack_reversible
 # POI_LAT, POI_LON = 48.858735900477676, 2.294496130260531  # Eiffel's Tower
 # POI_LAT, POI_LON = 34.632049981869564, 77.62554188766468  # Samsten Ling
 # POI_LAT, POI_LON =24.136360966675497, 23.245733016051407  # Al Kufrah.
-POI_LAT, POI_LON = 51.481588012311560, 0.00223723016213     # London
-
+# POI_LAT, POI_LON = 51.481588012311560, 0.00223723016213   # London
+POI_LON, POI_LAT = 1.640250018, 49.098794825    # box on lawn.
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _fit_viewport(pts, img_w, img_h, vp):
@@ -160,12 +162,28 @@ def _pick_source(bg_sources, L):
     return bg_sources[key]
 
 
+def _common_prefix(strs):
+    """Longest common leading substring across strs (character-wise).
+
+    Equal to os.path.commonprefix; inlined to avoid the import.  Returns '' for
+    an empty list and the whole string for a single element.
+    """
+    if not strs:
+        return ''
+    lo, hi = min(strs), max(strs)
+    for i, c in enumerate(lo):
+        if c != hi[i]:
+            return lo[:i]
+    return lo
+
+
 # ── source builders ───────────────────────────────────────────────────────────
 
-def make_pc_source(img_file, reg, p_pix, b_oct):
+def make_pc_source(img_file, reg, p_pix, b_oct, *, attribution=''):
     """Build a PlateCarrée KDTree background source.
 
     Returns a callable (b_pts: Points) -> (N, 4) float32 RGBA [0, 1].
+    `attribution` is stored on the callable for on-frame imagery credit.
     """
     img = image.imread(img_file, 'png')
     pc_px = p_pix.adopt(img)
@@ -180,96 +198,30 @@ def make_pc_source(img_file, reg, p_pix, b_oct):
             s = np.hstack((s, np.ones((s.shape[0], 1), dtype=s.dtype)))
         return s
 
+    source.attribution = attribution
     return source
 
 
-def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
-                     tile_matrix_set=None,
-                     cache_dir='wmts_cache',
-                     gain=1.1, gamma=1.1):
-    """Build a WMTS background source via owslib tile-level fetching.
+def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
+                       fetch_tile, gain=1.0, gamma=1.0, attribution=''):
+    """Shared tile-stitch/sample core for slippy-tile backgrounds.
 
-    Fetches individual tiles for the bounding box of each query batch, stitches
-    them, and samples with bilinear interpolation.  Works with both Web Mercator
-    (GoogleMapsCompatible / EPSG:3857) and geographic (WGS84 / EPSG:4326) tile
-    matrix sets — the CRS is auto-detected from the capabilities.
+    Zoom selection, tile-grid stitching, native-CRS extent, and bilinear
+    sampling are independent of *how* tiles are addressed.  Callers supply:
 
-    Tiles are cached individually on disk; animation frames that share tiles at
-    the same zoom level skip the network entirely on re-runs.
+        grid_of(z)       -> (n_cols, n_rows) tile-grid dimensions at zoom z
+        fetch_tile(tx,ty,z) -> (TILE_PX, TILE_PX, 3) float32 [0,1] RGB
 
-    Zoom level is auto-selected to match ~2× per-axis point density.
-    `tile_matrix_set` can be passed explicitly if auto-detection picks the wrong
-    one (the available names are printed on first run).
-
-    Args:
-        capabilities_url:  WMTS GetCapabilities URL.
-        layer_name:        WMTS layer identifier (e.g. 's2cloudless-2020').
-        reg:               Shared Registrar.
-        b_oct:             b_oct domain.
-        tile_matrix_set:   TileMatrixSet name, or None to auto-detect.
-        cache_dir:         Directory for per-tile PNG cache files.
-
-    Returns:
-        Callable  (b_pts: Points) -> (N, C) float32 [0, 1].
+    `is_geographic` selects WGS84 (lon/lat) vs Web-Mercator axis math.
+    Returns a callable (b_pts: Points) -> (N, 3) float32 [0, 1].
     """
-    import math, hashlib, io, os, urllib.parse, urllib.request
-    from owslib.wmts import WebMapTileService
-    from PIL import Image as PILImage
+    import math
     from scipy.interpolate import RegularGridInterpolator
 
     TILE_PX = 256
-
-    os.makedirs(cache_dir, exist_ok=True)
-    wmts = WebMapTileService(capabilities_url)
-    layer = wmts.contents[layer_name]
-
-    available = list(layer.tilematrixsetlinks.keys())
-    if tile_matrix_set and tile_matrix_set in available:
-        tms = tile_matrix_set
-    else:
-        # Prefer Mercator; fall back to any available TMS (e.g. WGS84-only services)
-        merc_names = ['GoogleMapsCompatible', 'g', 'EPSG:3857', 'WebMercatorQuad',
-                      'googlemapscompatible', 'EPSG_3857']
-        tms = next((t for t in merc_names if t in available), available[0])
-    print(f'  WMTS: layer={layer_name!r}  tms={tms!r}  available={available}')
-
-    tile_fmt = layer.formats[0] if layer.formats else 'image/jpeg'
-    tms_obj = wmts.tilematrixsets[tms]
-
-    # Detect CRS: geographic (WGS84 / EPSG:4326) or projected (Mercator)
-    crs_str = getattr(tms_obj, 'crs', '') or ''
-    is_geographic = '4326' in crs_str or 'CRS84' in crs_str or 'WGS84' in crs_str.upper()
-
-    zoom_ids = sorted(tms_obj.tilematrix, key=lambda x: int(x.split(':')[-1]))
-    max_zoom = int(zoom_ids[-1].split(':')[-1])
-    zoom_to_id = {int(tid.split(':')[-1]): tid for tid in zoom_ids}
-
-    # Build a KVP GetTile URL directly — owslib's gettile() crashes on some
-    # services due to a bug in its restonly property (iterates operations as a
-    # dict rather than a list of named objects).
-    kvp_base = capabilities_url.split('?')[0].replace('WMTSCapabilities.xml', '')
-
-    def _tile_url(tilematrix_id, row, col):
-        return kvp_base + '?' + urllib.parse.urlencode({
-            'SERVICE': 'WMTS', 'REQUEST': 'GetTile', 'VERSION': '1.0.0',
-            'LAYER': layer_name, 'STYLE': 'default', 'FORMAT': tile_fmt,
-            'TILEMATRIXSET': tms, 'TILEMATRIX': tilematrix_id,
-            'TILEROW': row, 'TILECOL': col,
-        })
-
     c_oct = reg.domain('c_oct')
     c_ell = reg.domain('c_ell')
     g_gcd = reg.domain('g_gcd')
-
-    def _fetch_tile(tx, ty, z):
-        key = f"{layer_name}:{tms}:{z}:{tx}:{ty}"
-        path = os.path.join(cache_dir, hashlib.md5(key.encode()).hexdigest()[:16] + '.png')
-        if os.path.exists(path):
-            return np.asarray(PILImage.open(path).convert('RGB'), dtype=np.float32) / 255.0
-        with urllib.request.urlopen(_tile_url(zoom_to_id[z], ty, tx)) as resp:
-            img = PILImage.open(io.BytesIO(resp.read())).convert('RGB')
-        img.save(path)
-        return np.asarray(img, dtype=np.float32) / 255.0
 
     def source(b_pts: Points) -> np.ndarray:
         ll = reg.project(b_pts, [b_oct, c_oct, c_ell, g_gcd])
@@ -285,10 +237,9 @@ def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
             math.log2(360.0 * int(math.sqrt(len(b_pts.coords))) * 2.0 / (TILE_PX * span_deg))
         )))
 
-        # Tile grid dimensions at this zoom (read from capabilities — works for
-        # both Mercator 2^z × 2^z and WGS84 2^(z+1) × 2^z layouts)
-        tm = tms_obj.tilematrix[zoom_to_id[z]]
-        n_cols, n_rows = tm.matrixwidth, tm.matrixheight
+        # Tile grid dimensions at this zoom (Mercator 2^z × 2^z or
+        # WGS84 2^(z+1) × 2^z, per the supplied grid_of)
+        n_cols, n_rows = grid_of(z)
 
         def _ll_to_tile(lon, lat):
             tx = min(int((lon + 180.0) / 360.0 * n_cols), n_cols - 1)
@@ -308,7 +259,7 @@ def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
         canvas = np.zeros((n_ty * TILE_PX, n_tx * TILE_PX, 3), dtype=np.float32)
         for ty in range(ty_min, ty_max + 1):
             for tx in range(tx_min, tx_max + 1):
-                arr = _fetch_tile(tx, ty, z)
+                arr = fetch_tile(tx, ty, z)
                 iy = (ty - ty_min) * TILE_PX
                 ix = (tx - tx_min) * TILE_PX
                 canvas[iy:iy + TILE_PX, ix:ix + TILE_PX] = arr
@@ -355,16 +306,165 @@ def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
             out = np.clip(out * gain, 0.0, 1.0) ** (1.0 / gamma)
         return out
 
+    source.attribution = attribution
     return source
 
 
-def make_bm_source(vrt_path, reg, b_oct, gamma=0.9):
-    """Build a GDAL VRT background source (Blue Marble or similar).
+def make_xyz_source(url_template, reg, b_oct, *,
+                    max_zoom=21, is_geographic=False,
+                    cache_dir='xyz_cache', gain=1.0, gamma=1.0, attribution=''):
+    """Build a background source from a slippy XYZ tile template.
+
+    `url_template` is a `{z}/{x}/{y}` template (Web-Mercator, Google/OSM row
+    convention), e.g. an OpenAerialMap mosaic URL.  Missing tiles (404) read as
+    black, so partial-coverage mosaics composite over whatever is underneath.
+
+    Args:
+        url_template:  URL with `{z}` `{x}` `{y}` placeholders.
+        max_zoom:      Deepest zoom the service provides.
+        is_geographic: True for a WGS84 (EPSG:4326) tile scheme; default False
+                       (Web Mercator).
+
+    Returns:
+        Callable  (b_pts: Points) -> (N, 3) float32 [0, 1].
+    """
+    import hashlib, io, os, urllib.request
+    from PIL import Image as PILImage
+
+    TILE_PX = 256
+    os.makedirs(cache_dir, exist_ok=True)
+    key0 = hashlib.md5(url_template.encode()).hexdigest()[:8]
+
+    def fetch_tile(tx, ty, z):
+        path = os.path.join(cache_dir, f'{key0}_{z}_{tx}_{ty}.png')
+        if os.path.exists(path):
+            return np.asarray(PILImage.open(path).convert('RGB'), dtype=np.float32) / 255.0
+        url = url_template.format(z=z, x=tx, y=ty)
+        try:
+            with urllib.request.urlopen(url) as resp:
+                img = PILImage.open(io.BytesIO(resp.read())).convert('RGB')
+        except Exception:
+            return np.zeros((TILE_PX, TILE_PX, 3), dtype=np.float32)
+        img.save(path)
+        return np.asarray(img, dtype=np.float32) / 255.0
+
+    def grid_of(z):
+        n = 1 << z
+        return n, n
+
+    return _make_tiled_source(
+        reg, b_oct, max_zoom=max_zoom, is_geographic=is_geographic,
+        grid_of=grid_of, fetch_tile=fetch_tile, gain=gain, gamma=gamma,
+        attribution=attribution,
+    )
+
+
+def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
+                     tile_matrix_set=None,
+                     cache_dir='wmts_cache',
+                     gain=1.1, gamma=1.1, attribution=''):
+    """Build a WMTS background source via owslib tile-level fetching.
+
+    Fetches individual tiles for the bounding box of each query batch, stitches
+    them, and samples with bilinear interpolation.  Works with both Web Mercator
+    (GoogleMapsCompatible / EPSG:3857) and geographic (WGS84 / EPSG:4326) tile
+    matrix sets — the CRS is auto-detected from the capabilities.
+
+    Tiles are cached individually on disk; animation frames that share tiles at
+    the same zoom level skip the network entirely on re-runs.
+
+    Zoom level is auto-selected to match ~2× per-axis point density.
+    `tile_matrix_set` can be passed explicitly if auto-detection picks the wrong
+    one (the available names are printed on first run).
+
+    Args:
+        capabilities_url:  WMTS GetCapabilities URL.
+        layer_name:        WMTS layer identifier (e.g. 's2cloudless-2020').
+        reg:               Shared Registrar.
+        b_oct:             b_oct domain.
+        tile_matrix_set:   TileMatrixSet name, or None to auto-detect.
+        cache_dir:         Directory for per-tile PNG cache files.
+
+    Returns:
+        Callable  (b_pts: Points) -> (N, C) float32 [0, 1].
+    """
+    import hashlib, io, os, urllib.parse, urllib.request
+    from owslib.wmts import WebMapTileService
+    from PIL import Image as PILImage
+
+    os.makedirs(cache_dir, exist_ok=True)
+    wmts = WebMapTileService(capabilities_url)
+    layer = wmts.contents[layer_name]
+
+    available = list(layer.tilematrixsetlinks.keys())
+    if tile_matrix_set and tile_matrix_set in available:
+        tms = tile_matrix_set
+    else:
+        # Prefer Mercator; fall back to any available TMS (e.g. WGS84-only services)
+        merc_names = ['GoogleMapsCompatible', 'g', 'EPSG:3857', 'WebMercatorQuad',
+                      'googlemapscompatible', 'EPSG_3857']
+        tms = next((t for t in merc_names if t in available), available[0])
+    print(f'  WMTS: layer={layer_name!r}  tms={tms!r}  available={available}')
+
+    tile_fmt = layer.formats[0] if layer.formats else 'image/jpeg'
+    tms_obj = wmts.tilematrixsets[tms]
+
+    # Detect CRS: geographic (WGS84 / EPSG:4326) or projected (Mercator)
+    crs_str = getattr(tms_obj, 'crs', '') or ''
+    is_geographic = '4326' in crs_str or 'CRS84' in crs_str or 'WGS84' in crs_str.upper()
+
+    zoom_ids = sorted(tms_obj.tilematrix, key=lambda x: int(x.split(':')[-1]))
+    max_zoom = int(zoom_ids[-1].split(':')[-1])
+    zoom_to_id = {int(tid.split(':')[-1]): tid for tid in zoom_ids}
+
+    # Build a KVP GetTile URL directly — owslib's gettile() crashes on some
+    # services due to a bug in its restonly property (iterates operations as a
+    # dict rather than a list of named objects).
+    kvp_base = capabilities_url.split('?')[0].replace('WMTSCapabilities.xml', '')
+
+    def _tile_url(tilematrix_id, row, col):
+        return kvp_base + '?' + urllib.parse.urlencode({
+            'SERVICE': 'WMTS', 'REQUEST': 'GetTile', 'VERSION': '1.0.0',
+            'LAYER': layer_name, 'STYLE': 'default', 'FORMAT': tile_fmt,
+            'TILEMATRIXSET': tms, 'TILEMATRIX': tilematrix_id,
+            'TILEROW': row, 'TILECOL': col,
+        })
+
+    def _fetch_tile(tx, ty, z):
+        key = f"{layer_name}:{tms}:{z}:{tx}:{ty}"
+        path = os.path.join(cache_dir, hashlib.md5(key.encode()).hexdigest()[:16] + '.png')
+        if os.path.exists(path):
+            return np.asarray(PILImage.open(path).convert('RGB'), dtype=np.float32) / 255.0
+        with urllib.request.urlopen(_tile_url(zoom_to_id[z], ty, tx)) as resp:
+            img = PILImage.open(io.BytesIO(resp.read())).convert('RGB')
+        img.save(path)
+        return np.asarray(img, dtype=np.float32) / 255.0
+
+    def grid_of(z):
+        # Read from capabilities — works for both Mercator 2^z × 2^z and
+        # WGS84 2^(z+1) × 2^z layouts.
+        tm = tms_obj.tilematrix[zoom_to_id[z]]
+        return tm.matrixwidth, tm.matrixheight
+
+    return _make_tiled_source(
+        reg, b_oct, max_zoom=max_zoom, is_geographic=is_geographic,
+        grid_of=grid_of, fetch_tile=_fetch_tile, gain=gain, gamma=gamma,
+        attribution=attribution,
+    )
+
+
+def make_bm_source(vrt_path, reg, b_oct, gamma=0.9, *,
+                   name='bm_wkt', attribution=''):
+    """Build a GDAL raster background source (Blue Marble, a georeferenced
+    photo, or any GeoTIFF/VRT).
 
     Opens `vrt_path`, registers its CRS via Wkt + Wkt_4978, and returns a
     callable (b_pts: Points) -> (N, C) float32 [0, 1].
 
     gamma < 1 lifts midtones (Blue Marble tends to be low-contrast).
+    `name` is the registered CRS-domain key — pass a UNIQUE name per file when
+    building more than one raster source, or they collide on the registrar.
+    `attribution` is stored on the callable for on-frame imagery credit.
 
     Note: make_geotiff_sampler reads full bands into memory each call.
     Use the 10800×10800 tile set, not 21600×21600.
@@ -373,7 +473,7 @@ def make_bm_source(vrt_path, reg, b_oct, gamma=0.9):
     from hhg9.geo.gdal import wkt_geotiff_meta, make_geotiff_sampler
     c_oct = reg.domain('c_oct')
     c_ell = reg.domain('c_ell')
-    ds, _, bm_wkt = wkt_geotiff_meta(vrt_path, reg=reg, name='bm_wkt')
+    ds, _, bm_wkt = wkt_geotiff_meta(vrt_path, reg=reg, name=name)
     chain = [b_oct, c_oct, c_ell, bm_wkt]
     sampler = make_geotiff_sampler(ds, reg, chain)
 
@@ -383,13 +483,15 @@ def make_bm_source(vrt_path, reg, b_oct, gamma=0.9):
             vals = np.clip(vals, 0.0, 1.0) ** gamma
         return vals
 
+    source.attribution = attribution
     return source
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
-        frames_per_level: int = 0, centre: str = 'poi'):
+        frames_per_level: int = 0, centre: str = 'poi',
+        start_frame: int = 0, end_frame=None, skip_existing: bool = False):
     """Generate zoom-sequence PNGs.
 
     Args:
@@ -409,6 +511,12 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
                           drift toward POI across each level transition).
                           'poi' — lock viewport centre to the POI's net coordinates from
                           L=1 onwards; L=0→1 still drifts in from the global centre.
+        start_frame:      Resume: skip every frame with index < start_frame.  In animate
+                          mode the index is the frame number (frame_NNNN); otherwise it is
+                          the layer L.  Frame index for the start of level L is 1 + L*fpl.
+        end_frame:        Stop after this frame index (inclusive); None renders to the end.
+        skip_existing:    Skip any frame whose output PNG already exists on disk — the
+                          simplest resume after an interrupted run.
     """
     if reg is None:
         reg = Registrar()
@@ -493,8 +601,16 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
         frame_seq = [(f, t, f'frame_{f:04d}') for f, t in enumerate(ts)]
 
     # Per-frame rendering
+    flv = flavour.replace(':', '_')
+    os.makedirs('output/ex0098', exist_ok=True)
     for frame_idx, t, label in frame_seq:
+        if frame_idx < start_frame or (end_frame is not None and frame_idx > end_frame):
+            continue
         L = min(int(t), max_layer)
+        f_name = f'output/ex0098/{flv}_{scale}_{label}.png'
+        if skip_existing and os.path.exists(f_name):
+            print(f'  {label}  skip (exists)')
+            continue
         print(f'  {label}  (t={t:.3f}  L={L})')
         src_fn = _pick_source(bg_sources, L)
 
@@ -555,6 +671,7 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             ]), n_oct)
         lw = [2.0, 1.0, 0.5]
         coarse_hexes, coarse_v_k, coarse_layer = None, None, overlay_layers[0]
+        mid_hexes, mid_v_k = None, None
         for li, layer in enumerate(overlay_layers):
             if L == 0:
                 hex_num, hex_v_k, _, _ = hex_reduce(b_pts, layer)
@@ -570,30 +687,67 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
             verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, hex_scale, n_oct)
             hexes = verts_n.coords.reshape(-1, 6, 2)
-            # Finest (newest) layer fades in; all others at full opacity
-            ec_a = ramp_alpha if li == len(overlay_layers) - 1 else 0.5
+            # Finest (newest) layer fades in; coarsest (oldest) layer fades out
+            # over the tail of the level so it leaves frame gracefully; middle
+            # holds at full opacity.
+            if li == len(overlay_layers) - 1:
+                ec_a = ramp_alpha
+            elif li == 0:
+                ec_a = 0.5 * (min((1.0 - frac) / 0.3, 1.0) if animate else 1.0)
+            else:
+                ec_a = 0.5
             ax.add_collection(PolyCollection(
                 hexes, facecolors='none', ec=(1, 1, 1, ec_a),
                 linewidth=lw[li], antialiaseds=True,
             ))
             if li == 0:
                 coarse_hexes, coarse_v_k = hexes, hex_v_k
+            elif li == 1:
+                mid_hexes, mid_v_k = hexes, hex_v_k
 
-        # Labels on the coarsest layer (≤~20 hexes in view, L>0 only)
-        if coarse_hexes is not None and L > 0 and coarse_hexes.shape[0] <= 40:
-            label_alpha = min(frac / 0.3, 1.0) if animate else 1.0
-            ctrs = np.mean(coarse_hexes, axis=1)  # (N, 2)
-            # Bottom-left vertex = min(x + y) per hex; offset 20% toward centroid
-            bl_idx = np.argmin(coarse_hexes[:, :, 0] + coarse_hexes[:, :, 1], axis=1)
-            bl_verts = coarse_hexes[np.arange(len(coarse_hexes)), bl_idx]  # (N, 2)
+        # Address labels (L>0, coarse layer ≤~40 hexes in view).
+        # Cross-fade across the level boundary: the parent (coarse) layer holds
+        # full then fades out over the tail, while the child (middle) layer fades
+        # in starting slightly earlier — so the two overlap through the switch
+        # instead of hard-cutting.  The child reaches full exactly at frac→1,
+        # handing off continuously to the next level where it becomes the coarse
+        # layer.  Children inherit the parent prefix, so it strips cleanly from
+        # both label sets and the bottom-left caption stays stable.
+        def _draw_layer_labels(hexes, v_k, alpha, plen):
+            if hexes is None or alpha <= 0.0:
+                return
+            ctrs = np.mean(hexes, axis=1)  # (N, 2)
+            # Bottom-left vertex = min(x + y) per hex; offset 3% toward centroid
+            bl_idx = np.argmin(hexes[:, :, 0] + hexes[:, :, 1], axis=1)
+            bl_verts = hexes[np.arange(len(hexes)), bl_idx]  # (N, 2)
             label_pos = bl_verts + 0.03 * (ctrs - bl_verts)
-            lab_str = [''.join(f'{int(d):01x}' for d in row[:-1]) for row in coarse_v_k]
-            for (lx, ly), lbl in zip(label_pos, lab_str):
-                ax.text(lx, ly, lbl,
-                        # rotation=tx_rot,
+            strs = [''.join(f'{int(d):01x}' for d in row[:-1]) for row in v_k]
+            for (lx, ly), lbl in zip(label_pos, strs):
+                ax.text(lx, ly, lbl[plen:],
                         fontsize=12, ha='left', va='bottom',
-                        color=(1.0, 1.0, 1.0, label_alpha),
+                        color=(1.0, 1.0, 1.0, alpha),
                         zorder=100, clip_on=True)
+
+        hex_text = f'Hex9 // Demo'
+        if coarse_hexes is not None and coarse_hexes.shape[0] <= 40:
+            lab_str = [''.join(f'{int(d):01x}' for d in row[:-1]) for row in coarse_v_k]
+            prefix = _common_prefix(lab_str)
+            plen = len(prefix)
+            parent_a = min((1.0 - frac) / 0.3, 1.0) if animate else 1.0
+            child_a = max(0.0, min((frac - 0.55) / 0.45, 1.0)) if animate else 0.0
+            _draw_layer_labels(coarse_hexes, coarse_v_k, parent_a, plen)
+            if mid_hexes is not None and mid_hexes.shape[0] <= 120:
+                _draw_layer_labels(mid_hexes, mid_v_k, child_a, plen)
+            # Bottom-left caption — the shared root never fades (it is the frame's
+            # anchor, not part of the per-hex label crossfade).
+            if prefix:
+                hex_text += f' // H9 Prefix: {prefix}'
+
+        ax.text(0.012, 0.012, hex_text,
+                transform=ax.transAxes,
+                fontsize=16, ha='left', va='bottom', family='monospace',
+                color=(1.0, 0.85, 0.0, 1.0),
+                zorder=150, clip_on=False)
 
         # Gold highlight: middle-layer hex containing the POI
         _, cur_poly = _hex_at_layer(poi_b, L, b_oct, n_oct, reg)
@@ -617,6 +771,15 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
                 edgecolors=[(1.0, 0.85, 0.0, ramp_alpha)],
                 linewidth=1.0,
             ))
+        # Imagery credit for the active source (lower-right)
+        credit = getattr(src_fn, 'attribution', '')
+        if credit:
+            ax.text(0.988, 0.012, credit,
+                    transform=ax.transAxes,
+                    fontsize=11, ha='right', va='bottom',
+                    color=(1.0, 1.0, 1.0, 0.85),
+                    zorder=150, clip_on=False)
+
         # Dashed yellow rectangle: next frame's viewport
         # if L < max_layer:
         #     next_ctr, _ = _hex_at_layer(poi_b, L + 2, b_oct, n_oct, reg)
@@ -632,38 +795,51 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
         #         [ny0, ny0, ny1, ny1, ny0],
         #         color='yellow', lw=1.5, linestyle='--', zorder=200,
         #     )
-        flv = flavour.replace(':', '_')
-        f_name = f'output/ex0098/{flv}_{scale}_{label}.png'
         fig.savefig(f_name, dpi=100)
         plt.close(fig)
         print(f'  saved {f_name}')
-        recover_stats_report()
 
 
 if __name__ == '__main__':
-    from hhg9.h9.region import recover_stats_reset, recover_stats_report
     gdal.UseExceptions()
     _reg = Registrar()
     _p_pix = _reg.domain('p_pix')
     _b_oct = _reg.domain('b_oct')
-    recover_stats_reset()
 
     EOX_WMTS='https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml'
     ESRI_WMTS='https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml'
+    OAM_URL='https://tiles.openaerialmap.org/6107d91f343da30006976e12/0/6107d91f343da30006976e13/{z}/{x}/{y}'
 
-    _pc = make_pc_source('src/bm_3600x1800.png', _reg, _p_pix, _b_oct)
-    _s2 = make_wmts_source(EOX_WMTS, 's2cloudless-2020', _reg, _b_oct, gain=1.1, gamma=1.1)
-    _s3 = make_wmts_source(ESRI_WMTS, 'World_Imagery', _reg, _b_oct, gain=1.0, gamma=1.0)
+    _pc = make_pc_source('src/bm_3600x1800.png', _reg, _p_pix, _b_oct,
+                         attribution='NASA Visible Earth · Blue Marble')
+    _s2 = make_wmts_source(EOX_WMTS, 's2cloudless-2020', _reg, _b_oct, gain=1.1, gamma=1.1,
+                           attribution='Sentinel-2 cloudless 2020 © EOX IT Services GmbH')
+    _s3 = make_wmts_source(ESRI_WMTS, 'World_Imagery', _reg, _b_oct, gain=1.0, gamma=1.0,
+                           attribution='Esri World Imagery · Esri, Maxar, Earthstar Geographics')
+    _s4 = make_xyz_source(OAM_URL, _reg, _b_oct, max_zoom=22, gain=1.0, gamma=1.0,
+                          attribution='Pierre d\'HUY ©2021  · OpenAerialMap, CC BY-SA 4.0')
+    _s5 = make_bm_source('lawn171.tif', _reg, _b_oct, gamma=1.0,
+                         name='lawn171_wkt', attribution='')
+    _s6 = make_bm_source('lawn_1mm.tif', _reg, _b_oct, gamma=1.0,
+                         name='lawn_1mm', attribution='')
+    _s7 = make_bm_source('fly_1mm.tif', _reg, _b_oct, gamma=1.0,
+                         name='fly_wkt', attribution='')
 
     run(
         reg=_reg,
         flavour='butterfly:0500',
         scale=600,
-        max_layer=13,
+        max_layer=22,
         bg_sources={
             # 0: _pc,
             0: _s2,
-            7: _s3
+            6: _s3,
+            10: _s4,
+            # 13: _s5,   # lawn/table photo (0.8 m) — viewport fits it ~L16
+            14: _s6,   # lawn — viewport fits it ~L20
+            17: _s7,  # fly (1 cm) — viewport fits it ~L20
         },
-        frames_per_level=6,   # set >0 for smooth animation, e.g. 24
+        frames_per_level=24,   # set >0 for smooth animation, e.g. 24
+        skip_existing=True,    # resume: skip frames whose PNG is already on disk
+        # start_frame=300,     # or resume from an explicit frame index
     )

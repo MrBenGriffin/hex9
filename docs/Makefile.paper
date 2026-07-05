@@ -8,7 +8,7 @@
 
 PANDOC   := pandoc
 DEFAULTS := paper.defaults.yaml
-SRC      := paper.md
+SRC      := paper-draft.md
 DEPS     := $(DEFAULTS) header.tex references.bib
 
 FIGDIR   := paper_figures

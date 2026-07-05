@@ -16,6 +16,16 @@ This repository is set up to publish the `hhg9` package from the repository root
      updated when publishing.
    - Consider adding `project.urls` (e.g., documentation, repository, issue tracker) for better PyPI metadata.
 
+
+  1. Clear out dist: rm dist/* 
+  2. Commit all release changes (version bump, README, changelog, urls) → clean working tree.
+  3. Build from that commit: python -m build. (Build reads pyproject, not git, but you want a clean tree so the artifact corresponds exactly to one commit.)
+  4. Verify: twine check dist/*, and ideally pip install the wheel in a throwaway venv and import it.
+  5. Tag that commit: git tag 0.2.0a0 (or -a for an annotated tag).
+  6. Push: git push && git push --tags.
+  7. Upload: twine upload dist/*.
+
+
 Running these steps should surface any remaining packaging issues before publishing to PyPI.
 
    - Run `twine upload --repository pypi dist/*`
