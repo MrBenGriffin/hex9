@@ -40,6 +40,8 @@ htmlcov/
 /hhg9/data/other_warps/
 # 179MB, regenerable — exceeds GitHub 100MB file limit
 /examples/src/tissot_3600x1800.npz
-
+/examples/xyz_cache/
 /hhg9/data/WGS84_pkdo_grid_80.npz
 /hhg9/data/WGS84_pkdo_warp.npz
+/docs/arxiv/
+/docs/**.zip

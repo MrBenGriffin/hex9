@@ -156,6 +156,12 @@ In packed format: reversible tail occupies two nibbles; key tail occupies one ni
 
 The tail encodes which parent is intended without altering the geometric computation. This is analogous to a point on a timezone boundary: it belongs to one zone by convention, not by geometry.
 
+### Labels and lineage paths
+
+A **label** is the human-readable serialisation of the key: digit body + key-tail nibble, written `<body>.<tail>` (e.g. `32343.2`), produced by `h9_label` and inverted by `h9_from_label`. Labels are in bijection with keys — a label *is* the identity, printable and sortable.
+
+The digit body alone (the part before the dot) is a **lineage path**, not an identity. It fails as a name in both directions: a split `x_cell` owns two valid bodies (one per parent lineage), and two distinct cells can produce the same body from different parent contexts (the `p_c2` and `r_mo` collisions). A string without the tail should be read as a path through the hierarchy, never as a cell. (Paper §10b/§10c.)
+
 ---
 
 ## Legacy / Alternative Names
@@ -168,7 +174,7 @@ The tail encodes which parent is intended without altering the geometric computa
 | `x_cell` | `hex`, `hexagon`, `cell` | OGC uses 'cell' for this |
 | `x_dig` | `hex_digit` | 'hex_digit' avoided: reads as hexadecimal |
 | `x_adr` | `h9_address` | |
-| `c2` | `sub-face identifier` | OGC provisional |
+| `c2` | `sub-face identifier` | dropped — not OGC vocabulary (checked against 20-040r3) |
 | `t_grid` | `classifier plane` | |
 
 ---
@@ -176,52 +182,58 @@ The tail encodes which parent is intended without altering the geometric computa
 ## OGC / ISO Mapping
 
 Mapping of Hex9 vocabulary to OGC Abstract Specification Topic 21 (20-040r3,
-2021) and ISO 19111:2019. Status: **C** = confident (term defined in the cited
-standard with a direct correspondence); **P** = provisional (reasonable
-correspondence, exact term to be confirmed against the spec text); **—** = no
+2021; also published as ISO 19170-1:2021) and ISO 19111:2019 (OGC 18-005r4).
+Verified against the published spec texts 2026-07-05; clause numbers refer to
+those documents. Status: **C** = confirmed (term defined at the cited clause);
+**A** = analogous (checked; correspondence real but approximate); **—** = no
 standard equivalent (Hex9-specific construct).
 
-Note the Topic 21 (2021, Part 1) vocabulary shift: the 2017 edition's *cell*
-became *zone*, and a cell identifier became a *zone identifier* (ZID). Hex9
-prose retains "cell" for readability; the OGC-facing term is "zone".
+Vocabulary note: Topic 21 (2021) *distinguishes* rather than renames. A
+**zone** is a "particular region of space-time" (4.52) — the unit that is
+identified; a **cell** is the "unit of geometry … associated with a zone"
+(4.2), and "cell is entirely appropriate when specifically discussing a zone's
+geometry or topology" (4.2, Note 3). The identifier term is *zonal identifier*
+(4.50); "ZID" appears nowhere in the spec.
 
 ### Hex9 → OGC Topic 21 (DGGS)
 
 | Hex9 term | OGC Topic 21 term | Status |
 |---|---|---|
-| Hex9 (the system) | Discrete Global Grid System (DGGS) | C |
-| `x_grid` at level L | Discrete Global Grid (DGG) — one tessellation / hierarchy level | C |
-| `x_cell` | zone (2021); cell (2017) | C |
-| `x_adr` / `x_list` | zone identifier (ZID) | C |
-| octant (8 seed faces) | base polyhedron face / level-0 partition | P |
-| 12 root `x_cells` | level-0 zones | C |
-| refinement level L | refinement level / resolution | C |
-| aperture 9 (shifted) | aperture (refinement ratio) | C |
-| `x_dig` | sub-zone index within a parent zone | P |
-| parent/child `x_cell` | zone hierarchy / containment | C |
-| AK+Warp realisation | DGGS Reference Frame (cell geometry on the globe) | P |
-| b_oct native space | (no direct term — the equal-area realisation surface) | — |
-| mode (0/1 parity) | (no direct term — internal face orientation) | — |
-| `c2` edge label | sub-face identifier | P |
-| `d_cell` (half-hexagon) | (no direct term — sub-cell primitive) | — |
-| `c_cell` / classifier | (no direct term — point-to-zone decode mechanism) | — |
+| Hex9 (the system) | discrete global grid system (4.13) | C |
+| `x_grid` at level L | discrete global grid (4.12) | C |
+| `x_cell` | zone (4.52); its geometry, a cell (4.2) | C |
+| `x_adr` / `x_list` | zonal identifier (4.50) | C |
+| octant (8 seed faces) | face of the base unit polyhedron (4.27) | C |
+| 12 root `x_cells` | initial discrete global grid, refinement level 0 (4.27, 4.37) | C |
+| refinement level L | refinement level (4.37) | C |
+| aperture 9 (shifted) | refinement ratio 9 (4.38; Note 3 records "aperture" as earlier DGGS-literature usage) | C |
+| binning (`h9_bin`) | quantization (4.36) | C |
+| parent/child `x_cell` | parent cell / child cell (4.33, 4.4) | C |
+| split `x_cell` (digits 6–8) | child cell "overlapped by multiple parent cells" (4.4, Note 1) | C |
+| `x_dig` | — (ordinal of a child within its parent; no Topic 21 term) | — |
+| AK+Warp realisation | surface model of the Earth (4.27); cf. Part 1's Equal Area Earth Reference System (Hex9 is quasi-equal-area) | A |
+| b_oct native space | — (the realisation surface; see the ISO table) | — |
+| mode (0/1 parity) | — (internal face orientation) | — |
+| `c2` edge label | — (sub-face structure; no Topic 21 term) | — |
+| `d_cell` (half-hexagon) | — (sub-cell primitive) | — |
+| `c_cell` / classifier | — (point-to-zone decode mechanism) | — |
 
 ### Hex9 → ISO 19111:2019 (referencing by coordinates)
 
 | Hex9 term | ISO 19111 term | Status |
 |---|---|---|
-| WGS84 reference ellipsoid | ellipsoid / geodetic reference frame (datum) | C |
-| Prime Meridian anchoring (Axiom 7) | prime meridian | C |
-| `x_adr` carried to the limit (§10e, App. A) | position recoverable by a function (quasi-continuous; not a strict ISO coordinate) | P |
-| Hex9 as a locating system | coordinate reference system (CRS) — *quasi*, see §10e | P |
-| b_oct | (a coordinate system realised by AK+Warp) | P |
-| encode/decode (point ↔ address) | coordinate operation / conversion | P |
-| octant 2D plane coordinates | coordinate system (CS) axes | P |
+| WGS84 reference ellipsoid | ellipsoid / geodetic reference frame (3.1.34) | C |
+| Prime Meridian anchoring (Axiom 7) | prime meridian (3.1.50) | C |
+| `x_adr` at a fixed level | spatial reference "in the form of a label, code" (3.1.56); a geographic identifier in the ISO 19112 sense (via Topic 21 4.50, Note 1) | C |
+| `x_adr` carried to the limit (§10e, App. A) | approaches the role of a coordinate — "one of a sequence of numbers designating the position of a point" (3.1.5); quasi-continuous, not a strict ISO coordinate | A |
+| Hex9 as a locating system | coordinate reference system (3.1.9) — *quasi*, see §10e | A |
+| b_oct over WGS84, realised by AK+Warp | projected CRS (3.1.51, §9.2.2); map projection — "coordinate conversion from an ellipsoidal coordinate system to a plane" (3.1.40) | C |
+| encode/decode (point ↔ address) | coordinate conversion (3.1.6) for the geodetic ↔ b_oct leg; the address leg assigns a spatial reference (3.1.56) | A |
+| octant 2D plane coordinates | coordinate system / axes (3.1.11) | C |
 
-*The dual role (§9, §10e, Appendix A): a single Hex9 address is a Topic 21 zone
-identifier when truncated and, in the limit, a position recoverable by a function
-to arbitrary precision. This is the weaker, defensible claim — quasi-continuous,
-by analogy with quasi-authalic — not a strict ISO 19111 CRS: the address space is
-discrete and the point→address map is discontinuous on a measure-zero seam set,
-so ISO-sense continuity does not hold (per Even Rouault). Final verification of
-the exact spec wording (current editions) remains a pre-submission task (§15).*
+*The dual role (paper §9, §10e, Appendix A): a Hex9 address truncated at a
+level is a Topic 21 zonal identifier; carried to the limit it converges to
+naming a point — the role ISO 19111 reserves for coordinates (3.1.5). The
+claim made is the weaker, defensible one — quasi-continuous, by analogy with
+quasi-authalic — not a strict ISO 19111 CRS: the address space is discrete and
+the point→address map is discontinuous on a measure-zero seam set.*

@@ -84,14 +84,20 @@ LAND_FILL = '#d8cfc0'
 LAND_STROKE = 'none'
 SEA_FILL = '#b8d4e8'
 GRAT_STROKE = '#888888'
-GRAT_WIDTH = 0.4
+GRAT_WIDTH = 0.3
+GRAT_OPACITY = 0.55
 TISS_STROKE = 'none'
 TISS_FILL = '#cc2200'
 TISS_WIDTH = 0.8
-HEX_STROKE = '#1a6b1a'
-HEX_W1 = 0.9  # L1 linewidth
-HEX_W2 = 0.6  # L2 linewidth
-HEX_W3 = 0.3  # L3 linewidth
+# Slate blue, translucent: the earlier opaque dark green sat next to the red
+# Tissot fills (a red/green pairing) and, with non-scaling strokes, rendered
+# heavy at screen zoom in the PDF conversion. Blue/red is CVD-safe; the alpha
+# and finer widths keep the lattice as context rather than foreground.
+HEX_STROKE = '#33506b'
+HEX_OPACITY = 0.45
+HEX_W1 = 0.55  # L1 linewidth
+HEX_W2 = 0.35  # L2 linewidth
+HEX_W3 = 0.18  # L3 linewidth
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -200,7 +206,8 @@ def run(flavour: str = FLAVOUR, pixels: int = PIXELS) -> None:
             pts = seg * scale
             g_grat.append(_line(pts,
                                 fill='none', stroke=GRAT_STROKE,
-                                stroke_width=GRAT_WIDTH))
+                                stroke_width=GRAT_WIDTH,
+                                stroke_opacity=GRAT_OPACITY))
 
     # ── 3. Tissot circles ────────────────────────────────────────────────────
     if fills_ok:
@@ -228,10 +235,14 @@ def run(flavour: str = FLAVOUR, pixels: int = PIXELS) -> None:
         valid = max_edge <= (face_edge / (3 ** layer))
         for hex_pts in hexes[valid]:
             pts = hex_pts * scale
+            # NB no vector_effect='non-scaling-stroke': that pins stroke width
+            # to screen pixels, which is what made the lattice render heavy at
+            # 100% zoom after SVG→PDF conversion; plain widths scale with the
+            # figure.
             grp.append(_poly(pts,
                              fill='none', stroke=HEX_STROKE,
                              stroke_width=lw,
-                             vector_effect='non-scaling-stroke'))
+                             stroke_opacity=HEX_OPACITY))
 
     # ── Assemble, flip y, write ──────────────────────────────────────────────
     for grp in [g_land, g_seas, g_lakes, g_grat, g_tiss, g_hex1, g_hex2, g_hex3]:

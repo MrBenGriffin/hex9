@@ -78,6 +78,7 @@ def mollweide_map(reg: Registrar, depth: int) -> None:
     v_min = float(np.percentile(scores_plot, 1))
     v_max = float(np.percentile(scores_plot, 99))
     norm = colors.TwoSlopeNorm(vcenter=0.0, vmin=v_min, vmax=v_max)
+    print(f'vmin={v_min}, vmax={v_max}')
     cmap = plt.get_cmap('RdBu_r')
 
     # ── Plot ───────────────────────────────────────────────────────────────
