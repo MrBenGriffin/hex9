@@ -15,6 +15,7 @@ Last Tested
 25 Nov 2025 (passed)
 """
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from matplotlib import pyplot as plt, colors
@@ -123,20 +124,37 @@ def snow_globe(arr: Points, poly_len: int = 6, scores=None, layers='x', lim_pct:
     cmap_name = 'RdBu_r'
     sm = plt.cm.ScalarMappable(cmap=cmap_name, norm=norm)
     sm.set_array([])
-    rgba, _norm = rgba_from(pct, cmap_name, norm=norm)
+    # FILL_ALPHA lightens the fill against the white ground so the stroke
+    # stays differentiable from near-zero (pale) cells. Tune to taste.
+    FILL_ALPHA = 0.60
+    rgba, _norm = rgba_from(pct, cmap_name, norm=norm, alpha=FILL_ALPHA)
     ax.set_proj_type('ortho')  # FOV = 0 deg
     if True:
-        ax.set_xlim(-2e+6, 2e+6)  # fill the area with the map.
-        ax.set_ylim(-2e+6, 2e+6)
-        ax.set_zlim(-3e+6, 3e+6)
+        # ±0.75e6 m (~1500 km across): close enough that the vertex bloom,
+        # its rings, and the seam rays fill the frame — at ±2e6 the ±1%-capped
+        # palette left a tiny cross in a vast near-white field.
+        # NB all three spans must be EQUAL: set_aspect('equal') scales the view
+        # to the largest axis range, so a wide zlim silently zooms back out.
+        # Vertex placed ~25% from the frame edge (not centred): the structure
+        # is 4-fold symmetric, so the composition gives the long run of one
+        # seam ray room to grade out to the quiet interior.
+        ax.set_xlim(-1.48e+6, 0.02e+6)   # moves up / down (add to go up)
+        ax.set_ylim(-0.005e+6, 1.455e+6)  # moves left / right (add to go left)
+        ax.set_zlim(-0.60e+6, 0.20e+6)
     polys = [p for p in front]
 
-    collection = Poly3DCollection(polys, ec='black', facecolors=rgba[mask], alpha=0.9, linewidth=0.02)
+    # Stroke must stay legible against the fill or the tessellation vanishes:
+    # at 400 dpi an L5 hex is ~15 px across, so 0.02 pt (~0.1 px) edges are
+    # invisible and the near-white interior reads as a structureless field.
+    # Semi-transparent grey edges at ~0.5 px keep the lattice visible without
+    # blackening dense regions; fill stays opaque — the colour is the data.
+    collection = Poly3DCollection(polys, ec=(0.15, 0.15, 0.15, 1.0),
+                                  facecolors=rgba[mask], linewidth=0.125)
     ax.add_collection(collection)
     ax.set_aspect('equal', adjustable='box')
     ax.set_axis_off()
     cbar = fig.colorbar(sm, ax=ax, orientation='horizontal', pad=0.0,
-                        fraction=0.025, aspect=40, shrink=0.6)
+                        fraction=0.025, aspect=40, shrink=0.5)
     cbar.set_label(f'% area deviation from ideal (scale clipped at ±{lim_pct:g}%)',
                    fontsize=10)
     lil, big = float(np.min(pct)), float(np.max(pct))
@@ -172,19 +190,28 @@ def hexify(reg: Registrar, b_pts: Points, warp_m=None, layers: int = 4):
     """
     Find hexagons for data, and display on a 'globe'.
     """
-    pts, pops = hex_poly_layer(b_pts, layers)
+    # Geometry and geodesic areas are view-independent and slow (~10 min at
+    # L5); cache them so stroke/zoom iterations re-render in seconds.
+    cache = Path(f'output/ex0081_cache_{layers}.npz')
+    if cache.exists():
+        z = np.load(cache)
+        c_pts = SimpleNamespace(coords=z['coords'])
+        score = z['score']
+    else:
+        pts, pops = hex_poly_layer(b_pts, layers)
 
-    # Now calculate their area as a metric. (ignore pops).
-    gm2 = ellipsoid_area_wgs84() # total surface area of WGS-84 (m²) about 510_065_621_724km
-    bins = 12*(9**layers)          # number of hexes at this layer
-    w_area_m2_mean = gm2/bins    # ideal equal-area per hex
-    h_pts = pts.copy()
-    c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.
-    g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
-    w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
-    w_adj = np.abs(w_area_m2 / w_area_m2_mean) + 1e-12
-    score = np.log(w_adj)  # authalic log-density ℓ
-    snow_globe(c_pts, 6, score, f'{layers}', lim_pct=1.0)
+        # Now calculate their area as a metric. (ignore pops).
+        gm2 = ellipsoid_area_wgs84() # total surface area of WGS-84 (m²) about 510_065_621_724km
+        bins = 12*(9**layers)          # number of hexes at this layer
+        w_area_m2_mean = gm2/bins    # ideal equal-area per hex
+        h_pts = pts.copy()
+        c_pts = reg.project(h_pts, ['b_oct', 'c_oct', 'c_ell'])  # use bary.
+        g_pts = reg.project(h_pts, ['b_oct', 'g_gcd'])
+        w_area_m2 = wgs84_area(reg, g_pts)  # default value is 6
+        w_adj = np.abs(w_area_m2 / w_area_m2_mean) + 1e-12
+        score = np.log(w_adj)  # authalic log-density ℓ
+        np.savez_compressed(cache, coords=c_pts.coords, score=score)
+    snow_globe(c_pts, 6, score, f'{layers}', lim_pct=0.25)
 
 
 if __name__ == '__main__':
