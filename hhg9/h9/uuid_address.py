@@ -149,7 +149,7 @@ def h9_enc(
     return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, UUID_DEPTH, scheme=scheme)
 
 
-def h9_enc_ext(b_pts, oc, mo) -> list[uuid_mod.UUID]:
+def h9_enc_ext(b_pts, oc, mo, depth=UUID_DEPTH) -> list[uuid_mod.UUID]:
     """
     Encode b_oct Points to H9 UUID addresses.
     The caller is responsible for projecting to b_oct beforehand.
@@ -162,8 +162,9 @@ def h9_enc_ext(b_pts, oc, mo) -> list[uuid_mod.UUID]:
     Returns
     -------
     uuids     : list[uuid.UUID]  — 128-bit canonical addresses, one per point
+    :param depth: unsigned int defaulting to UUID_DEPTH
     """
-    return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, UUID_DEPTH)
+    return _coalesce_bin(b_pts.coords, oc, mo, b_pts.domain, depth)
 
 
 def h9_dec(
@@ -387,6 +388,90 @@ def h9_ancestors(
     return h9_bin_pts(b_pts, target)
 
 
+# ---------- Canonical cell ancestry (mode-0 convention) ----------------------
+# h9_bin / h9_bin_pts / h9_ancestors answer the POINT question: which layer-K
+# cell contains this point. The functions below answer the CELL question:
+# which single layer-K cell is the canonical ancestor of this cell. The two
+# differ at split cells (x_dig 6..8), which geometrically straddle two
+# parents; the canonical parent is the one containing the cell's mode-0
+# d_cell (the §10b mode-0 convention). Binning a split cell's decoded
+# centroid cannot answer this — the centroid lies exactly on the straddled
+# boundary — so we decode to a point strictly interior to the mode-0 half:
+# the centroid nudged toward the cell origin (libhex9's full_id_from_cell
+# applies the same cure to grid identity UUIDs). Verified: exactly 9
+# canonical children per parent, every cell, layer pairs L1..L5 globally
+# (experimental/cell_ancestor_verify.py).
+
+_ANC_NUDGE = 0.10   # interior fraction, centroid -> cell origin (mode-0 side)
+
+
+def _mode0_interior_pts(uuids: list[uuid_mod.UUID], b_oct) -> 'Points':
+    """Decode bins to a point strictly inside each cell's mode-0 d_cell."""
+    import hhg9.h9.region as rg
+    from hhg9 import Points
+    from hhg9.h9 import H9K
+    from hhg9.h9.tail import tail_unpack_reversible
+    nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
+    key_tail = nibs[:, -1]
+    c2, _r_mo, c_mo = tail_unpack_reversible(key_tail)
+    cent = _HEX_CENTROID[c_mo.astype(np.intp), c2.astype(np.intp)] * H9K.Ü
+    oc, cells = hex_digits_reg(b_oct, nibs[:, :-1], tail=key_tail, place_terminal=False)
+    xy_c = rg.regions_xy(cells, seed=cent)      # cell centroid (as h9_dec)
+    xy_o = rg.regions_xy(cells)                 # cell origin (mode-0 side)
+    xy = xy_c + _ANC_NUDGE * (xy_o - xy_c)
+    return Points(xy[:, :2], domain=b_oct, oid=oc)
+
+
+def h9_cell_parent(uuids: list[uuid_mod.UUID], reg=None) -> list[uuid_mod.UUID]:
+    """Canonical parent bin of each *cell* — one layer up, mode-0 convention.
+
+    Every layer-K cell is the canonical parent of exactly 9 layer-(K+1)
+    cells: its 6 interior children plus its own 3 split children. Inputs may
+    be bins at mixed layers; L0 cells raise (no parent).
+    """
+    if reg is None:
+        from hhg9 import Registrar
+        reg = Registrar()
+    from hhg9 import Points
+    b_oct = reg.domain('b_oct')
+    layers = np.atleast_1d(h9_layer(uuids))
+    if np.any(layers < 1):
+        raise ValueError('L0 cells have no parent')
+    pts = _mode0_interior_pts(list(uuids), b_oct)
+    out: list = [None] * len(layers)
+    for L in np.unique(layers):
+        idx = np.flatnonzero(layers == L)
+        sub = Points(pts.coords[idx], domain=b_oct, oid=pts.oid[idx])
+        for j, u in zip(idx, h9_bin_pts(sub, int(L) - 1)):
+            out[j] = u
+    return out
+
+
+def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
+    """Canonical layer-``layer`` ancestor of each cell (mode-0 convention).
+
+    Defined by composition of :func:`h9_cell_parent`: canonical ancestry is a
+    per-level relation, so the multi-level ancestor is the iterated one-level
+    parent. (A single deep re-bin of an interior point answers the *point*
+    question instead, and differs at nested splits.) Cells already at
+    ``layer`` pass through unchanged.
+    """
+    if reg is None:
+        from hhg9 import Registrar
+        reg = Registrar()
+    out = list(uuids)
+    while True:
+        lay = np.atleast_1d(h9_layer(out))
+        if np.any(lay < layer):
+            raise ValueError('input coarser than target layer')
+        deep = np.flatnonzero(lay > layer)
+        if deep.size == 0:
+            return out
+        par = h9_cell_parent([out[i] for i in deep], reg=reg)
+        for i, u in zip(deep, par):
+            out[i] = u
+
+
 def _anchor_hex_latlon(anchor: uuid_mod.UUID, at_layer: int, reg, inflate: float = 1.03):
     """The anchor hexagon's lat/lon ring, built from its UUID via H9P.hx.
 
@@ -510,18 +595,20 @@ def h9_layer(uuids):
     return int(layer[0]) if single else layer
 
 
-def h9_label(u: uuid_mod.UUID) -> str:
+def h9_label(u: uuid_mod.UUID, with_tail=True) -> str:
     """Convert an H9 UUID to a human-readable label string.
-
     Format: '<body>.<key>'  e.g. '32343.2'
     The body is the hex-digit address up to (not including) the first 0x0F
     sentinel nibble.  The key nibble (nibble 31) follows the dot.
+    Without tail, the canonical label is unique, but cannot be inverted or re-binned!
     """
     nibs = _batch_int_to_nibbles([u.int], n=32)[0]          # (32,) uint8
     body_nibs = nibs[:31]
     sentinels = np.where(body_nibs == 0x0F)[0]
     stop = int(sentinels[0]) if len(sentinels) else 31       # full-depth → all 31
     body_str = ''.join(format(int(v), 'x') for v in body_nibs[:stop])
+    if not with_tail:
+        return body_str
     return f'{body_str}.{format(int(nibs[31]), "x")}'
 
 

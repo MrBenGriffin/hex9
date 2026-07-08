@@ -15,7 +15,7 @@ abstract: |
   hexagonal dual lattice admits exactly one orientation per chirality — both fixed
   by the same machine-verified exhaustive enumeration. The structure that
   survives is a shifted-aperture-9 hexagonal hierarchy in which every cell
-  carries a unique address derived from the construction alone: truncated at
+  carries a unique canonical address derived from the construction alone: truncated at
   level L, the address is a DGGS zonal identifier in the sense of OGC Topic 21;
   carried to the limit, a function recovers from it a point on the reference
   ellipsoid to arbitrary precision. The addressing is quasi-continuous — position
@@ -127,12 +127,14 @@ admissible complex is the octahedral triangulation.*
 
 ### Axiom 4 — Mode Transport
 
-Mode transport is consistent when traversing any closed loop through the
-triangulation returns the mode to its starting value (trivial holonomy, in the
+Assign to every face-to-face edge crossing in the triangulation the nontrivial
+element of ℤ₂ — a binary flip. This transport is consistent when traversing any
+closed loop of crossings composes to the identity (trivial holonomy, in the
 language of differential geometry; equivalently, a flat ℤ₂ connection, in
-gauge-theoretic terms). This is equivalent to the existence of a globally
-coherent mode field: fix the mode of any one face and every other face's mode
-follows directly.
+gauge-theoretic terms; combinatorially, the face-adjacency graph is bipartite).
+Consistency is equivalent to the existence of a globally coherent binary face
+field: fix the value of any one face and every other face's value follows
+directly. We call this field the **mode** (developed in §§2–3).
 
 Any refinement operator must preserve this consistency. Failure to do so
 introduces a transport defect.
@@ -177,11 +179,16 @@ This is not arbitrary once fixed — it is the reference gauge of the system.
 
 ### Axiom 8 — Unique Cell Addressing
 
-Every cell in the hierarchy has a unique address, and every valid address
-identifies exactly one cell. This bijection is compatible with hierarchical
+Every cell in the hierarchy has a unique canonical address, and every valid
+address identifies exactly one cell: the map between cells and canonical
+addresses is a bijection. This bijection is compatible with hierarchical
 structure: a cell's address encodes its position in the refinement hierarchy,
 and the parent–child relationship is recoverable directly from address
-structure.
+structure. (Cells that straddle a parent boundary — the split hexagons of
+§10 — admit two parent lineages and hence two lineage descriptions; the
+canonical address is fixed by convention. Uniqueness is a property of the
+addressing scheme, not of raw lineage paths, which §10 distinguishes from
+addresses for exactly this reason.)
 
 Combinatorial position is read directly from the address: cell identity and the
 parent–child hierarchy require no transformation. Geographic location follows from
@@ -227,7 +234,7 @@ sections that follow constitute its proof:
    the six octahedral vertices, not as a distinct cell type (Axiom 9; §7).
 4. **Orientation.** The residual orientation freedom collapses to a single
    chiral pair (Axiom 6; §8).
-5. **Identity.** Every cell carries a unique hierarchical address from which its
+5. **Identity.** Every cell carries a unique canonical address from which its
    geographic location is read directly, with no prior coordinate reference
    system (Axiom 8; §§9–10).
 
@@ -246,10 +253,14 @@ globe with appropriate modifications.
 
 The triangle stands apart from this class. It is the minimal polygon — three
 edges, three vertices, no simpler closed shape exists — and the only one whose
-orientation is intrinsic: given any triangle, a consistent notion of clockwise
-and counterclockwise is determined by its vertex ordering alone, without
-additional structure. Every other polygon either decomposes into triangles or
-requires external reference to define orientation consistently across a tiling.
+orientation datum is purely combinatorial: an ordering of its three vertices
+determines an orientation, two orderings being equivalent when they differ by
+an even permutation, with no metric or ambient structure required. (Which
+orientation class reads as *clockwise* is decided by the orientation of the
+surface the triangle sits in — the labels need a viewing side — but the datum
+itself lives in the vertex ordering alone.) Every other polygon either
+decomposes into triangles or carries orientation only through additional
+structure: a cyclic boundary order, a metric, or an embedding.
 
 This intrinsic orientability makes the triangle the natural substrate for a
 globally coherent grid. We take the triangular field — a tiling of the globe by
@@ -278,41 +289,48 @@ coherence requirements alone.
 
 ## 2. Mode
 
-In any consistent triangulation of an orientable surface, every edge is shared
-by exactly two triangles. The intrinsic orientation established in §1 ensures
-those two triangles carry opposite orientations: no two triangles of the same
-orientation can share an edge.
+In any triangulation of a surface without boundary, every edge is shared by
+exactly two triangles. In the familiar planar lattice those two triangles are
+always one *up* and one *down*: the faces fall into two classes, and every edge
+joins one face of each class. We call such a two-colouring of faces — adjacent
+faces always of opposite class — the **mode** of the triangular field: mode 0
+for the down (negative) class, mode 1 for the up (positive) class.
 
-The result is a consistent parity assignment over faces induced by orientation.
-In the familiar planar picture these are the *up* and *down* triangles; on the
-globe they generalise to two classes that partition every face in the
-triangulation. We call this two-colouring the **mode** of the triangular field —
-mode 0 for the down (negative) class, mode 1 for the up (positive) class. This
-labelling is not imposed from outside — it is a structural property of the
-triangulation itself. Fix the mode of any one face, and the mode of every other
-face follows directly; the only freedom is which face to start from, which
-amounts to a global reflection.
+Two cautions keep this definition honest. First, mode is not orientation. A
+coherent orientation — every face wound so that a shared edge is traversed in
+opposite directions by its two faces — exists on any orientable surface, and
+under it adjacent faces have the *same* handedness: in the planar lattice, up
+and down triangles are both counterclockwise. Mode is an additional structure,
+a bipartition of the face-adjacency graph. Second, its existence is not
+automatic. The boundary of the 3-simplex — four triangles, orientable,
+coherently orientable — admits no mode field: its face-adjacency graph is K₄,
+which has no proper two-colouring. The icosahedron, with five faces at every
+vertex, fails the same way. Mode exists exactly when the face-adjacency graph
+is bipartite; which triangulations achieve this is the substance of §§3–4.
 
-Every face carries a mode value. Every interior edge is incident to exactly two
-faces of opposite mode. The field is bipartite on its faces.
+Where a mode field exists it is essentially unique. Fix the mode of any one
+face, and the mode of every other face follows directly; the only freedom is
+which class is named 0, a global reflection. Every face carries a mode value;
+every interior edge is incident to exactly two faces of opposite mode; the
+field is bipartite on its faces.
 
-As the ℤ₂ orientation cocycle of the simplicial surface, realised as a global
-face bipartition, **mode** is the first emergent global invariant of simplicial
-orientation — a constraint every grid built over the field must either respect
-or violate. Everything downstream either respects that cocycle, preserving mode
-consistently across refinement and adjacency, or breaks it, introducing
-inconsistency or defects. Every edge crossing is a mode-flipping step; what
-follows from global consistency of those steps is the subject of §3.
+Mode is therefore the first global coherence requirement of the system, not a
+free consequence of the carrier — which is precisely why Axiom 4 must demand
+it. Every grid built over a triangular field either possesses this invariant
+and preserves it across refinement and adjacency, or lacks it and pays with
+defects. Every edge crossing is a mode-flipping step; what follows from global
+consistency of those steps is the subject of §3.
 
 ---
 
 ## 3. Mode Transport
 
-Section 2 established that every edge crossing carries a mode flip. The transport
-operator on each edge is that flip — the orientation difference between the two
-faces sharing the edge, inherited directly from the intrinsic orientability of
-§1. It is combinatorial in origin: no metric or embedding is required to define
-it.
+Section 2 defined mode where it exists and showed that its existence is a
+genuine constraint. To pose the question uniformly — on any triangulation,
+whether or not a mode field exists — we work with the transport rather than
+the field: the transport operator on each edge is the mode flip, the demand
+that the two faces sharing the edge take opposite classes. It is combinatorial
+in origin: no metric or embedding is required to define it.
 
 We now ask what it means for this transport to be globally consistent.
 
@@ -322,9 +340,9 @@ change in ℤ₂. The transport is **consistent** if the net change depends only
 the endpoints of the path — not on the route taken; equivalently, traversing any
 closed loop returns the mode to its starting value. This is the condition
 differential geometry calls trivial holonomy and gauge theory calls a flat ℤ₂
-connection; we will simply say the transport is **flat**. On any orientable
-surface flatness is equivalent to the existence of a globally consistent mode
-field: fix the mode of any one face and every other face's mode follows. Any
+connection; we will simply say the transport is **flat**. On any connected
+triangulation flatness is equivalent to the existence of a globally consistent
+mode field: fix the mode of any one face and every other face's mode follows. Any
 refinement must preserve flatness; otherwise it introduces a transport defect.
 
 The requirement becomes non-trivial when we demand that consistency extends to
@@ -367,21 +385,30 @@ This is the **vertex closure condition**: it selects triangulations in which
 every vertex has even valence. It ensures that the face adjacency graph is
 bipartite — no odd cycles in the dual.
 
-Face bipartiteness alone does not require uniform valence. Many irregular
-triangulations of S² admit a consistent mode assignment while mixing different
-even valences. The vertex closure condition, taken alone, is compatible with
-non-uniform even valence, and we make no claim that such triangulations fail
-under refinement.
+Vertex closure alone does not finish the argument. It requires every valence
+to be even, but not that all valences be equal: triangulations of S² that mix
+different even valences also carry a consistent mode field. A concrete example
+is the midpoint-subdivided octahedron — original vertices of valence 4,
+edge-midpoint vertices of valence 6, every valence even, dual bipartite, mode
+well defined.^[Combinatorially this example is the aperture-4 (midpoint)
+refinement of the octahedral seed — the same aperture §6 rejects. There is no
+tension: as a triangulation it preserves flat mode transport, since every
+valence stays even. What it fails is the separate hexagonalisation requirement
+developed in §6 — its octant does not tile by half-hexagons.] We make no claim
+that such mixed-valence triangulations fail
+under refinement; flatness by itself admits them.
 
-The selection of uniform valence comes instead from the regularity requirement
-of Axiom 3: the seed complex admits no exceptional cell types and no
-distinguished vertex classes. A triangulation mixing different even valences
-contains several distinct vertex-star types, and every structure built over it —
-refinement rules, addressing, adjacency — would have to distinguish those
-classes explicitly. Axiom 3 excludes this by requirement, not by theorem: every
-vertex star is of the same type, so every vertex behaves identically under
-refinement and addressing. Uniform even valence is therefore imposed as a
-regularity condition, not derived as a topological necessity.
+What removes them is the regularity requirement of Axiom 3, not a theorem. The
+star of a vertex is its ring of incident faces, and in a triangulation the
+star's combinatorial type is fixed by the valence alone: two vertex stars are
+of the same type exactly when the same number of triangles meets at each.
+Axiom 3's "no distinguished vertex classes" is precisely the demand that all
+vertex stars be of one type. A triangulation mixing valences 4 and 6 has two,
+and every structure built over it — refinement rules, addressing, adjacency —
+would have to case-split on them; with a single star type, every vertex
+behaves identically under refinement and addressing. Uniform even valence is
+therefore imposed as a regularity condition, not derived as a topological
+necessity.
 
 Given uniform even valence, the Euler characteristic of S² constrains what is
 possible. For a triangulation with V vertices, E edges, F faces:
@@ -420,8 +447,10 @@ geometric realisation as a convex polyhedron is the regular octahedron.
 
 On the sphere, every embedding of the octahedral seed is equivalent: the
 sphere's symmetry group O(3) contains the full octahedral group O_h in any
-orientation, and no embedding is preferred. The reference ellipsoid breaks this.
-An ellipsoid of revolution retains only the symmetries fixing its polar axis —
+orientation, and no embedding is preferred. The reference ellipsoid breaks
+this, and the more the body's symmetry breaks, the more of the embedding it
+pins. Geodetic reference ellipsoids (WGS84, GRS80) are ellipsoids of
+revolution: such a body retains only the symmetries fixing its polar axis —
 continuous rotation about the axis, the equatorial mirror, and the vertical
 mirror planes (the group D∞h). The poles are the fixed points of this residual
 symmetry.
@@ -432,12 +461,29 @@ the polar axis. Aligning a vertex pair (a 4-fold axis) retains D4h, of order 16;
 a face pair (a 3-fold axis) retains D3d, of order 12; an edge pair retains D2h,
 of order 8; a generic orientation retains almost nothing. Pole-on-vertex
 anchoring is therefore not one choice among equals: it is the unique orientation
-class preserving the maximal common symmetry of seed and surface.
+class preserving the maximal common symmetry of seed and surface.^[On a
+triaxial ellipsoid the residual symmetry drops to the finite group D2h (order
+8) and all three principal axes become salient. The maximal-common-symmetry
+principle still applies and pins the embedding up to a finite choice —
+aligning the body's three 2-fold axes with 2-fold axes of the octahedron
+shares the full D2h — but it no longer selects uniquely: the vertex-aligned
+embedding and the one rotated 45° about the polar axis (equatorial *edge*
+axes onto the equatorial principal axes) share the same group, so a
+convention is required — most naturally the continuous limit of the oblate
+case, which is vertex alignment. The eight octants remain a single D2h orbit,
+so the one-projection, one-warp economy survives, and the realisation of §11
+computes its warp numerically for whatever body is supplied.]
 
-This maximal residual symmetry is what the construction uses. Under D4h the 8
-octant faces form a single orbit — every octant face is equivalent to every
-other — so a single projection function serves all 8 octants, with mode-1 faces
-obtained from mode-0 by one reflection (y → −y). The anchoring also reduces the
+This maximal residual symmetry is what the construction uses, and it does two
+distinct jobs. Combinatorially, it anchors the seed: under D4h the 8 octant
+faces form a single orbit — every octant face is equivalent to every other —
+so a single projection function serves all 8 octants, with mode-1 faces
+obtained from mode-0 by one reflection (y → −y). The same orbit then carries
+into the realisation (§11): the area-distortion field the warp must correct
+shares the body's symmetry, so one warp field, computed once, serves every
+octant, and the correction is exactly uniform across octants — no octant pays
+more warp than another, a guarantee an asymmetric embedding could not make.
+The anchoring also reduces the
 continuous rotational gauge freedom to the discrete 4-fold rotation, which the
 meridian anchoring of Axiom 7 resolves. Pole anchoring does not impose a
 coordinate system; it selects the embedding in which the seed inherits the most
@@ -634,9 +680,9 @@ address, derived from simplicial coherence requirements alone.
 
 ![The seed solid and the 12 root cells. Left: the octahedron with each octant face creased into its three d_cell facets (24 faces, the diploid form that names the d_cell). Right: coloured per root x_cell, hue by octahedral axis, light/dark for the mode-0/mode-1 halves — at L0 every root cell is one of the 12 five-neighbour hexagons that meet at the octahedral vertices (appearing pentagonal once projected onto a reference ellipsoid). The faceting is illustrative; the cells live on the smooth ellipsoid.](paper_figures/f21.png){width=92%}
 
-Each Hex9 cell is identified by its octant (one of 8) and its path through the
-refinement hierarchy. This pair is not a coordinate computed from a prior
-reference system — it is the cell's identity. The bijection of Axiom 8 (Unique
+Each Hex9 cell is identified by its path through the refinement hierarchy.
+This path is not a coordinate computed from a prior reference system — it is
+the cell's identity. The bijection of Axiom 8 (Unique
 Cell Addressing) guarantees that this identity encodes a specific, unambiguous
 geographic region. At each finite refinement level the correspondence between
 addresses and cells is exact: one address, one cell, no exceptions. Cell
@@ -678,29 +724,31 @@ single letters: **c**, **t**, **d**, **x**. The sections that follow use this
 vocabulary constantly; this section fixes it. (The authoritative glossary,
 maintained alongside the implementation, extends these definitions.)
 
+![Anatomy of one parent triangle: t_cells, c2 edges, d_cells, and the assembled x_cells with x_dig labels — the c/t/d/x taxonomy in one picture.^[Generated by `examples/ex0400_anatomy.py`.]](paper_figures/ex0400_anatomy_f3.png){width=90%}
+
 **t_cell** — a triangular cell of the refined field: the working unit of the
 simplicial carrier. Each t_cell carries an intrinsic mode (0 = ∇, 1 = Λ; §2) and
-subdivides into 9 child t_cells at the next level (§6). Within a parent context,
-a child t_cell occupies one of 12 positional classes, written as a **region** id
-(0–11): 6 classes are shared across both parent modes, 3 occur only under a
-mode-0 parent, and 3 only under a mode-1 parent.
+subdivides into 9 child t_cells at the next level (§6).
 
 **c2** — the label (0, 1, 2) of a t_cell edge, assigned by edge gradient: 0 =
 flat (horizontal), 1 = forward (positive slope), 2 = back (negative slope).
 Adjacent triangles agree on the c2 value of their common edge, and the c2
-progression around any triangle is clockwise regardless of mode. *Etymology:*
-"c2" is shorthand for **"colouring 2"** — one of the two distinct
-three-colourings of the wallpaper group **p31m** (Grünbaum & Shephard 1987
-[@grunbaum1987tilings], *Tilings and Patterns*, §8.3 "Color Pattern Types", p.
-433, type IH38; PP25[3]₁/p31m[3]₁ and PP25[3]₂/p31m[3]₂ — see the
-`grunbaum_shephard_*` figures, the second with the Hex9 d_cell overlay aligned).
-Note a **very early naming mismatch**: despite the "2", the Hex9 c2 labelling
-actually corresponds to Grünbaum & Shephard's *first* colouring, **p31m[3]₁**,
-not the second.
+progression around any triangle is clockwise regardless of mode.^[*Etymology:*
+"c2" is shorthand for "colouring 2" — one of the two distinct three-colourings
+of the wallpaper group p31m (Grünbaum & Shephard 1987 [@grunbaum1987tilings],
+*Tilings and Patterns*, §8.3 "Color Pattern Types", p. 433, type IH38;
+PP25[3]₁/p31m[3]₁ and PP25[3]₂/p31m[3]₂ — reproduced in the figure, the second
+with the Hex9 d_cell overlay aligned). A very early naming mismatch: despite
+the "2", the Hex9 c2 labelling actually corresponds to Grünbaum & Shephard's
+*first* colouring, p31m[3]₁, not the second.]
+
+![The two three-colourings of the p31m arrowhead tiling, PP25[3]₁ and PP25[3]₂ (top pair, redrawn after Grünbaum & Shephard [@grunbaum1987tilings], §8.3 "Color Pattern Types", p. 433, type IH38), and the same colourings with the Hex9 d_cell tiling overlaid and aligned (bottom pair). Despite its name, the Hex9 c2 labelling corresponds to the *first* colouring, p31m[3]₁.](paper_figures/grunbaum_shephard_c2.png){width=80%}
 
 **c_cell** — a slot in the 96-position classifier grid: the raw output of the
 three-family inequality classification of §10a. Twelve of the 96 slots are the
 in-scope t_cell classes; the remainder are out of scope by construction.
+
+![The classifier (c-layer): three band families partition the octant plane; their indices compose the 96-slot c_grid digit, which maps to a t_cell and thence to d_cell and x_cell. Locating a point is band membership, not search (§10a).^[Generated from the `addressing.py` classifier.]](paper_figures/f5.png){width=85%}
 
 **d_cell** (half-hexagon) — three t_cells grouped by their shared long edge. The
 c2 value of that long edge is the d_cell's digit (d_dig ∈ {0, 1, 2}), and the
@@ -718,21 +766,27 @@ is **split**, straddling two parents), and the low trit records the c2
 orientation of the child's long edge. The three split children per parent
 (x_dig ∈ {6, 7, 8}) are the only cells with two valid parents (§10b).
 
+![The x-layer: a parent x_cell and its 9 child x_cells labelled by x_dig (0–8), coloured by high-trit class (0–2 / 3–5 / 6–8). The three split children (6,7,8) straddle the parent boundary; there is no central child.^[Generated by `examples/ex0400_anatomy.py`.]](paper_figures/ex0400_anatomy_f4.png){width=85%}
+
 **Lists and addresses** — c_list, t_list, and d_list are digit sequences over
 strict single-parent trees: they compose left-to-right and are prefix-sortable.
 An **x_list** is the sequence of x_digs; because of the split cells it is
-resolved right-to-left. An **x_adr** is an x_list plus a **tail** — a single
-metadata byte that resolves split-cell parentage and terminal state (§10b). The
-tail is metadata only: it never participates in geometric computation.
-
-![Anatomy of one parent triangle: t_cells, c2 edges, d_cells, and the assembled x_cells with x_dig labels — the c/t/d/x taxonomy in one picture.^[Generated by `examples/ex0400_anatomy.py`.]](paper_figures/ex0400_anatomy_f3.png){width=90%}
+resolved right-to-left. An **x_adr** is an x_list plus a **tail** — a metadata
+nibble that resolves the root octant and split-cell parentage (§10b details
+its fields). The tail is metadata only: it never participates in geometric
+computation.
 
 ### 10a. Identity as Locator
 
-A Hex9 address is a pair: an octant index (one of 8) and a refinement path — a
-sequence of x_dig values recording which child x_cell was entered at each level
-of the hierarchy. An x_adr of depth L identifies exactly one x_cell at level L on
-the reference ellipsoid.
+A Hex9 address is a pair — but not the pair a reader might expect. It is not
+(octant, path); it is (path, metadata). The path is the x_list: the sequence
+of x_dig values recording which child x_cell was entered at each level of the
+hierarchy. The metadata is the tail. The tail's root-mode field, together with
+the level-0 hexagon digit at the head of the path, identifies the octant — the
+octant is derived, not stored — and its parent-c2 field resolves the parentage
+ambiguity that the split digits 6–8 bake into the path (§10b develops both
+fields). An x_adr of depth L identifies exactly one x_cell at level L on the
+reference ellipsoid.
 
 The reversibility of this mapping rests on the construction. At each level, a
 parent x_cell contains exactly 9 child x_cells, whose arrangement is determined
@@ -741,8 +795,6 @@ selects one of those 9 children unambiguously. The refinement tree is a strict
 single-parent structure for t_cells and d_cells; x_cells inherit this property
 except at the 3 split x_cells per level, whose parentage is resolved by the tail
 of the x_adr.
-
-![The x-layer: a parent x_cell and its 9 child x_cells labelled by x_dig (0–8), coloured by high-trit class (0–2 / 3–5 / 6–8). The three split children (6,7,8) straddle the parent boundary; there is no central child.^[Generated by `examples/ex0400_anatomy.py`.]](paper_figures/ex0400_anatomy_f4.png){width=85%}
 
 Once the projection from the reference ellipsoid to the octant 2D plane is
 complete, the encode direction (point → x_adr) operates via a sequence of linear
@@ -757,10 +809,9 @@ A point's t_cell at a given level is determined by which band it occupies on eac
 family — a small fixed number of comparisons, with no geometric distance
 computation and no iterative search. At each successive refinement level the
 thresholds scale by 1/3, maintaining identical structure. The c_cell (the
-96-slot classifier combining horizontal and slope bands) maps directly to a
-t_cell, and from there to the d_cell and x_cell via the construction of §§6–8.
-
-![The classifier (c-layer): three band families partition the octant plane; their indices compose the 96-slot c_grid digit, which maps to a t_cell and thence to d_cell and x_cell. Locating a point is band membership, not search.^[Generated from the `addressing.py` classifier.]](paper_figures/f5.png){width=85%}
+96-slot classifier combining horizontal and slope bands, pictured in §10.0)
+maps directly to a t_cell, and from there to the d_cell and x_cell via the
+construction of §§6–8.
 
 The mapping operates in both directions. Given an x_adr, the corresponding
 geographic region is recovered by tracing the digit sequence from the octant
@@ -774,9 +825,10 @@ approximation: every point belongs to exactly one x_cell at every level. Decode
 recovers a cell whose geographic extent is precisely determined by the
 octahedral embedding and the refinement geometry.
 
-This reversibility qualifies Hex9 as a locating system rather than merely an
-indexing scheme. Location is not inferred from the address — it is recovered from
-it by retracing the construction.
+This reversibility qualifies the Hex9 address as a geocode, and Hex9 itself as
+a locating system rather than merely an indexing scheme. Location is not
+inferred from the address — it is recovered from it by retracing the
+construction.
 
 ### 10b. Identity as Key
 
@@ -785,63 +837,98 @@ can be stored, compared, and sorted without reference to any geometric
 structure. This makes Hex9 addresses directly usable as database keys, hash
 keys, or binning primitives.
 
-The key property is that prefix order corresponds to containment. All cells whose
-address begins with a given prefix σ are contained within the cell identified by
-σ. This means spatial containment queries reduce to prefix comparisons: to find
-all level-L cells within a given level-K region (L > K), select all addresses
-sharing that region's prefix. No geometric computation is needed.
+The key property is that prefix order corresponds to containment — stated with
+the care that Hex9's split cells demand. For the strict single-parent layers
+the property is unqualified: every c_list, t_list, or d_list beginning with a
+prefix σ names a cell inside the cell σ names. At the x layer, three facts
+coexist. First, a canonical body is a unique name even without its tail: no
+two cells at the same level share a digit body anywhere in the canonical
+address space — machine-verified exhaustively through level 5 (12, 108, 972,
+8,748, 78,732 and 708,588 bodies; all distinct).^[Verified by
+`experimental/body_census.py`: every cell at every level 0–5 is enumerated
+and the tail-stripped bodies compared. Non-canonical readings of a body do
+denote other cells — the tail pins the reading — but the canonical pipeline
+never emits them.] Second, a body is nevertheless a *lineage* path (§10c),
+and lineage is not ancestry: cutting a canonical body at length K yields its
+lineage node at level K, which for a child in the mode-1 half of a split
+parent is not its canonical ancestor. In the London example below, 43585 cuts
+to 4358, but its canonical level-3 ancestor is the hexagon canonically named
+4348 — 4358 is that same hexagon's reading under its non-canonical mode-1
+parent, while the body 4358 canonically names a different hexagon elsewhere.
+Prefix comparison therefore groups by lineage; grouping by canonical ancestor
+derives the ancestor through the tail first (the caution below). Third,
+geometry: a split child straddles its two parents — only its mode-0 half lies
+inside its canonical parent — and exact nesting lives one layer down, at the
+d_cell (§10e). Prefix containment is not the claim that every child hexagon
+sits wholly inside a parent hexagon; no hexagonal hierarchy can claim that,
+since hexagons do not tile hexagons.
 
-Spatial joins between two datasets reduce similarly: two observations share a
-cell at level K if and only if their addresses share a common prefix of length K.
-Aggregation across levels is achieved by truncating addresses to the desired
-depth. These operations are efficient and require no coordinate arithmetic.
+The operational consequences hold with the lineage/ancestry distinction kept
+in view. Cells belonging to a given level-K region are found by canonical
+truncation — a tail-aware cut, implemented as `h9_bin`/`h9_ancestors` — after
+which containment and join queries reduce to exact key and prefix comparison,
+with no geometric computation: two observations share a cell at level K if
+and only if their canonical level-K bins agree. Raw string cutting remains
+meaningful — it groups by lineage, and away from split lineages the two
+groupings coincide — but at split lineages they differ, which is the London
+table's lesson. Aggregation across levels truncates canonically for the same
+reason. These operations are efficient and require no coordinate arithmetic.
 
-Because the address space is defined by the refinement structure rather than by a
-numerical coordinate grid, there are no edge effects, no wrap-around anomalies,
-and no cells that straddle index boundaries. Every cell has exactly one address;
-every address identifies exactly one cell. The key space is clean.
+Because the address space is defined by the refinement structure rather than by
+a numerical coordinate grid, there are no edge effects and no wrap-around
+anomalies of an imposed coordinate system. Every cell has exactly one canonical
+address; every canonical address identifies exactly one cell. The key space is
+clean.
 
-This last claim is grounded in the address tail. The x_list alone is not always
-sufficient: at each level, 3 of the 9 child x_cells (those with x_dig in {6,7,8})
-straddle the c2 boundary between two adjacent d_cells and have two valid parents.
-Beyond this, two cells with distinct terminal regions can produce identical digit
-sequences when those regions generate the same hex digit from different parent c2
-contexts.
+The tail is what grounds these operations — not for uniqueness of canonical
+names, which the census above shows the bodies already have, but for
+*reading*. A digit sequence in isolation does not carry its parent context:
+3 of the 9 child x_cells at each level (x_dig ∈ {6, 7, 8}) straddle the c2
+boundary between two adjacent d_cells and have two valid parents, and the
+same terminal digit can arise from different parent c2 contexts. The context
+that makes a body's reading unique is global — recoverable in principle by
+re-descending the hierarchy, but not from the digits locally. The tail pins
+the reading in place, making decode a local, constant-time operation.
 
-The key tail carries two fields that resolve these ambiguities. The first is
-p_c2 — the parent c2 of the terminal region. A concrete instance: hex digit 6 at
-the terminal level arises from both region 9 (mode 1, parent c2 = 0) and region 6
-(mode 0, parent c2 = 2) within the same parent context. Both paths produce an
-identical digit body; without p_c2 they collide as keys. With p_c2 = 0 or
-p_c2 = 2 respectively, the two addresses are distinct. The second field is r_mo —
-the root octant's net_mode. Two octants of opposite mode can produce the same
-root hex digit; without r_mo the decoder cannot recover which octant the address
-originates from, and cells in distinct geographic regions would share the same
-key.
+The key tail carries two fields. The first is p_c2 — the parent c2 of the
+terminal region. (Within a parent context, a child t_cell occupies one of 12
+positional classes, its **region** id, 0–11: 6 classes are shared across both
+parent modes, 3 occur only under a mode-0 parent, and 3 only under a mode-1
+parent.) A concrete instance: terminal digit 6 arises both from
+region 9 (mode 1, parent c2 = 0) and from region 6 (mode 0, parent c2 = 2).
+The two readings denote different cells; only one is the canonical reading
+of any given body, but without p_c2 the decoder cannot tell which without
+global re-descent. The second field is r_mo — the root octant's net_mode.
+The root digit names one of the 12 root hexagons, each of which spans two
+octants; r_mo selects the octant frame in which the descent is read, without
+which the path cannot be oriented geometrically.
 
-The full reversible tail additionally carries p_mo and h. The p_mo field records
-the actual parent mode of the terminal region; for split x_cells, this may differ
-from the key tail's canonical mode-0 assumption. Without p_mo, the decoder
-recovers the mode-0 parent's representative, not the exact terminal cell. The h
-field identifies the terminal d_cell (one of 12, bits 3–0); without it,
-reconstruction returns the x_cell centre. With h, the precise d_cell centroid is
-recovered. The reversible tail is fully invertible: the address body together
-with the reversible tail uniquely and exactly determines both the geographic
-region and a representative point within it.
+The third field is p_mo, the mode of the terminal region's parent. Its role is
+resolved by canonicalisation: encoding folds the terminal half-hex onto its
+mode-0 parent *before* the tail is written, so every canonical address carries
+p_mo = 0. The bit exists because a mode-1-parent reading arises naturally
+during construction — split cells have two valid parents (§10.0) — and must
+remain expressible, and the decoder honours it; but the canonical pipeline
+never emits one. With p_mo pinned to zero, the reversible tail and the key
+tail coincide: a single nibble, identical in both styles.
 
 The tail fields in summary:
 
 | Field | Bits | Carries | Without it |
 |---|---|---|---|
-| p_c2 | 2 | parent c2 of the terminal region | distinct cells collide as keys (same digit body from different parent c2 contexts) |
-| r_mo | 1 | root octant net mode | octant unrecoverable from the root digit; cross-octant key collisions |
-| p_mo | 1 | actual parent mode of the terminal region (reversible tail only) | decoder returns the canonical mode-0 representative, not the exact cell |
-| h | 4 | terminal d_cell id, 0–11 (reversible tail only) | reconstruction returns the x_cell centre, not the exact d_cell centroid |
+| p_c2 | 2 (bits 2–1) | parent c2 of the terminal region | decode ceases to be local: the canonical reading of the terminal digit is recoverable only by global re-descent |
+| r_mo | 1 (bit 0) | root octant net mode | octant frame ambiguous — each root hexagon spans two octants; the path cannot be oriented geometrically |
+| p_mo | 1 (bit 3) | parent mode of the terminal region; 0 in every canonical address | non-canonical (mode-1-parent) readings inexpressible during construction |
 
-Both tails are invertible: the key (bin) tail round-trips to the bin cell's
-representative point, the full tail (all four fields) to the terminal cell's. The
-difference is *which* cell's representative is recovered — never the original
-source point — not whether one is recoverable at all.
+The tail is invertible in the sense that matters: digit body plus tail
+round-trips to the canonical cell — its region and its representative point —
+never to the original source point, which quantisation necessarily discards.
+Reversibility is thus bounded by resolution, not by the encoding: at full
+UUID depth the terminal cell is roughly 40 nm across (§13b), so the
+round-trip is exact for any geodetic purpose, while at coarser bins the
+recovered representative and the source point can differ by up to a cell
+radius — by design. §13b details the packed form and the marker that
+distinguishes a bin from a full-depth address.
 
 One caution follows directly. Truncating an address to length K always
 identifies a valid ancestor at the corresponding level, but not necessarily the
@@ -865,12 +952,26 @@ with non-adjacent prefixes:
 43527 appears to have jumped lineage: it belongs to 4352 (south-west England)
 despite being geographically adjacent to 43486 in 4348 (east England). The jump
 is not an anomaly — it is the visible signature of the split digits. Digits 6–8
-carry high ternary trit 2: thesecells straddle the d_cell boundary, and the
+carry high ternary trit 2: these cells straddle the d_cell boundary, and the
 canonical mode-0 parent convention places geographically adjacent cells on
 opposite sides of that boundary into different canonical lineages, exactly as the
 construction requires.
 
-![The split-cell lineage jump over central London and the Thames estuary (Equal Earth, EPSG:8857). Hexagons are annotated by digit body — the lineage path, §10c; the bold **4348** and **4352** mark the two level-3 parent cells, and the heavy line is their boundary. Cell **43527** lies west of Greenwich yet belongs to the **4352** lineage, while its geographic neighbours **43486** and **43483** belong to **4348** — the canonical mode-0 convention placing adjacent cells across the c2 (Prime-Meridian) boundary into different lineages, exactly as §10b describes.^[Rendered in QGIS over an OpenStreetMap backdrop; hex boundaries and addresses from `hhg9`.]](paper_figures/f6_epsg8857_web.jpg){width=90%}
+The deeper form of the jump is 43585 (see the figure). Its terminal digit is
+interior — nothing about the cell itself straddles — yet it sits wholly
+inside the heavy 4348 outline while carrying the 4358 lineage. The reason is
+that 4348 is itself a split cell: it straddles the [434|435] level-2 boundary
+that the Prime Meridian follows here, and its canonical name descends from
+its mode-0 parent, 434. The children of its mode-0 half extend 4348; the
+children of its mode-1 half descend through 435 and extend 4358 — one
+hexagon, two lineage prefixes — while canonically the body 4358 names a
+different split hexagon elsewhere, the one whose mode-0 parent is 435. This
+is also the mechanism behind the census result above: canonical bodies never
+collide because each cell's canonical name claims exactly one (parent, digit)
+slot, but the lineage prefixes visible on a map are not canonical ancestors,
+and aggregation must derive ancestry through the tail.
+
+![Split-cell lineage structure over England (Equal Earth, EPSG:8857). Hexagons are annotated by digit body — the lineage path, §10c; the bold **4348** and **4352** mark two level-3 cells and the heavy lines their boundaries. Two forms of lineage jump are visible. Cell **43527** lies west of Greenwich yet belongs to the **4352** lineage while its geographic neighbours **43486** and **43483** belong to **4348**: a split child, straddling the boundary, canonically named from across it. Deeper: 4348 is itself a split cell on the [434|435] level-2 boundary that the Prime Meridian follows here. Its canonical name descends from 434, but the children of its mode-1 half — **43581** and **43585**, wholly interior to the heavy 4348 outline, plus the split child **43587** on its rim — descend through 435 and carry the 4358 lineage: one hexagon, two lineage prefixes. Canonically, the body 4358 names a different hexagon elsewhere; canonical bodies themselves never collide (machine-verified, §10b).^[Rendered in QGIS over an OpenStreetMap backdrop; hex boundaries and addresses from `hhg9`.]](paper_figures/f6_epsg8857_web.jpg){width=90%}
 
 ### 10c. Identity as Label
 
@@ -881,14 +982,18 @@ implemented by `h9_label` and its inverse `h9_from_label`; labels and keys are
 in bijection, so a label carries exactly the identity of §10b, in a form that
 can be printed, sorted, and compared by eye.
 
-The digit body alone — the part before the dot — is a *lineage path*, not an
-identity. It is readable and prefix-meaningful: truncating it walks up a
-lineage, and two bodies sharing a prefix share the corresponding ancestor
-context. But it fails as a name in both directions (§10b): a split cell owns
-two valid bodies, one per parent lineage, and two distinct cells can produce
-the same body from different parent contexts — the p_c2 and r_mo collisions.
-The tail nibble is what closes both gaps. A string without it should be read
-as a path through the hierarchy, never as a cell.
+The digit body alone — the part before the dot — is a *lineage path*, not a
+decodable name. It is readable and prefix-meaningful: truncating it walks up
+a lineage, and two bodies sharing a prefix share that lineage context. The
+census of §10b even shows canonical bodies never collide — yet the body
+still falls short of a name in two ways. First, lineage is not ancestry:
+cutting a canonical body yields lineage spellings, and at a split parent the
+spelling differs from the canonical name of the cell it reaches (43585 cuts
+to 4358; that hexagon's canonical name is 4348). Second, a body cannot be
+read locally: the same digit string under different tail readings denotes
+different cells, so recovering a bare body's cell requires global re-descent
+(§10b). The tail nibble closes both gaps. A string without it should be read
+as a path through the hierarchy, not inverted as a cell.
 
 What makes labels uniform is the canonical fold of §10b, not a suppression of
 structure: after canonicalisation every cell is presented through a mode-0
@@ -905,22 +1010,35 @@ ellipsoid. In Hex9, adjacency is recoverable from the refinement structure
 because the x_cell geometry is fully determined by the t_cell → d_cell → x_cell
 construction.
 
-Within a parent x_cell, the 9 child x_cells tile the parent's region. Their
-shared edges are the c2 edges of the underlying d_cells — the same long-edge
-alignment that the orientation selection of §8 fixed globally. Adjacency is
-realised as a fixed, finite lookup: every cell has exactly three neighbours, one
-per c2 value, given by a constant table keyed by (cell, parent mode, c2). The
-digit structure mirrors this: each split digit k+6 (k ∈ {0, 1, 2}) names the pair
-of d_cells flanking interior child k, and the low ternary trit of every x_dig
-records the c2 orientation of the cell's long edge.
+Within a parent x_cell, the tiling one layer down is exact — but it is a
+tiling by d_cells, not by nine whole hexagons. The parent region is covered by
+its 6 interior child x_cells (digits 0–5, twelve connected d_cells) together
+with 6 rim d_cells, each the inward-facing half of a split hexagon. Three of
+those rim d_cells are the mode-0 halves of the parent's own canonical split
+children (digits 6–8); the other three are mode-1 halves of split cells
+canonically owned by the parent's neighbours (§10b). Shared edges throughout
+are the c2 edges of the underlying d_cells — the same long-edge alignment that
+the orientation selection of §8 fixed globally.
+
+Adjacency is computed at the t_cell layer, where it is a fixed, finite lookup:
+every t_cell has exactly three neighbours, one per c2 edge, given by a
+constant table keyed by (region id, parent mode, c2). The digit structure
+mirrors the assembly: each split digit k+6 (k ∈ {0, 1, 2}) names the pair of
+d_cells flanking interior child k, and the low ternary trit of every x_dig
+records the c2 orientation of the cell's long edge. d_cell and x_cell
+adjacency compose from this t_cell table through the t → d → x assembly: the
+six neighbours of an x_cell are reached through the c2 edges of its two
+halves.
 
 ![Sibling adjacency within a parent: each child t_cell edge is internal (blue, shared with a sibling) or external (red, cross-parent); a child's adjacency class is its red-edge count (interior 0, mid-edge 1, vertex 2).^[Generated by `examples/ex0400_anatomy.py`; classes verified against `region.py`'s neighbour builder.]](paper_figures/ex0400_anatomy_f7.png){width=85%}
 
-The same table classifies every cell's relationship to its parent boundary.
-Within each parent, cells fall into three classes: interior cells, whose
-neighbours all share the parent; mid-edge cells, with exactly one neighbour in an
-adjacent parent; and vertex cells, with two. For the latter classes the lookup
-flags the crossing and identifies the relevant child in the neighbouring parent —
+The same t_cell table classifies every child's relationship to its parent
+t_cell's boundary — the figure above shows the classes. Within each parent
+t_cell, child t_cells fall into three classes by their count of
+parent-crossing edges: interior children, whose three neighbours all share the
+parent; mid-edge children, with exactly one neighbour in an adjacent parent;
+and vertex children, with two. For the latter classes the lookup flags the
+crossing and identifies the corresponding child in the neighbouring parent —
 a computable operation on the address structure, stepping up one level in the
 refinement tree and applying the same c2 edge relationships that govern interior
 adjacency. Where the neighbouring parent lies across an octant seam, the octant
@@ -981,8 +1099,8 @@ attain, a continuous one.
 
 ### 10f. Seams and Valence Defects
 
-The Euler characteristic of S² requires that any triangulation of the globe carry
-topological defects. In Hex9 these are absorbed at the six octahedral vertices —
+As stated in §4, the Euler characteristic of S² requires that any triangulation
+of the globe carry topological defects. In Hex9 these are absorbed at the six octahedral vertices —
 each a 4-valent point of the triangulation, where the hexagonal grid carries its
 defect as the five-neighbour cells of §12. Understanding why
 neither these defects nor octant seams require special handling requires tracing
@@ -1053,12 +1171,13 @@ the others. The warp is ellipsoid-specific; the grid is not.
   \draw[->] (raw) -- node[op, above]{authalic warp\\(\S11b)} (oct);
   \draw[->] (oct) -- node[op, above]{partition cycle\\(\S10a, \S13a)} (adr);
   \draw[->, dashed] (adr.south) to[out=-150,in=-30]
-    node[op, below]{Newton--Raphson inverse warp $+$ decode} (g.south);
+    node[op, below]{decode $+$ inverse warp $+$ inverse projection} (g.south);
 \end{tikzpicture}}
 \caption{The geometric-realisation pipeline (\S11). A WGS84 geodetic coordinate
 reaches a combinatorial Hex9 address through the AK base projection, the authalic
-warp, and the partition cycle; the inverse (dashed) retraces the chain with a
-Newton--Raphson warp inversion. The three concerns --- combinatorial hierarchy,
+warp, and the partition cycle; the inverse (dashed) retraces the chain: decode,
+a Newton--Raphson inversion of the warp (\S11b), and a guarded Gauss--Newton
+inversion of the base projection (\S13f). The three concerns --- combinatorial hierarchy,
 base projection, area correction --- are independent and separately substitutable.}
 \end{figure}
 ```
@@ -1081,7 +1200,13 @@ y-coordinate reflection, so one projection function serves all octants.
 
 No closed-form inverse exists. The backward pass — ellipsoid to octant — is
 realised by numerical root-finding; the fast path is a guarded Gauss–Newton
-iteration on the analytic Jacobian (§13f), with an exact beam search as the
+iteration on the analytic Jacobian (§13f),^[Two Newton-family solvers appear in
+the realisation, and they are not interchangeable: this projection inverse is a
+Gauss–Newton least-squares iteration — three ECEF residual components over two
+face coordinates — while the warp inverse of §11b is a plain Newton–Raphson
+step on a square 2×2 system. The two methods coincide exactly when the residual
+system is square with an invertible Jacobian; each use in this paper names its
+own component.] with an exact beam search as the
 reference and as the fallback near seams and vertices. The forward map is smooth and injective
 on each octant, so an inverse is guaranteed to exist; the numerical method is an
 implementation choice, not a structural requirement.
@@ -1117,7 +1242,7 @@ positions, which improves numerical conditioning.
 The displacement field is precomputed once per ellipsoid and stored. At runtime,
 it is applied via a Clough-Tocher interpolant [@clough1965finite] (C1
 continuous). The inverse warp uses the forward interpolant to obtain an initial
-estimate, then refines by Newton-Raphson to a tolerance of 10⁻¹⁴ in b_oct
+estimate, then refines by Newton–Raphson to a tolerance of 10⁻¹⁴ in b_oct
 (barycentric) units. The geodetic round-trip g → b_oct → g, measured on WGS84 at
 validation points that include a near-pole location (89.99°N) and the Greenwich
 seam, returns to within 1.8 nm of the original position — many orders of
@@ -1140,7 +1265,7 @@ field.
 
 ![Per-hex area deviation around the north-pole vertex, colour scale capped at ±0.25%. The tight cap reveals the residual structure: a quiet near-white interior (the equal-area result), the vertex bloom whose innermost cells reach the ±4–5% extremes and saturate the scale, and the gentle grading that runs out along the two visible octant seams. Every cell is one L5 hexagon.^[Generated by `examples/ex0081w_warped_authalics.py` (`snow_globe`, `lim_pct=0.25`).]](paper_figures/ex0081wau_5_web.jpg){width=75%}
 
-![Per-hex area deviation, Mollweide, on a scale clipped at −0.31%/+0.26% — the p1–p99 band (pattern view). The clip makes the spatial structure legible: a quiet near-white interior with the octant seam skeleton and six vertex blooms picked out. The colourbar is clipped and does **not** reach the true extremes (min −3.57%, max +4.80%).^[Generated by `examples/ex0118_mollweide.py` (L5).]](paper_figures/ex0118_mollweide_L5_web.jpg){width=92%}
+![Per-hex area deviation, Mollweide, on a scale clipped at −0.31%/+0.26% — the p1–p99 band (pattern view). The clip makes the spatial structure legible: a quiet near-white interior with the octant seam skeleton and six vertex blooms picked out. The colourbar is clipped precisely so that this structure shows: unclipped, the vertex blooms would own the whole scale and the field would wash out to near-uniform white everywhere else. It therefore does **not** reach the true extremes (min −3.57%, max +4.80%).^[Generated by `examples/ex0118_mollweide.py` (L5).]](paper_figures/ex0118_mollweide_L5_web.jpg){width=92%}
 
 ![Where the "quasi" in quasi-authalic lives: every L5 cell classified by signed area deviation, showing one vertex from each of the three vertex classes at a common scale — (a) North Pole, (b) 0°N 0°E, (c) 0°N 90°E; every hexagon is one L5 cell (≈ 720 km², ≈ 33 km across). All but 244 of the 708,588 cells lie in the white class (within 0.1% of ideal area). The exceptions cluster at the six octahedral vertices in three pairwise-exact classes: the poles (48 cells beyond 0.1% each, 12 beyond 1%, extremes −3.57%/+4.80%), the 0°/180° pair (38 and 2, extreme −2.10%), and the 90°E/W pair (36 and 2, extreme −2.60%). Within each pair the sorted deviation spectra agree beyond three decimals, so the three classes are structural, not numerical. Morphology follows class: the polar bloom carries an excess (red) core with rays on all four meeting seams; the equatorial blooms have near-tolerance cores with their extremes wholly in deficit (blue), and their rays are meridional only — the equator seams stay within tolerance throughout.^[Generated by `examples/ex0124_vertex_census.py` (census table and figure; shares the cached geometry of `ex0081w_warped_authalics.py`).]](paper_figures/ex0124_vertex_census_web.jpg){width=100%}
 
@@ -1173,7 +1298,10 @@ of ideal area — the warp brings that to all but 244.]
 ### 11c. The Native Space
 
 After the warp, each x_cell occupies a well-defined region in b_oct — the octant
-barycentric space. In b_oct, the hexagonal cells are congruent and regular: no
+barycentric space.^[The name is historical: b_oct coordinates are planar
+Cartesian coordinates on the unfolded octant net, measured in octant-normalised
+units — not simplex (barycentric-weight) coordinates. No convex-combination
+reading is intended.] In b_oct, the hexagonal cells are congruent and regular: no
 cell is larger, smaller, or differently shaped than any other (modulo the
 irreducible vertex residuals). b_oct is the natural coordinate space for Hex9
 computation; it is where the inequality evaluations of §10a operate and where
@@ -1209,10 +1337,12 @@ the octahedron to the ellipsoid can be composed with the addressing scheme to
 produce a valid Hex9 coordinate system. The Lee conformal projection
 [@lee1965conformal] produces angle-preserving cells at the cost of non-uniform
 area; the Snyder octahedral equal-area projection [@snyder1992equal] achieves
-strict det(J) = 1 analytically and offers a closed-form inverse. Both compose
-cleanly with the Hex9 hierarchy; the
-cell identity, digit assignment, and adjacency structure are unchanged across
-projection choices.
+strict det(J) = 1 analytically and offers a closed-form inverse — a statement
+made here on its published properties: we have not exercised the composition,
+no working implementation of the octahedral Snyder having been found to test
+against. The compositional claim is structural rather than empirical in any
+case: cell identity, digit assignment, and adjacency structure are unchanged
+across projection choices.
 
 The warp is also ellipsoid-specific but not ellipsoid-exclusive. Recomputing the
 Sinkhorn displacement field against a different reference body (GRS80, Bessel, a
@@ -1466,9 +1596,9 @@ the terminal mode and then resolves canonical parentage upward in a single pass.
 
 ### 13b. Address encoding
 
-A Hex9 address packs into a single standard 128-bit UUID as 32 nibbles: 30 carry
-the hierarchy path (one base-9 digit per level, reaching layer 30) and the final
-two carry the tail (§10b). Because the canonical mode-0 fold (§10b) gives every
+A Hex9 address packs into a single standard 128-bit UUID as 32 nibbles: 31 carry
+the hierarchy path (a root digit, then one base-9 digit per level, reaching
+layer 30) and the final nibble carries the tail (§10b). Because the canonical mode-0 fold (§10b) gives every
 cell a single representative, the UUID is **self-inverting**: a full address and
 any coarser **bin** of it are the same kind of object — each decodes, with no
 companion field, to its *own* cell's representative point on the ellipsoid. The
@@ -1480,8 +1610,10 @@ design in which only the full address was reversible and a bin was an opaque,
 non-invertible key.)
 
 The format drops directly into any database, PostGIS column, or API that accepts a
-standard UUID; hierarchy traversal is nibble truncation and spatial binning is
-prefix comparison, with no decoding step. The hierarchy reaches layer 30 — far
+standard UUID; bin keys at a common layer compare by plain equality or prefix,
+with no decoding step, and coarser bins derive from a full-depth address by
+truncation with tail canonicalisation (§10b, §12) rather than a raw digit cut —
+the distinction the split lineages require. The hierarchy reaches layer 30 — far
 below any geodetic resolution (a layer-30 cell is roughly 40 nanometres across) —
 so 128 bits is effectively unlimited precision in practice. The same canonical fit packs
 an address into a standard **64-bit** integer just as readily — as the Python
@@ -1507,6 +1639,13 @@ choropleth as a GeoJSON feature collection, with no PostGIS or QGIS in the loop.
 The `hhg9` Python package remains the readable reference: it produced the warp
 characterisation of §11b and the figures in this paper, with all grid operations
 vectorised over NumPy arrays.
+
+Beyond the repository's own tooling, a Hex9 backend has been contributed to
+GeoPlegma,^[`https://github.com/GeoPlegma/GeoPlegma`] the open-source project
+developing DGGS tooling and interfaces conformant to the OGC API — DGGS
+specification, whose DGGRS interface presents existing grid implementations
+(DGGRID, H3, S2) behind a single API. At the time of writing the integration
+is under review as a pull request.
 
 ### 13d. PostGIS extension
 
@@ -1578,16 +1717,28 @@ to the exact beam search, which remains the reference. The implementation is
 
 The primary use case is the one that motivated the quasi-authalic default:
 aggregating point observations into cells whose areas are comparable anywhere on
-Earth. Encoding is the O(L) partition cycle; binning is prefix truncation of the
-UUID — with the canonical-ancestor derivation of §10b applied first wherever
-non-canonical addresses may be present. Because cell areas are uniform to within
+Earth. Encoding is the O(L) partition cycle; binning is truncation of the UUID
+with the canonical-ancestor derivation of §10b — a raw digit cut walks lineage,
+which at split lineages differs from ancestry, a discrepancy confined to the
+thinning band of §12. Because cell areas are uniform to within
 the warp residual, raw counts are densities up to a single global constant: no
 per-cell area correction, no latitude adjustment. Grids that are not equal-area
 (H3, S2) require explicit area normalisation for the same task, and the
 normalisation factor varies by location.
 
-*[Figure 15: population density heatmap binned to Hex9 cells, one country or
-global. (F15)]*
+The same machinery serves raster products directly: a source callable samples
+each dataset at the cell centroid — one lookup per cell, apt at fine layers
+where a cell spans only a few source pixels. The figure below composites three
+such layers over a kilometre-scale window at the Emerald Bay trailhead, Lake
+Tahoe: NLCD 2024 land-cover classes fill the L12 cells (≈ 10 m), a
+DEM-derived hillshade modulates the relief through a fill two layers finer,
+and the L9–L11 cells are drawn as an overlay grid whose labels are the cells'
+digits beneath the window's shared prefix — the label elision of §10c working
+as a map graticule. The panel legend states what equal area guarantees: an
+L10 cell here is ≈ 1.22 ha at 68.5 m per side, and those numbers hold
+anywhere on Earth to within the warp residual.
+
+![Land cover, relief, and addressing in one Hex9 composite (Emerald Bay trailhead, Lake Tahoe; kilometre-scale window). Three layers of one grid: USGS Annual NLCD 2024 land-cover classes fill the L12 cells; a hillshade derived from the Sierra Nevada DEM modulates at L14; the L9–L11 cells form the white overlay grid, labelled by their digit suffixes beneath the window's shared prefix 6045431 (the label elision of §10c). The north arrow marks true north — the frame is the grid's own net orientation, not north-up (§11c).^[Generated by `examples/ex0252_geotiff.py` (Compositor/LayerSpec pipeline; each source sampled once per cell at its centroid). Sources: USGS Annual NLCD Land Cover 2024 (`Annual_NLCD_LndCov_2024_CU_C1V1`); hillshade computed from the CA Sierra Nevada DEM.]](paper_figures/ex0252_sn_B1kL12_CaSN.jpg){width=100%}
 
 Cells need not share a level. Because parentage is exact (§12), a single layer
 can mix resolutions — coarse cells where data is sparse, fine cells where it is
@@ -1595,7 +1746,7 @@ dense — without T-junctions, seams, or interpolation between levels, and the
 mixed layer still rolls up losslessly. Refinement can therefore be driven by the
 data itself: subdivide a cell only while the population it contains stays within a
 target band, stopping when the count falls low enough or a depth limit is
-reached. Figure 23 shows this for Thimphu, Bhutan, where a population layer drives
+reached. The figure below shows this for Thimphu, Bhutan, where a population layer drives
 adaptive refinement across L5 to L12 — coarse L5 cells over empty terrain,
 refining to L12 along the inhabited valley floors. Each cell is shaded by
 population density (count per authalic cell area), so the fill is directly
@@ -1609,10 +1760,11 @@ selects — so cells of different levels tile without overlap.
 
 ### 14b. Spatial joins and multi-resolution analysis
 
-Two datasets encoded to Hex9 addresses join on shared prefixes: equality of
-level-K prefixes is co-location at level K, computed without geometry — the
-full-address truncation whose commutation with direct binning is measured at
-0.00% over 10⁴ points (L30 → L5, §12). Roll-up from L to any coarser K is
+Two datasets encoded to Hex9 addresses join on their canonical level-K bins:
+equality of bins is co-location at level K, computed without geometry. Bins
+derive from the stored full-depth addresses by the truncation-with-tail-
+canonicalisation of §12 — the route whose commutation with direct binning
+measures 0.00% over 10⁴ points (L30 → L5, §12). Roll-up from L to any coarser K is
 canonical and lossless: every fine cell has exactly one ancestor at K, so
 aggregates recombine with no double-counting and no residue. Its geometric
 fidelity is governed by the split-cell band of §12 — misassignment confined to
@@ -1921,7 +2073,7 @@ figures and their section anchors.
 | F12b | §11b | Area-deviation Mollweide, clipped scale (pattern view: seam skeleton) |
 | F12c | §11b | Vertex census — the three vertex classes, one panel each (ex0124) |
 | F13 | §11c | Tissot indicatrices on the b_oct butterfly net (warp applied) |
-| F15 | §14a | Population heatmap binned to Hex9 |
+| F15 | §14a | Land cover + hillshade + address-grid composite (Emerald Bay, ex0252) |
 | F16 | §14c | Same layer in b_oct / Mollweide / Mercator |
 | F20 | §2 / §7 / §8 | Wallpaper group of the d_cell tiling (p31m) |
 | F21 | §9 / §10 (graphical abstract) | Seed solid (24 d_cell facets) + 12 root x_cells |

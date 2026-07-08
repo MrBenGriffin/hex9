@@ -5,7 +5,7 @@
 """
 Verify hex_step direction vectors against the known period-9 digit cycles.
 
-From the user's earlier analysis, stepping repeatedly in direction 0 (the
+From the earlier analysis, stepping repeatedly in direction 0 (the
 +c2=0 axis / N→S direction) through any column of the grid produces one
 of three period-9 digit sequences:
 

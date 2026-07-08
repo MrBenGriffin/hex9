@@ -239,3 +239,52 @@ def test_descendants_complete_vs_bruteforce(reg):
     brute = set(f.int for f, b in zip(fine, back) if b.int == anchor.int)
 
     assert desc == brute
+
+
+# ---------------------------------------------------------------------------
+# Canonical cell ancestry (mode-0 convention): h9_cell_parent / h9_cell_ancestor
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def anc_mesh(reg):
+    from hhg9.h9.grid import HexMesh
+    return HexMesh.create(range(4), reg)
+
+
+@pytest.mark.parametrize("L", [1, 2, 3])
+def test_cell_parent_nine_per_parent(reg, anc_mesh, L):
+    """Every layer-(L-1) cell is canonical parent of exactly 9 layer-L cells."""
+    from collections import Counter
+    up = ua.h9_cell_parent(anc_mesh.addr(L), reg=reg)
+    cnt = Counter(u.int for u in up)
+    assert len(cnt) == 12 * 9 ** (L - 1)
+    assert set(cnt.values()) == {9}
+
+
+def test_cell_parent_london_known_answer(reg):
+    """The §10b worked example: 43585 (interior child carrying the sibling
+    lineage spelling) has canonical L3 ancestor 4348 — NOT its lineage cut
+    4358, which canonically names a different hexagon elsewhere."""
+    u = ua.h9_bin(ua.h9_encode(np.array([52.4365]), np.array([-0.9098])), 4, reg=reg)
+    assert ua.h9_label(u[0]) == '43585.1'
+    p = ua.h9_cell_parent(u, reg=reg)
+    assert ua.h9_label(p[0]) == '4348.2'
+
+
+def test_cell_ancestor_composes(reg, anc_mesh):
+    """ancestor(L-2) == parent∘parent, and 81 grandchildren per cell."""
+    from collections import Counter
+    uu = anc_mesh.addr(3)
+    two = ua.h9_cell_ancestor(uu, 1, reg=reg)
+    composed = ua.h9_cell_parent(ua.h9_cell_parent(uu, reg=reg), reg=reg)
+    assert two == composed
+    assert set(Counter(u.int for u in two).values()) == {81}
+
+
+def test_cell_ancestor_identity_and_errors(reg, anc_mesh):
+    uu = anc_mesh.addr(2)[:5]
+    assert ua.h9_cell_ancestor(uu, 2, reg=reg) == list(uu)
+    with pytest.raises(ValueError):
+        ua.h9_cell_ancestor(uu, 3, reg=reg)
+    with pytest.raises(ValueError):
+        ua.h9_cell_parent(anc_mesh.addr(0)[:3], reg=reg)

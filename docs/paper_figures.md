@@ -22,7 +22,7 @@ likely need bespoke (but small) plotting code.
 | F12b | §11b | Area-deviation Mollweide, clipped scale (pattern view: seam skeleton)                                                                 | `ex0118_mollweide.py` → `ex0118_mollweide_L5.png` (exists)               |
 | F13 | §11c | Tissot indicatrices on the b_oct butterfly net (warp applied)                                                                         | `ex0121_tissot_svg.py` → `ex0121_tissot_50_warp_file_butterfly_0500.svg` (exists) |
 | F14 | §12 | (optional) H3/S2/HEALPix/Hex9 same-region cells                                                                                       | external libs; licensing check                                           |
-| F15 | §14a | Population heatmap binned to Hex9                                                                                                     | `ex0301_heatmap.py` + `examples/hh_heatmaps` (GBR/BTN/BHS data)          |
+| F15 | §14a | Land cover + hillshade + address-grid composite (Emerald Bay trailhead)                                                              | `ex0252_geotiff.py` → `ex0252_sn_B1kL12_CaSN.jpg` (exists; NLCD 2024 + Sierra Nevada DEM hillshade) |
 | F16 | §14c | Same layer in b_oct / Mollweide / Mercator                                                                                            | `ex0118_mollweide.py` + `ex0300_backdrop.py`                             |
 | F17 | Intro/§5 | Octant boundaries over political world map (chirality convention)                                                                     | `ex0118_mollweide.py` with country backdrop                              |
 | F18 | (optional) | Butterfly/net unfolding of the octahedral grid                                                                                        | `butterfly.png` (exists)                                                 |
@@ -229,8 +229,9 @@ hierarchy
 (§12/§14a); and authalic cells making density directly comparable across levels
 without per-cell area correction (§11b/§14a). Caption keeps the depth claim
 *relative* (cells span L5–L12) rather than committing to an absolute L12 metric
-cell size. Companion to F15 (uniform-level heatmap) — F23 is the adaptive
-counterpart.
+cell size. (F15 was originally slotted as the uniform-level population
+heatmap companion; it is now the ex0252 raster composite — land cover +
+hillshade + address grid — so F23 carries the density story on its own.)
 
 ## Final captions — drop-in figures (images on disk, verified 2026-06-14)
 

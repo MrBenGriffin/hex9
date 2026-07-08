@@ -907,20 +907,16 @@ class HexMesh:
             faces_dict[L] = face_c
 
         # --- H9 UUID addresses for each hex at each layer -------------------
-        import uuid as _uuid
-        from hhg9.h9.addressing import hex_layer as _hex_layer
-        from hhg9.h9.tail import TailStyle as _TS
-        from hhg9.h9.uuid_address import batch_nibbles_to_int as _pack
+        from hhg9.h9.uuid_address import h9_bin_pts as _h9_bin_pts
 
         addrs_dict = {}
         for L in layers:
             fl = faces_dict[L]
-            N = len(fl)
 
             # Mode-safe centroid: seam hexes span mode-0 and mode-1 octants.
             # Averaging mixed-mode b_oct coords (where mode-1 has y negated) puts
-            # the centroid outside any valid octant, causing hex_layer to return
-            # garbage nibbles (including 0x0F in body positions).
+            # the centroid outside any valid octant, causing the encoder to
+            # return garbage nibbles (including 0x0F in body positions).
             # Fix: use only vertices whose mode matches the first vertex.
             oid_v        = pts.oid[fl]                           # (N, 6)
             mo_v         = H9O.oid_mo[oid_v]                    # (N, 6)
@@ -933,15 +929,7 @@ class HexMesh:
             centroid_oid = oid_v[:, 0].astype(np.int32)
 
             centroid_pts = Points(centroid_xy, b_oct, oid=centroid_oid)
-            hx_L         = _hex_layer(centroid_pts, layer=L, tail_style=_TS.key)
-            body_L       = hx_L[:, :-1]                          # (N, L+1) nibbles
-            key_nibble   = ((hx_L[:, -1] >> 4) & 0x0F).astype(np.uint8)
-            uuid_nibs    = np.zeros((N, 32), dtype=np.uint8)
-            uuid_nibs[:, :L + 1] = body_L
-            if L + 1 < 31:
-                uuid_nibs[:, L + 1:31] = 0x0F          # OOB sentinel — 0 is a valid hex digit
-            uuid_nibs[:, -1] |= (key_nibble & 0x0F)
-            addrs_dict[L] = [_uuid.UUID(int=v) for v in _pack(uuid_nibs)]
+            addrs_dict[L] = _h9_bin_pts(centroid_pts, L)
 
         offspring = cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict, addrs_dict)
         offspring.alt = alt
@@ -1089,10 +1077,7 @@ class HexMesh:
             edge vertices) — use the per-layer face arrays directly.
         """
         from matplotlib.path import Path as _Path
-        import uuid as _uuid
-        from hhg9.h9.addressing import hex_layer as _hex_layer
-        from hhg9.h9.tail import TailStyle as _TS
-        from hhg9.h9.uuid_address import batch_nibbles_to_int as _pack
+        from hhg9.h9.uuid_address import h9_bin_pts as _h9_bin_pts
 
         if isinstance(layers, int):
             layers = [layers]
@@ -1178,8 +1163,7 @@ class HexMesh:
         addrs_dict = {}
         for L in layers:
             fl = faces_dict[L]
-            n = len(fl)
-            if n == 0:
+            if len(fl) == 0:
                 addrs_dict[L] = []
                 continue
             oid_v = pts.oid[fl]
@@ -1189,13 +1173,7 @@ class HexMesh:
             centroid_xy = ((coords_v * match_mo[:, :, None]).sum(axis=1) /
                            match_mo.sum(axis=1, keepdims=True).astype(float))
             centroid_pts = Points(centroid_xy, b_oct, oid=oid_v[:, 0].astype(np.int32))
-            hx_L = _hex_layer(centroid_pts, layer=L, tail_style=_TS.key)
-            uuid_nibs = np.zeros((n, 32), dtype=np.uint8)
-            uuid_nibs[:, :L + 1] = hx_L[:, :-1]
-            if L + 1 < 31:
-                uuid_nibs[:, L + 1:31] = 0x0F
-            uuid_nibs[:, -1] |= ((hx_L[:, -1] >> 4) & 0x0F).astype(np.uint8)
-            addrs_dict[L] = [_uuid.UUID(int=v) for v in _pack(uuid_nibs)]
+            addrs_dict[L] = _h9_bin_pts(centroid_pts, L)
 
         return cls(pts, faces_dict, finest, ia_arr, ib_arr, vert_dict, addrs_dict)
 

@@ -1,11 +1,17 @@
 # Part of the Hex9 (H9) Project
 # Copyright ©2025, Ben Griffin
 # Licensed under the Apache License, Version 2.0
-
-#   SELECT h9_cell('47823518-2fff-ffff-ffff-fffffffffff1'::uuid, 8)::text,
-#          h9_cell('47823518-4fff-ffff-ffff-fffffffffff5'::uuid, 8)::text,
-#          h9_cell('47823518-6fff-ffff-ffff-fffffffffff5'::uuid, 8)::text,
-#          h9_cell('47823518-8fff-ffff-ffff-fffffffffff3'::uuid, 8)::text;
+import numpy as np
+from hhg9.h9.uuid_address import h9_enc_ext, h9_label
+from hhg9 import Registrar
+from hhg9.h9.grid import HexMesh
 
 if __name__ == '__main__':
-    pass
+    LAYER = 4
+    reg = Registrar()
+    mesh = HexMesh.create(LAYER, reg)
+    ulabels = [h9_label(u, False) for u in mesh.addrs]
+    nx = np.array(ulabels)  # human-readable, not-roundtrippable
+    unq, cnt = np.unique(nx, return_counts=True)
+    dset = unq[cnt > 1]
+    print(f'{nx.shape[0]} addresses (without tail); {dset.shape[0]} duplicates')
