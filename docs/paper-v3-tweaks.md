@@ -271,16 +271,44 @@ mark ☑ when applied to `paper-draft.md`.
   meanwhile: h9_bin_uuid (address-arithmetic, point semantics) is CLEAN —
   2M-point test, split cells → exactly their 2 geometric parents, no
   scatter.
-- ☐ **REMINDER (flag, half-resolved)**: §12's "no re-encoding from
-  geometry" — Python cell-ancestor is address→ancestor at the API but
-  geometric inside; still to do: C port of cell-parent (options: uv-lattice
-  nudge reusing full_id_from_cell primitives, or pure rid arithmetic —
-  backward pass with c_mo=0 seed [canonicalise-always retires the fossil's
-  recovery dance] + a generated 12-rid fold table from H9R.cmc2n +
-  H9_OID_NB hop), byte-compare vs hhg9, retire fossil F3
-  (h9_addressing.h:858, h9_kring.h:222, h9_grid.h:1083), write the missing
-  docs/addressing-doctrine.md. Then either the §12 sentence stands on the
-  C arithmetic or gets softened.
+- ☑ **h9_cell_parent named in the paper** (Ben approved 2026-07-08): §10b
+  operational clause now distinguishes `h9_bin` (full-depth addresses) from
+  `h9_cell_ancestor` (cell keys); §10b caution names
+  `h9_cell_parent`/`h9_cell_ancestor`; §13c states the operations are
+  implemented in hhg9 and verified (nine-per-parent enumeration through L5,
+  composition identity, London worked example) with a provenance footnote to
+  experimental/cell_ancestor_verify.py. When the C port lands, optionally
+  add it to the libhex9 feature list in §13c's first sentence.
+- ☑ **§12 flag RESOLVED — C port landed** (2026-07-08, subagent;
+  independently re-verified): h9kring::h9_cell_parent_uuid /
+  h9_cell_ancestor_uuid (core/h9_kring.h:402-593), C ABI + ext bindings
+  (cell_parent/cell_ancestor). Backward pass seeded c_mo=0
+  (canonicalise-always), origin+centroid from the digit chain, 0.10 nudge,
+  containment descent, identity cascade — no warp/ellipsoid round-trip, so
+  §12's "derived from the address alone … no re-encoding from geometry"
+  stands as written. Verified: byte-identical to hhg9 for ALL cells L1–L4,
+  9-per-parent C-only through L5 (708,588 cells), London KAT (43585.1 →
+  4348.2), composition over all L5 cells, ctest 11/11, hhg9 pytest 470,
+  fossil-probe vertex point clean at every layer. Fossil F3 comments now
+  point at the new functions. Notable: the agent independently rediscovered
+  the mode-1-half disease inside uuid_from_cxcy (180/972 wrong at L2
+  without the fold) — third sighting, same cure. §13c may now list the
+  operation under libhex9 as well as hhg9 (optional one-word edit).
+- ☑ **docs/addressing-doctrine.md WRITTEN** (libhex9/docs/, 2026-07-08):
+  canonicalise-always contract, the three roll-up operations, the
+  recurring centroid-on-seam disease (three sightings, one cure), fossil
+  register — F1 under review (census evidence suggests retirable; needs a
+  dedicated parse_label/common_ancestor probe), F2 standing (C-side
+  decode(bin); hhg9 parity open), F3 RETIRED (h9_cell_parent/ancestor),
+  F4 standing by design — plus the verification-artefact index. §13c also
+  updated: libhex9 feature list gains "canonical cell ancestry (§10b)",
+  and the hhg9 sentence upgraded to "implemented in both libraries,
+  byte-identical across the pair for every cell through level 4". PDF
+  rebuilt (48 pp).
+- ☐ **Still open (library, not paper)**: F1 retirement probe
+  (parse_label/common_ancestor over all split bodies); F2 C-side
+  decode(bin) parity; consider folding canonicalise into uuid_from_cxcy /
+  identity_from_uuid's bin path.
 
 ## Pending
 

@@ -865,7 +865,8 @@ since hexagons do not tile hexagons.
 
 The operational consequences hold with the lineage/ancestry distinction kept
 in view. Cells belonging to a given level-K region are found by canonical
-truncation — a tail-aware cut, implemented as `h9_bin`/`h9_ancestors` — after
+truncation — a tail-aware cut, implemented as `h9_bin` for full-depth
+addresses and `h9_cell_ancestor` for cell keys (§13c) — after
 which containment and join queries reduce to exact key and prefix comparison,
 with no geometric computation: two observations share a cell at level K if
 and only if their canonical level-K bins agree. Raw string cutting remains
@@ -935,7 +936,8 @@ identifies a valid ancestor at the corresponding level, but not necessarily the
 *canonical* one: a split cell encoded under its mode-1 parent truncates into the
 mode-1 lineage. Binning by naive prefix-cutting therefore silently produces two
 bins for the same cell whenever non-canonical addresses are present. The correct
-operation derives the canonical ancestor via the tail before truncating:
+operation derives the canonical ancestor via the tail before truncating
+(`h9_cell_parent` and its composition `h9_cell_ancestor`; §13c):
 prefix-cutting is exact for resolution identification; canonical ancestry
 requires the tail.
 
@@ -1628,7 +1630,8 @@ intrinsically preferable.
 
 The `libhex9` C/C++ core implements the full pipeline: the AK base projection
 with its analytic Jacobian, the authalic warp (Clough–Tocher interpolant,
-Newton–Raphson inverse), encoding and decoding, k-ring neighbour computation, and
+Newton–Raphson inverse), encoding and decoding, canonical cell ancestry
+(§10b), k-ring neighbour computation, and
 cell-polygon generation, with the trained WGS84 warp embedded in the library. A
 Python accelerator (`hex9_ext`) exposes the core to Python at native speed with
 OpenMP batch encoding, and two Python command-line tools wrap the common
@@ -1638,7 +1641,16 @@ handles large files; `h9_choropleth` turns a point CSV into an adaptive Hex9
 choropleth as a GeoJSON feature collection, with no PostGIS or QGIS in the loop.
 The `hhg9` Python package remains the readable reference: it produced the warp
 characterisation of §11b and the figures in this paper, with all grid operations
-vectorised over NumPy arrays.
+vectorised over NumPy arrays. The canonical cell-ancestry operations of §10b —
+`h9_cell_parent` (one-level canonical parent, mode-0 convention) and
+`h9_cell_ancestor` (its composition) — are implemented in both libraries,
+distinct from the point-binning family, byte-identical across the pair for
+every cell through level 4, and verified by exhaustive enumeration: exactly
+nine canonical children per parent, for every cell, at every layer pair
+through level 5.^[Verified by `experimental/cell_ancestor_verify.py`,
+together with the composition identity ancestor(L−2) = parent-of-parent and
+the §10b worked example (the canonical parent of cell 43585 is 4348, not its
+lineage cut 4358).]
 
 Beyond the repository's own tooling, a Hex9 backend has been contributed to
 GeoPlegma,^[`https://github.com/GeoPlegma/GeoPlegma`] the open-source project
