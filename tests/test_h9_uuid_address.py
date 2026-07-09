@@ -191,9 +191,9 @@ def test_descendants_nest_and_layer(reg, bpts, at_layer, g):
         assert kids, "non-empty descendant set expected"
         assert len(set(k.int for k in kids)) == len(kids)        # unique
         assert all(int(ua.h9_layer(k)) == target for k in kids)  # at target layer
-        backs = ua.h9_bin(list(kids), at_layer, reg=reg)
+        backs = ua.h9_cell_ancestor(list(kids), at_layer, reg=reg)
         assert all(b.int == anchor.int for b in backs)           # every kid nests
-        assert len(kids) <= 9 ** g                               # bounded by 9^g
+        assert len(kids) == 9 ** g                               # exactly 9^g
 
 
 def test_descendants_g0_is_anchor(reg, bpts):
@@ -210,10 +210,13 @@ def test_descendants_reject_out_of_range(bpts, at_layer, g):
 
 
 def test_descendants_complete_vs_bruteforce(reg):
-    """The descendant set is exactly the target hexes binning to the anchor.
+    """The descendant set is exactly the target hexes whose canonical
+    ancestor is the anchor (mode-0 convention).
 
     Cross-check against a dense in-anchor sample: every layer-(L+g) hex whose
-    own bin at L equals the anchor must appear, and nothing else."""
+    canonical ancestor at L equals the anchor must appear, and nothing else
+    (samples cover the anchor and its rim, so neighbours' splits are seen
+    and correctly excluded)."""
     from hhg9.h9 import H9O
     from hhg9.h9.classifier import in_scope, H9CL
     from hhg9.h9 import H9K
@@ -228,15 +231,16 @@ def test_descendants_complete_vs_bruteforce(reg):
     ac = ua.h9_dec([anchor], b_oct).coords[0]
     oc0 = int(pt.cm()[0][0])
     mode0 = np.uint8(H9O.oid_mo[oc0])
-    span = 0.55 * 3.0 ** -at_layer
+    span = 0.80 * 3.0 ** -at_layer
     gx, gy = np.meshgrid(np.linspace(-span, span, 250), np.linspace(-span, span, 250))
     sx, sy = ac[0] + gx.ravel(), ac[1] + gy.ravel()
     md = np.full(sx.shape, mode0)
     ok = in_scope(H9K.R3 * sx, sy, md, H9CL)
     spts = Points(np.column_stack([sx[ok], sy[ok]]), b_oct, oid=np.full(int(ok.sum()), oc0))
     fine = ua.h9_bin_pts(spts, at_layer + g)
-    back = ua.h9_bin(fine, at_layer, reg=reg)
-    brute = set(f.int for f, b in zip(fine, back) if b.int == anchor.int)
+    uniq = list({f.int: f for f in fine}.values())
+    back = ua.h9_cell_ancestor(uniq, at_layer, reg=reg)
+    brute = set(f.int for f, b in zip(uniq, back) if b.int == anchor.int)
 
     assert desc == brute
 
@@ -271,14 +275,24 @@ def test_cell_parent_london_known_answer(reg):
     assert ua.h9_label(p[0]) == '4348.2'
 
 
-def test_cell_ancestor_composes(reg, anc_mesh):
-    """ancestor(L-2) == parent∘parent, and 81 grandchildren per cell."""
+def test_cell_ancestor_direct_not_composed(reg, anc_mesh):
+    """ancestor is the leaf-reified d_cell relation, NOT parent∘parent.
+
+    The subdivision tree is on d_cells (rep-9, nests exactly); the mode-0
+    reification into x_cells happens once, at the leaf, so the ancestor is
+    the single deep re-bin of the cell's mode-0 interior point. Composing
+    h9_cell_parent level-by-level re-adjudicates splits at every layer and
+    decoheres at nested splits (the hexagon grows deep tongues/voids —
+    docs/dggs/dggs_nesting.py). Both relations are total and 9-regular
+    (81 grandchildren per cell); they differ in membership at exactly the
+    nested splits — 1/9 of cells."""
     from collections import Counter
     uu = anc_mesh.addr(3)
     two = ua.h9_cell_ancestor(uu, 1, reg=reg)
     composed = ua.h9_cell_parent(ua.h9_cell_parent(uu, reg=reg), reg=reg)
-    assert two == composed
     assert set(Counter(u.int for u in two).values()) == {81}
+    diffs = sum(a.int != b.int for a, b in zip(two, composed))
+    assert diffs == len(uu) // 9      # nested splits distinguish the relations
 
 
 def test_cell_ancestor_identity_and_errors(reg, anc_mesh):

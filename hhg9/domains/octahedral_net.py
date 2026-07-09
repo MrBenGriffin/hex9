@@ -14,6 +14,7 @@ from hhg9.base.point_format import PointFormat
 from hhg9.projections import BaryNet
 from hhg9.domains.nets import net_layouts
 from hhg9.h9 import H9K, H9P, H9O
+from hhg9.h9.polygon import SV_CORNER_AXIS
 from hhg9.algorithms.geometry import inside_convex_polygon_cw
 
 
@@ -244,9 +245,59 @@ class OctahedralNet(CompositeDomain):
                 out[mask] = oid
         return out
 
+    # H9P.sv corner k of a bary-mode-m face lies on this ECEF axis; on the
+    # triangle edge OPPOSITE corner k that axis's coordinate is exactly 0
+    # (an octant seam). Canonical table: hhg9.h9.polygon.SV_CORNER_AXIS.
+    SEAM_EPS = 1e-13  # on-seam distance tolerance, b_oct units (edge = √2)
+
     def binning(self, pts: Points, sig: tuple = None):
-        """Identify the octant id of each point."""
-        pts.oid = self.pt_face(pts.coords)
+        """Identify the octant id of each point.
+
+        Interior points take their containing face's oid. Points on an
+        octant seam are assigned by the on-seam mode-0 convention: this
+        method only resolves which axis-bits are free (which face-triangle
+        edges the point lies on) then hands over to the single place of
+        derivation, :meth:`CompositeDomain.seam_oid`.
+        """
+        from hhg9.base.points import OID_INVALID
+        oids = self.pt_face(pts.coords)
+        ok = oids != OID_INVALID
+        if np.any(ok):
+            oids[ok] = self._seam_bin(pts.coords[ok], oids[ok])
+        pts.oid = oids
+
+    def _seam_bin(self, coords: NDArray, face_oids: NDArray) -> NDArray:
+        """Resolve per-point sign/seam criteria, hand over to seam_oid.
+
+        Each point is mapped back to its face's bary triangle
+        (BaryNet.backward, c2-aware). Lying on a triangle edge means the
+        ECEF coordinate on the opposite corner's axis is 0, so that
+        axis-bit is free; sign bits come from the face's H9O.oid_cmp with
+        free bits cleared. This is 3D-faithful even across net cuts: every
+        net copy of a seam point derives the same (neg, free) and thus the
+        same canonical oid, independent of which face pt_face returned.
+        """
+        neg = np.zeros((len(coords), 3), dtype=bool)
+        free = np.zeros((len(coords), 3), dtype=bool)
+        for side, proj in self.projs.items():
+            oid = int(self.sides[side].oid)
+            sel = face_oids == oid
+            if not np.any(sel):
+                continue
+            mode = self.b_oct.sides[side].mode
+            tri = H9P.sv[mode]
+            xb = proj.backward(coords[sel])  # NaN rows (c2 edge misses) fail all `on` tests
+            rows = np.flatnonzero(sel)
+            for k in range(3):
+                a, b = tri[(k + 1) % 3], tri[(k + 2) % 3]  # edge opposite corner k
+                ab = b - a
+                d = np.abs(ab[0] * (xb[:, 1] - a[1]) - ab[1] * (xb[:, 0] - a[0]))
+                on = d <= self.SEAM_EPS * np.hypot(ab[0], ab[1])
+                if np.any(on):
+                    free[rows[on], SV_CORNER_AXIS[mode][k]] = True
+            neg[sel] = H9O.oid_cmp[oid] < 0
+        neg &= ~free
+        return self.seam_oid(neg, free)
 
     def local_layout(self, octants, fundamental=None, tol=1e-7) -> LocalLayout:
         """Build a *dynamic* net unfolding for the given octants.

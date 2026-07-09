@@ -41,29 +41,48 @@ class CompositeDomain(Domain, ABC):
 
             if np.any(finite_mask):
                 cf = c[finite_mask]
-                # Octant from coordinate signs. On a seam a coordinate is exactly 0
-                # and its axis-bit is "free"; the design convention is that on-seam
-                # points belong to a mode-0 octant (popcount(oid) even). So instead
-                # of forcing zeros to the positive side, choose the free bit(s) to
-                # make the popcount even. (Negatives set the bit; zeros default to 0
-                # and are flipped up only when needed to reach an even popcount.)
-                zero = (cf == 0)
-                oid = (
-                    ((cf[:, 2] < 0).astype(np.uint8) << 2) |
-                    ((cf[:, 1] < 0).astype(np.uint8) << 1) |
-                    (cf[:, 0] < 0).astype(np.uint8)
-                )
-                odd = (np.bitwise_count(oid) & np.uint8(1)).astype(bool)
-                fix = odd & zero.any(axis=1)
-                if np.any(fix):
-                    axes = np.array([0, 1, 2], dtype=np.int8)
-                    hi_zero = np.where(zero, axes, np.int8(-1)).max(axis=1)  # highest zero axis
-                    rows = np.flatnonzero(fix)
-                    oid[rows] |= (np.uint8(1) << hi_zero[rows].astype(np.uint8))
-                oids[finite_mask] = oid
+                oids[finite_mask] = self.seam_oid(cf < 0, cf == 0)
             pts.oid = oids
         else:
             raise NotImplementedError(f'{self.name} needs to bin {self.axes} axes')
+
+    @staticmethod
+    def seam_oid(neg: NDArray, free: NDArray) -> NDArray:
+        """Derive octant ids under the on-seam mode-0 convention.
+
+        The single place of derivation for the oid convention: octant bits
+        come from coordinate signs (ECEF x, y, z -> bits 0, 1, 2, set when
+        strictly negative). On a seam a coordinate is exactly 0 and its
+        axis-bit is "free"; the design convention is that on-seam points
+        belong to a mode-0 octant (popcount(oid) even). So instead of forcing
+        zeros to the positive side, the free bit(s) are chosen to make the
+        popcount even (free bits default to 0 and the highest is flipped up
+        only when needed).
+
+        Domains that bin in other spaces (e.g. OctahedralNet) resolve their
+        own sign/seam criteria and hand over here — do not reimplement this
+        rule elsewhere.
+
+        Args:
+            neg:  (N, 3) bool — coordinate strictly negative, per axis.
+            free: (N, 3) bool — coordinate on the seam (axis-bit free), per
+                  axis. ``neg`` must be False wherever ``free`` is True.
+        Returns:
+            (N,) uint8 octant ids.
+        """
+        oid = (
+            (neg[:, 2].astype(np.uint8) << 2) |
+            (neg[:, 1].astype(np.uint8) << 1) |
+            neg[:, 0].astype(np.uint8)
+        )
+        odd = (np.bitwise_count(oid) & np.uint8(1)).astype(bool)
+        fix = odd & free.any(axis=1)
+        if np.any(fix):
+            axes = np.array([0, 1, 2], dtype=np.int8)
+            hi_free = np.where(free, axes, np.int8(-1)).max(axis=1)  # highest free axis
+            rows = np.flatnonzero(fix)
+            oid[rows] |= (np.uint8(1) << hi_free[rows].astype(np.uint8))
+        return oid
 
 
     @cache

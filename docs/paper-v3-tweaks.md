@@ -309,11 +309,128 @@ mark ☑ when applied to `paper-draft.md`.
   (parse_label/common_ancestor over all split bodies); F2 C-side
   decode(bin) parity; consider folding canonicalise into uuid_from_cxcy /
   identity_from_uuid's bin path.
+- ☑ **h9_descendants → canonical semantics (2026-07-08, DONE — suite green)**:
+  filter switched from centroid re-bin to h9_cell_ancestor == anchor;
+  docstrings/doctrine comment updated; enumeration clip inflated 1.03→1.6
+  (canonical splits protrude up to R/2); tests strengthened to len ==
+  9^g exactly + brute-force oracle now canonical (box 0.55→0.80).
+  RESOLVED (2026-07-08, two independent fixes, all 470 tests pass):
+  (1) Per Ben's directive the oid seam convention now has exactly one
+  implementation: factored out of CompositeDomain.binning into
+  CompositeDomain.seam_oid(neg, free) (hhg9/base/composite.py);
+  OctahedralNet.binning resolves its own criteria — pt_face for the
+  containing face, BaryNet.backward (c2-aware) to the bary triangle,
+  on-edge ⇒ the opposite sv-corner's ECEF axis-bit is free (corner→axis
+  map SV_CORNER_AXIS verified by projection: mode0 (0,2,1), mode1
+  (0,1,2)) — then hands over to seam_oid. 3D-faithful across net cuts:
+  every net copy of a seam point derives the same canonical oid. Audit:
+  the only other binning override is Points.binning (a delegate) —
+  b_oct/b_raw/s_oct are axes-2 CompositeDomains whose inherited binning
+  raises, so no other skip exists.
+  (2) The actual 8/9 dropper at vertex anchors: the fallback disc was
+  sized from _anchor_hex_latlon's ring, and at vertex cells the hx ring
+  template WRAPS PAST THE ANTIMERIDIAN (verts at lon ±178 for 022.0) —
+  R exploded to 535° so the fixed 220² grid (spacing ~4.9°) was coarser
+  than an L3 child (~3.3°) and split child 0227.1 fell between samples.
+  Fix = the tracker's pre-approved option: size the disc from cell
+  geometry directly, R = 135°·3⁻ᴸ (uuid_address.py, h9_descendants).
+  (3) ROOT FIX for the 5th sighting (same session): the "vertex ring
+  template" was a misnomer — the hx template is fine; the bug was
+  STRICTLY-IN-OCTANT PROJECTION of overhanging ring verts (the actual
+  grid_face_vertex_oid_bug mechanism). New canonical utility
+  hhg9.h9.polygon.fold_to_octant(verts, oid): exact unfold across the
+  violated sv edge — neighbour = oid ^ (1 << SV_CORNER_AXIS[mode][k]),
+  coords by axis-matched corner isometry, iterated ≤3 for corner
+  overhangs (cone-angle fold-order ambiguity at the 6 vertices is
+  inherent; either representative is faithful). _anchor_hex_latlon now
+  folds before projecting → 022.0 ring is a sane hexagon (was lon ±178).
+  SV_CORNER_AXIS promoted to hhg9.h9.polygon (canonical, next to the sv
+  LUT); OctahedralNet imports it. Also fixed fallback disc longitude
+  span: converge at the disc's most-polar latitude and go full-lon when
+  the disc contains a pole (poles were 79/81). All 6 octahedral vertices
+  now 9/9 (L2,g1) and 81/81 (L3,g2); suite 470 passed. Candidate reuse:
+  grid.py's strict-in-octant sites (create_clipped descent) could adopt
+  fold_to_octant to kill the remaining sightings at source.
+  STILL OPEN (follow-ups): (a) libhex9 PARITY: the C++ GcdBoctLib
+  resolver (when the lib is loaded — NOT in this dev env, where the
+  pure-Python g_gcd→b_raw→b_oct bridge runs) does its own octant
+  assignment; the seam_oid mode-0 convention must be checked/ported
+  there, same bucket as the pending cell_parent/ancestor C port —
+  n_oct binning and h9_descendants/fold_to_octant are Python-only (no C
+  counterpart exists); (b) tracker prose said vertices default to the
+  LOWEST-numbered mode-0 octant — the implemented rule flips the HIGHEST
+  free axis-bit (e.g. P(-1,0,0) → 5/SEP, not 3/NWP; both mode-0) — prose
+  corrected here, keep seam_oid as the authority; (c) encode-path binning
+  runs at ak_octahedral.backward:150 on c_ell coords (signs scale-invariant
+  so valid) but exact-0 detection depends on trig: lon ±90/180 and poles
+  yield ~4e-10 m positive noise, not 0.0 — currently benign (positive noise
+  = free-bit default; probe: all 9 seam/vertex cases matched the exact
+  convention) but a latent tolerance question.
+- ☐ **(superseded by above) original 4th-sighting record**:
+  membership filter re-bins descendant centroids at the anchor layer;
+  probe on X=4348 returned 7/9 canonical children (lost 43488 + 43587,
+  kept 43486 by tie-break). Fix candidate: filter by h9_cell_ancestor ==
+  anchor — but that is a semantics DECISION (descendants = canonical
+  children vs point-bin membership), Ben's call; note
+  test_descendants_complete_vs_bruteforce is self-consistent with the old
+  semantics and the dggs_nesting figure caption already CLAIMS mode-0
+  binding ("each bound to its owner by the mode-0 convention") — the
+  implementation currently doesn't honour that claim at tie-break cells,
+  so either code moves to the caption or the caption softens. Related
+  to-audit: C k_disk/adaptive/common_ancestor on cell inputs; PostGIS
+  surface (expose cell_parent in SQL; audit any bin-of-bin flows).
 
 ## Pending
 
-- ☐ Rebuild + re-read §§1–4 in the line-numbered PDF to check the new prose
-  flows (the §2 rewrite is ~1.5× the old length).
+- ☐ **Address-arithmetic h9_cell_ancestor (Ben's rid/mode idea, confirmed
+  2026-07-09)**: current impl (Py+C) is GEOMETRIC (decode → mode-0 nudge →
+  re-bin); correct + byte-verified, but nudge margins scale 3⁻ᴸ so it
+  degrades near L25+ in doubles. CONFIRMED RULE (Ben's formulation, checked
+  empirically over all cells L2–L4, every cut): recover the mode of each
+  digit leaf→root (the machinery survives as hex_digits_reg's backward
+  context thread / the C backward pass; per-level RID 0..11 is
+  side-bearing, parity = recovered mode, so rid chain = d_cell address);
+  then at a split digit (6/7/8) with recovered mode 1, the containing
+  parent is the lineage parent's NEIGHBOUR across that split's edge — and
+  the hop cascades upward (the neighbour re-registers in its own frame;
+  root hex/octant can change, e.g. 725.1→72.2 oct 1→3). All cut-level
+  presentation folds are odd-rid→even-rid (mode-1 thread → canonical
+  mode-0 registration); flip rates 1/3, 4/9, 39/81 → ~1/2 (matches raw
+  p_mo=50%). Pure-address ancestor = truncate + symbolic
+  neighbour-hop cascade (odometer-style carry; C has the machinery in
+  k_ring/resolve_frames, Python would need it built). Prototypes:
+  scratchpad rid_chain_proto.py / rid_fold_analysis.py. Options: (a)
+  expose rid/mode chain only, (b) full pure-address ancestor Py+C, (c)
+  keep geometric + document depth caveat.
+- ☑ **RESOLVED (2026-07-09, Ben's d_cell doctrine) — h9_cell_ancestor is
+  the DIRECT leaf-reified d_cell relation, not parent∘parent**: the
+  2026-07-08 composition implementation was wrong doctrine, exposed by
+  the dggs_nesting figure (729 = 9³ but 108 ENTIRELY OUTSIDE — deep
+  tongues/voids, exactly 1/6 of area displaced; the composition
+  re-adjudicates splits at every layer, i.e. "naively consider the
+  x_cell at each level and the hexagon decoheres"). Correct doctrine
+  (Ben): the subdivision tree is on d_cells — an x_cell's territory is
+  18 next-layer d_cells (12 complete = 6 interior children + its 6
+  split halves), the d_cell tree is rep-9 and nests EXACTLY, and mode-0
+  reification of d_cells into x_cells happens ONCE, at the leaf. So
+  ancestor(cell, L) = single deep re-bin of the cell's mode-0-interior
+  point at L (well-defined: the mode-0 d_cell lies wholly inside one
+  cell at every coarser layer). h9_cell_parent unchanged (coincides at
+  one generation). Verified: 81 grandchildren per cell for ALL 108 L1
+  cells; direct vs composed membership differs at exactly 1/9 of cells
+  (nested splits; e.g. 5267.4 → 52.4 direct vs 58.0 composed); figure
+  now 729 = 702 in / 27 rim-split straddle / 0 outside — the paper.tex
+  §12 caption ("no Hex9 descendant lies outside the anchor") is TRUE
+  as written and now machine-verified under canonical semantics (old
+  Felix-era panel had wrong count 739 from point-bin tie-breaks).
+  docs/dggs/dggs_nesting.png regenerated; arxiv/paper_figures copies
+  refresh at the v3 rebuild step. Suite 470 green incl. rewritten
+  test_cell_ancestor_direct_not_composed (pins direct ≠ composed at
+  1/9). C MIGRATED same day: h9kring::h9_cell_bin_at_uuid engine
+  (descent to arbitrary target layer); parent/ancestor now wrappers;
+  byte-identical to hhg9 all cells L1–L4 × all coarser targets, 9^g
+  count-set exact, C-only L5 sweep (708,588), nested-split + London
+  KATs, ctest 11/11.
 - ☐ Continue Ben's full offline read-through pass (carried over from v2
   tracker); further findings land here.
 

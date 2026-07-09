@@ -356,8 +356,8 @@ def h9_bin(
 
 # ---------- Hierarchy traversal (relative generations) ---------------------
 # These express the H9 "direct per-layer contract": descendants(H, L+i) is not an
-# iterated parent/child walk (which would propagate the split-cell ambiguity), it
-# is the set of layer-(L+i) hexagons that bin to H at layer L. See
+# iterated parent/child walk over lineage digits, it is the set of layer-(L+i)
+# hexagons whose canonical ancestor (mode-0 convention) at layer L is H. See
 # docs/h3/dggs_nesting.py for the motivation. Input is a b_oct Points; the anchor
 # is the layer-`at_layer` bin of each point.
 
@@ -393,14 +393,24 @@ def h9_ancestors(
 # cell contains this point. The functions below answer the CELL question:
 # which single layer-K cell is the canonical ancestor of this cell. The two
 # differ at split cells (x_dig 6..8), which geometrically straddle two
-# parents; the canonical parent is the one containing the cell's mode-0
+# parents; the canonical owner is the one containing the cell's mode-0
 # d_cell (the §10b mode-0 convention). Binning a split cell's decoded
 # centroid cannot answer this — the centroid lies exactly on the straddled
 # boundary — so we decode to a point strictly interior to the mode-0 half:
 # the centroid nudged toward the cell origin (libhex9's full_id_from_cell
-# applies the same cure to grid identity UUIDs). Verified: exactly 9
-# canonical children per parent, every cell, layer pairs L1..L5 globally
-# (experimental/cell_ancestor_verify.py).
+# applies the same cure to grid identity UUIDs).
+#
+# DOCTRINE — the tree is on d_cells, not x_cells. An x_cell's territory at
+# the next layer is 18 d_cells (12 complete = its 6 interior children, plus
+# its own 6 split halves), and the d_cell tree nests EXACTLY (rep-9
+# rep-tile). A cell's mode-0 d_cell therefore lies wholly inside one cell
+# at EVERY coarser layer, so canonical ancestry at any depth is the single
+# deep re-bin of a mode-0-interior point — the mode-0 reification of
+# d_cells into x_cells happens once, at the leaf. Naively composing x_cell
+# parents level-by-level re-adjudicates the splits at every layer and the
+# hexagon decoheres (deep tongues/voids; see docs/dggs/dggs_nesting.py).
+# Verified: exactly 9 canonical children per parent, every cell, layer
+# pairs L1..L5 globally (experimental/cell_ancestor_verify.py).
 
 _ANC_NUDGE = 0.10   # interior fraction, centroid -> cell origin (mode-0 side)
 
@@ -450,26 +460,32 @@ def h9_cell_parent(uuids: list[uuid_mod.UUID], reg=None) -> list[uuid_mod.UUID]:
 def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
     """Canonical layer-``layer`` ancestor of each cell (mode-0 convention).
 
-    Defined by composition of :func:`h9_cell_parent`: canonical ancestry is a
-    per-level relation, so the multi-level ancestor is the iterated one-level
-    parent. (A single deep re-bin of an interior point answers the *point*
-    question instead, and differs at nested splits.) Cells already at
-    ``layer`` pass through unchanged.
+    NOT the iterated one-level parent. The subdivision tree is the 9-ary
+    d_cell tree, which nests exactly; a cell's mode-0 d_cell lies wholly
+    inside one cell at every coarser layer, so its ancestor at any depth
+    is the single deep re-bin of a mode-0-interior point (the mode-0
+    reification of d_cells into x_cells happens at the leaf only — see
+    the doctrine comment above). Composing :func:`h9_cell_parent`
+    level-by-level would re-adjudicate splits at every layer and
+    decohere at nested splits; the two relations coincide only for a
+    single generation. Cells already at ``layer`` pass through
+    unchanged; input coarser than ``layer`` raises.
     """
     if reg is None:
         from hhg9 import Registrar
         reg = Registrar()
+    b_oct = reg.domain('b_oct')
     out = list(uuids)
-    while True:
-        lay = np.atleast_1d(h9_layer(out))
-        if np.any(lay < layer):
-            raise ValueError('input coarser than target layer')
-        deep = np.flatnonzero(lay > layer)
-        if deep.size == 0:
-            return out
-        par = h9_cell_parent([out[i] for i in deep], reg=reg)
-        for i, u in zip(deep, par):
-            out[i] = u
+    lay = np.atleast_1d(h9_layer(out))
+    if np.any(lay < layer):
+        raise ValueError('input coarser than target layer')
+    deep = np.flatnonzero(lay > layer)
+    if deep.size == 0:
+        return out
+    pts = _mode0_interior_pts([out[i] for i in deep], b_oct)
+    for i, u in zip(deep, h9_bin_pts(pts, layer)):
+        out[i] = u
+    return out
 
 
 def _anchor_hex_latlon(anchor: uuid_mod.UUID, at_layer: int, reg, inflate: float = 1.03):
@@ -478,8 +494,14 @@ def _anchor_hex_latlon(anchor: uuid_mod.UUID, at_layer: int, reg, inflate: float
     Slightly inflated (``inflate``) so the clip region is a strict superset of the
     true hexagon — completeness is then guaranteed by the downstream bin filter,
     which removes any extra hexes the larger polygon admitted.
+
+    Ring vertices of a seam-straddling hexagon overhang the anchor's octant;
+    they are folded into their true octant (``fold_to_octant``) before
+    projection — a strictly in-octant projection would wrap them to nonsense
+    (grid_face_vertex_oid_bug family).
     """
     from hhg9.h9 import H9P
+    from hhg9.h9.polygon import fold_to_octant
     from hhg9 import Points
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
@@ -490,7 +512,8 @@ def _anchor_hex_latlon(anchor: uuid_mod.UUID, at_layer: int, reg, inflate: float
     hx = H9P.hx[int(p_mo[0]), int(c2[0])]                       # (6, 2) parent-origin-relative
     ring_rel = (hx - hx.mean(axis=0)) * (3.0 ** -at_layer) * inflate
     verts = centroid[None, :] + ring_rel                        # (6, 2) b_oct
-    ll = reg.project(Points(verts, b_oct, oid=np.full(6, oid)), [b_oct, g_gcd]).coords
+    fold_xy, fold_oid = fold_to_octant(verts, oid)
+    ll = reg.project(Points(fold_xy, b_oct, oid=fold_oid), [b_oct, g_gcd]).coords
     return ll                                                   # (6, 2) [lat, lon]
 
 
@@ -500,12 +523,15 @@ def h9_descendants(
         generations_down: int,
         reg=None,
 ) -> list[list[uuid_mod.UUID]]:
-    """Layer-(at_layer+generations_down) hexagons that bin to each point's anchor.
+    """Canonical descendants of each point's anchor hexagon.
 
-    The descendant set is the H9 per-layer contract: every layer-`target` hexagon
-    whose own ``h9_bin(., at_layer)`` equals the anchor (the point's layer-`at_layer`
-    bin). The protruding split hexagons are exactly those that still bin to the
-    anchor; splits that bin to a neighbour belong to that neighbour, not here.
+    The descendant set is the H9 per-layer contract: every layer-`target`
+    hexagon whose canonical ancestor (``h9_cell_ancestor``, mode-0
+    convention: leaf mode-0 d_cell inside the anchor) is the anchor —
+    exactly 9^generations_down cells, tiling the anchor hexagon exactly up
+    to a one-leaf-cell fringe. Splits on the anchor's rim protrude by
+    their far (mode-1) half but belong to exactly one canonical ancestor;
+    rim splits owned by a neighbour belong there, not here.
 
     Reuses the proven pruned descent in ``HexMesh.create_clipped`` over the anchor
     hexagon, re-bins each descendant centroid to a canonical UUID, then filters on
@@ -543,7 +569,12 @@ def h9_descendants(
         if key in cache:
             out.append(cache[key])
             continue
-        poly = _anchor_hex_latlon(anchor, at_layer, reg)
+        # Canonical descendants stay within half a target-layer cell of the
+        # anchor's boundary (only rim splits protrude, by their far half —
+        # the d_cell tree nests exactly, so nothing telescopes deeper).
+        # Inflate the enumeration clip generously; non-descendants are
+        # filtered below.
+        poly = _anchor_hex_latlon(anchor, at_layer, reg, inflate=1.6)
         mesh = HexMesh.create_clipped([target], poly, reg)
         faces = mesh[target]
         if len(faces) == 0:
@@ -558,13 +589,51 @@ def h9_descendants(
         cent = (cv * match[:, :, None]).sum(axis=1) / match.sum(axis=1, keepdims=True)
         cpts = Points(cent, b_oct, oid=oid_v[:, 0].astype(np.int32))
         canon = h9_bin_pts(cpts, target)
-        # Keep only hexes that bin to the anchor; dedup, stable order.
-        back = h9_bin(canon, at_layer, reg=reg)
+        # Keep only hexes whose CANONICAL ancestor is the anchor (mode-0
+        # convention; exactly 9^g per anchor). Re-binning centroids here is
+        # the centroid-on-seam disease (doctrine): split descendants sit ON
+        # the anchor boundary and tie-break away.
+        back = h9_cell_ancestor(canon, at_layer, reg=reg)
         seen, kept = set(), []
         for d, a in zip(canon, back):
             if a.int == anchor.int and d.int not in seen:
                 seen.add(d.int)
                 kept.append(d)
+        # Completeness fallback: near octahedral vertices the clipped-mesh
+        # enumeration can drop cross-seam descendants (strict in-octant
+        # projection; see grid_face_vertex_oid_bug.md). Rescue by sampling
+        # a disc in lat/lon — encode is frame-agnostic — and keeping cells
+        # whose canonical ancestor is the anchor.
+        want = 9 ** generations_down
+        if len(kept) < want:
+            ctr_lat, ctr_lon = h9_decode([anchor], reg=reg)
+            cla, clo = float(np.ravel(ctr_lat)[0]), float(np.ravel(ctr_lon)[0])
+            # Size the disc from the cell geometry (3^-L) directly, NOT from
+            # the ring: at vertex cells the hx ring template is wrong
+            # (grid_face_vertex_oid_bug family) and wraps past the
+            # antimeridian, exploding the radius until the fixed grid is
+            # coarser than a child cell and whole children fall between
+            # samples.
+            R = 135.0 * (3.0 ** -at_layer)
+            gl = np.clip(np.linspace(cla - R, cla + R, 220), -89.999, 89.999)
+            # Longitude span: converge at the disc's most polar latitude,
+            # not the centre; a disc containing a pole spans all longitudes.
+            lat_hi = abs(cla) + R
+            if lat_hi >= 90.0:
+                gn = clo + np.linspace(-180.0, 180.0, 220)
+            else:
+                cosl = max(np.cos(np.radians(lat_hi)), 0.05)
+                gn = clo + np.linspace(-R, R, 220) / cosl
+            GLa, GLo = np.meshgrid(gl, gn)
+            glo = (GLo.ravel() + 180.0) % 360.0 - 180.0
+            pu = h9_encode(GLa.ravel(), glo, reg=reg)
+            fine = list({u.int: u for u in h9_bin(pu, target, reg=reg)}.values())
+            fb = h9_cell_ancestor(fine, at_layer, reg=reg)
+            have = set(k.int for k in kept)
+            extra = sorted((f for f, a in zip(fine, fb)
+                            if a.int == anchor.int and f.int not in have),
+                           key=lambda u: u.int)
+            kept = kept + extra
         cache[key] = kept
         out.append(kept)
     return out

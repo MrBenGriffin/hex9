@@ -186,6 +186,80 @@ def _h9_polygon(h9k: Optional[H9ConstLike] = None) -> H9Polygon:
 
 H9P: H9Polygon = _h9_polygon()
 
+# H9P.sv corner k of a mode-m octant face lies on this ECEF axis
+# (0=x/AP, 1=y/EW, 2=z/NS); on the sv edge OPPOSITE corner k that axis's
+# coordinate is exactly 0 (an octant seam). Verified by projecting every
+# face's sv corners through b_oct -> g_gcd.
+SV_CORNER_AXIS = ((0, 2, 1), (0, 1, 2))
+
+
+def fold_to_octant(verts: NDArray, oid: int) -> Tuple[NDArray, NDArray]:
+    """Fold template vertices that overhang their octant into the octant
+    that actually contains them.
+
+    Hex templates near an octant edge legitimately extend past the sv
+    triangle, but b_oct coordinates are only meaningful inside their own
+    octant's frame: projecting an overhanging vertex "strictly in-octant"
+    wraps to nonsense (the grid_face_vertex_oid_bug family). Unfolding is
+    exact — the neighbour's face continued into this frame is the mirror
+    image across the shared edge — so a vertex beyond the edge opposite
+    corner k belongs to ``oid ^ (1 << SV_CORNER_AXIS[mode][k])``, and its
+    coordinates in that neighbour's own frame follow by matching the three
+    axis-labelled corners (an exact isometry between congruent triangles).
+    Repeats (≤3) for vertices beyond a corner, where two seams are crossed;
+    at the 6 octahedral vertices the fold order is the inherent cone-angle
+    ambiguity and either result is a faithful representative.
+
+    Args:
+        verts: (N, 2) b_oct coordinates in ``oid``'s frame.
+        oid:   the frame's octant id.
+    Returns:
+        (coords (N, 2), oids (N,)) — each vertex in its containing octant.
+    """
+    out = np.array(verts, dtype=np.float64, copy=True)
+    oids = np.full(len(out), int(oid), dtype=np.uint8)
+    for i in range(len(out)):
+        v = out[i]
+        o = int(oid)
+        for _ in range(3):
+            mode = int(H9O.oid_mo[o])
+            tri = H9P.sv[mode]
+            k_hit = None
+            for k in range(3):
+                a, b = tri[(k + 1) % 3], tri[(k + 2) % 3]
+                cross = ((b[0] - a[0]) * (v[1] - a[1]) -
+                         (b[1] - a[1]) * (v[0] - a[0]))
+                if cross > 1e-12:          # CW polygon: inside is cross <= 0
+                    k_hit = k
+                    break
+            if k_hit is None:
+                break
+            k = k_hit
+            a, b = tri[(k + 1) % 3], tri[(k + 2) % 3]
+            e = b - a
+            e = e / np.hypot(e[0], e[1])
+
+            def _reflect(p):
+                d = p - a
+                return a + 2.0 * float(d @ e) * e - d
+
+            mode_b = 1 - mode
+            tri_b = H9P.sv[mode_b]
+            axis_b = SV_CORNER_AXIS[mode_b]
+            # source corners (unfolded-neighbour triangle in this frame) and
+            # target corners (the neighbour's canonical frame), axis-matched
+            src = np.array([a, b, _reflect(tri[k])])
+            axes = (SV_CORNER_AXIS[mode][(k + 1) % 3],
+                    SV_CORNER_AXIS[mode][(k + 2) % 3],
+                    SV_CORNER_AXIS[mode][k])
+            dst = np.array([tri_b[axis_b.index(ax)] for ax in axes])
+            m = np.linalg.solve(np.column_stack([src, np.ones(3)]), dst)
+            v = np.array([v[0], v[1], 1.0]) @ m
+            o ^= 1 << SV_CORNER_AXIS[mode][k]
+        out[i] = v
+        oids[i] = o
+    return out, oids
+
 
 def uv_grid_debug(levels: int = 3, mode: int = 0) -> NDArray:
     """
