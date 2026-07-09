@@ -651,35 +651,23 @@ H9_RA = _region_scheme(H9C, H9R)
 HEX_LUTS = _hex_luts(H9R, H9_RA)
 
 
-def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
-    """
-    Given a region chain and an octant ID, returns the Hex Hierarchy.
-    :param cx: Region chain (proto + layers).
-    :param oc: Octant ID.
-    :param dom: b_oct
-    :param tail_style: Choose the tail_style to use.
-    :param scheme: RegionAddressLike (normally H9_RA)
+def _r_adr_forward(oc, rx, c2_root, tail_style: TailStyle, scheme: RegionAddressLike):
+    """Forward (root->leaf) engine: region-id chain -> hex digits + tail.
 
-    Returns:
-        NDArray: The canonical hex-digit hierarchy (hex_layer, L+1)
-        Final byte is meta-data (full tail is reversible; partial tail is hex-binning safe).
+    Shared by reg_hex_digits (which derives rx/c2_root from a c_dig chain)
+    and r_adr_to_x_adr (which takes the rid chain directly).
 
+    Args:
+        oc:      (N,) octant ids.
+        rx:      (N, L+2) region-id (rid, 0..11) chain: [proto, root, levels].
+        c2_root: (N,) c2 of the root hexagon within the octant.
+        tail_style, scheme: as reg_hex_digits.
     """
     from hhg9.h9 import H9O
-    if dom.name[:5] != 'b_oct':
-        raise ValueError(f"reg_hex_digits: domain must be a b_oct, not {dom}")
-    sz, cols = np.shape(cx)
+    sz, cols = np.shape(rx)
     depth = cols - 1
-
-    # Mode per point (from octant); we could have used the region root, but we need oc.
     r_mo = H9O.oid_mo[oc]
-    c2 = H9R.mcc2[r_mo, cx[:, 1]]
-
-    # Points whose root cell is the invalid-region sentinel (0x5F) cannot be addressed.
-    # These arise when neighbours() coalesces a point that lands exactly on a simplex
-    # boundary.  Clamp c2 to 0 so downstream indexing doesn't crash; the resulting hex
-    # addresses will be deduplicated away or overwritten by valid neighbours.
-    c2 = np.where(c2 == 0x5F, np.uint8(0), c2)
+    c2 = c2_root
 
     # Hex body: one hex digit per region step away from the proto.
     bdy = np.full((sz, depth), 0x0F, dtype=np.uint8)
@@ -688,7 +676,6 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
         bdy[:, 0] = H9O.l0hex_by_id[oc, c2]  # given the octant, and the c2 we can identify the root hexagon.
         # Remaining hex digits via region-to-hex LUT.
         reg_hex = HEX_LUTS.reg_hex
-        rx = scheme.cell2rid[cx]  # This gives us region_address ids [0...11]
         p, c = rx[:, 0], rx[:, 1]  # first region will be either 0, or 1 (protos).
         h = rx[:, -1]
         p_mo = scheme.modes[p]
@@ -722,6 +709,35 @@ def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, sc
             return bdy
         raise ValueError(f"unknown tail_style: {tail_style}")
     return bdy
+
+
+def reg_hex_digits(cx, oc, dom, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):
+    """
+    Given a region chain and an octant ID, returns the Hex Hierarchy.
+    :param cx: Region chain (proto + layers), as c_dig (classifier cell) values.
+    :param oc: Octant ID.
+    :param dom: b_oct
+    :param tail_style: Choose the tail_style to use.
+    :param scheme: RegionAddressLike (normally H9_RA)
+
+    Returns:
+        NDArray: The canonical hex-digit hierarchy (hex_layer, L+1)
+        Final byte is meta-data (full tail is reversible; partial tail is hex-binning safe).
+
+    """
+    from hhg9.h9 import H9O
+    if dom.name[:5] != 'b_oct':
+        raise ValueError(f"reg_hex_digits: domain must be a b_oct, not {dom}")
+    r_mo = H9O.oid_mo[oc]
+    c2 = H9R.mcc2[r_mo, cx[:, 1]]
+
+    # Points whose root cell is the invalid-region sentinel (0x5F) cannot be addressed.
+    # These arise when neighbours() coalesces a point that lands exactly on a simplex
+    # boundary.  Clamp c2 to 0 so downstream indexing doesn't crash; the resulting hex
+    # addresses will be deduplicated away or overwritten by valid neighbours.
+    c2 = np.where(c2 == 0x5F, np.uint8(0), c2)
+    rx = scheme.cell2rid[cx]  # This gives us region_address ids [0...11]
+    return _r_adr_forward(oc, rx, c2, tail_style, scheme)
 
 
 def canonicalise(coords, oc, mo, dom, layer, scheme: RegionAddressLike = H9_RA):
@@ -814,6 +830,43 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA, place_
     oct_c2 = H9O.l0hex_back[root_hex, r_mo]  # (hex_layer, 2): [face_id, c2_root]
     r_oct = oct_c2[:, 0]
 
+    rids, real_layer, _root_ctx = _x_adr_backwalk(body, c_mo, c2)
+
+    tail_h = np.array([[6, 10, 8], [7, 11, 9]], dtype=np.uint8)[c_mo, c2]   # region "3"
+    seed_reg = hex_reg[3, c_mo, c2][:, 0]
+
+    rows = np.arange(sz)
+    regs = np.full((sz, ncols + 2), oob, dtype=np.uint8)
+    regs[:, :ncols] = rids
+    if place_terminal:
+        regs[rows, real_layer + 1] = seed_reg
+        regs[rows, real_layer + 2] = tail_h
+
+    regs[:, 0] = r_mo
+    cells = scheme.rid2cell[regs]
+    return r_oct, cells
+
+
+def _x_adr_backwalk(body, c_mo, c2):
+    """Backward (leaf->root, right-to-left) engine over x_adr body digits.
+
+    The tail-derived leaf context (c_mo, c2) seeds the walk; each body digit
+    resolves through hex_reg to its region id (rid) and lifts the context one
+    level. This bottom-up unzip is what makes x_list interpretable (glossary:
+    split x_cells force right-to-left reading).
+
+    Args:
+        body: (N, ncols) body nibbles [root hex, digit_1..], 0x0F padded.
+        c_mo, c2: (N,) leaf context from the unpacked tail.
+    Returns:
+        (rids, real_layer, (cm, cc)): per-level rids (N, ncols; col 0 unused,
+        0x0F beyond each row's layer), each row's layer, and the recovered
+        ROOT context (the L0 hexagon's (mode, c2) within the octant proto).
+    """
+    hex_reg = HEX_LUTS.hex_reg
+    oob = HEX_LUTS.hex_oob
+    sz, ncols = body.shape
+
     # Per-row layer = the deepest non-sentinel body nibble. Full addresses have no
     # sentinel (-> ncols-1); a bin carries 0xF beyond its layer, so this is how
     # the same decoder handles both (the "skip 0xF" the bin case needs).
@@ -821,34 +874,297 @@ def hex_digits_reg(dom, hx, tail=None, scheme: RegionAddressLike = H9_RA, place_
     real_layer = (ncols - 1) - np.argmax(is_real[:, ::-1], axis=1)
 
     # Canonical "3" terminal: undo the 3-step (hex_reg[3, c_mo, c2]) to recover the
-    # (c_mo, c2) context AT the deepest real body level, and record the 3-region
-    # (geometry proxy at the shared vertex) just below the body. Both sit at the
-    # row's own depth so a bin decodes to its own L-cell.
-    tail_h = np.array([[6, 10, 8], [7, 11, 9]], dtype=np.uint8)[c_mo, c2]   # region "3"
+    # (c_mo, c2) context AT the deepest real body level.
     e3 = hex_reg[3, c_mo, c2]
-    seed_reg = e3[:, 0]
     cm = e3[:, 1].astype(np.intp)
     cc = e3[:, 2].astype(np.intp)
 
-    rows = np.arange(sz)
-    regs = np.full((sz, ncols + 2), oob, dtype=np.uint8)
-    if place_terminal:
-        regs[rows, real_layer + 1] = seed_reg
-        regs[rows, real_layer + 2] = tail_h
-
     # Backward walk: each row starts at its own real_layer (rows in their sentinel
     # zone stay inactive and keep their seed context untouched).
+    rids = np.full((sz, ncols), oob, dtype=np.uint8)
     for i in range(int(real_layer.max()), 0, -1):
         active = i <= real_layer
         d = np.where(active, body[:, i], 0)          # avoid indexing hex_reg with 0xF
         e = hex_reg[d, cm, cc]
-        regs[active, i] = e[active, 0]
+        rids[active, i] = e[active, 0]
         cm = np.where(active, e[:, 1], cm)
         cc = np.where(active, e[:, 2], cc)
+    return rids, real_layer, (cm, cc)
 
-    regs[:, 0] = r_mo
-    cells = scheme.rid2cell[regs]
-    return r_oct, cells
+
+# ---------- Address-form conversions: x_adr <-> r_adr <-> d_adr --------------
+# Three views of one hierarchy path (glossary taxonomy):
+#   x_adr: root hex + x_dig chain + tail. What UUIDs store. Digits alone are
+#          slot names — split x_cells force the bottom-up unzip to interpret.
+#   r_adr: (oc, [proto, e_0 .. e_L]): the thread's region (t_cell) id per
+#          scale — the same chain the encoder produces (canonicalise ->
+#          cell2rid), with e_L normalised to the canonical "3" terminal.
+#          Consecutive pairs (e_{i-1}, e_i) carry the digits (reg_hex);
+#          octant-relative, so it travels with oc.
+#   d_adr: (N, L+1, 2) [digit, mode] pairs, row 0 = (root hex, r_mo).
+#          Ben's "combined x_cell/cell_mode = d_cell address": the mode of
+#          digit i is parity(e_{i-1}) = scheme.modes[e_{i-1}] — the d_cell
+#          side the thread runs through at that level. Self-contained: the
+#          octant follows from row 0, and the region thread reconstructs
+#          top-down because (digit, parent-ctx, child-mode) -> child-c2 is
+#          unique (the two hex_reg preimages of a parent context always
+#          differ in child mode).
+
+
+@lru_cache(maxsize=1)
+def _hex_reg_inv():
+    """Inverse context map: [digit, p_mo, p_c2, c_mo] -> (c_c2, rid).
+
+    hex_reg maps (digit, child ctx) -> (rid, parent ctx) two-to-one per
+    digit; the child MODE disambiguates, so with it the downward walk is
+    exact. 0xF entries are unreachable (invalid digit/mode pairings).
+    """
+    hex_reg = HEX_LUTS.hex_reg
+    inv = np.full((9, 2, 3, 2, 2), 0x0F, dtype=np.uint8)
+    for d in range(9):
+        for cm in range(2):
+            for cc in range(3):
+                rid, pm, pc = hex_reg[d, cm, cc]
+                inv[d, pm, pc, cm] = (cc, rid)
+    return inv
+
+
+def x_adr_to_r_adr(hx, tail=None, scheme: RegionAddressLike = H9_RA):
+    """x_adr -> r_adr: recover the thread's region-id chain of an x_adr.
+
+    The bottom-up recovery: the tail seeds the leaf context and each digit
+    resolves to the region (t_cell) the thread occupies one scale up.
+
+    Args:
+        hx: (N, L+1[+1]) body nibbles (root hex + digits[, tail]), 0x0F padded.
+        tail: (N,) tail nibbles if not in hx's last column.
+    Returns:
+        (oc, r_adr): octant ids (N,) and region chain (N, L+2):
+        [proto (= r_mo), e_0 .. e_L], 0x0F padded beyond each row's layer.
+    """
+    from hhg9.h9 import H9O
+    hx = np.asarray(hx, dtype=np.uint8)
+    if tail is None:
+        body, tail = hx[:, :-1], hx[:, -1]
+    else:
+        body = hx
+    c2, r_mo, c_mo = tail_unpack_reversible(tail)
+    c2 = np.asarray(c2).astype(np.intp)
+    c_mo = np.asarray(c_mo).astype(np.intp)
+    rids, real_layer, _ = _x_adr_backwalk(body, c_mo, c2)
+    oc = H9O.l0hex_back[body[:, 0], r_mo][:, 0]
+    sz, ncols = body.shape
+    r_adr = np.full((sz, ncols + 1), HEX_LUTS.hex_oob, dtype=np.uint8)
+    r_adr[:, 0] = r_mo
+    r_adr[:, 1:ncols] = rids[:, 1:]                       # e_0 .. e_{L-1}
+    seed_reg = HEX_LUTS.hex_reg[3, c_mo, c2][:, 0]        # e_L ("3" terminal)
+    r_adr[np.arange(sz), real_layer + 1] = seed_reg
+    return oc, r_adr
+
+
+def r_adr_to_x_adr(oc, r_adr, tail_style: TailStyle = TailStyle.reversible,
+                   scheme: RegionAddressLike = H9_RA):
+    """r_adr -> x_adr: forward walk emitting the hex-digit body + tail.
+
+    Rows must share one layer (group mixed-layer batches by layer first).
+
+    Args:
+        oc:    (N,) octant ids.
+        r_adr: (N, L+2) region chain as returned by x_adr_to_r_adr, trimmed
+               or 0x0F-padded uniformly.
+    Returns:
+        (N, L+2) body nibbles + tail (per tail_style).
+    """
+    from hhg9.h9 import H9O
+    rx = np.asarray(r_adr)
+    oob = HEX_LUTS.hex_oob
+    real = rx[0] != oob
+    if not np.array_equal(rx != oob, np.broadcast_to(real, rx.shape)):
+        raise ValueError('r_adr_to_x_adr: rows must share one layer')
+    rx = rx[:, real]
+    r_mo = H9O.oid_mo[oc]
+    c2_root = H9R.mcc2[r_mo, np.asarray(scheme.rid2cell)[rx[:, 1]]]
+    return _r_adr_forward(oc, rx, c2_root, tail_style, scheme)
+
+
+def x_adr_to_d_adr(hx, tail=None, scheme: RegionAddressLike = H9_RA):
+    """x_adr -> d_adr: the digit chain zipped with its recovered modes.
+
+    Returns:
+        d_adr (N, L+1, 2): [digit, mode] per level; row 0 = (root hex, r_mo);
+        (0x0F, 0x0F) beyond each row's layer. The mode of digit i is
+        parity(e_{i-1}) — which d_cell side the thread runs through at that
+        level: mode 1 at a split digit (6/7/8) means the containing parent
+        is the lineage parent's neighbour.
+    """
+    hx = np.asarray(hx, dtype=np.uint8)
+    if tail is None:
+        body, tl = hx[:, :-1], hx[:, -1]
+    else:
+        body, tl = hx, np.asarray(tail)
+    c2, r_mo, c_mo = tail_unpack_reversible(tl)
+    c2 = np.asarray(c2).astype(np.intp)
+    c_mo = np.asarray(c_mo).astype(np.intp)
+    rids, _, _ = _x_adr_backwalk(body, c_mo, c2)
+    oob = HEX_LUTS.hex_oob
+    pad = body == oob
+    modes = np.where(pad, oob, np.asarray(scheme.modes, dtype=np.uint8)[rids & 0xF])
+    modes[:, 0] = r_mo                                    # root row: (hex, r_mo)
+    digits = np.where(pad, oob, body)
+    return np.stack([digits, modes], axis=-1)
+
+
+def d_adr_to_x_adr(d_adr, tail_style: TailStyle = TailStyle.reversible,
+                   scheme: RegionAddressLike = H9_RA):
+    """d_adr -> x_adr: rebuild the body + tail from (digit, mode) pairs.
+
+    The c2 thread is reconstructed top-down via the inverse context map;
+    the leaf tail is the digit-3 step's unique inverse. Rows must share one
+    layer.
+    """
+    oc, r_adr, tl = _d_adr_walk(d_adr)
+    if tail_style is TailStyle.reversible:
+        dm = np.asarray(d_adr)
+        body = dm[:, dm[0, :, 0] != HEX_LUTS.hex_oob, 0]
+        return np.column_stack([body, tl])
+    return r_adr_to_x_adr(oc, r_adr, tail_style, scheme)
+
+
+def d_adr_to_r_adr(d_adr, scheme: RegionAddressLike = H9_RA):
+    """d_adr -> r_adr: thread the context top-down, collecting rids.
+
+    Returns (oc, r_adr) in x_adr_to_r_adr's layout. Rows must share one layer.
+    """
+    oc, r_adr, _ = _d_adr_walk(d_adr)
+    return oc, r_adr
+
+
+def r_adr_to_d_adr(oc, r_adr, scheme: RegionAddressLike = H9_RA):
+    """r_adr -> d_adr: digits via the forward walk, modes from rid parity."""
+    hx = r_adr_to_x_adr(oc, r_adr, TailStyle.reversible, scheme)
+    return x_adr_to_d_adr(hx, scheme=scheme)
+
+
+@lru_cache(maxsize=1)
+def _y_mirror():
+    """Classifier-cell id map under the octant-seam frame flip (y -> -y).
+
+    A descent chain mirrors entry-wise: every level's frame transform
+    (offset subtract, x3 rescale) commutes with the flip, so the
+    neighbour-octant presentation of a chain is the mirrored chain — the
+    symbolic form of canonicalise's geometric xy_regions(flipped)
+    re-descend. Out-of-scope slots mirror to sentinels and never appear in
+    in-scope chains.
+    """
+    from hhg9.h9 import H9C, H9K
+    from hhg9.h9.classifier import classify_cell
+    off = H9C.off_xy
+    return np.asarray(classify_cell(H9K.R3 * off[:, 0], -off[:, 1]), dtype=np.uint8)
+
+
+def x_adr_cell_ancestor(hx, target: int, tail=None, scheme: RegionAddressLike = H9_RA):
+    """Canonical layer-``target`` ancestor of each cell, in address space.
+
+    The pure-address form of the mode-0 d_cell doctrine (no geometry, no
+    nudge — exact at any depth): truncate the recovered region thread at
+    the target layer; where the presentation there is mode-1 (the thread
+    came up the far side of a split), fold to the canonical mode-0
+    registration — region_neighbours' upward cascade within the octant,
+    the symbolic seam mirror when the fold crosses octants — then re-emit
+    digits + canonical tail through the forward walk.
+
+    Args:
+        hx / tail: as x_adr_to_r_adr. Rows must share one layer L > target.
+        target: the ancestor layer.
+    Returns:
+        (oc, hx_out): octant ids and the canonical (N, target+2) body+tail.
+    """
+    from hhg9.h9 import H9C, H9O
+    from hhg9.h9.region import region_neighbours
+    oc, r_adr = x_adr_to_r_adr(hx, tail, scheme)
+    oob = HEX_LUTS.hex_oob
+    real = r_adr[0] != oob
+    if not np.array_equal(r_adr != oob, np.broadcast_to(real, r_adr.shape)):
+        raise ValueError('x_adr_cell_ancestor: rows must share one layer')
+    layer = int(real.sum()) - 2
+    if not 0 <= target < layer:
+        raise ValueError('x_adr_cell_ancestor: need 0 <= target < layer')
+    cx = np.asarray(scheme.rid2cell)[r_adr[:, :target + 2]]
+    oc = np.asarray(oc).copy()
+
+    # Fold mode-1 presentations to the canonical side (cf. canonicalise).
+    active = np.asarray(H9C.mode)[cx[:, -2]] == 1
+    if target > 0 and np.any(active):
+        idx = np.flatnonzero(active)
+        nbr, c2 = region_neighbours(cx[idx])
+        hopped = cx[idx, 0] != nbr[:, 0]                # octant-spanning fold
+        cx[idx[~hopped]] = nbr[~hopped]
+        if np.any(hopped):
+            hidx = idx[hopped]
+            oc[hidx] = H9O.oid_nb[oc[hidx], c2[hopped]]
+            cx[hidx] = _y_mirror()[cx[hidx]]            # seam = y-flip, symbolically
+
+    r_mo = H9O.oid_mo[oc]
+    c2r = H9R.mcc2[r_mo, cx[:, 1]]
+    c2r = np.where(c2r == 0x5F, np.uint8(0), c2r)
+    rx = np.asarray(scheme.cell2rid)[cx]
+    out = _r_adr_forward(oc, rx, c2r, TailStyle.reversible, scheme)
+    if target == 0:
+        # L0 bins canonicalise to the mode-0 octant rep (h9_bin_pts' L0
+        # branch): the root hexagon is shared by two octants; the canonical
+        # tail carries its c2 in the mode-0 one, r_mo = 0.
+        m0 = H9O.l0hex_back[out[:, 0], 0]               # [oid, c2] mode-0 side
+        out[:, 1] = (m0[:, 1] & 3) << 1
+        oc = m0[:, 0]
+    return oc, out
+
+
+def _d_adr_walk(d_adr):
+    """Top-down context thread over (digit, mode) pairs.
+
+    Each step's inverse lookup yields the region the thread occupies one
+    scale up (e_{i-1}); the leaf region e_L and the reversible tail come
+    from the unique inverse of the terminal digit-3 step.
+
+    Returns (oc, r_adr, tail): octants, the region chain [proto, e_0..e_L],
+    and the tail nibble.
+    """
+    from hhg9.h9 import H9O
+    dm = np.asarray(d_adr)
+    oob = HEX_LUTS.hex_oob
+    real = dm[0, :, 0] != oob
+    if not np.array_equal(dm[..., 0] != oob, np.broadcast_to(real, dm.shape[:2])):
+        raise ValueError('d_adr walk: rows must share one layer')
+    dm = dm[:, real]
+    sz, cols = dm.shape[:2]
+    root_hex, r_mo = dm[:, 0, 0], dm[:, 0, 1] & 1
+    oct_c2 = H9O.l0hex_back[root_hex, r_mo]
+    oc = oct_c2[:, 0]
+    cc = oct_c2[:, 1].astype(np.intp)                 # root c2
+    cm = r_mo.astype(np.intp)                         # root mode
+    inv = _hex_reg_inv()
+    r_adr = np.full((sz, cols + 1), oob, dtype=np.uint8)
+    r_adr[:, 0] = r_mo
+    for i in range(1, cols):
+        d, m = dm[:, i, 0], dm[:, i, 1] & 1
+        step = inv[d, cm, cc, m]                      # (N, 2): child c2, e_{i-1}
+        if np.any(step[:, 0] == oob):
+            raise ValueError('d_adr walk: invalid digit/mode for context')
+        r_adr[:, i] = step[:, 1]
+        cc = step[:, 0].astype(np.intp)
+        cm = m.astype(np.intp)
+    # Leaf: unique inverse of the terminal digit-3 step from the leaf ctx.
+    hex_reg = HEX_LUTS.hex_reg
+    e3 = hex_reg[3]                                   # (2, 3, 3): (rid, pm, pc)
+    t_inv = np.full((2, 3, 2), oob, dtype=np.uint8)   # [pm, pc] -> (c_mo, c2)
+    for tm in range(2):
+        for tc in range(3):
+            _, pm, pc = e3[tm, tc]
+            t_inv[pm, pc] = (tm, tc)
+    tmc = t_inv[cm, cc]
+    r_adr[:, cols] = hex_reg[3, tmc[:, 0], tmc[:, 1]][:, 0]   # e_L
+    tail = tail_pack_reversible(r_mo, tmc[:, 0], tmc[:, 1])
+    return oc, r_adr, tail
 
 
 def hex_digits(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversible, scheme: RegionAddressLike = H9_RA):

@@ -295,6 +295,19 @@ def test_cell_ancestor_direct_not_composed(reg, anc_mesh):
     assert diffs == len(uu) // 9      # nested splits distinguish the relations
 
 
+def test_cell_ancestor_address_equals_geometric(reg, anc_mesh):
+    """The two doctrine derivations cross-check: the address-space fold
+    (production path) equals the geometric mode-0-interior deep re-bin."""
+    from hhg9.h9.uuid_address import _mode0_interior_pts
+    uu = anc_mesh.addr(3)
+    b_oct = reg.domain('b_oct')
+    pts = _mode0_interior_pts(list(uu), b_oct)
+    for K in (0, 1, 2):
+        addr = ua.h9_cell_ancestor(uu, K, reg=reg)
+        geo = ua.h9_bin_pts(pts, K)
+        assert [a.int for a in addr] == [g.int for g in geo]
+
+
 def test_cell_ancestor_identity_and_errors(reg, anc_mesh):
     uu = anc_mesh.addr(2)[:5]
     assert ua.h9_cell_ancestor(uu, 2, reg=reg) == list(uu)

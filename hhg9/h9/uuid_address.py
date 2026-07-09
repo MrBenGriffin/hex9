@@ -404,13 +404,19 @@ def h9_ancestors(
 # the next layer is 18 d_cells (12 complete = its 6 interior children, plus
 # its own 6 split halves), and the d_cell tree nests EXACTLY (rep-9
 # rep-tile). A cell's mode-0 d_cell therefore lies wholly inside one cell
-# at EVERY coarser layer, so canonical ancestry at any depth is the single
-# deep re-bin of a mode-0-interior point — the mode-0 reification of
-# d_cells into x_cells happens once, at the leaf. Naively composing x_cell
-# parents level-by-level re-adjudicates the splits at every layer and the
-# hexagon decoheres (deep tongues/voids; see docs/dggs/dggs_nesting.py).
-# Verified: exactly 9 canonical children per parent, every cell, layer
-# pairs L1..L5 globally (experimental/cell_ancestor_verify.py).
+# at EVERY coarser layer, so canonical ancestry at any depth is the
+# leaf-reified d_cell relation — the mode-0 reification of d_cells into
+# x_cells happens once, at the leaf. Naively composing x_cell parents
+# level-by-level re-adjudicates the splits at every layer and the hexagon
+# decoheres (deep tongues/voids; see docs/dggs/dggs_nesting.py).
+# Two equivalent derivations, byte-identical globally (L1..L4, every
+# target): the ADDRESS-SPACE fold (addressing.x_adr_cell_ancestor — the
+# production path, exact at any depth) and the GEOMETRIC deep re-bin of a
+# mode-0-interior point (_mode0_interior_pts + h9_bin_pts — kept as the
+# cross-check oracle; its nudge margins scale 3^-L so it degrades in
+# doubles near L25+). Verified: exactly 9 canonical children per parent,
+# every cell, layer pairs L1..L5 globally
+# (experimental/cell_ancestor_verify.py).
 
 _ANC_NUDGE = 0.10   # interior fraction, centroid -> cell origin (mode-0 side)
 
@@ -438,23 +444,32 @@ def h9_cell_parent(uuids: list[uuid_mod.UUID], reg=None) -> list[uuid_mod.UUID]:
     Every layer-K cell is the canonical parent of exactly 9 layer-(K+1)
     cells: its 6 interior children plus its own 3 split children. Inputs may
     be bins at mixed layers; L0 cells raise (no parent).
+
+    ``reg`` is unused (kept for API compatibility): the roll-up is pure
+    address arithmetic — see :func:`h9_cell_ancestor`.
     """
-    if reg is None:
-        from hhg9 import Registrar
-        reg = Registrar()
-    from hhg9 import Points
-    b_oct = reg.domain('b_oct')
     layers = np.atleast_1d(h9_layer(uuids))
     if np.any(layers < 1):
         raise ValueError('L0 cells have no parent')
-    pts = _mode0_interior_pts(list(uuids), b_oct)
     out: list = [None] * len(layers)
     for L in np.unique(layers):
         idx = np.flatnonzero(layers == L)
-        sub = Points(pts.coords[idx], domain=b_oct, oid=pts.oid[idx])
-        for j, u in zip(idx, h9_bin_pts(sub, int(L) - 1)):
+        for j, u in zip(idx, _cell_ancestor_batch([uuids[i] for i in idx],
+                                                  int(L), int(L) - 1)):
             out[j] = u
     return out
+
+
+def _cell_ancestor_batch(uuids, at_layer: int, target: int) -> list[uuid_mod.UUID]:
+    """Address-space canonical ancestor for a uniform-layer batch."""
+    from hhg9.h9.addressing import x_adr_cell_ancestor
+    nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
+    hx = np.column_stack([nibs[:, :at_layer + 1], nibs[:, -1]])
+    _, anc = x_adr_cell_ancestor(hx, target)
+    full = np.full((len(uuids), 32), 0x0F, dtype=np.uint8)
+    full[:, :target + 1] = anc[:, :-1]
+    full[:, -1] = anc[:, -1]
+    return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(full)]
 
 
 def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
@@ -463,18 +478,22 @@ def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
     NOT the iterated one-level parent. The subdivision tree is the 9-ary
     d_cell tree, which nests exactly; a cell's mode-0 d_cell lies wholly
     inside one cell at every coarser layer, so its ancestor at any depth
-    is the single deep re-bin of a mode-0-interior point (the mode-0
-    reification of d_cells into x_cells happens at the leaf only — see
-    the doctrine comment above). Composing :func:`h9_cell_parent`
-    level-by-level would re-adjudicate splits at every layer and
-    decohere at nested splits; the two relations coincide only for a
-    single generation. Cells already at ``layer`` pass through
-    unchanged; input coarser than ``layer`` raises.
+    is the leaf-reified d_cell relation (the mode-0 reification of d_cells
+    into x_cells happens at the leaf only — see the doctrine comment
+    above). Composing :func:`h9_cell_parent` level-by-level would
+    re-adjudicate splits at every layer and decohere at nested splits; the
+    two relations coincide only for a single generation.
+
+    Implemented in pure address space (``addressing.x_adr_cell_ancestor``):
+    recover the region thread, truncate at ``layer``, and fold mode-1
+    presentations to their canonical mode-0 registration
+    (region_neighbours' upward cascade; the symbolic seam mirror when the
+    fold crosses octants). Exact at any depth — no geometry, no nudge —
+    and verified byte-identical both to the geometric mode-0-interior
+    re-bin and to libhex9 for all cells L1–L4 at every target. ``reg`` is
+    unused (kept for API compatibility). Cells already at ``layer`` pass
+    through unchanged; input coarser than ``layer`` raises.
     """
-    if reg is None:
-        from hhg9 import Registrar
-        reg = Registrar()
-    b_oct = reg.domain('b_oct')
     out = list(uuids)
     lay = np.atleast_1d(h9_layer(out))
     if np.any(lay < layer):
@@ -482,9 +501,11 @@ def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
     deep = np.flatnonzero(lay > layer)
     if deep.size == 0:
         return out
-    pts = _mode0_interior_pts([out[i] for i in deep], b_oct)
-    for i, u in zip(deep, h9_bin_pts(pts, layer)):
-        out[i] = u
+    for L in np.unique(lay[deep]):
+        idx = deep[lay[deep] == L]
+        for i, u in zip(idx, _cell_ancestor_batch([out[i] for i in idx],
+                                                  int(L), layer)):
+            out[i] = u
     return out
 
 

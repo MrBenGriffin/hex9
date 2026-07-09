@@ -26,17 +26,23 @@ spatial pre-filtering (that would rig the result; cf. `tile_subgrid`, which clip
 to the tile and is therefore NOT used here).
 
 Run:
-    python docs/h3/dggs_nesting.py                 # 2x2 figure -> docs/h3/dggs_nesting.png
-    python docs/h3/dggs_nesting.py --gens 3 --lat 40 --lng -3
+    python docs/dggs/dggs_nesting.py               # 2x2 figure -> docs/dggs/dggs_nesting.png
+    python docs/dggs/dggs_nesting.py --gens 3 --lat 40 --lng -3
 
 Result (anchor 40N,3W, gens 3): H3 12/343 and A5 22/64 outside (iterated, rotated
-→ decohere); S2 0 straddle / 0 outside and Hex9 0 outside, 37 real split-hex
-straddlers (quadtree / contracted → nest). Hex9 uses the real `h9_descendants`
-per-layer contract (hhg9.h9.uuid_address). Overlap is classified with EDGE_TOL so
-that boundary cells sharing the anchor's (curved, polygon-approximated) edge are
+→ decohere); S2 0 straddle / 0 outside. Hex9: exactly 729 = 9^3 descendants —
+702 inside, 27 rim splits straddling by their far (mode-1) half, 0 outside.
+This is the leaf-reified d_cell relation (h9_cell_ancestor: the subdivision
+tree is on d_cells, which nest exactly; mode-0 reification into x_cells happens
+once, at the leaf). Two superseded semantics both decohere and are recorded as
+warnings: point-bin tie-breaking gave a wrong COUNT (739 ≠ 9^3, "0 outside");
+composing x_cell parents level-by-level gave the right count but re-adjudicated
+splits at every layer, growing deep tongues/voids (108/729 entirely outside,
+exactly 1/6 of the area displaced). Overlap is classified with EDGE_TOL so that
+boundary cells sharing the anchor's (curved, polygon-approximated) edge are
 counted as contained, not as spurious straddlers.
 
-Last edited: 2026-06-30 (all four panels live; straddle classification fixed).
+Last edited: 2026-07-09 (h9_cell_ancestor = direct d_cell relation; 729/702/27/0).
 """
 import argparse
 
@@ -83,9 +89,10 @@ def hex9_adapter(lat, lng, res, gens):
     """Hex9 via the DIRECT per-layer contract `h9_descendants` (not iterated children).
 
     `h9_descendants(b_pts, res, gens)` returns every layer-(res+gens) hexagon whose
-    own `h9_bin(., res)` equals the anchor — the contract that keeps the split hexes
-    binned to whoever owns them, so descendants never decohere out of the ancestor.
-    `_anchor_hex_latlon` renders any UUID's hexagon as a lat/lon ring.
+    canonical ancestor (`h9_cell_ancestor`, mode-0 convention) is the anchor —
+    exactly 9^gens cells, every split hex bound to its one owner.
+    `_anchor_hex_latlon` renders any UUID's hexagon as a lat/lon ring (folding
+    seam-overhanging vertices into their true octant).
     """
     import numpy as np
     from shapely.validation import make_valid
