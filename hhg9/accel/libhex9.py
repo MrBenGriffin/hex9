@@ -79,6 +79,18 @@ class _Lib:
             raise RuntimeError(f"hex9_warp_init failed: {err.value.decode()}")
         self._dp, self._ip = dp, ip
 
+        # Canonical cell roll-up (address-space mode-0 fold), when this
+        # build exports it. Callers must gate on has_cell_ancestor.
+        u8p = ctypes.POINTER(ctypes.c_uint8)
+        self._u8p = u8p
+        try:
+            self.lib.hex9_cell_ancestor_many.argtypes = [
+                u8p, ctypes.c_int, ctypes.c_size_t, u8p]
+            self.lib.hex9_cell_ancestor_many.restype = ctypes.c_int
+            self.has_cell_ancestor = True
+        except AttributeError:
+            self.has_cell_ancestor = False
+
     @property
     def version(self) -> str:
         return self.lib.hex9_version().decode()
@@ -99,6 +111,18 @@ class _Lib:
         if rc != 0:
             raise RuntimeError(f"hex9_project_many rc={rc}")
         return cx, cy, oid
+
+    def cell_ancestor_many(self, uuids_u8, layer: int):
+        """(N, 16) uint8 bin UUIDs -> (N, 16) canonical layer-``layer``
+        ancestors (the mode-0 d_cell fold). Requires has_cell_ancestor."""
+        a = np.ascontiguousarray(uuids_u8, dtype=np.uint8)
+        out = np.empty_like(a)
+        rc = self.lib.hex9_cell_ancestor_many(
+            a.ctypes.data_as(self._u8p), int(layer), a.shape[0],
+            out.ctypes.data_as(self._u8p))
+        if rc != 0:
+            raise RuntimeError(f"hex9_cell_ancestor_many rc={rc}")
+        return out
 
     def unproject_many(self, cx, cy, oid, use_warp: bool):
         """(cx, cy, oid) b_oct → (lon, lat)° arrays. Must use the SAME use_warp

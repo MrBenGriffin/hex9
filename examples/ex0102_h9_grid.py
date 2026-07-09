@@ -126,7 +126,7 @@ def run(layout, scale, depths):
             hex_addr = lab
             label = f'{hex_addr[layer]}'
             ax.text(ctr[0], ctr[1], label,
-                    fontsize=4*[6-layer], ha='center', va='center',
+                    fontsize=4*(6-layer), ha='center', va='center',
                     color='black', zorder=100, clip_on=True)
 
         f_name = f"output/ex0102_{layout}_L{layer}.png"
