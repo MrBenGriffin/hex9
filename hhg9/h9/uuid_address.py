@@ -460,8 +460,49 @@ def h9_cell_parent(uuids: list[uuid_mod.UUID], reg=None) -> list[uuid_mod.UUID]:
     return out
 
 
+_ACCEL_ANC = ...   # sentinel: delegation not yet probed
+
+
+def _accel_cell_ancestor():
+    """libhex9's cell_ancestor_many when available AND doctrine-correct.
+
+    Gated on the nested-split KAT 5267.4 -> 52.4 at layer 1, which
+    discriminates the leaf-reified d_cell relation from both historical
+    mistakes (point-bin tie-break; composed parents give 58.0) — an
+    out-of-date lib silently falls back to the Python path rather than
+    drifting. Probed once per process.
+    """
+    global _ACCEL_ANC
+    if _ACCEL_ANC is not ...:
+        return _ACCEL_ANC
+    _ACCEL_ANC = None
+    try:
+        from hhg9.accel import backend
+        lib = backend()
+        if lib is not None and getattr(lib, 'has_cell_ancestor', False):
+            kat = np.frombuffer(uuid_mod.UUID('5267' + 'f' * 27 + '4').bytes,
+                                dtype=np.uint8).reshape(1, 16).copy()
+            want = uuid_mod.UUID('52' + 'f' * 29 + '4').bytes
+            if bytes(lib.cell_ancestor_many(kat, 1)[0]) == want:
+                _ACCEL_ANC = lib
+    except Exception:
+        _ACCEL_ANC = None
+    return _ACCEL_ANC
+
+
 def _cell_ancestor_batch(uuids, at_layer: int, target: int) -> list[uuid_mod.UUID]:
-    """Address-space canonical ancestor for a uniform-layer batch."""
+    """Address-space canonical ancestor for a uniform-layer batch.
+
+    Delegates to libhex9's C fold (~100x) when a doctrine-correct build is
+    loadable; otherwise runs the pure-Python fold. Both are the same
+    algorithm and byte-identical (verified all cells L1-L4, every target).
+    """
+    lib = _accel_cell_ancestor()
+    if lib is not None:
+        arr = np.frombuffer(b''.join(u.bytes for u in uuids),
+                            dtype=np.uint8).reshape(-1, 16).copy()
+        return [uuid_mod.UUID(bytes=bytes(r))
+                for r in lib.cell_ancestor_many(arr, target)]
     from hhg9.h9.addressing import x_adr_cell_ancestor
     nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
     hx = np.column_stack([nibs[:, :at_layer + 1], nibs[:, -1]])
