@@ -149,7 +149,7 @@ def main(lat, lng, gens, out_path):
                                         edgecolor='#555555',
                                         linewidth=0.3, alpha=0.85, zorder=2))
             ax.autoscale()
-            ax.set_aspect('equal')
+            ax.set_aspect('equal', adjustable='box')
             ax.axis('off')
             ax.set_title(f'{label} — {rel}   (out {counts["out"]}/{len(desc)})')
             print(f'{name:>6} {rel:>9} {len(desc):>6} {counts["in"]:>7} '
