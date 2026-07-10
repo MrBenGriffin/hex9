@@ -5,7 +5,7 @@
 """
 Hierarchy nesting across DGGS: iterated hierarchies decohere, contracted ones don't.
 
-A four-panel comparison backing the §12 nesting argument in the Hex9 paper.  For
+A six-panel comparison backing the §12 nesting argument in the Hex9 paper.  For
 each system we take one anchor cell H, enumerate its index-descendants `gens`
 resolutions finer (by that system's *own* descendant definition), and colour each
 descendant by how much of its area overlaps H:
@@ -21,16 +21,22 @@ Hex9 avoids iteration entirely: `descendants(H, L+i)` is a direct per-layer
 one place iteration would break) do not decohere.
 
 Fairness: every panel uses that system's native descendant relation — H3/S2/A5
-through their reference libraries, Hex9 through its `descendants` contract.  No
-spatial pre-filtering (that would rig the result; cf. `tile_subgrid`, which clips
-to the tile and is therefore NOT used here).
+through their reference libraries, ISEA3H through DGGAL's primary-parent lineage
+(parents[0] = upstream getZonePrimaryParent; via isea_probe.py in a subprocess),
+HEALPix through nested-index arithmetic, Hex9 through its `descendants` contract.
+No spatial pre-filtering (that would rig the result; cf. `tile_subgrid`, which
+clips to the tile and is therefore NOT used here).
 
 Run:
-    python docs/dggs/dggs_nesting.py               # 2x2 figure -> docs/dggs/dggs_nesting.png
+    python docs/dggs/dggs_nesting.py               # 2x3 figure -> docs/dggs/dggs_nesting.png
     python docs/dggs/dggs_nesting.py --gens 3 --lat 40 --lng -3
 
 Result (anchor 40N,3W, gens 3): H3 12/343 and A5 22/64 outside (iterated, rotated
-→ decohere); S2 0 straddle / 0 outside. Hex9: exactly 729 = 9^3 descendants —
+→ decohere); ISEA3H 20/36 outside (DGGAL primary-parent lineage: a pure
+first-parent convention, not geometry-aware, so the descendant patch slides
+sideways out of the anchor — the strongest decoherence measured here); S2 and
+HEALPix 0 straddle / 0 outside (fully-nested quadtrees: all hierarchy readings
+coincide). Hex9: exactly 729 = 9^3 descendants —
 702 inside, 27 rim splits straddling by their far (mode-1) half, 0 outside.
 This is the leaf-reified d_cell relation (h9_cell_ancestor: the subdivision
 tree is on d_cells, which nest exactly; mode-0 reification into x_cells happens
@@ -42,7 +48,8 @@ exactly 1/6 of the area displaced). Overlap is classified with EDGE_TOL so that
 boundary cells sharing the anchor's (curved, polygon-approximated) edge are
 counted as contained, not as spurious straddlers.
 
-Last edited: 2026-07-09 (h9_cell_ancestor = direct d_cell relation; 729/702/27/0).
+Last edited: 2026-07-10 (six panels: +ISEA3H via DGGAL primary-parent lineage,
++HEALPix nested; ISEA3H 20/36 outside, HEALPix 0/64).
 """
 import argparse
 
@@ -113,11 +120,69 @@ def hex9_adapter(lat, lng, res, gens):
     return poly(anchor, res), [poly(d, target) for d in desc], f'Hex9 L{res}->L{target}'
 
 
-ADAPTERS = {'H3': h3_adapter, 'S2': s2_adapter, 'A5': a5_adapter, 'Hex9': hex9_adapter}
+def healpix_adapter(lat, lng, res, gens):
+    """HEALPix nested scheme: a strict aperture-4 quadtree on 12 equal-area base
+    pixels, so — like S2 — all three hierarchy readings coincide.  `res` is the
+    order (nside = 2**res); descendants of pixel p at +gens are the contiguous
+    nested range [p·4^gens, (p+1)·4^gens)."""
+    from hhg9.accel.libhex9 import backend
+    backend()   # healpy's native libs break libhex9 if they load first (segfault)
+    import healpy as hp
+    import numpy as np
+    nside = 1 << res
+    p = int(hp.ang2pix(nside, lng, lat, nest=True, lonlat=True))
+
+    def poly(nside_, pix):
+        vecs = hp.boundaries(nside_, pix, step=1, nest=True)        # (3, 4) vectors
+        lon, la = hp.vec2ang(vecs.T, lonlat=True)
+        lon = (lon + 180.0) % 360.0 - 180.0                         # match other panels
+        return Polygon(np.column_stack([lon, la]))
+
+    fine = nside << gens
+    desc = [poly(fine, q) for q in range((p << (2 * gens)), (p + 1) << (2 * gens))]
+    return poly(nside, p), desc, f'HEALPix n{nside}->n{fine}'
+
+
+def dggal_probe_cmd(*argv):
+    """Command to run isea_probe.py in an interpreter where dggal loads: the
+    current one if the wheel is healthy, else the repo's `.venv-x86` under
+    Rosetta (the dggal 0.0.6 macOS arm64 wheel ships x86_64 dylibs).
+    Raises NotImplementedError if neither is available."""
+    import os
+    import sys
+    probe = os.path.join(os.path.dirname(__file__), 'isea_probe.py')
+    try:
+        import dggal                                                # noqa: F401
+        return [sys.executable, probe, *argv]
+    except ImportError:
+        venv_py = os.path.join(os.path.dirname(__file__), '..', '..',
+                               '.venv-x86', 'bin', 'python')
+        if not os.path.exists(venv_py):
+            raise NotImplementedError('dggal unavailable: pip install dggal, or on '
+                                      'arm64 macOS create .venv-x86 (see isea_probe.py)')
+        return ['arch', '-x86_64', venv_py, probe, *argv]
+
+
+def isea3h_adapter(lat, lng, res, gens):
+    """ISEA3H via DGGAL, using its primary-parent lineage (see isea_probe.py)."""
+    import json
+    import subprocess
+    cmd = dggal_probe_cmd('--lat', str(lat), '--lng', str(lng),
+                          '--res', str(res), '--gens', str(gens))
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if out.returncode:
+        raise NotImplementedError(f'isea_probe failed: {out.stderr.strip()[-200:]}')
+    data = json.loads(out.stdout)
+    return (Polygon(data['anchor']), [Polygon(r) for r in data['descendants']],
+            data['label'])
+
+
+ADAPTERS = {'H3': h3_adapter, 'S2': s2_adapter, 'A5': a5_adapter,
+            'ISEA3H': isea3h_adapter, 'HEALPix': healpix_adapter, 'Hex9': hex9_adapter}
 # Per-system default resolution for the anchor (own numbering); tuned to comparable
 # anchor sizes.  The nesting behaviour is resolution-invariant, so exact values are
 # not load-bearing.
-DEFAULT_RES = {'H3': 5, 'S2': 8, 'A5': 5, 'Hex9': 5}
+DEFAULT_RES = {'H3': 5, 'S2': 8, 'A5': 5, 'ISEA3H': 11, 'HEALPix': 8, 'Hex9': 5}
 
 # CVD-safe (luminance + blue/gold), matching ex0122.
 COLOURS = {'in': '#4f86c6', 'straddle': '#efdca0', 'out': '#c0392b'}
@@ -150,12 +215,12 @@ def main(lat, lng, gens, out_path):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon as MplPolygon
 
-    fig, axes = plt.subplots(2, 2, figsize=(11, 11))
+    fig, axes = plt.subplots(2, 3, figsize=(16, 11))
     print(f'anchor = ({lat}, {lng})   gens = {gens}')
     print(f'{"system":>6} {"res":>14} {"descendants":>12} {"inside":>7} '
           f'{"straddle":>9} {"OUTSIDE":>8}')
 
-    for ax, name in zip(axes.flat, ['H3', 'S2', 'A5', 'Hex9']):
+    for ax, name in zip(axes.flat, ADAPTERS):
         res = DEFAULT_RES[name]
         try:
             anchor, desc, label = ADAPTERS[name](lat, lng, res, gens)

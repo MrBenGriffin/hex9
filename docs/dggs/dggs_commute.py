@@ -21,10 +21,13 @@ The dggs_nesting.py red/gold cells are the geometric face of the same
 disagreement; this script measures its rate directly — no polygons, no
 approximation, each system through its own native operations:
 
-    H3   : latlng_to_cell / cell_to_parent
-    S2   : CellId.from_lat_lng / CellId.parent
-    A5   : lonlat_to_cell / cell_to_parent
-    Hex9 : h9_bin_pts (direct) / h9_bin on the child UUID alone (via child)
+    H3      : latlng_to_cell / cell_to_parent
+    S2      : CellId.from_lat_lng / CellId.parent
+    A5      : lonlat_to_cell / cell_to_parent
+    ISEA3H  : DGGAL getZoneFromWGS84Centroid / getZoneParents[0] walked k levels
+              (= upstream getZonePrimaryParent; subprocess probe, isea_probe.py)
+    HEALPix : ang2pix(nest) / two-bit right-shift of the nested index
+    Hex9    : h9_bin_pts (direct) / h9_bin on the child UUID alone (via child)
 
 Sampling is uniform on the sphere (fixed seed; area-true via arcsin latitude).
 Base levels match dggs_nesting.py's DEFAULT_RES (comparable anchor sizes);
@@ -34,10 +37,17 @@ Run:
     python docs/dggs/dggs_commute.py                    # N=10000, k=1..3
     python docs/dggs/dggs_commute.py --n 100000 --gens 4
 
-Result (N=10000, seed 9, k=1..6): S2 0.00% at every k (congruent quadtree).
-H3 is CONSTANT at ~6.5% regardless of k — the fixed shape mismatch between the
-parent hexagon and the Gosper-island-like limit of its descendant set. A5 is
-constant at ~35% (the rhombus limit of its pentagon refinement). Hex9 DECAYS:
+Result (N=10000, seed 9, k=1..6): S2 and HEALPix 0.00% at every k (fully-nested
+quadtrees; for HEALPix truncation IS the index shift, so agreement is
+structural). H3 is CONSTANT at ~6.5% regardless of k — the fixed shape mismatch
+between the parent hexagon and the Gosper-island-like limit of its descendant
+set (cf. St-Louis's analytic ~6.52% bound, OGC API-DGGS issue #108: our deep
+Monte Carlo gives 6.50%). A5 is constant at ~35% (the rhombus limit of its
+pentagon refinement). ISEA3H under DGGAL's primary-parent lineage is the
+outlier: ~44/52/51% at k=1..3 GROWING to ~57% at k=9 — parents[0] is an
+ID-ordering convention with a consistent geometric bias, so the walk drifts
+like a biased random walk instead of converging to a fixed limit shape.
+Hex9 DECAYS:
 16.76%, 5.88%, 1.94%, 0.62%, 0.23%, 0.07% — matching the predicted
 (1/6)*3^(1-k) split-hex band (3 of 9 children split, half of each outside the
 owner). The limit shape of a Hex9 cell's descendants IS the ancestor, so the
@@ -46,14 +56,16 @@ point is assigned to a cell that shares the straddling hexagon with its
 geometric parent — adjacent, never far. At the d_cell (half-hex) level the
 Hex9 rate is zero at every depth; only the paired-hexagon layer carries the
 band. --deep (bin at LMAX, roll up to the analysis layer): H3 15->5 6.50%,
-S2 30->8 0.00%, A5 30->5 35.02%, Hex9 30->5 0.00% — at workload depth the
+S2 30->8 0.00%, A5 30->5 35.02%, ISEA3H 20->11 56.89%, HEALPix 29->8 0.00%,
+Hex9 30->5 0.00% — at workload depth the
 Hex9 band has decayed below any measurable rate ((1/6)*3^-24 ~ 1e-13) while
 the H3/A5 constants stand. The deep row is Hex9's normal pipeline, not a
 favourable corner: encode once to the full L30 address, then derive every
 coarser bin from the address alone (truncation + tail canonicalisation, O(1),
 no re-encoding from geometry). See §12 of the paper (Ancestry).
 
-Last edited: 2026-07-05 (first version; --deep mode added).
+Last edited: 2026-07-10 (ISEA3H via DGGAL primary-parent lineage + HEALPix
+nested added; H3 deep 6.50% cross-checks St-Louis's analytic ~6.52%).
 """
 import argparse
 import numpy as np
@@ -109,12 +121,46 @@ def hex9_trial(lats, lngs, res, k, _cache={}):
     return sum(d != v for d, v in zip(direct, via))
 
 
-TRIALS = {'H3': h3_trial, 'S2': s2_trial, 'A5': a5_trial, 'Hex9': hex9_trial}
+def isea3h_trial(lats, lngs, res, k):
+    """ISEA3H via DGGAL (subprocess probe, see isea_probe.py): direct
+    binning vs binning at res+k then walking primary parents (parents[0],
+    = upstream getZonePrimaryParent) up k levels — DGGAL's lineage."""
+    import json
+    import subprocess
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from dggs_nesting import dggal_probe_cmd
+    cmd = dggal_probe_cmd('--mode', 'commute', '--res', str(res), '--k', str(k))
+    payload = json.dumps({'lats': lats.tolist(), 'lngs': lngs.tolist()})
+    out = subprocess.run(cmd, input=payload, capture_output=True, text=True,
+                         timeout=1800)
+    if out.returncode:
+        raise NotImplementedError(f'isea_probe failed: {out.stderr.strip()[-200:]}')
+    return json.loads(out.stdout)['bad']
+
+
+def healpix_trial(lats, lngs, res, k):
+    """HEALPix nested: truncation IS the two-bit right-shift of the pixel
+    index — an exact quadtree, so the two routes agree everywhere."""
+    from hhg9.accel.libhex9 import backend
+    backend()   # healpy's native libs break libhex9 if they load first (segfault)
+    import healpy as hp
+    nside = 1 << res
+    direct = hp.ang2pix(nside, lngs, lats, nest=True, lonlat=True)
+    via = hp.ang2pix(nside << k, lngs, lats, nest=True, lonlat=True) >> (2 * k)
+    return int((direct != via).sum())
+
+
+TRIALS = {'H3': h3_trial, 'S2': s2_trial, 'A5': a5_trial,
+          'ISEA3H': isea3h_trial, 'HEALPix': healpix_trial, 'Hex9': hex9_trial}
 # Same anchors as dggs_nesting.py: comparable cell sizes, own numbering.
-DEFAULT_RES = {'H3': 5, 'S2': 8, 'A5': 5, 'Hex9': 5}
+DEFAULT_RES = {'H3': 5, 'S2': 8, 'A5': 5, 'ISEA3H': 11, 'HEALPix': 8, 'Hex9': 5}
 # --deep: the workload-realistic case — bin at the system's maximum resolution,
 # roll all the way up to the DEFAULT_RES analysis layer (k = LMAX - base).
-LMAX = {'H3': 15, 'S2': 30, 'A5': 30, 'Hex9': 30}
+# ISEA3H's cap is probe cost, not a library limit (rate is constant in k anyway);
+# HEALPix order 29 is healpy's nside limit.
+LMAX = {'H3': 15, 'S2': 30, 'A5': 30, 'ISEA3H': 20, 'HEALPix': 29, 'Hex9': 30}
 
 
 def sample_sphere(n, seed=9):

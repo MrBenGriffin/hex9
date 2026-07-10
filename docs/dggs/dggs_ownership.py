@@ -16,12 +16,15 @@ with two panels over the same anchor:
           centre/ownership point) is the anchor. Partitions the globe;
           nothing red, by construction.
 
-For H3 and A5 the ownership rule used here is centre-point containment
-(owner = encode(cell centre) at the anchor level) — definable today with
-their public APIs, no library changes. Note their owned COUNTS vary per
-anchor (no carrier ⇒ no exact-count property); Hex9's rep-9 d_cell
-carrier gives exactly 9^depth every time. S2 is omitted: congruent, the
-two panels would be identical.
+For H3, A5 and ISEA3H the ownership rule used here is centre-point
+containment (owner = encode(cell centre) at the anchor level) — definable
+today with their public APIs, no library changes. ISEA3H's lineage is
+DGGAL's primary-parent relation (parents[0] = upstream
+getZonePrimaryParent), run through isea_probe.py in a subprocess. Note
+their owned COUNTS vary per anchor (no carrier ⇒ no exact-count
+property); Hex9's rep-9 d_cell carrier gives exactly 9^depth every time.
+S2 and HEALPix are omitted: fully-nested, the two panels would be
+identical.
 
 Run:
     python docs/dggs/dggs_ownership.py            # -> docs/dggs/dggs_ownership.png
@@ -82,6 +85,27 @@ def a5_pair(lat, lng, res, gens):
             f'{len(owned_ids)} owned (varies by anchor)')
 
 
+def isea3h_pair(lat, lng, res, gens):
+    """ISEA3H via DGGAL (subprocess probe): lineage = primary-parent walk
+    (parents[0] = upstream getZonePrimaryParent); owned = centre-point
+    containment (zone whose WGS84 centroid re-encodes to the anchor) —
+    definable today with DGGAL's public API. See isea_probe.py."""
+    import json
+    import subprocess
+    from dggs_nesting import dggal_probe_cmd
+    cmd = dggal_probe_cmd('--mode', 'ownership', '--lat', str(lat), '--lng', str(lng),
+                          '--res', str(res), '--gens', str(gens))
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    if out.returncode:
+        raise NotImplementedError(f'isea_probe failed: {out.stderr.strip()[-200:]}')
+    data = json.loads(out.stdout)
+    return (Polygon(data['anchor']),
+            [Polygon(r) for r in data['naive']],
+            [Polygon(r) for r in data['owned']],
+            data['label'].replace('->', '→'),
+            f'{len(data["owned"])} owned (varies by anchor)')
+
+
 def hex9_pair(lat, lng, res, gens):
     from shapely.validation import make_valid
     from hhg9 import Registrar, Points
@@ -116,7 +140,7 @@ def hex9_pair(lat, lng, res, gens):
             f'{len(owned_ids)} owned (= 9^{gens}, every anchor)')
 
 
-PAIRS = {'H3': h3_pair, 'A5': a5_pair, 'Hex9': hex9_pair}
+PAIRS = {'H3': h3_pair, 'A5': a5_pair, 'ISEA3H': isea3h_pair, 'Hex9': hex9_pair}
 
 
 def main(lat, lng, gens, out_path):
@@ -125,8 +149,8 @@ def main(lat, lng, gens, out_path):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon as MplPolygon
 
-    systems = ['H3', 'A5', 'Hex9']
-    fig, axes = plt.subplots(len(systems), 2, figsize=(11, 15))
+    systems = list(PAIRS)
+    fig, axes = plt.subplots(len(systems), 2, figsize=(11, 5 * len(systems)))
     print(f'anchor = ({lat}, {lng})   gens = {gens}')
     print(f'{"system":>6} {"relation":>9} {"cells":>6} {"inside":>7} '
           f'{"straddle":>9} {"OUTSIDE":>8}')
