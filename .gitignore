@@ -45,3 +45,4 @@ htmlcov/
 /hhg9/data/WGS84_pkdo_warp.npz
 /docs/arxiv/
 /docs/**.zip
+.venv-x86/
