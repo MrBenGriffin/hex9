@@ -25,8 +25,8 @@ tile hexagons, a half-hexagon can be
 tiled by half-hexagons.
 
 Half-hexagons have a history of their own in tilings. In their chapter on
-aperiodic tilings, Grünbaum & Shephard, (also
-Baake et al.), bring note to some of the issues of using the 1:4 (50%)
+aperiodic tilings, Grünbaum & Shephard, (also  Baake et al.), bring note to 
+some of the issues of using the 1:4 (50%)
 hierarchy -
 
 ![aperiodic 1:4 grid](images/hhg_aperiodic_1_4.png)
