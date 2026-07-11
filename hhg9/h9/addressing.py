@@ -962,6 +962,99 @@ def x_adr_to_r_adr(hx, tail=None, scheme: RegionAddressLike = H9_RA):
     return oc, r_adr
 
 
+def is_canonical(hx, tail=None, scheme: RegionAddressLike = H9_RA):
+    """Test whether each x_adr is the canonical mode-0 bin representative.
+
+    Canonicality is a *leaf-only* property. ``canonicalise`` folds a mode-1
+    leaf half-hex into its mode-0 parent bin, so the canonical form carries
+    leaf-presentation mode ``p_mo == 0`` (the "canonical home" tail bit,
+    tail_pack_reversible bit 3). Interior modes are forced by the region
+    thread and never make an address non-canonical (cf. x_adr_cell_ancestor
+    and the mode-0 d_cell doctrine). An L0-only address (root hex, no digits)
+    additionally needs the mode-0 octant rep ``r_mo == 0``: the root hexagon
+    is shared by two octants and the canonical bin lives in the mode-0 one.
+
+    Only meaningful for a reversible tail — key/none tails drop ``p_mo`` and
+    are canonical bins by construction, so this reports them canonical.
+
+    Args:
+        hx / tail: as x_adr_to_r_adr (root hex + digits[, tail], 0x0F padded).
+    Returns:
+        (N,) bool: True where the address is the canonical bin representative.
+    """
+    hx = np.asarray(hx, dtype=np.uint8)
+    body, tl = (hx[:, :-1], hx[:, -1]) if tail is None else (hx, np.asarray(tail, dtype=np.uint8))
+    _, r_mo, p_mo = tail_unpack_reversible(tl)
+    is_real = body != HEX_LUTS.hex_oob
+    layer = is_real.sum(axis=1) - 1                        # 0 = root-only (L0)
+    return (p_mo == 0) & ((layer > 0) | (r_mo == 0))
+
+
+def is_wellformed(hx, tail=None, scheme: RegionAddressLike = H9_RA):
+    """Test whether each x_adr is a structurally resolvable path.
+
+    Unlike is_canonical (a leaf-mode read), this re-threads the whole
+    address bottom-up — a guarded mirror of ``_x_adr_backwalk`` — and checks
+    every step lands on a real region:
+
+      * root hex in 0..11, deeper body digits in 0..8 (0x0F = right-aligned
+        padding only, no interior holes);
+      * the reversible tail unpacks to a valid leaf context (c2 in 0..2 and
+        the terminal digit-3 step from (c_mo, c2) exists);
+      * every hex_reg step up the thread resolves without an 0x0F sentinel;
+      * the root (hex, r_mo) maps to a real octant (H9O.l0hex_back).
+
+    Rows may be 0x0F padded (bins) and need not share a layer. The context is
+    clamped in-domain at every step, so adversarial input cannot raise.
+
+    Args:
+        hx / tail: as x_adr_to_r_adr (root hex + digits[, tail], 0x0F padded).
+    Returns:
+        (N,) bool: True where the address resolves end to end.
+    """
+    from hhg9.h9 import H9O
+    hex_reg = HEX_LUTS.hex_reg
+    oob = HEX_LUTS.hex_oob
+    hx = np.asarray(hx, dtype=np.uint8)
+    body, tl = (hx[:, :-1], hx[:, -1]) if tail is None else (hx, np.asarray(tail, dtype=np.uint8))
+    sz, ncols = body.shape
+    ok = np.ones(sz, dtype=bool)
+
+    # --- digit ranges + right-aligned padding (no interior 0x0F holes) ------
+    is_real = body != oob
+    real_layer = (ncols - 1) - np.argmax(is_real[:, ::-1], axis=1)
+    lvl = np.arange(ncols)[None, :]
+    ok &= np.all(is_real == (lvl <= real_layer[:, None]), axis=1)
+    ok &= body[:, 0] < 12                                  # root hex 0..11
+    if ncols > 1:
+        deeper = body[:, 1:]
+        ok &= np.all((deeper < 9) | (deeper == oob), axis=1)
+
+    # --- tail leaf context: c2 valid + terminal digit-3 step exists ---------
+    c2, r_mo, c_mo = tail_unpack_reversible(tl)
+    ok &= c2 < 3
+    cm = np.clip(c_mo, 0, 1).astype(np.intp)
+    cc = np.clip(c2, 0, 2).astype(np.intp)
+    e3 = hex_reg[3, cm, cc]                                # undo the "3" terminal
+    ok &= e3[:, 1] != oob
+    cm = np.where(e3[:, 1] <= 1, e3[:, 1], 0).astype(np.intp)
+    cc = np.where(e3[:, 2] <= 2, e3[:, 2], 0).astype(np.intp)
+
+    # --- guarded backward walk (leaf -> root), clamping ctx each step -------
+    safe = np.where(is_real & (body < 9), body, 0)        # keep hex_reg in-domain
+    for i in range(int(real_layer.max()), 0, -1):
+        active = i <= real_layer
+        e = hex_reg[safe[:, i], cm, cc]
+        ok &= ~(active & (e[:, 0] == oob))
+        nm, nc = e[:, 1], e[:, 2]
+        cm = np.where(active & (nm <= 1), nm, cm).astype(np.intp)
+        cc = np.where(active & (nc <= 2), nc, cc).astype(np.intp)
+
+    # --- root (hex, r_mo) must resolve to a real octant ---------------------
+    ok &= H9O.l0hex_back[np.minimum(body[:, 0], 11), r_mo][:, 0] != oob
+    return ok
+
+
 def r_adr_to_x_adr(oc, r_adr, tail_style: TailStyle = TailStyle.reversible,
                    scheme: RegionAddressLike = H9_RA):
     """r_adr -> x_adr: forward walk emitting the hex-digit body + tail.
