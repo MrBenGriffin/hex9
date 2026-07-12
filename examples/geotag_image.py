@@ -94,17 +94,11 @@ def geotag(in_path, out_path, *, lon, lat, width_m, height_m=None,
 
 if __name__ == '__main__':
     gdal.UseExceptions()
-    # ap = argparse.ArgumentParser(description=__doc__,
-    #                              formatter_class=argparse.RawDescriptionHelpFormatter)
-    # ap.add_argument('input')
-    # ap.add_argument('output')
-    # ap.add_argument('--width-m', type=float, required=True)
-    # ap.add_argument('--height-m', type=float, default=None)
-    # ap.add_argument('--heading-deg', type=float, default=0.0)
-    # ap.add_argument('--lon', type=float, default=DEF_LON)
-    # ap.add_argument('--lat', type=float, default=DEF_LAT)
-    # a = ap.parse_args()
 
-    geotag('bee_fly.jpg', 'fly_1mm.tif', width_m=0.03527485380116959, lon=DEF_LON, lat=DEF_LAT)
+    fly_lon, fly_lat = 1.640250000, 49.0987953450  # 49.0987953200 +100 +100 +50
+    geotag('src/fly2.png', 'src/fly_1mm.tif', width_m=0.257212475633528, lon=fly_lon, lat=fly_lat)
+
+    # c_lon, c_lat = 1.640250018, 49.098794825,
+    # geotag('src/171c.png', 'src/171c.tif', heading_deg=0, width_m=15, lon=c_lon, lat=c_lat)
     # geotag(a.input, a.output, lon=a.lon, lat=a.lat,
     #        width_m=a.width_m, height_m=a.height_m, heading_deg=a.heading_deg)

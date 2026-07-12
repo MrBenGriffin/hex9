@@ -54,7 +54,7 @@ from hhg9.h9.tail import tail_unpack_reversible
 # POI_LAT, POI_LON = 34.632049981869564, 77.62554188766468  # Samsten Ling
 # POI_LAT, POI_LON =24.136360966675497, 23.245733016051407  # Al Kufrah.
 # POI_LAT, POI_LON = 51.481588012311560, 0.00223723016213   # London
-POI_LON, POI_LAT = 1.640250018, 49.098794825    # box on lawn.
+POI_LON, POI_LAT = 1.640250018, 49.098795425    # box on lawn. 1.640250018 49.098794825
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _fit_viewport(pts, img_w, img_h, vp):
@@ -728,7 +728,7 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
                         color=(1.0, 1.0, 1.0, alpha),
                         zorder=100, clip_on=True)
 
-        hex_text = f'Hex9 // Demo'
+        hex_text = f'Hex9 // Demo // L{L}'
         if coarse_hexes is not None and coarse_hexes.shape[0] <= 40:
             lab_str = [''.join(f'{int(d):01x}' for d in row[:-1]) for row in coarse_v_k]
             prefix = _common_prefix(lab_str)
@@ -743,10 +743,14 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             if prefix:
                 hex_text += f' // H9 Prefix: {prefix}'
 
+        col = (1.0, 0.85, 0.0, 1.0)
+        if 14 < L < 19:
+            col = (0.2, 0.25, 0.0, 1.0)
+
         ax.text(0.012, 0.012, hex_text,
                 transform=ax.transAxes,
                 fontsize=16, ha='left', va='bottom', family='monospace',
-                color=(1.0, 0.85, 0.0, 1.0),
+                color=col,
                 zorder=150, clip_on=False)
 
         # Gold highlight: middle-layer hex containing the POI
@@ -810,36 +814,36 @@ if __name__ == '__main__':
     ESRI_WMTS='https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml'
     OAM_URL='https://tiles.openaerialmap.org/6107d91f343da30006976e12/0/6107d91f343da30006976e13/{z}/{x}/{y}'
 
+
     _pc = make_pc_source('src/bm_3600x1800.png', _reg, _p_pix, _b_oct,
                          attribution='NASA Visible Earth · Blue Marble')
     _s2 = make_wmts_source(EOX_WMTS, 's2cloudless-2020', _reg, _b_oct, gain=1.1, gamma=1.1,
                            attribution='Sentinel-2 cloudless 2020 © EOX IT Services GmbH')
     _s3 = make_wmts_source(ESRI_WMTS, 'World_Imagery', _reg, _b_oct, gain=1.0, gamma=1.0,
                            attribution='Esri World Imagery · Esri, Maxar, Earthstar Geographics')
-    _s4 = make_xyz_source(OAM_URL, _reg, _b_oct, max_zoom=22, gain=1.0, gamma=1.0,
+    _s4 = make_xyz_source(OAM_URL, _reg, _b_oct, max_zoom=26, gain=1.0, gamma=1.0,
                           attribution='Pierre d\'HUY ©2021  · OpenAerialMap, CC BY-SA 4.0')
-    _s5 = make_bm_source('lawn171.tif', _reg, _b_oct, gamma=1.0,
-                         name='lawn171_wkt', attribution='')
-    _s6 = make_bm_source('lawn_1mm.tif', _reg, _b_oct, gamma=1.0,
-                         name='lawn_1mm', attribution='')
-    _s7 = make_bm_source('fly_1mm.tif', _reg, _b_oct, gamma=1.0,
-                         name='fly_wkt', attribution='')
+    _s5 = make_bm_source('src/171c.tif', _reg, _b_oct, gamma=1.0,
+                         name='171_wkt', attribution='Pierre d\'HUY ©2021 placeholder.')
+    # _s6 = make_bm_source('src/lawn_1mm.tif', _reg, _b_oct, gamma=1.0,
+    #                      name='lawn_1mm', attribution='')
+    _s7 = make_bm_source('src/fly_1mm.tif', _reg, _b_oct, gamma=1.0,
+                         name='fly_wkt', attribution='fly')
 
     run(
         reg=_reg,
         flavour='butterfly:0500',
         scale=600,
-        max_layer=22,
+        max_layer=21,
         bg_sources={
             # 0: _pc,
             0: _s2,
             6: _s3,
             10: _s4,
-            # 13: _s5,   # lawn/table photo (0.8 m) — viewport fits it ~L16
-            14: _s6,   # lawn — viewport fits it ~L20
-            17: _s7,  # fly (1 cm) — viewport fits it ~L20
+            14: _s5,
+            18: _s7,  # fly (1 cm) — viewport fits it L18
         },
-        frames_per_level=24,   # set >0 for smooth animation, e.g. 24
+        frames_per_level=50,   # set >0 for smooth animation, e.g. 24
         skip_existing=True,    # resume: skip frames whose PNG is already on disk
-        # start_frame=300,     # or resume from an explicit frame index
+        # start_frame=480,     # or resume from an explicit frame index
     )

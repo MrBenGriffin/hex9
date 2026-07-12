@@ -13,14 +13,16 @@ walks; round trips must be byte-identical for every canonical cell.
 import numpy as np
 import pytest
 
-from hhg9 import Registrar
+from hhg9 import Registrar, Points
 from hhg9.h9.grid import HexMesh
 from hhg9.h9 import H9O
 import hhg9.h9.uuid_address as ua
 from hhg9.h9.uuid_address import _batch_int_to_nibbles
+from hhg9.h9.tail import tail_pack_reversible
 from hhg9.h9.addressing import (
     x_adr_to_r_adr, r_adr_to_x_adr, x_adr_to_d_adr, d_adr_to_x_adr,
-    d_adr_to_r_adr, r_adr_to_d_adr, H9_RA, HEX_LUTS,
+    d_adr_to_r_adr, r_adr_to_d_adr, is_canonical, is_wellformed,
+    hex_digits, H9_RA, HEX_LUTS,
 )
 
 OOB = HEX_LUTS.hex_oob
@@ -120,6 +122,99 @@ def test_padded_input_matches_trimmed(reg, mesh):
     assert np.array_equal(oc_p, oc_t)
     assert np.array_equal(r_p[:, :4], r_t)
     assert np.all(r_p[:, 4:] == OOB)
+
+
+def test_x_adr_cell_ancestor_equals_geometric(reg, mesh):
+    """The pure-Python address-space fold equals the geometric oracle —
+    tested directly, bypassing any libhex9 delegation, so the Python path
+    stays covered in lib-present environments."""
+    from hhg9.h9.addressing import x_adr_cell_ancestor
+    from hhg9.h9.uuid_address import _mode0_interior_pts
+    L = 3
+    uu = list(mesh.addr(L))
+    hx = x_adr_of(uu, L)
+    pts = _mode0_interior_pts(uu, reg.domain('b_oct'))
+    for K in (0, 1, 2):
+        _, got = x_adr_cell_ancestor(hx, K)
+        want = x_adr_of(ua.h9_bin_pts(pts, K), K)
+        assert np.array_equal(got, want)
+
+
+def _geo_pts(reg, n=48):
+    """A deterministic lon/lat grid projected into b_oct."""
+    g, b = reg.domain('g_gcd'), reg.domain('b_oct')
+    lo, la = np.meshgrid(np.linspace(-179, 179, n), np.linspace(-89, 89, n))
+    ll = np.column_stack([la.ravel(), lo.ravel()])
+    return reg.project(Points(ll, domain=g), [g, b])
+
+
+# ---------------------------------------------------------------------------
+# is_canonical: leaf-mode (mode-0 bin) predicate
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("L", [1, 2, 3, 4])
+def test_is_canonical_true_for_bins(reg, mesh, L):
+    """Every encoder-produced bin is the canonical mode-0 representative."""
+    hx = x_adr_of(mesh.addr(L), L)
+    assert np.all(is_canonical(hx))
+    # Padded full-width input is handled identically.
+    nibs = _batch_int_to_nibbles([u.int for u in mesh.addr(L)], n=32)
+    assert np.all(is_canonical(nibs))
+
+
+def test_is_canonical_detects_raw_mode1(reg):
+    """The raw (unfolded) encoder keeps mode-1 leaf presentations; those are
+    exactly the non-canonical addresses — the tail's p_mo bit (bit 3) — and
+    they remain structurally well-formed."""
+    pb = _geo_pts(reg)
+    raw = np.asarray(hex_digits(pb, layer=5))
+    canon = is_canonical(raw)
+    assert canon.any() and not canon.all()                 # a genuine mix
+    p_mo = (raw[:, -1] >> 3) & 1
+    assert np.array_equal(canon, p_mo == 0)                # canonical <=> p_mo 0
+    assert np.all(is_wellformed(raw))                      # all still resolvable
+
+
+def test_is_canonical_l0_octant_rep(reg):
+    """An L0-only address is canonical only in the mode-0 octant (r_mo == 0):
+    the root hexagon is shared by two octants."""
+    body = np.array([[0], [0]], dtype=np.uint8)            # root hex only
+    tail0 = tail_pack_reversible(np.uint8(0), np.uint8(0), np.uint8(0))  # r_mo 0
+    tail1 = tail_pack_reversible(np.uint8(1), np.uint8(0), np.uint8(0))  # r_mo 1
+    hx = np.column_stack([body, np.array([tail0, tail1], dtype=np.uint8)])
+    assert list(is_canonical(hx)) == [True, False]
+
+
+# ---------------------------------------------------------------------------
+# is_wellformed: structural resolvability predicate
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("L", [1, 2, 3, 4])
+def test_is_wellformed_true_for_bins(reg, mesh, L):
+    """Valid bins resolve end to end, trimmed or 0x0F padded."""
+    assert np.all(is_wellformed(x_adr_of(mesh.addr(L), L)))
+    nibs = _batch_int_to_nibbles([u.int for u in mesh.addr(L)], n=32)
+    assert np.all(is_wellformed(nibs))
+
+
+def test_is_wellformed_rejects_corruption(reg, mesh):
+    """Out-of-range digits, an invalid tail c2, an out-of-range interior digit
+    and an interior padding hole are each rejected."""
+    hx = x_adr_of(mesh.addr(3), 3)
+    assert np.all(is_wellformed(hx))                       # baseline
+
+    bad_root = hx.copy(); bad_root[:, 0] = 12              # root hex must be 0..11
+    bad_c2 = hx.copy(); bad_c2[:, -1] |= 0b0110            # tail c2 -> 3
+    bad_dig = hx.copy(); bad_dig[:, 2] = 9                 # interior digit 0..8 only
+    hole = hx.copy(); hole[:, 1] = OOB                     # interior 0x0F hole
+    for corrupt in (bad_root, bad_c2, bad_dig, hole):
+        assert not np.any(is_wellformed(corrupt))
+
+
+def test_is_wellformed_no_crash_on_garbage(reg):
+    """Adversarial nibbles must not raise — context is clamped every step."""
+    rng = np.random.default_rng(0)
+    garbage = rng.integers(0, 16, size=(500, 6), dtype=np.uint8)
+    out = is_wellformed(garbage)
+    assert out.dtype == bool and out.shape == (500,)
 
 
 def test_mixed_layer_forward_rejected(reg, mesh):
