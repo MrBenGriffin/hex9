@@ -47,10 +47,11 @@ _CHAINS = {
     "r_gcd": ["g_gcd", "r_gcd"],
     "c_oct": ["g_gcd", "c_ell", "c_oct"],
     "s_oct": ["g_gcd", "b_oct", "s_oct"],
+    "w_oct": ["g_gcd", "b_oct", "w_oct"],
 }
 
 # Octant-carrying domains (those should propagate a valid oid).
-_OCTANT_DOMAINS = {"b_oct", "b_raw", "c_oct", "s_oct"}
+_OCTANT_DOMAINS = {"b_oct", "b_raw", "c_oct", "s_oct", "w_oct"}
 
 
 # ---------------------------------------------------------------------------

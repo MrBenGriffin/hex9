@@ -130,6 +130,12 @@ class Registrar:
                 case 'c_oct':
                     from hhg9.domains import OctahedralCartesian
                     _ = OctahedralCartesian(self)
+                case 'w_oct':
+                    # Same 3D octahedral container as c_oct, but reached warp-free
+                    # from b_oct (post-warp coords lifted straight to 3D). No path
+                    # to c_ell is wired, so AK can never be applied to it.
+                    from hhg9.domains import OctahedralCartesian
+                    _ = OctahedralCartesian(self, 'w_oct', link_boct=True)
                 case 'b_oct':
                     from hhg9.domains import OctahedralBarycentric
                     _ = OctahedralBarycentric(self)

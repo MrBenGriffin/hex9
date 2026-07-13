@@ -684,11 +684,13 @@ class OctantBarycentric(ComponentDomain):
         self.oid = oid
         face = H9O.oid_str[oid]
         b_sig = f'{dom.name}:{face}'
-        # thet = H9O.oid_tht[oid]
+        thet = H9O.oid_tht[oid]
         self.mo = H9O.oid_mo[oid]
         # mo_str = 'V' if self.mo == 0 else 'Λ'
         super().__init__(registrar, b_sig, dom,  oid, 2)
-        # self.th = (thet % 6) * np.pi / 3.
+        # .th mirrors b_raw's OctantBaryRaw so the warp-free w_oct<->b_oct
+        # OctantBraw lift can build an identical orient matrix from this side.
+        self.th = (thet % 6) * np.pi / 3.
 
         edges = H9O.edges_by_id[oid]
         # self.oc = np.array([ed+mo_str for ed in edges], dtype='U3')

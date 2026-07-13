@@ -35,12 +35,13 @@ _FACE_ADJ: tuple[frozenset, ...] = (
 def _hex_areas(earth_area: float = None):
     """Return characteristic lengths for an ideal regular hexagon at each layer.
     Returns:
-        np.array (max_depth, 5):
+        np.array (max_depth, 6):
             area: area in m^2
             side: side length s (aka) circumradius: (vertex-centre)
             inradius: r (flat-centre)
             flat_diameter: 2*r aka 'height'
             point_diameter: 2*side
+            count: number of hexes at this layer
     """
     # Level 0 area ≈ 42_505_468 km^2 (area of Earth / 12 hexes)
     max_depth = 64  # way over the top.
