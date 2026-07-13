@@ -7,9 +7,8 @@ Zoom sequence centred on a lat/lon point of interest.
 
 Frame L shows:
   - Background pixel map zoomed to a 1/3^L sub-region of the full net.
-  - Hex overlays:
-      L=0 — layers 1, 2 (net shape is the implicit L0 cue, as per ex0097)
-      L>0 — layers L, L+1, L+2
+  - Hex overlays: layers L, L+1, L+2 (uniformly, L=0 included — the 12 base
+      cells are drawn and labelled at L0, just like any other level).
   - Middle-layer hex (L+1, for L>0) highlighted in gold.
   - Dashed yellow rectangle indicating the next frame's viewport (debug aid).
 
@@ -33,6 +32,7 @@ import os
 
 import numpy as np
 from matplotlib import image, pyplot as plt
+import matplotlib.patheffects as pe
 from matplotlib.collections import PolyCollection
 from osgeo import gdal
 from scipy.ndimage import distance_transform_edt
@@ -43,9 +43,8 @@ from hhg9.algorithms.geometry import inside_convex_polygon_cw
 from hhg9.h9 import H9O, H9P
 from hhg9.h9.addressing import hex_str_encode
 from hhg9.h9.binning import hex_reduce, hex_parents
-from hhg9.h9.grid import qa_grid, hex_verts_in_noct, poly_net_field
+from hhg9.h9.grid import qa_grid, hex_verts_in_noct, poly_net_field, hex_props
 from hhg9.h9.tail import tail_unpack_reversible
-
 
 # POI_LAT = 43.7694687631026    # Hall of Maps, Palazzo Vecchio, Florence
 # POI_LON = 11.25624466034606
@@ -54,7 +53,10 @@ from hhg9.h9.tail import tail_unpack_reversible
 # POI_LAT, POI_LON = 34.632049981869564, 77.62554188766468  # Samsten Ling
 # POI_LAT, POI_LON =24.136360966675497, 23.245733016051407  # Al Kufrah.
 # POI_LAT, POI_LON = 51.481588012311560, 0.00223723016213   # London
-POI_LON, POI_LAT = 1.640250018, 49.098795425    # box on lawn. 1.640250018 49.098794825
+#POI_LON, POI_LAT = 1.640250018, 49.098795425    # box on lawn. 1.640250018 49.098794825
+POI_LON, POI_LAT = 1.640249982, 49.0987954416  # 640250000   /// 0987953450 + 10
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _fit_viewport(pts, img_w, img_h, vp):
@@ -76,30 +78,28 @@ def _hex_at_layer(poi_b, layer, b_oct, n_oct, reg):
     `layer` containing poi_b."""
     h_num, h_v, _, _ = hex_reduce(poi_b, layer)
     h_par, h_oid, h_scale = hex_parents(b_oct, h_v, h_num)
-    xc2, _, xpm = tail_unpack_reversible(h_v[:, -1])   # (c2, r_mo, p_mo)
+    xc2, _, xpm = tail_unpack_reversible(h_v[:, -1])  # (c2, r_mo, p_mo)
     verts_n = hex_verts_in_noct(h_par, h_oid, xpm, xc2, h_scale, n_oct)
     ctr_b = Points(h_par, b_oct, oid=h_oid)
     ctr_n = reg.project(ctr_b, [b_oct, n_oct])
     return ctr_n.coords[0], verts_n.coords.reshape(-1, 6, 2)
 
 
-def _viewport(L, centre_n, net_xmin, net_xmax, net_ymin, net_ymax):
-    """Viewport [xmin, xmax, ymin, ymax] at zoom level L.
+def _viewport(L, centre_n, net_xmin, net_xmax, net_ymin, net_ymax, aspect):
+    """Viewport [xmin, xmax, ymin, ymax] at zoom level L, with the given aspect.
 
-    L=0 returns the full net extent.  L>0 shrinks by 3^L per axis,
-    centred on centre_n, clamped to the net bounds.
+    L=0 returns the full net height framed at `aspect` (pillarbox).  L>0 shrinks
+    by 3^L in height and derives width from `aspect`, centred on centre_n.  The
+    window aspect always matches the output canvas so the render never stretches.
     """
     if L == 0:
-        return [net_xmin, net_xmax, net_ymin, net_ymax]
-    span_x = (net_xmax - net_xmin) / (3.0 ** L)
-    span_y = (net_ymax - net_ymin) / (3.0 ** L)
-    cx, cy = centre_n
-    return [
-        max(net_xmin, cx - span_x / 2),
-        min(net_xmax, cx + span_x / 2),
-        max(net_ymin, cy - span_y / 2),
-        min(net_ymax, cy + span_y / 2),
-    ]
+        span_y = net_ymax - net_ymin
+        cx, cy = (net_xmin + net_xmax) / 2, (net_ymin + net_ymax) / 2
+    else:
+        span_y = (net_ymax - net_ymin) / (3.0 ** L)
+        cx, cy = centre_n
+    span_x = span_y * aspect
+    return [cx - span_x / 2, cx + span_x / 2, cy - span_y / 2, cy + span_y / 2]
 
 
 def _project_noct_pts(coords_n, n_oct, b_oct, reg, tol=0.0):
@@ -138,12 +138,12 @@ def _viewport_grid(vp, img_w, img_h, n_oct, b_oct, reg):
     M ≈ img_w * img_h minus any seam gaps.
     """
     xl = np.linspace(vp[0], vp[1], img_w)
-    yl = np.linspace(vp[3], vp[2], img_h)   # row 0 = top = high y
+    yl = np.linspace(vp[3], vp[2], img_h)  # row 0 = top = high y
     xx, yy = np.meshgrid(xl, yl)
     coords = np.stack([xx.ravel(), yy.ravel()], axis=1)
     px_all = np.tile(np.arange(img_w), img_h)
     py_all = np.repeat(np.arange(img_h), img_w)
-    tol = 0.5 * (vp[1] - vp[0]) / img_w   # half-pixel seam tolerance
+    tol = 0.5 * (vp[1] - vp[0]) / img_w  # half-pixel seam tolerance
     b_pts, idx = _project_noct_pts(coords, n_oct, b_oct, reg, tol=tol)
     return px_all[idx], py_all[idx], b_pts
 
@@ -247,7 +247,8 @@ def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
                 ty = min(int((90.0 - lat) / 180.0 * n_rows), n_rows - 1)
             else:
                 lat_r = math.radians(max(-85.0511, min(85.0511, lat)))
-                ty = min(int((1.0 - math.log(math.tan(lat_r) + 1.0 / math.cos(lat_r)) / math.pi) / 2.0 * n_rows), n_rows - 1)
+                ty = min(int((1.0 - math.log(math.tan(lat_r) + 1.0 / math.cos(lat_r)) / math.pi) / 2.0 * n_rows),
+                         n_rows - 1)
             return tx, ty
 
         tx_min, ty_min = _ll_to_tile(lon_min, lat_max)
@@ -266,32 +267,34 @@ def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
 
         # Extent of stitched canvas in native CRS coordinates
         if is_geographic:
-            x_left  = -180.0 + (tx_min / n_cols) * 360.0
+            x_left = -180.0 + (tx_min / n_cols) * 360.0
             x_right = -180.0 + ((tx_max + 1) / n_cols) * 360.0
-            y_top   =  90.0 - (ty_min / n_rows) * 180.0
-            y_bot   =  90.0 - ((ty_max + 1) / n_rows) * 180.0
+            y_top = 90.0 - (ty_min / n_rows) * 180.0
+            y_bot = 90.0 - ((ty_max + 1) / n_rows) * 180.0
             # Query points are already in lon/lat — use directly
-            pts_q = np.stack([lats, lons], axis=1)   # (lat=y, lon=x)
+            pts_q = np.stack([lats, lons], axis=1)  # (lat=y, lon=x)
         else:
             MERC_MAX = math.pi * 6378137.0
-            x_left  = (tx_min / n_cols) * 2 * MERC_MAX - MERC_MAX
+            x_left = (tx_min / n_cols) * 2 * MERC_MAX - MERC_MAX
             x_right = ((tx_max + 1) / n_cols) * 2 * MERC_MAX - MERC_MAX
-            y_top   = MERC_MAX - (ty_min / n_rows) * 2 * MERC_MAX
-            y_bot   = MERC_MAX - ((ty_max + 1) / n_rows) * 2 * MERC_MAX
+            y_top = MERC_MAX - (ty_min / n_rows) * 2 * MERC_MAX
+            y_bot = MERC_MAX - ((ty_max + 1) / n_rows) * 2 * MERC_MAX
+
             # Convert lat/lon to Mercator for query
             def _ll_to_merc(lon_deg, lat_deg):
                 x = math.radians(lon_deg) * 6378137.0
                 lat_r = math.radians(max(-85.0511, min(85.0511, lat_deg)))
                 y = math.log(math.tan(math.pi / 4 + lat_r / 2)) * 6378137.0
                 return x, y
+
             merc_xy = np.array([_ll_to_merc(lo, la) for lo, la in zip(lons.tolist(), lats.tolist())])
-            pts_q = merc_xy[:, ::-1]   # (y, x) order
+            pts_q = merc_xy[:, ::-1]  # (y, x) order
 
         # RegularGridInterpolator needs monotone-increasing axes.
         # Canvas rows are top→bottom (y_top > y_bot), so flip.
         h, w = canvas.shape[:2]
         xs = np.linspace(x_left, x_right, w)
-        ys = np.linspace(y_bot, y_top, h)      # increasing after flip
+        ys = np.linspace(y_bot, y_top, h)  # increasing after flip
         canvas = canvas[::-1]
 
         channels = [
@@ -487,6 +490,34 @@ def make_bm_source(vrt_path, reg, b_oct, gamma=0.9, *,
     return source
 
 
+def fmt_area(area_m2, sig=3):
+    """Format an area (given in km²) with the nearest well-known unit."""
+    # m2 = area_km2 * 1e6
+    m2 = area_m2
+    # (symbol, m² per unit) — largest → smallest
+    units = [
+        ('Mkm²', 1e12),  # million km²
+        ('km²', 1e6),
+        ('ha', 1e4),  # hectare (drop this line if you don't want ha)
+        ('m²', 1.0),
+        ('cm²', 1e-4),
+        ('mm²', 1e-6),
+        ('µm²', 1e-12),
+        ('nm²', 1e-15),
+    ]
+    for sym, f in units:
+        if m2 >= f:
+            return f'{m2 / f:.{sig}g} {sym}'
+    sym, f = units[-1]
+    return f'{m2 / f:.{sig}g} {sym}'  # below smallest unit
+
+
+def fmt_count(l: int):
+    """12×9²² Cells"""
+    sup = str(int(l)).translate(str.maketrans('0123456789-', '⁰¹²³⁴⁵⁶⁷⁸⁹⁻'))
+    return f'12×9{sup}'
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
@@ -524,7 +555,13 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
 
-    img_w, img_h = n_oct.image_dims(pixels=scale)
+    # Output canvas is a fixed 16:9 frame, decoupled from `scale` (which now only
+    # sets the L=0 net-grid density via qa_grid).  The viewport is anchored on
+    # height at the same aspect (see _viewport/_viewport_t), so the render never
+    # stretches.  Keep `scale` high enough that image_dims(scale).W >~ img_w or the
+    # L=0 subsample gets gappy.
+    img_w, img_h = 2560, 1440
+    aspect = img_w / img_h
 
     # POI in b_oct
     poi_g = Points(np.array([[POI_LAT, POI_LON]]), g_gcd)
@@ -537,8 +574,8 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
         mo = H9O.oid_mo[oid]
         prj = n_oct.projs[name]
         for c2 in [0, 1, 2]:
-            hhp = H9P.hh[mo, c2]
             placed_mode = prj.c2trans[c2][0] if prj.c2trans is not None else -1
+            hhp = H9P.hh[mo, c2]
             grid = qa_grid(hhp, scale, affine=prj.c2_affine(c2), net_mode=placed_mode)
             pix, msk = grid[2], grid[3]
             if np.any(msk):
@@ -554,8 +591,7 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
     xc, yc = pts_n.coords[:, 0], pts_n.coords[:, 1]
     net_xmin, net_xmax = float(xc.min()), float(xc.max())
     net_ymin, net_ymax = float(yc.min()), float(yc.max())
-    net_span_x = net_xmax - net_xmin
-    net_span_y = net_ymax - net_ymin
+    net_span_y = net_ymax - net_ymin  # width is derived from `aspect`, not the net
 
     # Pre-compute viewport centres for each integer level.
     # Level 0: net midpoint.  Level L>0: centroid of hex at layer L+1.
@@ -577,15 +613,19 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
         L_lo = min(int(t), max_layer - 1)
         L_hi = L_lo + 1
         alpha = t - L_lo
-        cx, cy = (1.0 - alpha) * centres[L_lo] + alpha * centres[L_hi]
-        span_x = net_span_x / (3.0 ** t)
+        # Front-load the centre lerp so screen-space pan is uniform: the span
+        # shrinks as 3^-t, so a linear-in-alpha centre would surge ~6x near each
+        # level boundary (a throb). w = alpha*3^(1-alpha) makes screen motion ∝ alpha.
+        w = alpha * (3.0 ** (1.0 - alpha))
+        cx, cy = (1.0 - w) * centres[L_lo] + w * centres[L_hi]
+        # Anchor the window on height and derive width from the canvas aspect, so
+        # the viewport rectangle matches img_w/img_h and the render never stretches.
         span_y = net_span_y / (3.0 ** t)
-        return [
-            max(net_xmin, cx - span_x / 2),
-            min(net_xmax, cx + span_x / 2),
-            max(net_ymin, cy - span_y / 2),
-            min(net_ymax, cy + span_y / 2),
-        ]
+        span_x = span_y * aspect
+        # No clamp to net bounds: the 16:9 window is wider than the butterfly, so
+        # clamping x would pin it to the net width (breaking aspect / isotropy) for
+        # the first frames.  Off-net pixels sample nothing and stay transparent.
+        return [cx - span_x / 2, cx + span_x / 2, cy - span_y / 2, cy + span_y / 2]
 
     # Build the sequence of (frame_index, t, label) tuples.
     # frames_per_level=0 → one entry per integer level, labelled by L.
@@ -613,13 +653,17 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             continue
         print(f'  {label}  (t={t:.3f}  L={L})')
         src_fn = _pick_source(bg_sources, L)
+        hp = hex_props(L)
+        area_km2 = hp[0]
+        area_str = fmt_area(area_km2)
+        count = fmt_count(L)
 
         if animate or L > 0:
-            vp = _viewport_t(t) if animate else _viewport(L, centres[L], net_xmin, net_xmax, net_ymin, net_ymax)
-            overlay_layers = [L, L + 1, L + 2] if L > 0 else [1, 2]
+            vp = _viewport_t(t) if animate else _viewport(L, centres[L], net_xmin, net_xmax, net_ymin, net_ymax, aspect)
+            overlay_layers = [L, L + 1, L + 2]
         else:
-            vp = [net_xmin, net_xmax, net_ymin, net_ymax]
-            overlay_layers = [1, 2]
+            vp = _viewport(0, None, net_xmin, net_xmax, net_ymin, net_ymax, aspect)
+            overlay_layers = [0, 1, 2]
 
         # Viewport pixel placement + colour sampling.
         # Discrete L=0: subsample the pre-projected global grid (resolution matches scale).
@@ -660,31 +704,26 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
         frac = t - int(t)
         ramp_alpha = 0.5 if not animate else min(frac / 0.9, 0.5)
 
-        # Hex outlines — coarse (thick) → fine (thin)
-        # L=0: hex_reduce on the global b_pts (layers 1–2 are well-sampled at scale).
-        # L>0: poly_net_field on the viewport rectangle guarantees every hex in view.
-        vp_pts = None
-        if L > 0:
-            vp_pts = Points(np.array([
-                [vp[0], vp[2]], [vp[1], vp[2]],
-                [vp[1], vp[3]], [vp[0], vp[3]],
-            ]), n_oct)
+        # Hex outlines — coarse (thick) → fine (thin).  poly_net_field on the
+        # viewport rectangle guarantees every hex in view at every level (L=0
+        # included), so grid geometry + numbering are consistent across frames.
+        vp_pts = Points(np.array([
+            [vp[0], vp[2]], [vp[1], vp[2]],
+            [vp[1], vp[3]], [vp[0], vp[3]],
+        ]), n_oct)
         lw = [2.0, 1.0, 0.5]
         coarse_hexes, coarse_v_k, coarse_layer = None, None, overlay_layers[0]
         mid_hexes, mid_v_k = None, None
         for li, layer in enumerate(overlay_layers):
-            if L == 0:
-                hex_num, hex_v_k, _, _ = hex_reduce(b_pts, layer)
-            else:
-                lattice_n = poly_net_field(vp_pts, layer)
-                b_lattice, _ = _project_noct_pts(lattice_n.coords, n_oct, b_oct, reg)
-                if b_lattice is None:
-                    continue
-                hex_num, hex_v_k, _, _ = hex_reduce(b_lattice, layer)
+            lattice_n = poly_net_field(vp_pts, layer)
+            b_lattice, _ = _project_noct_pts(lattice_n.coords, n_oct, b_oct, reg)
+            if b_lattice is None:
+                continue
+            hex_num, hex_v_k, _, _ = hex_reduce(b_lattice, layer)
             if hex_v_k is None or len(hex_v_k) == 0:
                 continue
             hex_par, hex_oid, hex_scale = hex_parents(b_oct, hex_v_k, hex_num)
-            xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])   # (c2, r_mo, p_mo)
+            xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])  # (c2, r_mo, p_mo)
             verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, hex_scale, n_oct)
             hexes = verts_n.coords.reshape(-1, 6, 2)
             # Finest (newest) layer fades in; coarsest (oldest) layer fades out
@@ -721,14 +760,24 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             bl_idx = np.argmin(hexes[:, :, 0] + hexes[:, :, 1], axis=1)
             bl_verts = hexes[np.arange(len(hexes)), bl_idx]  # (N, 2)
             label_pos = bl_verts + 0.03 * (ctrs - bl_verts)
+            # Drop labels whose bottom-left anchor lands off the net (in a butterfly
+            # notch or margin) — absent rather than mis-placed.
+            on_net = np.zeros(len(label_pos), dtype=bool)
+            for _polys in n_oct.face_polys.values():
+                for _poly in _polys:
+                    on_net |= inside_convex_polygon_cw(label_pos, _poly, tol=0.0)
             strs = [''.join(f'{int(d):01x}' for d in row[:-1]) for row in v_k]
-            for (lx, ly), lbl in zip(label_pos, strs):
+            lbl_halo = [pe.withStroke(linewidth=1.2, foreground=(0, 0, 0, 0.5 * alpha))]
+            for (lx, ly), lbl, on in zip(label_pos, strs, on_net):
+                if not on:
+                    continue
                 ax.text(lx, ly, lbl[plen:],
                         fontsize=12, ha='left', va='bottom',
                         color=(1.0, 1.0, 1.0, alpha),
+                        path_effects=lbl_halo,
                         zorder=100, clip_on=True)
 
-        hex_text = f'Hex9 // Demo // L{L}'
+        hex_text = f'Hex9 // Fly // L{L}: {count} cells; {area_str}/cell'
         if coarse_hexes is not None and coarse_hexes.shape[0] <= 40:
             lab_str = [''.join(f'{int(d):01x}' for d in row[:-1]) for row in coarse_v_k]
             prefix = _common_prefix(lab_str)
@@ -743,14 +792,15 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             if prefix:
                 hex_text += f' // H9 Prefix: {prefix}'
 
-        col = (1.0, 0.85, 0.0, 1.0)
-        if 14 < L < 19:
-            col = (0.2, 0.25, 0.0, 1.0)
-
+        # Dark tablet + a fine, soft halo → legible on any background without the
+        # heavy outline demanding attention (no per-L colour hack).
+        tablet = dict(boxstyle='round,pad=0.35', fc=(0, 0, 0, 0.45), ec='none')
+        soft_halo = [pe.withStroke(linewidth=1.0, foreground=(0, 0, 0, 0.5))]
         ax.text(0.012, 0.012, hex_text,
                 transform=ax.transAxes,
                 fontsize=16, ha='left', va='bottom', family='monospace',
-                color=col,
+                color=(1.0, 0.85, 0.0, 1.0),
+                path_effects=soft_halo, bbox=tablet,
                 zorder=150, clip_on=False)
 
         # Gold highlight: middle-layer hex containing the POI
@@ -781,7 +831,8 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             ax.text(0.988, 0.012, credit,
                     transform=ax.transAxes,
                     fontsize=11, ha='right', va='bottom',
-                    color=(1.0, 1.0, 1.0, 0.85),
+                    color=(1.0, 1.0, 1.0, 0.9),
+                    path_effects=soft_halo, bbox=tablet,
                     zorder=150, clip_on=False)
 
         # Dashed yellow rectangle: next frame's viewport
@@ -810,10 +861,9 @@ if __name__ == '__main__':
     _p_pix = _reg.domain('p_pix')
     _b_oct = _reg.domain('b_oct')
 
-    EOX_WMTS='https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml'
-    ESRI_WMTS='https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml'
-    OAM_URL='https://tiles.openaerialmap.org/6107d91f343da30006976e12/0/6107d91f343da30006976e13/{z}/{x}/{y}'
-
+    EOX_WMTS = 'https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml'
+    ESRI_WMTS = 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml'
+    OAM_URL = 'https://tiles.openaerialmap.org/6107d91f343da30006976e12/0/6107d91f343da30006976e13/{z}/{x}/{y}'
 
     _pc = make_pc_source('src/bm_3600x1800.png', _reg, _p_pix, _b_oct,
                          attribution='NASA Visible Earth · Blue Marble')
@@ -824,17 +874,17 @@ if __name__ == '__main__':
     _s4 = make_xyz_source(OAM_URL, _reg, _b_oct, max_zoom=26, gain=1.0, gamma=1.0,
                           attribution='Pierre d\'HUY ©2021  · OpenAerialMap, CC BY-SA 4.0')
     _s5 = make_bm_source('src/171c.tif', _reg, _b_oct, gamma=1.0,
-                         name='171_wkt', attribution='Pierre d\'HUY ©2021 placeholder.')
+                         name='171_wkt', attribution='Caue95')
     # _s6 = make_bm_source('src/lawn_1mm.tif', _reg, _b_oct, gamma=1.0,
     #                      name='lawn_1mm', attribution='')
     _s7 = make_bm_source('src/fly_1mm.tif', _reg, _b_oct, gamma=1.0,
-                         name='fly_wkt', attribution='fly')
+                         name='fly_wkt', attribution='Judy Gallagher, CC BY 2.0')
 
     run(
         reg=_reg,
         flavour='butterfly:0500',
-        scale=600,
-        max_layer=21,
+        scale=750,
+        max_layer=22,
         bg_sources={
             # 0: _pc,
             0: _s2,
@@ -843,7 +893,7 @@ if __name__ == '__main__':
             14: _s5,
             18: _s7,  # fly (1 cm) — viewport fits it L18
         },
-        frames_per_level=50,   # set >0 for smooth animation, e.g. 24
+        frames_per_level=100,  # set >0 for smooth animation, e.g. 24
         skip_existing=True,    # resume: skip frames whose PNG is already on disk
-        # start_frame=480,     # or resume from an explicit frame index
+        # start_frame=99,        # or resume from an explicit frame index
     )
