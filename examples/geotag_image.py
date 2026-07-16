@@ -42,6 +42,7 @@ from PIL import Image
 #DEF_LON, DEF_LAT = 1.6402506890084543, 49.09879599485989
 DEF_LON, DEF_LAT = 1.640250018, 49.098794825,
 
+
 def geotag(in_path, out_path, *, lon, lat, width_m, height_m=None,
            heading_deg=0.0, anchor_px=None):
     """Write `in_path` as a georeferenced GeoTIFF placed at (lon, lat).
@@ -79,10 +80,10 @@ def geotag(in_path, out_path, *, lon, lat, width_m, height_m=None,
     dE, dN = -math.sin(th), -math.cos(th)
 
     # Affine: x=lon, y=lat as functions of (col, row).
-    gt1 = mppx * rE / m_per_deg_lon   # d lon / d col
-    gt2 = mppy * dE / m_per_deg_lon   # d lon / d row
-    gt4 = mppx * rN / m_per_deg_lat   # d lat / d col
-    gt5 = mppy * dN / m_per_deg_lat   # d lat / d row
+    gt1 = mppx * rE / m_per_deg_lon  # d lon / d col
+    gt2 = mppy * dE / m_per_deg_lon  # d lon / d row
+    gt4 = mppx * rN / m_per_deg_lat  # d lat / d col
+    gt5 = mppy * dN / m_per_deg_lat  # d lat / d row
     # Pin the anchor pixel (cx, cy) to (lon, lat); default = image centre.
     cx, cy = (w_px / 2.0, h_px / 2.0) if anchor_px is None else \
         (float(anchor_px[0]), float(anchor_px[1]))
@@ -112,29 +113,21 @@ def geotag(in_path, out_path, *, lon, lat, width_m, height_m=None,
 if __name__ == '__main__':
     gdal.UseExceptions()
 
-    # fly_lon, fly_lat = 1.640250000, 49.0987953450  # 49.0987953200 +100 +100 +50
-    # geotag('src/fly2.png', 'src/fly_1mm.tif', width_m=0.257212475633528, lon=fly_lon, lat=fly_lat)
-
-    # fly_lon, fly_lat = 1.640249982, 49.0987954416  # 0.065 is too large!
-    # geotag('src/peacock_full.png', 'src/fly_55mm.tif', width_m=0.05518, lon=fly_lon, lat=fly_lat, anchor_px=(38466, 15993))
-
-    # s_lon, s_lat, s_width = 1.640249982, 49.0987954416, 0.70  # , anchor_px=(872, 1316-607)
-    # geotag('src/better_sign.png', 'src/sign.tif',
-    #        heading_deg=0, width_m=s_width, lon=s_lon, lat=s_lat,
-    #        # if the image is too far right, add to the anchor.
-    #        # if the image is too far down, add to the anchor.
-    #        anchor_px=(795, 769)  # acorn has y fixed at bottom - so use y-dim - offset. 872, 607
-    #        )
-
-    s_lon, s_lat, s_width_m = 1.640249982, 49.0987954416, 0.0009213014119091467  # , anchor_px=(872, 1316-607)
-    # 16290px = 1600µm 921.301411909146716µm -- seems smaller.
-    s_width = 0.00067
-    geotag('src/scale.png', 'src/scale067.tif',
+    s_lon, s_lat, s_width = 1.640249982, 49.0987954416, 0.70  #
+    geotag('src/better_sign.png', 'src/sign.tif',
            heading_deg=0, width_m=s_width, lon=s_lon, lat=s_lat,
-           # if the image is too far right, add to anchor[0].
-           # if the image is too far down, add to anchor[1].
-           anchor_px=(6290, 5062)  # acorn has y fixed at bottom - so use y-dim - offset. 872, 607
+           # This will honour alpha transparency!
+           # if the image is too far right, add to the anchor.
+           # if the image is too far down, add to the anchor.
+           anchor_px=(795, 769)  # anchor point measured from TOP LEFT in pixels
            )
-  # pin the tip of the sign (say pixel 1420, 300) to the known lon/lat
-  # geotag('src/better_sign.png', 'src/sign.tif', width_m=s_width,
-  #        lon=s_lon, lat=s_lat, anchor_px=(1420, 300))
+
+    # s_lon, s_lat, s_width_m = 1.640249982, 49.0987954416, 0.0009213014119091467  #
+    # s_width = 0.00067  # in metres!
+    # geotag('src/scale.png', 'src/scale067.tif',
+    #        heading_deg=0, width_m=s_width, lon=s_lon, lat=s_lat,
+    #        # if the image is too far right, add to anchor[0].
+    #        # if the image is too far down, add to anchor[1].
+    #        # point measured from TOP LEFT
+    #        anchor_px=(6290, 5062)
+    #        )

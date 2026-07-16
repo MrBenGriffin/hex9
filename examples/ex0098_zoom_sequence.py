@@ -18,14 +18,17 @@ source builders are provided:
   make_bm_source  — GDAL VRT sampler (Blue Marble or similar, for L>=1)
 
 Note: make_geotiff_sampler reads full raster bands into memory.  Use the
-10800×10800 Blue Marble variant (not 21600×21600) to keep RAM below ~400 MB.
+10800×10800 Blue Marble variant to keep RAM below ~400 MB.
 Build a VRT first:
   gdalbuildvrt src/blue_marble.vrt src/world.200408.3x10800x10800.A*.tif
 
-Point of Interest: Hall of Maps, Palazzo Vecchio, Florence, Italy.
+use geotag_image.py for adding in signs, butterflies, etc.
+that will honour transparency, and then can use it to composite via
+make_composite_source
+
 
 Last Tested
-16 Jun 2026 0.1.3a0 (passed) 895.7s
+16 Jul 2026 0.1.3a0 (passed)
 28 Mar 2026 (new)
 """
 import os
@@ -45,16 +48,7 @@ from hhg9.h9.binning import hex_reduce, hex_parents
 from hhg9.h9.grid import qa_grid, hex_verts_in_noct, poly_net_field, hex_props
 from hhg9.h9.tail import tail_unpack_reversible
 
-# POI_LAT = 43.7694687631026    # Hall of Maps, Palazzo Vecchio, Florence
-# POI_LON = 11.25624466034606
-
-# POI_LAT, POI_LON = 48.858735900477676, 2.294496130260531  # Eiffel's Tower
-# POI_LAT, POI_LON = 34.632049981869564, 77.62554188766468  # Samsten Ling
-# POI_LAT, POI_LON =24.136360966675497, 23.245733016051407  # Al Kufrah.
-# POI_LAT, POI_LON = 51.481588012311560, 0.00223723016213   # London
-#POI_LON, POI_LAT = 1.640250018, 49.098795425    # box on lawn. 1.640250018 49.098794825
-POI_LON, POI_LAT = 1.640249982, 49.0987954416  # 640250000   /// 0987953450 + 10
-
+POI_LON, POI_LAT = 1.640249982, 49.0987954416  # Butterfly demo.
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -1054,8 +1048,8 @@ if __name__ == '__main__':
         max_frame=25500,         # 24 levels · 1000
         bg_sources={             # keys are frame indices (introduce a source at a point)
             0: _s2,
-            5390: _s3,
-            5400: _s4,
+            5430: _s3,
+            5440: _s4,
             10900: _s5,
             12450: _s7,          # butterfly — tune the exact index by scrubbing frames
             18480: _s8
