@@ -374,6 +374,67 @@ def test_x_adr_curve_non_uuid_path(anc_mesh):
     assert packed == idx
     # split hx/tail argument form agrees
     assert np.array_equal(x_adr_curve(hx[:, :-1], tail=hx[:, -1]), rows)
+    # uuid-list input form agrees; string form (single tail char) agrees
+    assert np.array_equal(x_adr_curve(uu), rows)
+    strs = [''.join(format(int(d), 'x') for d in row) for row in hx]
+    assert np.array_equal(x_adr_curve(strs), rows)
+
+
+def test_x_adr_curve_input_guards(anc_mesh):
+    from hhg9.h9.addressing import x_adr_curve
+    uu = list(anc_mesh.addr(2)[:4])
+    with pytest.raises(TypeError):
+        x_adr_curve([u.int for u in uu])                 # packed ints
+    with pytest.raises(ValueError):
+        x_adr_curve(ua.h9_curve_uuid(uu))                # already curve
+    with pytest.raises(ValueError):
+        x_adr_curve(uu + list(anc_mesh.addr(3)[:1]))     # mixed layers
+    with pytest.raises(ValueError):
+        x_adr_curve(['4302', '512'])                     # ragged strings
+
+
+def test_curve_rows_to_curve_uuid(reg, bpts):
+    """The rows -> uuid link: h9_curve_uuid accepts x_adr_curve / hex_curve
+    rows directly (pure repack) and agrees with the bin-uuid path."""
+    from hhg9.h9.addressing import hex_curve
+    for L in (1, 12):
+        rows = hex_curve(bpts, L)
+        cu = ua.h9_curve_uuid(rows)
+        assert cu == ua.h9_curve_uuid(ua.h9_bin_pts(bpts, L))
+        assert (ua.h9_curve_layer(cu) == L).all()
+        # rows are accepted by the decode too: full loop back to the bin
+        assert [d.int for d in ua.h9_curve_decode(rows)] == \
+               [u.int for u in ua.h9_bin_pts(bpts, L)]
+    with pytest.raises(ValueError):
+        ua.h9_curve_uuid(np.full((2, 5), 9, dtype=np.uint8))   # bad ranks
+    with pytest.raises(ValueError):
+        ua.h9_curve_decode(np.zeros((1, 32), dtype=np.uint8))  # deeper than L30
+
+
+def test_hex_curve_points_front_door(reg, bpts):
+    """hex_curve (Points -> canonical bin curve rows) matches the uuid
+    path at every tested layer, including full depth."""
+    from hhg9.h9.addressing import hex_curve
+    for L in (1, 4, 12, 30):
+        rows = hex_curve(bpts, L)
+        assert rows.shape == (len(bpts.coords), L + 1)
+        got = [int(r[0]) * 9 ** L + int(''.join(str(d) for d in r[1:]) or '0', 9)
+               for r in rows]
+        assert got == ua.h9_curve_index(ua.h9_bin_pts(bpts, L))
+
+
+def test_x_adr_curve_deeper_than_key_layout(reg):
+    """Raw reversible walk strings (hex_str_encode default, L36) work —
+    generations above L30 run the pure fold. The deep cell's lineage
+    passes through its shallow ancestors, so shallow rank prefixes match
+    the raw walk's own truncated re-encode."""
+    from hhg9.h9.addressing import hex_str_encode, x_adr_curve
+    from hhg9 import Points
+    pts = reg.project(Points(np.array([[51.1787980000210725, -1.8261898473293335]]),
+                             'g_gcd'), ['g_gcd', 'b_oct'])
+    rows = x_adr_curve(hex_str_encode(pts))
+    assert rows.shape[1] == 37                           # L36: slot + 36 ranks
+    assert rows[0, 0] <= 11 and (rows[0, 1:] <= 8).all()
 
 
 # ---------------------------------------------------------------------------

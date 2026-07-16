@@ -630,8 +630,22 @@ def h9_curve_uuid(uuids) -> list[uuid_mod.UUID]:
     rank digits gives the lineage parent's curve address (rank identity
     index//9 == parent index) — see :func:`h9_curve_bin`. Curve-uuid
     inputs pass through unchanged; h9-uuid inputs are walked through the
-    transducer (mixed layers fine).
+    transducer (mixed layers fine). Also accepts (N, L+1) curve ROWS
+    (slot + ranks, the x_adr_curve / hex_curve output) — a pure repack,
+    no transducer: the row IS the uuid body.
     """
+    if isinstance(uuids, np.ndarray) and uuids.ndim == 2:
+        rows = uuids
+        level = rows.shape[1] - 1
+        if not (0 <= level <= UUID_DEPTH):
+            raise ValueError(f'curve rows deeper than L{UUID_DEPTH} cannot '
+                             f'pack into 128 bits (got L{level})')
+        if np.any(rows[:, 0] > 11) or (level and np.any(rows[:, 1:] > 8)):
+            raise ValueError('not curve rows (slot 0..11, ranks 0..8)')
+        cu = np.full((len(rows), 32), 0x0F, dtype=np.uint8)
+        cu[:, 0] = CURVE_MARK
+        cu[:, 1:level + 2] = rows
+        return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(cu)]
     items = [uuids] if isinstance(uuids, uuid_mod.UUID) else list(uuids)
     if not items:
         return []
@@ -714,7 +728,7 @@ def h9_curve_bin(uuids: list[uuid_mod.UUID], layer: int) -> list[uuid_mod.UUID]:
     return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(nibs)]
 
 
-def h9_curve_pack(indices, layer: int) -> list[uuid_mod.UUID]:
+def h9_curve_pack(indices, layer: int = 30) -> list[uuid_mod.UUID]:
     """Packed curve-uuids from plain curve indices at a known layer.
 
     The inverse of :func:`h9_curve_index` on the REPRESENTATION only
@@ -758,7 +772,16 @@ def h9_curve_decode(curve_uuids, reg=None) -> list[uuid_mod.UUID]:
 
     Batched: items are grouped by parent at each level, one descendants
     call per distinct parent. h9-uuid inputs pass through unchanged (the
-    converse of :func:`h9_curve_uuid`). Returns layer-L bin uuids.
+    converse of :func:`h9_curve_uuid`); (N, L+1) curve ROWS (x_adr_curve
+    / hex_curve output) are accepted for L <= 30. Returns layer-L bin
+    uuids.
+
+    Depth: unlike the encode (pure address space, exact at any depth),
+    the decode's child-selection oracle is geometric, and float64
+    positional precision floors at ~L30 (an L31 cell is ~11nm on Earth;
+    1 ulp is ~1.4nm) — the same wall as the 128-bit packing. Rows deeper
+    than L30 therefore cannot be decoded; a depth-unlimited inverse
+    would need the pure-symbolic patch-state automaton (shelved).
 
     (A non-foster fast path — child body = parent body + digit, tail
     recovered by decoding under the 6 valid key tails and re-binning —
@@ -772,6 +795,8 @@ def h9_curve_decode(curve_uuids, reg=None) -> list[uuid_mod.UUID]:
     from hhg9.h9.curve_tables import (CURVE_AXIOM, CURVE_ROOT_STATE,
                                       CURVE_T1_INV_FOSTER,
                                       CURVE_T1_INV_DIGIT, CURVE_T2)
+    if isinstance(curve_uuids, np.ndarray) and curve_uuids.ndim == 2:
+        return h9_curve_decode(h9_curve_uuid(curve_uuids), reg=reg)
     single = isinstance(curve_uuids, uuid_mod.UUID)
     items = [curve_uuids] if single else list(curve_uuids)
     if not items:

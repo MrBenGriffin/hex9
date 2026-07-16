@@ -15,7 +15,7 @@ if __name__ == '__main__':
     b_pt = reg.project(g_pt, ['g_gcd', 'b_oct'])
     # now have b_oct.
     oc, mo = b_pt.cm()
-    cx = rg.xy_regions(b_pt.coords, mo, 0, ensure)
+    cx = rg.xy_regions(b_pt.coords, mo, 0)
     c2 = rg.H9R.mcc2[mo, cx[:, 1]]
     r0 = H9O.l0hex_by_id[oc, c2]
     print(c2)

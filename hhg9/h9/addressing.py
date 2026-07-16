@@ -1269,6 +1269,64 @@ def cell_ancestor_nibs(nibs, at_layer: int, target: int,
     return out
 
 
+def _adr_curve_input(hx, tail):
+    """Normalise x_adr_curve input to (body, tail) uint8 arrays.
+
+    Accepts (N, L+2) hx rows (or split body/tail), address strings
+    (hex_str_encode's '<body><tail char>' — single-nibble tail), and h9
+    uuids (uniform layer). Packed integers are rejected with guidance.
+    """
+    import uuid as uuid_mod
+    if isinstance(hx, (str, np.str_, uuid_mod.UUID)):
+        hx = [hx]
+    if isinstance(hx, np.ndarray) and hx.dtype.kind in 'US':
+        hx = [str(s) for s in hx]
+    if isinstance(hx, (list, tuple)) and len(hx) and isinstance(hx[0], uuid_mod.UUID):
+        if tail is not None:
+            raise ValueError('x_adr_curve: tail is implicit in uuid input')
+        b = np.frombuffer(b''.join(u.bytes for u in hx),
+                          dtype=np.uint8).reshape(-1, 16)
+        nibs = np.empty((len(hx), 32), dtype=np.uint8)
+        nibs[:, 0::2] = b >> 4
+        nibs[:, 1::2] = b & 0x0F
+        if np.any(nibs[:, 0] == 0x0C):
+            raise ValueError('x_adr_curve: input is already a packed curve '
+                             'address (nibble 0 = 0xC)')
+        real = nibs[:, :31] != HEX_LUTS.hex_oob
+        layers = 30 - np.argmax(real[:, ::-1], axis=1)
+        level = int(layers[0])
+        if not np.all(layers == level):
+            raise ValueError('x_adr_curve: uuids must share one layer '
+                             '(use h9_curve_index for mixed layers)')
+        return nibs[:, :level + 1], nibs[:, -1]
+    if isinstance(hx, (list, tuple)) and len(hx) and isinstance(hx[0], str):
+        if tail is not None:
+            raise ValueError('x_adr_curve: tail is implicit in string input')
+        n = len(hx[0])
+        if n < 2 or any(len(s) != n for s in hx):
+            raise ValueError('x_adr_curve: address strings must share one '
+                             'layer (equal length, body + tail char)')
+        try:
+            body = np.array([[int(c, 16) for c in s[:-1]] for s in hx],
+                            dtype=np.uint8)
+            tl = np.array([int(s[-1], 16) for s in hx], dtype=np.uint8)
+        except ValueError:
+            raise ValueError("x_adr_curve: bad address string — expected "
+                             "'<body hex digits><tail char>' "
+                             "(hex_str_encode format)")
+        return body, tl
+    try:
+        hx = np.asarray(hx, dtype=np.uint8)
+    except (OverflowError, ValueError):
+        raise TypeError(
+            'x_adr_curve: expected hx nibble rows, address strings or h9 '
+            'uuids — packed integers are not accepted (unpack to nibbles, '
+            'or use h9_curve_index for uuid ints)')
+    if tail is None:
+        return hx[:, :-1], hx[:, -1]
+    return hx, np.asarray(tail, dtype=np.uint8).reshape(-1)
+
+
 def x_adr_curve(hx, tail=None, scheme: RegionAddressLike = H9_RA):
     """Hamiltonian curve address of each cell, in address space.
 
@@ -1277,10 +1335,15 @@ def x_adr_curve(hx, tail=None, scheme: RegionAddressLike = H9_RA):
     at a time (the curve's tree is iterated one-generation canonical
     parents — deep ownership differs on hexagon-band cells, so a single
     deep fold would be WRONG here), then walk the closed 36-state row
-    transducer fully vectorised.
+    transducer fully vectorised. Any depth: the C fold accelerates
+    layers <= 30; deeper generations run the pure address fold.
 
     Args:
-        hx / tail: as x_adr_to_r_adr. Rows must share one layer L.
+        hx / tail: as x_adr_to_r_adr — (N, L+2) rows sharing one layer L.
+            Also accepted: address strings (hex_str_encode format) and
+            h9 uuid lists (uniform layer); for Points use
+            :func:`hex_curve`, for uuids at mixed layers use
+            h9_curve_index.
     Returns:
         (N, L+1) uint8 curve rows: col 0 = axiom slot (curve position
         0..11 of the L0 root), col k = base-9 rank at layer k. The row
@@ -1292,18 +1355,29 @@ def x_adr_curve(hx, tail=None, scheme: RegionAddressLike = H9_RA):
     """
     from hhg9.h9.curve_tables import (CURVE_AXIOM_POS, CURVE_ROOT_STATE,
                                       CURVE_T1, CURVE_T2)
-    hx = np.asarray(hx, dtype=np.uint8)
-    if tail is None:
-        body, tl = hx[:, :-1], hx[:, -1]
-    else:
-        body, tl = hx, np.asarray(tail, dtype=np.uint8).reshape(-1)
+    body, tl = _adr_curve_input(hx, tail)
     level = body.shape[1] - 1
-    nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)
-    nibs[:, :level + 1] = body
-    nibs[:, -1] = tl & 0x0F
+    if np.any(body[:, 0] > 11) or np.any(body[:, 1:] > 8):
+        raise ValueError('x_adr_curve: body digit out of range')
     chain: list = [None] * (level + 1)
-    chain[level] = nibs
-    for k in range(level, 0, -1):
+    if level > 30:
+        # Deeper than the 32-nibble key layout: pure fold down to L30.
+        rows = np.column_stack([body, tl])
+        for k in range(level, 30, -1):
+            chain[k] = rows
+            _, rows = x_adr_cell_ancestor(rows, k - 1, scheme=scheme)
+        nib30 = np.full((len(body), 32), 0x0F, dtype=np.uint8)
+        nib30[:, :31] = rows[:, :31]
+        nib30[:, -1] = rows[:, -1] & 0x0F
+        chain[30] = nib30
+        top = 30
+    else:
+        nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)
+        nibs[:, :level + 1] = body
+        nibs[:, -1] = tl & 0x0F
+        chain[level] = nibs
+        top = level
+    for k in range(top, 0, -1):
         chain[k - 1] = cell_ancestor_nibs(chain[k], k, k - 1, scheme=scheme)
     root = chain[0][:, 0].astype(np.intp)
     if np.any(root > 11):
@@ -1325,6 +1399,23 @@ def x_adr_curve(hx, tail=None, scheme: RegionAddressLike = H9_RA):
         out[:, k] = r
         state = CURVE_T2[state, r].astype(np.intp)
     return out
+
+
+def hex_curve(pts, layer: int = 30, scheme: RegionAddressLike = H9_RA):
+    """Curve rows of each point's canonical layer-``layer`` hexagon bin.
+
+    The Points front door for the curve: canonicalise (the half-hex ->
+    mode-0 bin fold — hex_digits' raw walk is NOT this currency: the
+    curve is defined on canonical hexagon bins), emit key digits, then
+    :func:`x_adr_curve`. Matches h9_curve_index over the bin uuids.
+    """
+    if not (1 <= layer <= 30):
+        raise ValueError(f'hex_curve: layer must be in 1..30, got {layer}')
+    oc, mo = pts.cm()
+    regions, oc = canonicalise(pts.coords, oc, mo, pts.domain, layer,
+                               scheme=scheme)
+    kx = reg_hex_digits(regions, oc, pts.domain, TailStyle.key, scheme=scheme)
+    return x_adr_curve(kx[:, :-1], tail=kx[:, -1] & 0x0F, scheme=scheme)
 
 
 def _d_adr_walk(d_adr):
@@ -1416,9 +1507,12 @@ def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.rever
                    scheme: RegionAddressLike = H9_RA):
     """Convert Points (barycentric) to canonical hex string representation.
 
-    Format: <body hex digits><tail byte>
+    Format: <body hex digits><tail char>
     - body: one hex char per digit (root + layers)
-    - tail: two hex chars (one byte). For `TailStyle.none`, no tail is appended.
+    - tail: ONE hex char — the single-nibble tail (tail.py layout; the
+      byte's high nibble is spare/always 0, so reversible and key styles
+      emit the same char once canonical). For `TailStyle.none`, no tail
+      is appended.
 
     This is intentionally derived from `hex_digits(...)` so tail layout is centralized.
     """
@@ -1437,10 +1531,7 @@ def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.rever
     body = hx[:, :-1]
     tail_ids = hx[:, -1]
     body_str = np.array([''.join(f'{int(d):01x}' for d in row) for row in body], dtype=str)
-    if tail_style is TailStyle.reversible:
-        tail_str = np.array([f'{int(t):02x}' for t in tail_ids], dtype=str)
-    else:
-        tail_str = np.array([f'{int(t >> 4):01x}' for t in tail_ids], dtype=str)
+    tail_str = np.array([f'{int(t & 0xf):01x}' for t in tail_ids], dtype=str)
     return np.char.add(body_str, tail_str)
 
 
@@ -1452,8 +1543,8 @@ def hex_str_decode(adr, dom=None):
     Returns:
         Points: Reconstructed coordinates.
     """
-    tail = np.array([int(s[-2:], 16) for s in adr], dtype=np.uint8)
-    body_strs = [s[:-2] for s in adr]
+    tail = np.array([int(s[-1], 16) for s in adr], dtype=np.uint8)
+    body_strs = [s[:-1] for s in adr]
     body_len = len(body_strs[0])
     if any(len(s) != body_len for s in body_strs):
         raise ValueError("all addresses must have the same body length")
