@@ -360,6 +360,22 @@ def test_curve_index_axiom_order(reg):
     assert ua.h9_curve_index(uu) == [int(CURVE_AXIOM_POS[r]) for r in roots]
 
 
+def test_x_adr_curve_non_uuid_path(anc_mesh):
+    """The address-space curve encode works on raw hx rows (body + tail),
+    no UUID objects — and agrees digit-for-digit with the uuid path."""
+    from hhg9.h9.addressing import x_adr_curve
+    uu = list(anc_mesh.addr(3))
+    nibs = ua._batch_int_to_nibbles([u.int for u in uu], n=32)
+    hx = np.column_stack([nibs[:, :4], nibs[:, -1]])
+    rows = x_adr_curve(hx)                       # (N, 4): slot + 3 ranks
+    idx = ua.h9_curve_index(uu)
+    packed = [int(r[0]) * 9 ** 3 + int(r[1]) * 81 + int(r[2]) * 9 + int(r[3])
+              for r in rows]
+    assert packed == idx
+    # split hx/tail argument form agrees
+    assert np.array_equal(x_adr_curve(hx[:, :-1], tail=hx[:, -1]), rows)
+
+
 # ---------------------------------------------------------------------------
 # 9. packed curve-uuids (0xC-marked, sortable, prefix-truncatable)
 # ---------------------------------------------------------------------------

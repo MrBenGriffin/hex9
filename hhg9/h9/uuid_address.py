@@ -56,7 +56,9 @@ from hhg9.h9.region import xy_regions
 if TYPE_CHECKING:
     from hhg9 import Points, Registrar
 
-from hhg9.h9.addressing import hex_digits, hex_decode, H9_RA, hex_digits_reg, reg_hex_digits, canonicalise
+from hhg9.h9.addressing import (hex_digits, hex_decode, H9_RA, hex_digits_reg,
+                                reg_hex_digits, canonicalise,
+                                cell_ancestor_nibs, x_adr_curve)
 from hhg9.h9.tail import TailStyle, tail_pack_reversible, tail_unpack_reversible
 from hhg9.h9.protocols import RegionAddressLike
 
@@ -472,67 +474,14 @@ def h9_cell_parent(uuids: list[uuid_mod.UUID], reg=None) -> list[uuid_mod.UUID]:
     return out
 
 
-_ACCEL_ANC = ...   # sentinel: delegation not yet probed
-
-
-def _accel_cell_ancestor():
-    """libhex9's cell_ancestor_many when available AND doctrine-correct.
-
-    Gated on the nested-split KAT 5267.4 -> 52.4 at layer 1, which
-    discriminates the leaf-reified d_cell relation from both historical
-    mistakes (point-bin tie-break; composed parents give 58.0) — an
-    out-of-date lib silently falls back to the Python path rather than
-    drifting. Probed once per process.
-    """
-    global _ACCEL_ANC
-    if _ACCEL_ANC is not ...:
-        return _ACCEL_ANC
-    _ACCEL_ANC = None
-    try:
-        from hhg9.accel import backend
-        lib = backend()
-        if lib is not None and getattr(lib, 'has_cell_ancestor', False):
-            kat = np.frombuffer(uuid_mod.UUID('5267' + 'f' * 27 + '4').bytes,
-                                dtype=np.uint8).reshape(1, 16).copy()
-            want = uuid_mod.UUID('52' + 'f' * 29 + '4').bytes
-            if bytes(lib.cell_ancestor_many(kat, 1)[0]) == want:
-                _ACCEL_ANC = lib
-    except Exception:
-        _ACCEL_ANC = None
-    return _ACCEL_ANC
-
-
-def _cell_ancestor_nibs(nibs: NDArray[np.uint8], at_layer: int,
-                        target: int) -> NDArray[np.uint8]:
-    """Address-space canonical ancestor on (N, 32) nibble rows (uniform layer).
-
-    The nibble-level core of :func:`_cell_ancestor_batch` — no UUID objects.
-    Delegates to libhex9's C fold (~100x) when a doctrine-correct build is
-    loadable; otherwise runs the pure-Python fold. Both are the same
-    algorithm and byte-identical (verified all cells L1-L4, every target).
-    """
-    lib = _accel_cell_ancestor()
-    if lib is not None:
-        byts = ((nibs[:, 0::2] << 4) | nibs[:, 1::2]).astype(np.uint8).copy()
-        res = np.asarray(lib.cell_ancestor_many(byts, target),
-                         dtype=np.uint8).reshape(-1, 16)
-        out = np.empty((len(nibs), 32), dtype=np.uint8)
-        out[:, 0::2] = res >> 4
-        out[:, 1::2] = res & 0x0F
-        return out
-    from hhg9.h9.addressing import x_adr_cell_ancestor
-    hx = np.column_stack([nibs[:, :at_layer + 1], nibs[:, -1]])
-    _, anc = x_adr_cell_ancestor(hx, target)
-    out = np.full((len(nibs), 32), 0x0F, dtype=np.uint8)
-    out[:, :target + 1] = anc[:, :-1]
-    out[:, -1] = anc[:, -1]
-    return out
-
-
 def _cell_ancestor_batch(uuids, at_layer: int, target: int) -> list[uuid_mod.UUID]:
-    """Address-space canonical ancestor for a uniform-layer batch of UUIDs."""
+    """Address-space canonical ancestor for a uniform-layer batch of UUIDs.
+
+    The nibble-level core (C fold when available) lives in
+    :func:`hhg9.h9.addressing.cell_ancestor_nibs`.
+    """
     nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
-    anc = _cell_ancestor_nibs(nibs, at_layer, target)
+    anc = cell_ancestor_nibs(nibs, at_layer, target)
     return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(anc)]
 
 
@@ -583,42 +532,15 @@ CURVE_MARK: int = 0xC
 
 
 def _curve_ranks_batch(nibs: NDArray[np.uint8], level: int
-                       ) -> tuple[NDArray[np.uint8], NDArray[np.int8]]:
+                       ) -> tuple[NDArray[np.uint8], NDArray[np.uint8]]:
     """(axiom positions, rank digits) for a uniform-layer batch of (N, 32)
-    h9 nibble rows.
-
-    Gathers the lineage chain one generation at a time (the curve's tree
-    is iterated one-generation canonical parents — deep ownership differs
-    on hexagon-band cells, so a single deep fold would be WRONG here),
-    then walks the closed 36-state transducer fully vectorised. The chain
-    steps run in nibble/byte space (C fold when available); no UUID
-    objects, labels or per-item dict walks.
+    h9 nibble rows — thin adapter over the address-space curve encode
+    (:func:`hhg9.h9.addressing.x_adr_curve`), which is also the non-uuid
+    entry point.
     """
-    from hhg9.h9.curve_tables import (CURVE_AXIOM_POS, CURVE_ROOT_STATE,
-                                      CURVE_T1, CURVE_T2)
-    chain: list = [None] * (level + 1)
-    chain[level] = nibs
-    for k in range(level, 0, -1):
-        chain[k - 1] = _cell_ancestor_nibs(chain[k], k, k - 1)
-    root = chain[0][:, 0].astype(np.intp)
-    if np.any(root > 11):
-        raise ValueError('h9 curve: invalid L0 digit')
-    state = CURVE_ROOT_STATE[root].astype(np.intp)
-    ranks = np.empty((len(nibs), level), dtype=np.int8)
-    for k in range(1, level + 1):
-        child, par = chain[k], chain[k - 1]
-        foster = (child[:, :k] != par[:, :k]).any(axis=1).astype(np.intp)
-        digit = child[:, k].astype(np.intp)
-        r = CURVE_T1[state, foster, digit]
-        if np.any(r < 0):
-            i = int(np.flatnonzero(r < 0)[0])
-            raise KeyError(
-                f'h9 curve: T1 miss at layer {k} '
-                f'(state {int(state[i])}, foster {bool(foster[i])}, '
-                f'digit {int(digit[i])}) — non-canonical input')
-        ranks[:, k - 1] = r
-        state = CURVE_T2[state, r].astype(np.intp)
-    return CURVE_AXIOM_POS[root], ranks
+    hx = np.column_stack([nibs[:, :level + 1], nibs[:, -1]])
+    rows = x_adr_curve(hx)
+    return rows[:, 0], rows[:, 1:]
 
 
 def _curve_index_batch(nibs: NDArray[np.uint8], level: int) -> list[int]:

@@ -1212,6 +1212,121 @@ def x_adr_cell_ancestor(hx, target: int, tail=None, scheme: RegionAddressLike = 
     return oc, out
 
 
+_ACCEL_ANC = ...   # sentinel: delegation not yet probed
+
+
+def _accel_cell_ancestor():
+    """libhex9's cell_ancestor_many when available AND doctrine-correct.
+
+    Gated on the nested-split KAT 5267.4 -> 52.4 at layer 1, which
+    discriminates the leaf-reified d_cell relation from both historical
+    mistakes (point-bin tie-break; composed parents give 58.0) — an
+    out-of-date lib silently falls back to the Python path rather than
+    drifting. Probed once per process.
+    """
+    global _ACCEL_ANC
+    if _ACCEL_ANC is not ...:
+        return _ACCEL_ANC
+    _ACCEL_ANC = None
+    try:
+        from hhg9.accel import backend
+        lib = backend()
+        if lib is not None and getattr(lib, 'has_cell_ancestor', False):
+            kat = np.frombuffer(bytes.fromhex('5267' + 'f' * 27 + '4'),
+                                dtype=np.uint8).reshape(1, 16).copy()
+            want = bytes.fromhex('52' + 'f' * 29 + '4')
+            if bytes(lib.cell_ancestor_many(kat, 1)[0]) == want:
+                _ACCEL_ANC = lib
+    except Exception:
+        _ACCEL_ANC = None
+    return _ACCEL_ANC
+
+
+def cell_ancestor_nibs(nibs, at_layer: int, target: int,
+                       scheme: RegionAddressLike = H9_RA):
+    """Canonical cell ancestor on (N, 32) key-nibble rows (uniform layer).
+
+    The nibble-level core shared by uuid_address and :func:`x_adr_curve`
+    — no UUID objects. Delegates to libhex9's C fold (~100x) when a
+    doctrine-correct build is loadable (H9_RA only); otherwise runs
+    :func:`x_adr_cell_ancestor`. Both are the same algorithm and
+    byte-identical (verified all cells L1-L4, every target).
+    """
+    lib = _accel_cell_ancestor() if scheme is H9_RA else None
+    if lib is not None:
+        byts = ((nibs[:, 0::2] << 4) | nibs[:, 1::2]).astype(np.uint8).copy()
+        res = np.asarray(lib.cell_ancestor_many(byts, target),
+                         dtype=np.uint8).reshape(-1, 16)
+        out = np.empty((len(nibs), 32), dtype=np.uint8)
+        out[:, 0::2] = res >> 4
+        out[:, 1::2] = res & 0x0F
+        return out
+    hx = np.column_stack([nibs[:, :at_layer + 1], nibs[:, -1]])
+    _, anc = x_adr_cell_ancestor(hx, target, scheme=scheme)
+    out = np.full((len(nibs), 32), 0x0F, dtype=np.uint8)
+    out[:, :target + 1] = anc[:, :-1]
+    out[:, -1] = anc[:, -1]
+    return out
+
+
+def x_adr_curve(hx, tail=None, scheme: RegionAddressLike = H9_RA):
+    """Hamiltonian curve address of each cell, in address space.
+
+    The pure-address curve encode (see hhg9.h9.curve_tables for the
+    machinery and provenance): gather the lineage chain one generation
+    at a time (the curve's tree is iterated one-generation canonical
+    parents — deep ownership differs on hexagon-band cells, so a single
+    deep fold would be WRONG here), then walk the closed 36-state row
+    transducer fully vectorised.
+
+    Args:
+        hx / tail: as x_adr_to_r_adr. Rows must share one layer L.
+    Returns:
+        (N, L+1) uint8 curve rows: col 0 = axiom slot (curve position
+        0..11 of the L0 root), col k = base-9 rank at layer k. The row
+        is the mixed-radix numeral of the curve index; truncating rank
+        columns is EXACT (the lineage parent's curve address).
+    Raises:
+        KeyError on a T1 miss — the totality test: a non-canonical
+        address, never a table gap (machine-verified closure).
+    """
+    from hhg9.h9.curve_tables import (CURVE_AXIOM_POS, CURVE_ROOT_STATE,
+                                      CURVE_T1, CURVE_T2)
+    hx = np.asarray(hx, dtype=np.uint8)
+    if tail is None:
+        body, tl = hx[:, :-1], hx[:, -1]
+    else:
+        body, tl = hx, np.asarray(tail, dtype=np.uint8).reshape(-1)
+    level = body.shape[1] - 1
+    nibs = np.full((len(body), 32), 0x0F, dtype=np.uint8)
+    nibs[:, :level + 1] = body
+    nibs[:, -1] = tl & 0x0F
+    chain: list = [None] * (level + 1)
+    chain[level] = nibs
+    for k in range(level, 0, -1):
+        chain[k - 1] = cell_ancestor_nibs(chain[k], k, k - 1, scheme=scheme)
+    root = chain[0][:, 0].astype(np.intp)
+    if np.any(root > 11):
+        raise ValueError('x_adr_curve: invalid L0 digit')
+    out = np.empty((len(body), level + 1), dtype=np.uint8)
+    out[:, 0] = CURVE_AXIOM_POS[root]
+    state = CURVE_ROOT_STATE[root].astype(np.intp)
+    for k in range(1, level + 1):
+        child, par = chain[k], chain[k - 1]
+        foster = (child[:, :k] != par[:, :k]).any(axis=1).astype(np.intp)
+        digit = child[:, k].astype(np.intp)
+        r = CURVE_T1[state, foster, digit]
+        if np.any(r < 0):
+            i = int(np.flatnonzero(r < 0)[0])
+            raise KeyError(
+                f'x_adr_curve: T1 miss at layer {k} (state {int(state[i])}, '
+                f'foster {bool(foster[i])}, digit {int(digit[i])}) '
+                f'— non-canonical input')
+        out[:, k] = r
+        state = CURVE_T2[state, r].astype(np.intp)
+    return out
+
+
 def _d_adr_walk(d_adr):
     """Top-down context thread over (digit, mode) pairs.
 
