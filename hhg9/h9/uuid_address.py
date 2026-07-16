@@ -829,21 +829,23 @@ def h9_curve_decode(curve_uuids, reg=None) -> list[uuid_mod.UUID]:
     from the ranks alone; each state's T1 row is rank-bijective, so the
     rank inverts deterministically to (foster, digit).
 
-    NON-FOSTER steps are pure address ops: the child's body is the
-    parent's body + digit, and its key tail is recovered by decoding the
-    candidate under each of the 12 valid tail values and re-binning —
-    the true tail decodes to the true centroid, so its re-bin matches
-    the body; a wrong tail either lands in the same cell (same canonical
-    key) or mismatches and is discarded. No false positives: canonical
-    bodies are unique. FOSTER steps (the spelling jump) query the
-    parent's 9 lineage children (one-generation :func:`h9_descendants`,
-    where lineage == ownership); the match is unique by the T1
-    bijection. O(L) overall, geometry only where lineage forces it.
+    The matching child is selected from the parent's 9 lineage children
+    (one-generation :func:`h9_descendants`, where lineage == ownership) —
+    unique by the same bijection. O(L) with one bounded local oracle call
+    per level.
 
-    Batched: vectorised across items per level; foster items grouped by
-    parent, one descendants call per distinct parent. h9-uuid inputs
-    pass through unchanged (the converse of :func:`h9_curve_uuid`).
-    Returns layer-L bin uuids.
+    Batched: items are grouped by parent at each level, one descendants
+    call per distinct parent. h9-uuid inputs pass through unchanged (the
+    converse of :func:`h9_curve_uuid`). Returns layer-L bin uuids.
+
+    (A non-foster fast path — child body = parent body + digit, tail
+    recovered by decoding under the 6 valid key tails and re-binning —
+    was explored and is sound in principle: over full L1/L2 sweeps the
+    true tail never failed and body uniqueness excludes false positives.
+    Shelved: the region walk hard-crashes on geometrically inconsistent
+    (body, tail) guesses instead of reporting them, so it needs a
+    lenient/validating walk mode in the engine first. ~50x at depth if
+    ever wanted.)
     """
     from hhg9.h9.curve_tables import (CURVE_AXIOM, CURVE_ROOT_STATE,
                                       CURVE_T1_INV_FOSTER,
@@ -874,57 +876,31 @@ def h9_curve_decode(curve_uuids, reg=None) -> list[uuid_mod.UUID]:
     cur[:, 0] = root
     cur[:, -1] = ((c2 & 0x03) << 1).astype(np.uint8)
     state = CURVE_ROOT_STATE[root.astype(np.intp)].astype(np.intp)
-    # The 6 valid key-tail values: (p_c2<<1) | r_mo. Canonical keys always
-    # have p_mo == 0 (the fold gives every cell a mode-0 terminal parent);
-    # p_mo=1 guesses are malformed and can crash the region walk.
-    tails6 = np.array([(c << 1) | r for c in (0, 1, 2) for r in (0, 1)],
-                      dtype=np.uint8)
     for k in range(1, int(layers.max()) + 1):
         act = np.flatnonzero(layers >= k)
         r = body[act, k].astype(np.intp)
         want_f = CURVE_T1_INV_FOSTER[state[act], r].astype(bool)
         want_d = CURVE_T1_INV_DIGIT[state[act], r]
         state[act] = CURVE_T2[state[act], r]
-
-        nf = act[~want_f]
-        if len(nf):
-            # Candidate = parent body + digit; recover the tail by decode
-            # + re-bin under all 12 tails at once (vectorised).
-            cand = np.repeat(cur[nf], 6, axis=0)
-            cand[:, k] = np.repeat(want_d[~want_f], 6)
-            cand[:, -1] = np.tile(tails6, len(nf))
-            keyed = h9_bin_pts(_dec_nibs(cand, b_oct), k)
-            kn = _batch_int_to_nibbles([u.int for u in keyed], n=32)
-            hit = (kn[:, :k + 1] == cand[:, :k + 1]).all(axis=1)
-            hit = hit.reshape(len(nf), 6)
-            if not hit.any(axis=1).all():
-                i = int(np.flatnonzero(~hit.any(axis=1))[0])
-                raise RuntimeError(
-                    f'h9_curve_decode: interior child not recovered at '
-                    f'layer {k} (item {int(nf[i])})')
-            first = np.argmax(hit, axis=1) + 6 * np.arange(len(nf))
-            cur[nf] = kn[first]
-
-        fo = act[want_f]
-        if len(fo):
-            groups: dict[int, list] = {}
-            for j, i in zip(np.flatnonzero(want_f), fo):
-                key = batch_nibbles_to_int(cur[i])[0]
-                groups.setdefault(key, []).append((i, int(want_d[j])))
-            parents = [uuid_mod.UUID(int=p) for p in groups]
-            kids = h9_descendants(h9_dec(parents, b_oct), k - 1, 1, reg=reg)
-            for parent, children in zip(parents, kids):
-                pn = _batch_int_to_nibbles([parent.int], n=32)[0]
-                cn = _batch_int_to_nibbles([c.int for c in children], n=32)
-                by_d = {int(cn[j, k]): j for j in range(len(children))
-                        if (cn[j, :k] != pn[:k]).any()}
-                for i, wd in groups[parent.int]:
-                    j = by_d.get(wd)
-                    if j is None:
-                        raise RuntimeError(
-                            f'h9_curve_decode: no foster child of '
-                            f'{h9_label(parent)} with digit {wd} at layer {k}')
-                    cur[i] = cn[j]
+        groups: dict[int, list] = {}
+        for j, i in enumerate(act):
+            key = batch_nibbles_to_int(cur[i])[0]
+            groups.setdefault(key, []).append(
+                (i, bool(want_f[j]), int(want_d[j])))
+        parents = [uuid_mod.UUID(int=p) for p in groups]
+        kids = h9_descendants(h9_dec(parents, b_oct), k - 1, 1, reg=reg)
+        for parent, children in zip(parents, kids):
+            pn = _batch_int_to_nibbles([parent.int], n=32)[0]
+            cn = _batch_int_to_nibbles([c.int for c in children], n=32)
+            by_fd = {(bool((cn[j, :k] != pn[:k]).any()), int(cn[j, k])): j
+                     for j in range(len(children))}
+            for i, wf, wd in groups[parent.int]:
+                j = by_fd.get((wf, wd))
+                if j is None:
+                    raise RuntimeError(
+                        f'h9_curve_decode: no child of {h9_label(parent)} '
+                        f'with (foster={wf}, digit={wd}) at layer {k}')
+                cur[i] = cn[j]
     dec = [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(cur)]
     for j, i in enumerate(act0):
         out[i] = dec[j]
