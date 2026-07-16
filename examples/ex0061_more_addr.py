@@ -269,9 +269,6 @@ if __name__ == '__main__':
 
     bcc, bmo = bry.cm()
 
-    # fn = Path(f'c_oct_nowarp.csv')
-    # if not fn.exists():
-    #
     #     with fn.open('w', newline='') as f:
     #         for idx, name in enumerate(names):
     #             _lat, _lon = pos.coords[idx]

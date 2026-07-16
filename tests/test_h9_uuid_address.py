@@ -315,3 +315,172 @@ def test_cell_ancestor_identity_and_errors(reg, anc_mesh):
         ua.h9_cell_ancestor(uu, 3, reg=reg)
     with pytest.raises(ValueError):
         ua.h9_cell_parent(anc_mesh.addr(0)[:3], reg=reg)
+
+
+# ---------------------------------------------------------------------------
+# 8. Hamiltonian curve index (36-state transducer, curve_tables)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("L", [0, 1, 2, 3])
+def test_curve_index_bijective_onto_range(anc_mesh, L):
+    """The curve visits every layer-L cell exactly once: indices over the
+    whole sphere are a bijection onto 0 .. 12*9^L - 1."""
+    idx = ua.h9_curve_index(anc_mesh.addr(L))
+    assert sorted(idx) == list(range(12 * 9 ** L))
+
+
+def test_curve_index_refines_by_lineage(reg, anc_mesh):
+    """The curve's tree is the LINEAGE tree: a cell's index prefix (//9) is
+    its one-generation canonical parent's index — for every L3 cell,
+    including nested splits where lineage and deep ownership differ."""
+    uu = anc_mesh.addr(3)
+    idx = ua.h9_curve_index(uu)
+    par_idx = ua.h9_curve_index(ua.h9_cell_parent(uu, reg=reg))
+    assert all(i // 9 == p for i, p in zip(idx, par_idx))
+
+
+def test_curve_index_mixed_layers_and_forms(anc_mesh):
+    """Mixed-layer input matches per-layer calls; single-UUID and empty
+    forms are accepted."""
+    u2, u3 = anc_mesh.addr(2)[:7], anc_mesh.addr(3)[:5]
+    mixed = ua.h9_curve_index(list(u3[:2]) + list(u2) + list(u3[2:]))
+    i2, i3 = ua.h9_curve_index(u2), ua.h9_curve_index(u3)
+    assert mixed == i3[:2] + i2 + i3[2:]
+    assert ua.h9_curve_index(u2[0]) == [i2[0]]
+    assert ua.h9_curve_index([]) == []
+
+
+def test_curve_index_axiom_order(reg):
+    """L0: the 12 root hexagons appear at their axiom positions, decoded
+    straight from the root digit."""
+    from hhg9.h9.curve_tables import CURVE_AXIOM_POS
+    from hhg9.h9.grid import HexMesh
+    uu = HexMesh.create([0], reg).addr(0)
+    roots = [int(ua.h9_label(u, with_tail=False), 16) for u in uu]
+    assert ua.h9_curve_index(uu) == [int(CURVE_AXIOM_POS[r]) for r in roots]
+
+
+# ---------------------------------------------------------------------------
+# 9. packed curve-uuids (0xC-marked, sortable, prefix-truncatable)
+# ---------------------------------------------------------------------------
+
+def test_curve_uuid_marker_layer_and_index(anc_mesh):
+    """Packing is faithful: marker set, layer preserved, index preserved
+    (unpack is pure arithmetic, no transducer), pass-through idempotent."""
+    uu = anc_mesh.addr(2)
+    cu = ua.h9_curve_uuid(uu)
+    assert ua.h9_is_curve(cu).all()
+    assert not ua.h9_is_curve(list(uu)).any()
+    assert (ua.h9_curve_layer(cu) == 2).all()
+    assert ua.h9_curve_index(cu) == ua.h9_curve_index(uu)
+    assert ua.h9_curve_uuid(cu) == cu
+    assert ua.h9_curve_uuid(cu[0]) == [cu[0]]
+    assert ua.h9_curve_uuid([]) == []
+
+
+def test_curve_uuid_full_depth(uuids):
+    """L30 lands exactly on nibble 31 (the marker reuses the tail slot)."""
+    cu = ua.h9_curve_uuid(uuids)
+    assert (ua.h9_curve_layer(cu) == ua.UUID_DEPTH).all()
+    assert ua.h9_curve_index(cu) == ua.h9_curve_index(uuids)
+
+
+def test_curve_bin_is_exact_lineage_parent(reg, anc_mesh):
+    """Prefix truncation IS the lineage parent's curve address — checked
+    against h9_cell_parent over the whole sphere at L3 (unlike h9-uuid
+    body truncation, which mis-names split lineages)."""
+    uu = anc_mesh.addr(3)
+    cu = ua.h9_curve_uuid(uu)
+    par = ua.h9_curve_uuid(ua.h9_cell_parent(uu, reg=reg))
+    assert ua.h9_curve_bin(cu, 2) == par
+    assert ua.h9_curve_bin(cu, 3) == cu          # identity at own layer
+    grand = ua.h9_curve_bin(cu, 1)
+    assert grand == ua.h9_curve_bin(par, 1)      # truncation composes
+
+
+def test_curve_uuid_sort_order(anc_mesh):
+    """Byte order of curve-uuids at a fixed layer IS curve order, and in
+    mixed collections every curve-uuid sorts after every h9-uuid."""
+    uu = anc_mesh.addr(2)
+    cu = ua.h9_curve_uuid(uu)
+    idx = ua.h9_curve_index(uu)
+    assert [i for _, i in sorted(zip(cu, idx))] == sorted(idx)
+    assert min(c.int for c in cu) > max(u.int for u in uu)
+
+
+def test_curve_label_and_pack_roundtrip(anc_mesh):
+    uu = list(anc_mesh.addr(3)[:20]) + list(anc_mesh.addr(0)[:2])
+    cu = ua.h9_curve_uuid(uu)
+    for c in cu:
+        lab = ua.h9_curve_label(c)
+        assert lab.startswith('c') and '.' not in lab
+        assert ua.h9_curve_from_label(lab) == c
+    idx3 = ua.h9_curve_index(cu[:20])
+    assert ua.h9_curve_pack(idx3, 3) == cu[:20]
+
+
+def test_curve_uuid_mixed_input_forms(anc_mesh):
+    """h9_curve_index accepts h9-uuids and curve-uuids freely mixed."""
+    uu = list(anc_mesh.addr(2)[:6])
+    cu = ua.h9_curve_uuid(uu)
+    mixed = [uu[0], cu[1], uu[2], cu[3], uu[4], cu[5]]
+    assert ua.h9_curve_index(mixed) == ua.h9_curve_index(uu)
+
+
+# ---------------------------------------------------------------------------
+# 10. h9_curve_decode — the constructive inverse (forward-fit)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("L", [0, 1, 2])
+def test_curve_decode_roundtrip_full_sphere(reg, anc_mesh, L):
+    """decode(curve_uuid(u)) == u for EVERY cell of the layer."""
+    uu = list(anc_mesh.addr(L))
+    dec = ua.h9_curve_decode(ua.h9_curve_uuid(uu), reg=reg)
+    assert [d.int for d in dec] == [u.int for u in uu]
+
+
+def test_curve_decode_roundtrip_L3_sample(reg, anc_mesh):
+    uu = list(anc_mesh.addr(3))[::37]
+    dec = ua.h9_curve_decode(ua.h9_curve_uuid(uu), reg=reg)
+    assert [d.int for d in dec] == [u.int for u in uu]
+
+
+def test_curve_decode_arbitrary_indices(reg):
+    """The inverse evaluated anywhere, not just on encoded points: pack
+    arbitrary indices, decode, and re-index — identity, at the right layer."""
+    rng = np.random.default_rng(9)
+    idx = sorted(int(v) for v in rng.integers(0, 12 * 9 ** 4, size=15))
+    dec = ua.h9_curve_decode(ua.h9_curve_pack(idx, 4), reg=reg)
+    assert (ua.h9_layer(dec) == 4).all()
+    assert ua.h9_curve_index(dec) == idx
+
+
+def test_curve_decode_deep_and_forms(reg):
+    """Deep seam round-trip (Greenwich, L12) + pass-through and single."""
+    u = ua.h9_bin(ua.h9_encode(np.array([51.48, 51.5]),
+                               np.array([0.0, -0.12]), reg=reg), 12, reg=reg)
+    cu = ua.h9_curve_uuid(u)
+    dec = ua.h9_curve_decode(cu, reg=reg)
+    assert [d.int for d in dec] == [x.int for x in u]
+    assert ua.h9_curve_decode(cu[0], reg=reg) == [dec[0]]
+    assert ua.h9_curve_decode(u, reg=reg) == u      # h9-uuids pass through
+    assert ua.h9_curve_decode([], reg=reg) == []
+    mixed = [u[0], cu[1]]                            # mixed forms
+    assert [d.int for d in ua.h9_curve_decode(mixed, reg=reg)] == \
+           [u[0].int, u[1].int]
+
+
+def test_curve_uuid_errors(anc_mesh, uuids):
+    cu = ua.h9_curve_uuid(anc_mesh.addr(2)[:3])
+    with pytest.raises(ValueError):
+        ua.h9_curve_layer(list(uuids)[:1])           # h9-uuid, no marker
+    with pytest.raises(ValueError):
+        ua.h9_curve_bin(cu, 3)                       # deeper than input
+    with pytest.raises(ValueError):
+        ua.h9_curve_bin(cu, -1)
+    with pytest.raises(ValueError):
+        ua.h9_curve_from_label('32343.2')            # h9 label, not curve
+    with pytest.raises(ValueError):
+        ua.h9_curve_pack([12 * 9 ** 2], 2)           # index out of range
+    with pytest.raises(ValueError):
+        ua.h9_curve_from_label('c1' + '0' * 31)      # too deep

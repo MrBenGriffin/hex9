@@ -39,6 +39,22 @@ net_layouts = {
             (-1, -1, -1): [(6., 3., 3), (0., 0., 0), (-6., 0, 0), (0, 0, 0)],   # SWP
         }
     },
+    'oct_rhombus': {
+        'width': 30,  # number of full triangles across * 6
+        'height':27,  # number of full triangles up * 9
+        'grid': {
+            (-1, -1, -1): (2., 4., 4),  # SWP
+            (-1, -1, +1): (3., 5., 4),  # NWP
+            (+1, -1, +1): (4., 4., 0),  # NWA
+            (+1, +1, +1): (5., 5., 2),  # NEA
+            (+1, +1, -1): (6., 4., 2),  # SEA
+            (-1, +1, -1): (7., 5., 0),  # SEP
+
+            (+1, -1, -1): (2., 2., 2),  # SWA
+            (-1, +1, +1): (7., 7., 0),  # NEP
+
+        }
+    },
     'diamonds_native': {
         'width': 24,  # number of full triangles across * 6
         'height': 18,  # number of full triangles up * 9
@@ -130,6 +146,32 @@ net_layouts = {
             (+1, +1, -1): (5., 4., 2),  #
             (-1, +1, +1): (4., 7., 4),  # right wing
             (-1, +1, -1): (5., 8., 4),  #
+        }
+    },
+    'cylinder': {
+        # Translation-tiling equatorial strip (the b_oct<->planar CRS net).
+        # Every face is placed by a PURE translation (theta=0, matrix=I), so the
+        # fold is just (X,Y) = (cx,cy) + t[oid].  Rows are by bary mode:
+        # mode-0 faces (apex-down) on the lower row (gy=2), mode-1 (apex-up) on
+        # the upper row (gy=4); each column is one equatorial-edge diamond.
+        # Columns run in longitude order EA|EP|WP|WA (lon 0-90|90-180|180-270|
+        # 270-360), so the left edge of EA and the right edge of WA are the same
+        # lon-0 / A-axis meridian: X wraps modulo width, healing that one cut and
+        # leaving all curvature at the 6 cone vertices (poles top/bottom edge, the
+        # 4 equatorial vertices on the mid-line).
+        'flipped': False,
+        'width': 24,    # 4*sqrt2 in wi units; also the X-wrap modulus
+        'height': 18,
+        'wrap_x': 24,   # longitude modulus (== width); the A-axis meridian seam
+        'grid': {
+            (+1, +1, +1): (1., 2., 0),  # NEA  col EA (lon 0-90),   lower
+            (+1, +1, -1): (1., 4., 0),  # SEA               upper
+            (-1, +1, +1): (3., 4., 0),  # NEP  col EP (lon 90-180),  upper
+            (-1, +1, -1): (3., 2., 0),  # SEP               lower
+            (-1, -1, +1): (5., 2., 0),  # NWP  col WP (lon 180-270), lower
+            (-1, -1, -1): (5., 4., 0),  # SWP               upper
+            (+1, -1, +1): (7., 4., 0),  # NWA  col WA (lon 270-360), upper
+            (+1, -1, -1): (7., 2., 0),  # SWA               lower
         }
     },
     'butterfly_cahill': {  # Cahill butterfly (without the necessary 15º shift).

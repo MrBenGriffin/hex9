@@ -41,7 +41,6 @@ from scipy.spatial import KDTree
 from hhg9 import Registrar, Points
 from hhg9.algorithms.geometry import inside_convex_polygon_cw
 from hhg9.h9 import H9O, H9P
-from hhg9.h9.addressing import hex_str_encode
 from hhg9.h9.binning import hex_reduce, hex_parents
 from hhg9.h9.grid import qa_grid, hex_verts_in_noct, poly_net_field, hex_props
 from hhg9.h9.tail import tail_unpack_reversible
@@ -148,18 +147,62 @@ def _viewport_grid(vp, img_w, img_h, n_oct, b_oct, reg):
     return px_all[idx], py_all[idx], b_pts
 
 
-def _pick_source(bg_sources, L):
-    """Select the source callable for frame L.
+def _pick_source(bg_sources, key_at):
+    """Select the source callable active at `key_at` (frame index, or layer L in
+    the legacy per-level path).
 
     bg_sources may be:
       - a single callable  → used for all frames
-      - a dict {int: callable} → max key ≤ L is used; falls back to min key
+      - a dict {int: callable} → source with the greatest key ≤ key_at; falls
+        back to the min key below it.
     """
     if callable(bg_sources):
         return bg_sources
-    candidates = [k for k in bg_sources if k <= L]
+    candidates = [k for k in bg_sources if k <= key_at]
     key = max(candidates) if candidates else min(bg_sources)
     return bg_sources[key]
+
+
+def _draw_credits(ax, credit_list, frame_idx, bg_sources, fpl, animate):
+    """Bottom-right imagery-credit stack: newest (deepest subject) at the bottom,
+    at most 3 lines visible.
+
+    When a new source composites in (a bg_sources key is crossed) the stack scrolls
+    up one slot over ~fpl/5 indices — the new line rises into the bottom slot and
+    the oldest clips off the top.  It is a pure function of frame_idx (no
+    cross-frame state), so it is correct at any render stride or resume point.
+    """
+    credits = [c for c in credit_list if c]
+    if not credits:
+        return
+    x, base_y, line_h, max_show = 0.988, 0.010, 0.018, 3
+
+    delta, s = 0, 1.0
+    if animate and isinstance(bg_sources, dict):
+        keys = sorted(bg_sources)
+        active = [k for k in keys if k <= frame_idx]
+        entered_at = active[-1] if active else keys[0]
+        below = [k for k in keys if k < entered_at]
+        if below:                              # how many new credits this source adds
+            prev = bg_sources[below[-1]]
+            prev_credits = [c for c in (getattr(prev, 'credits', None)
+                                        or [getattr(prev, 'attribution', '')]) if c]
+            delta = max(0, len(credits) - len(prev_credits))
+        s = min(1.0, (frame_idx - entered_at) / max(1, fpl // 5))
+
+    for j in range(min(len(credits), max_show + delta)):
+        slot = j - delta * (1.0 - s)           # 0 = bottom; slides up as s→1
+        if slot < -1.0 or slot > max_show:
+            continue
+        vis = max(0.0, min(1.0, min(slot + 1.0, max_show - slot)))  # fade at both ends
+        if vis <= 0.02:
+            continue
+        ax.text(x, base_y + slot * line_h, credits[j],
+                transform=ax.transAxes, fontsize=11, ha='right', va='bottom',
+                color=(1.0, 1.0, 1.0, 0.9 * vis),
+                path_effects=[pe.withStroke(linewidth=1.0, foreground=(0, 0, 0, 0.55 * vis))],
+                bbox=dict(boxstyle='round,pad=0.3', fc=(0, 0, 0, 0.45 * vis), ec='none'),
+                zorder=150, clip_on=False)
 
 
 def _common_prefix(strs):
@@ -175,6 +218,31 @@ def _common_prefix(strs):
         if c != hi[i]:
             return lo[:i]
     return lo
+
+
+def _tier_lw(d):
+    """Grid line-width as a continuous function of depth d = layer - t.
+
+    Coarse tiers (d≤0) are thick, fine tiers (d≥2) thin.  Because d moves smoothly
+    with t, a tier no longer snaps wider when the integer level ticks over.
+    """
+    return float(np.interp(d, [0.0, 1.0, 2.0], [2.0, 1.0, 0.5]))
+
+
+def _tier_alpha(d):
+    """Grid edge alpha as a continuous function of depth d = layer - t.
+
+    A newly-appearing fine tier fades in near d=2; an outgoing coarse tier fades
+    out near d=-1; everything between holds at 0.5.  This is the old per-tier ramp
+    re-expressed in d, so alpha AND width line up across every level boundary.
+    """
+    if d >= 2.0 or d <= -1.0:
+        return 0.0
+    if d >= 1.55:            # fine tier fading in  (frac 0 → 0.45)
+        return 0.5 * (2.0 - d) / 0.45
+    if d <= -0.7:            # coarse tier fading out (frac 0.7 → 1.0)
+        return 0.5 * (d + 1.0) / 0.3
+    return 0.5
 
 
 # ── source builders ───────────────────────────────────────────────────────────
@@ -203,17 +271,23 @@ def make_pc_source(img_file, reg, p_pix, b_oct, *, attribution=''):
 
 
 def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
-                       fetch_tile, gain=1.0, gamma=1.0, attribution=''):
+                       fetch_tile, gain=1.0, gamma=1.0, attribution='',
+                       with_coverage=False):
     """Shared tile-stitch/sample core for slippy-tile backgrounds.
 
     Zoom selection, tile-grid stitching, native-CRS extent, and bilinear
     sampling are independent of *how* tiles are addressed.  Callers supply:
 
         grid_of(z)       -> (n_cols, n_rows) tile-grid dimensions at zoom z
-        fetch_tile(tx,ty,z) -> (TILE_PX, TILE_PX, 3) float32 [0,1] RGB
+        fetch_tile(tx,ty,z) -> (TILE_PX, TILE_PX, 3|4) float32 [0,1], or None
+                              for a missing tile.  A 4th channel is treated as
+                              per-pixel coverage (alpha); 3-channel tiles are
+                              fully opaque.
 
     `is_geographic` selects WGS84 (lon/lat) vs Web-Mercator axis math.
-    Returns a callable (b_pts: Points) -> (N, 3) float32 [0, 1].
+    Returns a callable (b_pts: Points) -> (N, 3) float32 [0, 1], or (N, 4) with
+    a coverage-alpha channel when `with_coverage` (0 = no imagery here, e.g.
+    outside a partial-coverage mosaic — composite over another source).
     """
     import math
     from scipy.interpolate import RegularGridInterpolator
@@ -254,16 +328,24 @@ def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
         tx_min, ty_min = _ll_to_tile(lon_min, lat_max)
         tx_max, ty_max = _ll_to_tile(lon_max, lat_min)
 
-        # Stitch tiles (rows top-to-bottom)
+        # Stitch tiles (rows top-to-bottom).  Canvas carries RGB + coverage alpha:
+        # a missing tile (None) stays alpha 0; a 3-channel tile is fully opaque; a
+        # 4-channel tile brings its own per-pixel alpha (mosaic footprint edge).
         n_tx = tx_max - tx_min + 1
         n_ty = ty_max - ty_min + 1
-        canvas = np.zeros((n_ty * TILE_PX, n_tx * TILE_PX, 3), dtype=np.float32)
+        canvas = np.zeros((n_ty * TILE_PX, n_tx * TILE_PX, 4), dtype=np.float32)
         for ty in range(ty_min, ty_max + 1):
             for tx in range(tx_min, tx_max + 1):
                 arr = fetch_tile(tx, ty, z)
+                if arr is None:
+                    continue
                 iy = (ty - ty_min) * TILE_PX
                 ix = (tx - tx_min) * TILE_PX
-                canvas[iy:iy + TILE_PX, ix:ix + TILE_PX] = arr
+                if arr.shape[2] == 4:
+                    canvas[iy:iy + TILE_PX, ix:ix + TILE_PX] = arr
+                else:
+                    canvas[iy:iy + TILE_PX, ix:ix + TILE_PX, :3] = arr
+                    canvas[iy:iy + TILE_PX, ix:ix + TILE_PX, 3] = 1.0
 
         # Extent of stitched canvas in native CRS coordinates
         if is_geographic:
@@ -297,16 +379,17 @@ def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
         ys = np.linspace(y_bot, y_top, h)  # increasing after flip
         canvas = canvas[::-1]
 
+        n_ch = 4 if with_coverage else 3  # sample the coverage channel only if asked
         channels = [
             RegularGridInterpolator(
                 (ys, xs), canvas[:, :, c],
                 method='linear', bounds_error=False, fill_value=0.0,
             )(pts_q)
-            for c in range(3)
+            for c in range(n_ch)
         ]
         out = np.stack(channels, axis=1).astype(np.float32)
         if gain != 1.0 or gamma != 1.0:
-            out = np.clip(out * gain, 0.0, 1.0) ** (1.0 / gamma)
+            out[:, :3] = np.clip(out[:, :3] * gain, 0.0, 1.0) ** (1.0 / gamma)
         return out
 
     source.attribution = attribution
@@ -314,42 +397,52 @@ def _make_tiled_source(reg, b_oct, *, max_zoom, is_geographic, grid_of,
 
 
 def make_xyz_source(url_template, reg, b_oct, *,
-                    max_zoom=21, is_geographic=False,
+                    max_zoom=21, is_geographic=False, with_coverage=False,
                     cache_dir='xyz_cache', gain=1.0, gamma=1.0, attribution=''):
     """Build a background source from a slippy XYZ tile template.
 
     `url_template` is a `{z}/{x}/{y}` template (Web-Mercator, Google/OSM row
-    convention), e.g. an OpenAerialMap mosaic URL.  Missing tiles (404) read as
-    black, so partial-coverage mosaics composite over whatever is underneath.
+    convention), e.g. an OpenAerialMap mosaic URL.  Missing tiles (404) are
+    reported as no-coverage, so a partial mosaic can composite over another
+    source (see make_composite_source) instead of showing black.
 
     Args:
         url_template:  URL with `{z}` `{x}` `{y}` placeholders.
         max_zoom:      Deepest zoom the service provides.
         is_geographic: True for a WGS84 (EPSG:4326) tile scheme; default False
                        (Web Mercator).
+        with_coverage: return (N, 4) with a coverage-alpha channel (for
+                       compositing) instead of (N, 3).
 
     Returns:
-        Callable  (b_pts: Points) -> (N, 3) float32 [0, 1].
+        Callable  (b_pts: Points) -> (N, 3) float32 [0, 1], or (N, 4) if
+        `with_coverage`.
     """
     import hashlib, io, os, urllib.request
     from PIL import Image as PILImage
 
-    TILE_PX = 256
     os.makedirs(cache_dir, exist_ok=True)
     key0 = hashlib.md5(url_template.encode()).hexdigest()[:8]
 
     def fetch_tile(tx, ty, z):
         path = os.path.join(cache_dir, f'{key0}_{z}_{tx}_{ty}.png')
         if os.path.exists(path):
-            return np.asarray(PILImage.open(path).convert('RGB'), dtype=np.float32) / 255.0
-        url = url_template.format(z=z, x=tx, y=ty)
-        try:
-            with urllib.request.urlopen(url) as resp:
-                img = PILImage.open(io.BytesIO(resp.read())).convert('RGB')
-        except Exception:
-            return np.zeros((TILE_PX, TILE_PX, 3), dtype=np.float32)
-        img.save(path)
-        return np.asarray(img, dtype=np.float32) / 255.0
+            img = PILImage.open(path)
+        else:
+            url = url_template.format(z=z, x=tx, y=ty)
+            try:
+                with urllib.request.urlopen(url) as resp:
+                    img = PILImage.open(io.BytesIO(resp.read()))
+            except Exception:
+                return None  # missing tile → no coverage
+            img.save(path)
+        has_alpha = img.mode in ('RGBA', 'LA', 'PA')
+        arr = np.asarray(img.convert('RGBA'), dtype=np.float32) / 255.0
+        if not has_alpha:
+            # RGB tile (or legacy RGB cache): derive coverage from non-black, so
+            # a mosaic's footprint edge (transparent → saved black) drops out.
+            arr[:, :, 3] = (arr[:, :, :3].max(axis=2) > 0.02).astype(np.float32)
+        return arr
 
     def grid_of(z):
         n = 1 << z
@@ -357,9 +450,44 @@ def make_xyz_source(url_template, reg, b_oct, *,
 
     return _make_tiled_source(
         reg, b_oct, max_zoom=max_zoom, is_geographic=is_geographic,
+        with_coverage=with_coverage,
         grid_of=grid_of, fetch_tile=fetch_tile, gain=gain, gamma=gamma,
         attribution=attribution,
     )
+
+
+def make_composite_source(over, under, *, attribution=None):
+    """Alpha-composite `over` onto `under`, per query point.
+
+    `over` must return (N, 4) with a coverage-alpha channel (e.g. a
+    make_xyz_source(..., with_coverage=True) mosaic).  Where `over` has no
+    coverage — outside a partial mosaic's footprint, or a missing tile — the
+    `under` source shows through instead of black.  The soft coverage edge
+    (bilinear) blends the two cleanly at the footprint boundary.
+
+    `under` may return (N, 3) or (N, 4); its alpha, if any, is ignored (it is the
+    always-present base layer).  Returns a callable -> (N, 4) opaque RGBA.
+    """
+    def source(b_pts):
+        o = over(b_pts)                       # (N, 4): RGB + coverage
+        u = under(b_pts)                      # (N, 3|4): base layer
+        a = np.clip(o[:, 3:4], 0.0, 1.0)
+        rgb = o[:, :3] * a + u[:, :3] * (1.0 - a)
+        opaque = np.ones((rgb.shape[0], 1), dtype=np.float32)
+        return np.hstack((rgb.astype(np.float32), opaque))
+
+    over_attr = getattr(over, 'attribution', '')
+    under_attr = getattr(under, 'attribution', '')
+    # Ordered credit stack, top-of-stack (deepest subject) first → base last.  A
+    # nested composite already has .credits; a raw source contributes its single
+    # attribution.  The joined .attribution is kept for the legacy single-line path.
+    over_credits = list(getattr(over, 'credits', None) or ([over_attr] if over_attr else []))
+    under_credits = list(getattr(under, 'credits', None) or ([under_attr] if under_attr else []))
+    source.credits = over_credits + under_credits
+    if attribution is None:
+        attribution = ' · over '.join(source.credits)
+    source.attribution = attribution
+    return source
 
 
 def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
@@ -457,12 +585,18 @@ def make_wmts_source(capabilities_url, layer_name, reg, b_oct, *,
 
 
 def make_bm_source(vrt_path, reg, b_oct, gamma=0.9, *,
-                   name='bm_wkt', attribution=''):
+                   name='bm_wkt', with_coverage=False, attribution=''):
     """Build a GDAL raster background source (Blue Marble, a georeferenced
     photo, or any GeoTIFF/VRT).
 
     Opens `vrt_path`, registers its CRS via Wkt + Wkt_4978, and returns a
-    callable (b_pts: Points) -> (N, C) float32 [0, 1].
+    callable (b_pts: Points) -> (N, 3) float32 [0, 1], or (N, 4) with a
+    coverage-alpha channel when `with_coverage` (for make_composite_source).
+
+    Coverage comes from the raster's alpha band (band 4, e.g. written by
+    geotag_image.py) if present, else from the in-footprint / non-black region;
+    out-of-raster samples are 0.  So a partial ortho composites over whatever is
+    beneath instead of painting its bounding rectangle black.
 
     gamma < 1 lifts midtones (Blue Marble tends to be low-contrast).
     `name` is the registered CRS-domain key — pass a UNIQUE name per file when
@@ -482,34 +616,45 @@ def make_bm_source(vrt_path, reg, b_oct, gamma=0.9, *,
 
     def source(b_pts):
         vals = sampler(b_pts).astype(np.float32)
+        rgb = vals[:, :3]
         if gamma != 1.0:
-            vals = np.clip(vals, 0.0, 1.0) ** gamma
-        return vals
+            rgb = np.clip(rgb, 0.0, 1.0) ** gamma
+        if not with_coverage:
+            return rgb
+        if vals.shape[1] >= 4:
+            cov = np.clip(vals[:, 3:4], 0.0, 1.0)  # alpha band = footprint
+        else:
+            cov = (rgb.max(axis=1, keepdims=True) > 0.0).astype(np.float32)
+        return np.hstack((rgb, cov))
 
     source.attribution = attribution
     return source
 
 
-def fmt_area(area_m2, sig=3):
-    """Format an area (given in km²) with the nearest well-known unit."""
-    # m2 = area_km2 * 1e6
+def fmt_area(area_m2, sig=4):
+    """Format an area (given in m²) with the nearest well-known unit."""
     m2 = area_m2
     # (symbol, m² per unit) — largest → smallest
     units = [
-        ('Mkm²', 1e12),  # million km²
+        ('M km²', 1e12),  # million km²
+        ('k km²', 1e9),   # thousand km²
         ('km²', 1e6),
-        ('ha', 1e4),  # hectare (drop this line if you don't want ha)
+        ('ha', 1e4),  # hectare
         ('m²', 1.0),
         ('cm²', 1e-4),
         ('mm²', 1e-6),
+        ('k µm²', 1e-9),   # thousand µm²
         ('µm²', 1e-12),
-        ('nm²', 1e-15),
+        ('k nm²', 1e-15),  # thousand nm²
+        ('nm²', 1e-18),
     ]
+
     for sym, f in units:
         if m2 >= f:
-            return f'{m2 / f:.{sig}g} {sym}'
+            return f'{m2 / f:,.{sig}g}{sym}'
+
     sym, f = units[-1]
-    return f'{m2 / f:.{sig}g} {sym}'  # below smallest unit
+    return f'{m2 / f:.{sig}g}{sym}'  # below smallest unit
 
 
 def fmt_count(l: int):
@@ -521,9 +666,17 @@ def fmt_count(l: int):
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
-        frames_per_level: int = 0, centre: str = 'poi',
-        start_frame: int = 0, end_frame=None, skip_existing: bool = False):
+        frames_per_level: int = 0, frame_interval: int = 1, max_frame=None,
+        centre: str = 'poi', start_frame: int = 0, end_frame=None,
+        skip_existing: bool = False):
     """Generate zoom-sequence PNGs.
+
+    Frame indexing (animate, frames_per_level > 0) is decoupled from generation:
+    index ``i`` always denotes zoom ``t = i / frames_per_level`` and the output
+    file is named by that index (``frame_NNNNNN.png``), so a given index is the
+    same viewpoint no matter the stride.  `frame_interval` is the render stride —
+    render every Nth index (1 = every frame; = frames_per_level = one still per
+    level).  `bg_sources` keys live in this same index space.
 
     Args:
         reg:              Registrar to use.  Pass the same instance used to build
@@ -531,29 +684,38 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
                           Registrar is created if None.
         flavour:          Net layout name.
         scale:            Pixel density (triangle side in pixels) for the full grid.
-        max_layer:        Highest zoom level to render (inclusive).
-        bg_sources:       Background colour source(s).  A single callable or a
-                          dict {int: callable} mapping minimum-L to source.
-                          Callable signature: (b_pts: Points) -> (N, 3|4) float [0,1].
-        frames_per_level: 0 → render one PNG per integer level (original behaviour).
-                          N → render a smooth animation: N frames per level transition
-                          up to max_layer.  Output files are named frame_NNNN.png.
-        centre:           'hex' (default) — interpolate between hex centroids (Ken Burns
-                          drift toward POI across each level transition).
-                          'poi' — lock viewport centre to the POI's net coordinates from
-                          L=1 onwards; L=0→1 still drifts in from the global centre.
-        start_frame:      Resume: skip every frame with index < start_frame.  In animate
-                          mode the index is the frame number (frame_NNNN); otherwise it is
-                          the layer L.  Frame index for the start of level L is 1 + L*fpl.
-        end_frame:        Stop after this frame index (inclusive); None renders to the end.
-        skip_existing:    Skip any frame whose output PNG already exists on disk — the
-                          simplest resume after an interrupted run.
+        max_layer:        Highest zoom level (used when max_frame is not given).
+        bg_sources:       Background colour source(s).  A single callable, or a dict
+                          {index: callable} — the source with the greatest key ≤ the
+                          current frame index is used (in the legacy per-level path
+                          the key is the layer L).  A source that returns (N, 4) must
+                          be an opaque composite (make_composite_source); a raw
+                          with_coverage source belongs *inside* a composite, never here.
+        frames_per_level: 0 → legacy: one PNG per integer level (static, full alpha).
+                          N → animate: index resolution.  frame i ↔ t = i/N.
+        frame_interval:   Animate render stride (default 1).  Files are named by index
+                          (multiples of the stride), so the same index → same file.
+        max_frame:        Animate: highest index to render.  Defaults to max_layer*N.
+        centre:           'poi' (default) — lock viewport centre to the POI from L=1;
+                          'hex' — drift between hex centroids each level (Ken Burns).
+        start_frame:      Skip indices < this (resume window start).
+        end_frame:        Stop after this index (inclusive); None → max_frame.
+        skip_existing:    Skip any frame whose output PNG already exists on disk.
     """
     if reg is None:
         reg = Registrar()
     n_oct = reg.domain(f'n_oct:{flavour}')
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
+
+    # Frame index space (animate): index i ↔ t = i/fpl; max_frame is the top index.
+    # Derive max_layer from it so the centres precompute covers the deepest level.
+    animate = frames_per_level > 0
+    if animate:
+        fpl = frames_per_level
+        if max_frame is None:
+            max_frame = max_layer * fpl
+        max_layer = -(-max_frame // fpl)  # ceil
 
     # Output canvas is a fixed 16:9 frame, decoupled from `scale` (which now only
     # sets the L=0 net-grid density via qa_grid).  The viewport is anchored on
@@ -628,17 +790,15 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
         return [cx - span_x / 2, cx + span_x / 2, cy - span_y / 2, cy + span_y / 2]
 
     # Build the sequence of (frame_index, t, label) tuples.
-    # frames_per_level=0 → one entry per integer level, labelled by L.
-    # frames_per_level=N → lead-in hold + linear zoom, labelled by frame index.
-    tx_rot = np.rad2deg(-n_oct.projs['NEA'].theta)
-    animate = frames_per_level > 0
+    # Legacy (fpl=0): one entry per integer level, labelled/keyed by L.
+    # Animate (fpl>0): index i ↔ t = i/fpl, stepped by frame_interval; the file is
+    #   named by the index, so it denotes the same viewpoint at any stride.
     if not animate:
         frame_seq = [(L, float(L), f'L{L:02d}') for L in range(max_layer + 1)]
     else:
-        fpl = frames_per_level
-        ts = [0.0] * 1  # lead-in: hold global view
-        ts += [i / fpl for i in range(max_layer * fpl + 1)]
-        frame_seq = [(f, t, f'frame_{f:04d}') for f, t in enumerate(ts)]
+        idx_w = max(4, len(str(max_frame)))
+        frame_seq = [(i, i / fpl, f'frame_{i:0{idx_w}d}')
+                     for i in range(0, max_frame + 1, frame_interval)]
 
     # Per-frame rendering
     flv = flavour.replace(':', '_')
@@ -652,10 +812,10 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             print(f'  {label}  skip (exists)')
             continue
         print(f'  {label}  (t={t:.3f}  L={L})')
-        src_fn = _pick_source(bg_sources, L)
+        src_fn = _pick_source(bg_sources, frame_idx)  # key space = index (animate) / L (legacy)
         hp = hex_props(L)
-        area_km2 = hp[0]
-        area_str = fmt_area(area_km2)
+        area_m2 = hp[0]
+        area_str = fmt_area(area_m2)
         count = fmt_count(L)
 
         if animate or L > 0:
@@ -726,18 +886,15 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
             xc2, _, xpm = tail_unpack_reversible(hex_v_k[:, -1])  # (c2, r_mo, p_mo)
             verts_n = hex_verts_in_noct(hex_par, hex_oid, xpm, xc2, hex_scale, n_oct)
             hexes = verts_n.coords.reshape(-1, 6, 2)
-            # Finest (newest) layer fades in; coarsest (oldest) layer fades out
-            # over the tail of the level so it leaves frame gracefully; middle
-            # holds at full opacity.
-            if li == len(overlay_layers) - 1:
-                ec_a = ramp_alpha
-            elif li == 0:
-                ec_a = 0.5 * (min((1.0 - frac) / 0.3, 1.0) if animate else 1.0)
-            else:
-                ec_a = 0.5
+            # Weight each tier by continuous depth d = layer - t, so line-width and
+            # alpha vary smoothly and never snap when the integer level ticks over.
+            # Static frames show every tier at full weight (no zoom to fade across).
+            depth = layer - t
+            ec_a = _tier_alpha(depth) if animate else 0.5
+            lwv = _tier_lw(depth) if animate else lw[li]
             ax.add_collection(PolyCollection(
                 hexes, facecolors='none', ec=(1, 1, 1, ec_a),
-                linewidth=lw[li], antialiaseds=True,
+                linewidth=lwv, antialiaseds=True,
             ))
             if li == 0:
                 coarse_hexes, coarse_v_k = hexes, hex_v_k
@@ -825,15 +982,9 @@ def run(*, reg=None, flavour='rhombus', scale=1201, max_layer=4, bg_sources,
                 edgecolors=[(1.0, 0.85, 0.0, ramp_alpha)],
                 linewidth=1.0,
             ))
-        # Imagery credit for the active source (lower-right)
-        credit = getattr(src_fn, 'attribution', '')
-        if credit:
-            ax.text(0.988, 0.012, credit,
-                    transform=ax.transAxes,
-                    fontsize=11, ha='right', va='bottom',
-                    color=(1.0, 1.0, 1.0, 0.9),
-                    path_effects=soft_halo, bbox=tablet,
-                    zorder=150, clip_on=False)
+        # Imagery-credit stack (lower-right); scrolls up as sources composite in.
+        credit_list = getattr(src_fn, 'credits', None) or [getattr(src_fn, 'attribution', '')]
+        _draw_credits(ax, credit_list, frame_idx, bg_sources, frames_per_level, animate)
 
         # Dashed yellow rectangle: next frame's viewport
         # if L < max_layer:
@@ -865,35 +1016,52 @@ if __name__ == '__main__':
     ESRI_WMTS = 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml'
     OAM_URL = 'https://tiles.openaerialmap.org/6107d91f343da30006976e12/0/6107d91f343da30006976e13/{z}/{x}/{y}'
 
+    # https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/
     _pc = make_pc_source('src/bm_3600x1800.png', _reg, _p_pix, _b_oct,
-                         attribution='NASA Visible Earth · Blue Marble')
+                         attribution='NASA Visible Earth: Blue Marble · visibleearth.nasa.gov')
     _s2 = make_wmts_source(EOX_WMTS, 's2cloudless-2020', _reg, _b_oct, gain=1.1, gamma=1.1,
-                           attribution='Sentinel-2 cloudless 2020 © EOX IT Services GmbH')
+                           attribution='Sentinel-2 cloudless 2020 · © EOX IT Services GmbH')
     _s3 = make_wmts_source(ESRI_WMTS, 'World_Imagery', _reg, _b_oct, gain=1.0, gamma=1.0,
                            attribution='Esri World Imagery · Esri, Maxar, Earthstar Geographics')
-    _s4 = make_xyz_source(OAM_URL, _reg, _b_oct, max_zoom=26, gain=1.0, gamma=1.0,
-                          attribution='Pierre d\'HUY ©2021  · OpenAerialMap, CC BY-SA 4.0')
-    _s5 = make_bm_source('src/171c.tif', _reg, _b_oct, gamma=1.0,
-                         name='171_wkt', attribution='Caue95')
-    # _s6 = make_bm_source('src/lawn_1mm.tif', _reg, _b_oct, gamma=1.0,
-    #                      name='lawn_1mm', attribution='')
-    _s7 = make_bm_source('src/fly_1mm.tif', _reg, _b_oct, gamma=1.0,
-                         name='fly_wkt', attribution='Judy Gallagher, CC BY 2.0')
+    # https://map.openaerialmap.org/#/1.641082763671875,49.09994811924072,15/square/12020223221032303/6107dae4343da30006976e14?_k=94noo8
+    # OAM is a partial-footprint drone mosaic — composite it over Esri so its
+    # out-of-footprint area shows Esri context instead of black.
+    _s4_oam = make_xyz_source(OAM_URL, _reg, _b_oct, max_zoom=26, with_coverage=True,
+                              gain=1.0, gamma=1.0,
+                              attribution='Pierre d\'HUY ©2021  · OpenAerialMap, CC BY-SA 4.0')
+    _s4 = make_composite_source(_s4_oam, _s3)
+    # https://valdoise.observatoiredesarbres.fr/en/portail/583/observatoire/71781/cedre-du-liban-arboretum-de-la-roche-guyon-95.html
+    _s5_src = make_bm_source('src/sign.tif', _reg, _b_oct, gamma=1.0, with_coverage=True,
+                         name='sign_wkt', attribution='© CAUE 95 · valdoise.observatoiredesarbres.fr (Research Only)')
+    _s5 = make_composite_source(_s5_src, _s4)   # sign over OAM-over-Esri (not raw OAM)
+    # https://upload.wikimedia.org/wikipedia/commons/9/98/Bee_Fly_-_Anthrax_albofasciatus%2C_Lower_Suwannee_National_Wildlife_Refuge%2C_Chiefland%2C_Florida.jpg
+    # Yep - found in France.  But it's really pretty.
+    _s7_src = make_bm_source('src/fly_55mm.tif', _reg, _b_oct, gamma=1.0, with_coverage=True,
+                             name='fly_wkt', attribution='Michael Garlick ©2024 / Franz van Duns  ©2023 · Wikimedia Commons, CC BY 2.0')
+    _s7 = make_composite_source(_s7_src, _s5)   # butterfly over sign-over-OAM-over-Esri
 
+    _s8_src = make_bm_source('src/scale067.tif', _reg, _b_oct, gamma=1.0, with_coverage=True,
+                             name='scale_wkt', attribution='Brandon Antonio Segura Torres & Priscilla Vieto Bonilla ©2025, Wikimedia Commons, CC BY 4.0')
+
+    _s8 = make_composite_source(_s8_src, _s7)   # butterfly over sign-over-OAM-over-Esri
+
+    # https://commons.wikimedia.org/wiki/File:Escama_de_ala_de_mariposa_SEM.jpg
     run(
         reg=_reg,
         flavour='butterfly:0500',
         scale=750,
-        max_layer=22,
-        bg_sources={
-            # 0: _pc,
+        frames_per_level=1000,   # index resolution: frame i ↔ zoom t = i/1000
+        max_frame=25500,         # 24 levels · 1000
+        bg_sources={             # keys are frame indices (introduce a source at a point)
             0: _s2,
-            6: _s3,
-            10: _s4,
-            14: _s5,
-            18: _s7,  # fly (1 cm) — viewport fits it L18
+            5390: _s3,
+            5400: _s4,
+            10900: _s5,
+            12450: _s7,          # butterfly — tune the exact index by scrubbing frames
+            18480: _s8
         },
-        frames_per_level=100,  # set >0 for smooth animation, e.g. 24
-        skip_existing=True,    # resume: skip frames whose PNG is already on disk
-        # start_frame=99,        # or resume from an explicit frame index
+        frame_interval=10,       # render stride: files 000000, 000010, … (=1000 → per level)
+        skip_existing=True,      # resume: skip frames whose PNG is already on disk
+        # start_frame=25490,       # window with start_frame / end_frame (index space)
+        # end_frame=25500
     )

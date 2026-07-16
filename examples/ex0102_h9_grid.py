@@ -23,7 +23,7 @@ from hhg9.formats import OctahedralH9
 from hhg9.h9.addressing import TailStyle, hex_str_encode
 from hhg9.h9.binning import hex_reduce, hex_parents, ctr_from_pars
 from hhg9.h9.grid import hex_verts_in_noct
-from hhg9.h9.tail import tail_key_from_reversible, tail_unpack_reversible
+from hhg9.h9.tail import tail_unpack_reversible
 
 
 def run(layout, scale, depths):

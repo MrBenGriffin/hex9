@@ -24,7 +24,7 @@ from hhg9.h9.addressing import TailStyle, hex_str_encode
 
 def run(layout, scale, depths):
     """Runner"""
-    cmap = plt.colormaps.get_cmap("plasma")
+    cmap = plt.colormaps.get_cmap("tab20")
     cols = cmap(np.linspace(0, 1, 14))
     cols[13] = np.array([1, 1, 1, 1])         # transparent/illegal fallback
 
@@ -80,6 +80,6 @@ def run(layout, scale, depths):
 
 if __name__ == "__main__":
     from hhg9.domains.nets import net_layouts
-    for layout in ['butterfly']:
+    for layout in ['turbine']:
     # for layout in net_layouts:
-        run(layout, 1200, depths=[0, 1])
+        run(layout, 1200, depths=[0])

@@ -120,7 +120,7 @@ def run(reg, logger, refs, b_oct):
 
 
 if __name__ == '__main__':
-    from hhg9.h9.region import recover_stats_reset, recover_stats_report
+    # from hhg9.h9.region import recover_stats_reset, recover_stats_report
     reg = Registrar()  # Manage Domains & Projections
     locs = json_load('../assets/locations.json')
     ll = list()
@@ -130,10 +130,10 @@ if __name__ == '__main__':
             lat, lon = tuple(val)
             ll.append((float(lat), float(lon)))
     seed = 4007
-    samples = 100_000
+    samples = 100
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
-    recover_stats_reset()
+    # recover_stats_reset()
 
     np.random.seed(seed)
     base = Path(__file__).parent
@@ -151,4 +151,4 @@ if __name__ == '__main__':
     print(f'Results written to {log_file.relative_to(base)}\n'
           f'Completed {len(gpts)} points in {elapsed:.3f} seconds'
           f' ({elapsed / len(gpts):.6f} sec/pt)')
-    recover_stats_report()
+    # recover_stats_report()

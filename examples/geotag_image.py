@@ -27,7 +27,9 @@ Usage:
 --heading-deg  compass bearing the photo's "up" (top edge) points toward, cw
             from north.  0 = north-up.  A handheld macro is usually arbitrary;
             eyeball it or leave 0 and rotate later in QGIS.
---lon/--lat centre; defaults to the ex0098 POI.
+--lon/--lat the point the anchor pixel lands on; defaults to the ex0098 POI.
+anchor_px   (col, row) pixel pinned to lon/lat; default = image centre.  Pass a
+            feature's pixel (sign tip, marker) when it isn't the middle.
 """
 import argparse
 import math
@@ -41,9 +43,21 @@ from PIL import Image
 DEF_LON, DEF_LAT = 1.640250018, 49.098794825,
 
 def geotag(in_path, out_path, *, lon, lat, width_m, height_m=None,
-           heading_deg=0.0):
-    """Write `in_path` as a georeferenced GeoTIFF placed at (lon, lat)."""
-    img = np.asarray(Image.open(in_path).convert('RGB'))
+           heading_deg=0.0, anchor_px=None):
+    """Write `in_path` as a georeferenced GeoTIFF placed at (lon, lat).
+
+    `anchor_px` is the (col, row) pixel that lands on (lon, lat); default is the
+    image centre.  Give it when the known point is a feature in the photo (the
+    tip of a sign, a marker) rather than the middle — read the pixel off in any
+    image viewer.  Row is measured from the top, matching image convention.
+
+    Output is 4-band RGBA: the alpha band records the image's footprint (opaque
+    everywhere for a full photo; the source's own transparency for a cut-out or
+    clipped ortho).  make_bm_source(..., with_coverage=True) reads that band so
+    the tile composites over whatever is beneath instead of painting its bounding
+    rectangle — a rotated rectangle leaves transparent corners — with black.
+    """
+    img = np.asarray(Image.open(in_path).convert('RGBA'))
     h_px, w_px = img.shape[:2]
     if height_m is None:
         height_m = width_m * (h_px / w_px)
@@ -69,36 +83,58 @@ def geotag(in_path, out_path, *, lon, lat, width_m, height_m=None,
     gt2 = mppy * dE / m_per_deg_lon   # d lon / d row
     gt4 = mppx * rN / m_per_deg_lat   # d lat / d col
     gt5 = mppy * dN / m_per_deg_lat   # d lat / d row
-    # Pin the image centre (cx, cy) to (lon, lat).
-    cx, cy = w_px / 2.0, h_px / 2.0
+    # Pin the anchor pixel (cx, cy) to (lon, lat); default = image centre.
+    cx, cy = (w_px / 2.0, h_px / 2.0) if anchor_px is None else \
+        (float(anchor_px[0]), float(anchor_px[1]))
     gt0 = lon - cx * gt1 - cy * gt2
     gt3 = lat - cx * gt4 - cy * gt5
 
     drv = gdal.GetDriverByName('GTiff')
-    ds = drv.Create(out_path, w_px, h_px, 3, gdal.GDT_Byte,
-                    options=['COMPRESS=DEFLATE', 'PHOTOMETRIC=RGB'])
+    ds = drv.Create(out_path, w_px, h_px, 4, gdal.GDT_Byte,
+                    options=['COMPRESS=DEFLATE', 'PHOTOMETRIC=RGB', 'ALPHA=YES'])
     ds.SetGeoTransform((gt0, gt1, gt2, gt3, gt4, gt5))
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(4326)
     ds.SetProjection(srs.ExportToWkt())
-    for b in range(3):
+    for b in range(4):
         ds.GetRasterBand(b + 1).WriteArray(img[:, :, b])
+    ds.GetRasterBand(4).SetColorInterpretation(gdal.GCI_AlphaBand)
     ds.FlushCache()
     ds = None
 
     corner = (gt0, gt3)
+    anchor = 'centre' if anchor_px is None else f'px ({cx:.0f}, {cy:.0f})'
     print(f'  wrote {out_path}  ({w_px}×{h_px}px, {width_m:.3f}×{height_m:.3f} m)')
-    print(f'  centre lon/lat = {lon:.7f}, {lat:.7f}   heading = {heading_deg}°')
+    print(f'  {anchor} lon/lat = {lon:.7f}, {lat:.7f}   heading = {heading_deg}°')
     print(f'  ul corner lon/lat = {corner[0]:.7f}, {corner[1]:.7f}')
 
 
 if __name__ == '__main__':
     gdal.UseExceptions()
 
-    fly_lon, fly_lat = 1.640250000, 49.0987953450  # 49.0987953200 +100 +100 +50
-    geotag('src/fly2.png', 'src/fly_1mm.tif', width_m=0.257212475633528, lon=fly_lon, lat=fly_lat)
+    # fly_lon, fly_lat = 1.640250000, 49.0987953450  # 49.0987953200 +100 +100 +50
+    # geotag('src/fly2.png', 'src/fly_1mm.tif', width_m=0.257212475633528, lon=fly_lon, lat=fly_lat)
 
-    # c_lon, c_lat = 1.640250018, 49.098794825,
-    # geotag('src/171c.png', 'src/171c.tif', heading_deg=0, width_m=15, lon=c_lon, lat=c_lat)
-    # geotag(a.input, a.output, lon=a.lon, lat=a.lat,
-    #        width_m=a.width_m, height_m=a.height_m, heading_deg=a.heading_deg)
+    # fly_lon, fly_lat = 1.640249982, 49.0987954416  # 0.065 is too large!
+    # geotag('src/peacock_full.png', 'src/fly_55mm.tif', width_m=0.05518, lon=fly_lon, lat=fly_lat, anchor_px=(38466, 15993))
+
+    # s_lon, s_lat, s_width = 1.640249982, 49.0987954416, 0.70  # , anchor_px=(872, 1316-607)
+    # geotag('src/better_sign.png', 'src/sign.tif',
+    #        heading_deg=0, width_m=s_width, lon=s_lon, lat=s_lat,
+    #        # if the image is too far right, add to the anchor.
+    #        # if the image is too far down, add to the anchor.
+    #        anchor_px=(795, 769)  # acorn has y fixed at bottom - so use y-dim - offset. 872, 607
+    #        )
+
+    s_lon, s_lat, s_width_m = 1.640249982, 49.0987954416, 0.0009213014119091467  # , anchor_px=(872, 1316-607)
+    # 16290px = 1600µm 921.301411909146716µm -- seems smaller.
+    s_width = 0.00067
+    geotag('src/scale.png', 'src/scale067.tif',
+           heading_deg=0, width_m=s_width, lon=s_lon, lat=s_lat,
+           # if the image is too far right, add to anchor[0].
+           # if the image is too far down, add to anchor[1].
+           anchor_px=(6290, 5062)  # acorn has y fixed at bottom - so use y-dim - offset. 872, 607
+           )
+  # pin the tip of the sign (say pixel 1420, 300) to the known lon/lat
+  # geotag('src/better_sign.png', 'src/sign.tif', width_m=s_width,
+  #        lon=s_lon, lat=s_lat, anchor_px=(1420, 300))

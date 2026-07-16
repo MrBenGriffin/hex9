@@ -35,13 +35,12 @@ _FACE_ADJ: tuple[frozenset, ...] = (
 def _hex_areas(earth_area: float = None):
     """Return characteristic lengths for an ideal regular hexagon at each layer.
     Returns:
-        np.array (max_depth, 6):
+        np.array (max_depth, 5):
             area: area in m^2
             side: side length s (aka) circumradius: (vertex-centre)
             inradius: r (flat-centre)
             flat_diameter: 2*r aka 'height'
             point_diameter: 2*side
-            count: number of hexes at this layer
     """
     # Level 0 area ≈ 42_505_468 km^2 (area of Earth / 12 hexes)
     max_depth = 64  # way over the top.
@@ -58,6 +57,7 @@ def _hex_areas(earth_area: float = None):
         point_diameter = 2.0 * side
         h_areas[i] = [area, side, in_radius, flat_diameter, point_diameter]
         l_hex /= 9
+    h_areas.setflags(write=False)  # cached & shared — mutation would poison the cache
     return h_areas
 
 
@@ -89,6 +89,7 @@ def _tri_areas(earth_area: float = None):
         height = h
         t_areas[i] = [area, side, in_radius, height, big_r]
         l_tri /= 9
+    t_areas.setflags(write=False)  # cached & shared — mutation would poison the cache
     return t_areas
 
 

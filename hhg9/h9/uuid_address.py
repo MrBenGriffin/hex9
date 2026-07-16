@@ -34,6 +34,14 @@ Public API:
     h9_bin(uuids, layer)                        -> uuids
     h9_ancestors(b_pts, at_layer, gens_up)     -> uuids   (one per point)
     h9_descendants(b_pts, at_layer, gens_down) -> list of uuid lists
+    h9_curve_index(uuids)                       -> list of ints (SFC order)
+    h9_curve_uuid(uuids)                        -> packed curve-uuids (0xC mark)
+    h9_is_curve(uuids)                          -> bool / bool array
+    h9_curve_layer(uuids)                       -> int / int array
+    h9_curve_bin(curve_uuids, layer)            -> curve-uuids (prefix truncation)
+    h9_curve_pack(indices, layer)               -> curve-uuids
+    h9_curve_decode(curve_uuids)                -> h9 bin uuids (the inverse)
+    h9_curve_label / h9_curve_from_label        -> 'c<slot><ranks>' round-trip
 """
 
 from __future__ import annotations
@@ -188,12 +196,16 @@ def h9_dec(
     -------
     Points in b_oct domain
     """
+    uuid_nibbles = _batch_int_to_nibbles([u.int for u in uuids], n=32)
+    return _dec_nibs(uuid_nibbles, b_oct)
+
+
+def _dec_nibs(uuid_nibbles: NDArray[np.uint8], b_oct) -> 'Points':
+    """Decode (N, 32) key nibble rows to b_oct centroid Points (h9_dec core)."""
     import hhg9.h9.region as rg
     from hhg9 import Points
     from hhg9.h9 import H9K
     from hhg9.h9.tail import tail_unpack_reversible
-    uuid_ints = [u.int for u in uuids]
-    uuid_nibbles = _batch_int_to_nibbles(uuid_ints, n=32)   # (N, 32)
     # Single-nibble tail at [31]; body at [0..30]. hex_digits_reg is layer-aware
     # (skips 0xF sentinels), so this decodes full addresses and truncated bins alike.
     key_tail = uuid_nibbles[:, -1]
@@ -490,27 +502,38 @@ def _accel_cell_ancestor():
     return _ACCEL_ANC
 
 
-def _cell_ancestor_batch(uuids, at_layer: int, target: int) -> list[uuid_mod.UUID]:
-    """Address-space canonical ancestor for a uniform-layer batch.
+def _cell_ancestor_nibs(nibs: NDArray[np.uint8], at_layer: int,
+                        target: int) -> NDArray[np.uint8]:
+    """Address-space canonical ancestor on (N, 32) nibble rows (uniform layer).
 
+    The nibble-level core of :func:`_cell_ancestor_batch` — no UUID objects.
     Delegates to libhex9's C fold (~100x) when a doctrine-correct build is
     loadable; otherwise runs the pure-Python fold. Both are the same
     algorithm and byte-identical (verified all cells L1-L4, every target).
     """
     lib = _accel_cell_ancestor()
     if lib is not None:
-        arr = np.frombuffer(b''.join(u.bytes for u in uuids),
-                            dtype=np.uint8).reshape(-1, 16).copy()
-        return [uuid_mod.UUID(bytes=bytes(r))
-                for r in lib.cell_ancestor_many(arr, target)]
+        byts = ((nibs[:, 0::2] << 4) | nibs[:, 1::2]).astype(np.uint8).copy()
+        res = np.asarray(lib.cell_ancestor_many(byts, target),
+                         dtype=np.uint8).reshape(-1, 16)
+        out = np.empty((len(nibs), 32), dtype=np.uint8)
+        out[:, 0::2] = res >> 4
+        out[:, 1::2] = res & 0x0F
+        return out
     from hhg9.h9.addressing import x_adr_cell_ancestor
-    nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
     hx = np.column_stack([nibs[:, :at_layer + 1], nibs[:, -1]])
     _, anc = x_adr_cell_ancestor(hx, target)
-    full = np.full((len(uuids), 32), 0x0F, dtype=np.uint8)
-    full[:, :target + 1] = anc[:, :-1]
-    full[:, -1] = anc[:, -1]
-    return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(full)]
+    out = np.full((len(nibs), 32), 0x0F, dtype=np.uint8)
+    out[:, :target + 1] = anc[:, :-1]
+    out[:, -1] = anc[:, -1]
+    return out
+
+
+def _cell_ancestor_batch(uuids, at_layer: int, target: int) -> list[uuid_mod.UUID]:
+    """Address-space canonical ancestor for a uniform-layer batch of UUIDs."""
+    nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
+    anc = _cell_ancestor_nibs(nibs, at_layer, target)
+    return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(anc)]
 
 
 def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
@@ -548,6 +571,399 @@ def h9_cell_ancestor(uuids, layer: int, reg=None) -> list[uuid_mod.UUID]:
                                                   int(L), layer)):
             out[i] = u
     return out
+
+
+# ---------- Hamiltonian curve index (36-state transducer) --------------------
+
+# Type marker in nibble 0 of a packed curve-uuid. An h9-uuid's nibble 0 is
+# the L0 root digit 0..11, so 0xC there is an unambiguous POSITIONAL
+# discriminator (0xC can occur in an h9-uuid's TAIL nibble — never test
+# "contains no c"). 0xD/0xE remain free for future address kinds.
+CURVE_MARK: int = 0xC
+
+
+def _curve_ranks_batch(nibs: NDArray[np.uint8], level: int
+                       ) -> tuple[NDArray[np.uint8], NDArray[np.int8]]:
+    """(axiom positions, rank digits) for a uniform-layer batch of (N, 32)
+    h9 nibble rows.
+
+    Gathers the lineage chain one generation at a time (the curve's tree
+    is iterated one-generation canonical parents — deep ownership differs
+    on hexagon-band cells, so a single deep fold would be WRONG here),
+    then walks the closed 36-state transducer fully vectorised. The chain
+    steps run in nibble/byte space (C fold when available); no UUID
+    objects, labels or per-item dict walks.
+    """
+    from hhg9.h9.curve_tables import (CURVE_AXIOM_POS, CURVE_ROOT_STATE,
+                                      CURVE_T1, CURVE_T2)
+    chain: list = [None] * (level + 1)
+    chain[level] = nibs
+    for k in range(level, 0, -1):
+        chain[k - 1] = _cell_ancestor_nibs(chain[k], k, k - 1)
+    root = chain[0][:, 0].astype(np.intp)
+    if np.any(root > 11):
+        raise ValueError('h9 curve: invalid L0 digit')
+    state = CURVE_ROOT_STATE[root].astype(np.intp)
+    ranks = np.empty((len(nibs), level), dtype=np.int8)
+    for k in range(1, level + 1):
+        child, par = chain[k], chain[k - 1]
+        foster = (child[:, :k] != par[:, :k]).any(axis=1).astype(np.intp)
+        digit = child[:, k].astype(np.intp)
+        r = CURVE_T1[state, foster, digit]
+        if np.any(r < 0):
+            i = int(np.flatnonzero(r < 0)[0])
+            raise KeyError(
+                f'h9 curve: T1 miss at layer {k} '
+                f'(state {int(state[i])}, foster {bool(foster[i])}, '
+                f'digit {int(digit[i])}) — non-canonical input')
+        ranks[:, k - 1] = r
+        state = CURVE_T2[state, r].astype(np.intp)
+    return CURVE_AXIOM_POS[root], ranks
+
+
+def _curve_index_batch(nibs: NDArray[np.uint8], level: int) -> list[int]:
+    """Curve indices for a uniform-layer batch of (N, 32) h9 nibble rows."""
+    pos, ranks = _curve_ranks_batch(nibs, level)
+    # Indices exceed uint64 beyond ~L18 (12*9^L): pack per row in Python ints.
+    out = [int(p) for p in pos]
+    for i, row in enumerate(ranks.tolist()):
+        v = out[i]
+        for r in row:
+            v = v * 9 + r
+        out[i] = v
+    return out
+
+
+def _curve_unpack_rows(nibs: NDArray[np.uint8]) -> list[int]:
+    """Curve indices from packed curve-uuid nibble rows (mixed layers fine)."""
+    out = []
+    for row in nibs.tolist():
+        if row[0] != CURVE_MARK or row[1] > 11:
+            raise ValueError('not a curve uuid')
+        v = row[1]
+        for r in row[2:]:
+            if r == 0x0F:
+                break
+            if r > 8:
+                raise ValueError('not a curve uuid: bad rank digit')
+            v = v * 9 + r
+        out.append(v)
+    return out
+
+
+def h9_curve_index(uuids) -> list[int]:
+    """Hamiltonian curve index of each cell/bin — pure table walk.
+
+    The hex9 space-filling curve visits every layer-L cell once, in an
+    order that is edge-adjacent between consecutive indices (local
+    Hamiltonicity) and refines: a cell's 9 lineage children occupy indices
+    ``index*9 .. index*9+8``. The index is emitted by the closed 36-state
+    row transducer (see :mod:`hhg9.h9.curve_tables`) walked down the
+    cell's lineage chain. Forward-only — there is no index->geometry
+    inverse yet.
+
+    Accepts h9-uuids (transducer walk) and packed curve-uuids (pure
+    arithmetic unpack — see :func:`h9_curve_uuid`), freely mixed, at
+    mixed layers; a single uuid.UUID is also accepted (returns a list of
+    one). Indices at layer L lie in ``0 .. 12*9^L - 1`` and are Python
+    ints (they exceed uint64 beyond ~L18). Raises KeyError on a
+    transducer table miss, which is the totality test: it means a
+    non-canonical address, never a table gap (machine-verified closure;
+    deep-seam samples to L21+).
+    """
+    items = [uuids] if isinstance(uuids, uuid_mod.UUID) else list(uuids)
+    if not items:
+        return []
+    out: list = [None] * len(items)
+    curve = [i for i, u in enumerate(items) if (u.int >> 124) == CURVE_MARK]
+    if curve:
+        nibs = _batch_int_to_nibbles([items[i].int for i in curve], n=32)
+        for i, v in zip(curve, _curve_unpack_rows(nibs)):
+            out[i] = v
+    rest = [i for i, u in enumerate(items) if (u.int >> 124) != CURVE_MARK]
+    if rest:
+        layers = np.atleast_1d(h9_layer([items[i] for i in rest]))
+        for L in np.unique(layers):
+            idx = [rest[j] for j in np.flatnonzero(layers == L)]
+            nibs = _batch_int_to_nibbles([items[i].int for i in idx], n=32)
+            for i, v in zip(idx, _curve_index_batch(nibs, int(L))):
+                out[i] = v
+    return out
+
+
+def h9_curve_uuid(uuids) -> list[uuid_mod.UUID]:
+    """Packed 128-bit curve address of each cell/bin (the sortable form).
+
+    Layout (32 nibbles): nibble 0 = 0xC (type marker — an h9-uuid's
+    nibble 0 is the root digit 0..11, so this is positionally
+    unambiguous); nibble 1 = axiom slot 0..11; nibbles 2..L+1 = base-9
+    rank digits; nibbles L+2..31 = 0xF sentinels. The packed value is
+    the base-9 numeral of the curve index, so byte order at a fixed
+    layer IS curve order, and full depth L30 lands exactly on nibble 31
+    — the key-tail nibble h9 spends on invertibility is the nibble the
+    curve doesn't need, repurposed as the marker. In mixed collections
+    every curve-uuid sorts after every h9-uuid (0xC > 0xB).
+
+    Unlike an h9-uuid body, a curve-uuid truncates EXACTLY: dropping
+    rank digits gives the lineage parent's curve address (rank identity
+    index//9 == parent index) — see :func:`h9_curve_bin`. Curve-uuid
+    inputs pass through unchanged; h9-uuid inputs are walked through the
+    transducer (mixed layers fine).
+    """
+    items = [uuids] if isinstance(uuids, uuid_mod.UUID) else list(uuids)
+    if not items:
+        return []
+    out: list = [None] * len(items)
+    rest = []
+    for i, u in enumerate(items):
+        if (u.int >> 124) == CURVE_MARK:
+            out[i] = u
+        else:
+            rest.append(i)
+    if rest:
+        layers = np.atleast_1d(h9_layer([items[i] for i in rest]))
+        for L in np.unique(layers):
+            idx = [rest[j] for j in np.flatnonzero(layers == L)]
+            nibs = _batch_int_to_nibbles([items[i].int for i in idx], n=32)
+            pos, ranks = _curve_ranks_batch(nibs, int(L))
+            cu = np.full((len(idx), 32), 0x0F, dtype=np.uint8)
+            cu[:, 0] = CURVE_MARK
+            cu[:, 1] = pos
+            if L:
+                cu[:, 2:int(L) + 2] = ranks.astype(np.uint8)
+            for i, v in zip(idx, batch_nibbles_to_int(cu)):
+                out[i] = uuid_mod.UUID(int=v)
+    return out
+
+
+def h9_is_curve(uuids):
+    """True where nibble 0 is the 0xC curve marker (positional test only).
+
+    Accepts a single uuid.UUID (returns bool) or an iterable (returns a
+    bool array).
+    """
+    single = isinstance(uuids, uuid_mod.UUID)
+    items = [uuids] if single else list(uuids)
+    m = np.array([(u.int >> 124) == CURVE_MARK for u in items], dtype=bool)
+    return bool(m[0]) if single else m
+
+
+def _curve_nibs(uuids) -> NDArray[np.uint8]:
+    """(N, 32) nibble rows of curve-uuids, marker-checked."""
+    nibs = _batch_int_to_nibbles([u.int for u in uuids], n=32)
+    if len(nibs) and np.any(nibs[:, 0] != CURVE_MARK):
+        raise ValueError('not a curve uuid')
+    return nibs
+
+
+def h9_curve_layer(uuids):
+    """The layer of a packed curve-uuid: rank digits run from nibble 2, so
+    the first 0xF sentinel is scanned from nibble 1 (the slot, always
+    real). Same sentinel convention as :func:`h9_layer`, offset by the
+    marker. Accepts a single uuid.UUID (returns int) or an iterable.
+    """
+    single = isinstance(uuids, uuid_mod.UUID)
+    items = [uuids] if single else list(uuids)
+    body = _curve_nibs(items)[:, 1:]
+    is_real = body != 0x0F
+    layer = UUID_DEPTH - np.argmax(is_real[:, ::-1], axis=1)
+    return int(layer[0]) if single else layer
+
+
+def h9_curve_bin(uuids: list[uuid_mod.UUID], layer: int) -> list[uuid_mod.UUID]:
+    """Layer-L curve bin — PURE PREFIX TRUNCATION, exact on the curve tree.
+
+    Truncating an h9-uuid body is not a valid bin (the lineage spelling
+    can name a different hexagon than the canonical parent, which is why
+    h9_bin decodes and re-bins). The curve-uuid has no such defect: by
+    the rank identity, dropping rank digits IS the lineage ancestor's
+    curve address — no fold, no geometry. Input deeper bins only; input
+    coarser than ``layer`` raises.
+    """
+    if not (0 <= layer <= UUID_DEPTH):
+        raise ValueError(f"layer must be in 0..{UUID_DEPTH}, got {layer}")
+    items = list(uuids)
+    nibs = _curve_nibs(items)
+    is_real = nibs[:, 1:] != 0x0F
+    layers = UUID_DEPTH - np.argmax(is_real[:, ::-1], axis=1)
+    if np.any(layers < layer):
+        raise ValueError('input coarser than target layer')
+    nibs[:, layer + 2:] = 0x0F
+    return [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(nibs)]
+
+
+def h9_curve_pack(indices, layer: int) -> list[uuid_mod.UUID]:
+    """Packed curve-uuids from plain curve indices at a known layer.
+
+    The inverse of :func:`h9_curve_index` on the REPRESENTATION only
+    (base-9 digit split; the geometric index->cell inverse remains
+    unbuilt). The layer must be supplied — a bare index does not
+    self-describe it.
+    """
+    if not (0 <= layer <= UUID_DEPTH):
+        raise ValueError(f"layer must be in 0..{UUID_DEPTH}, got {layer}")
+    out = []
+    for v in indices:
+        v = int(v)
+        nibs = np.full(32, 0x0F, dtype=np.uint8)
+        nibs[0] = CURVE_MARK
+        for k in range(layer + 1, 1, -1):
+            v, r = divmod(v, 9)
+            nibs[k] = r
+        if not 0 <= v <= 11:
+            raise ValueError(f'index out of range for layer {layer}')
+        nibs[1] = v
+        out.append(uuid_mod.UUID(int=_nibbles_to_int(nibs)))
+    return out
+
+
+def h9_curve_decode(curve_uuids, reg=None) -> list[uuid_mod.UUID]:
+    """h9-uuid of each packed curve address — the constructive inverse.
+
+    The curve index is bijective per layer but was long "forward-only":
+    a purely symbolic inverse (bounded local state, no geometry) was
+    refuted — a foster child's address spelling depends on neighbour
+    lineages. Forward-fitting dissolves that: descending from the root we
+    always hold the parent's COMPLETE address, so the neighbourhood is
+    queried, never predicted. Per level: the T2 state thread is known
+    from the ranks alone; each state's T1 row is rank-bijective, so the
+    rank inverts deterministically to (foster, digit).
+
+    NON-FOSTER steps are pure address ops: the child's body is the
+    parent's body + digit, and its key tail is recovered by decoding the
+    candidate under each of the 12 valid tail values and re-binning —
+    the true tail decodes to the true centroid, so its re-bin matches
+    the body; a wrong tail either lands in the same cell (same canonical
+    key) or mismatches and is discarded. No false positives: canonical
+    bodies are unique. FOSTER steps (the spelling jump) query the
+    parent's 9 lineage children (one-generation :func:`h9_descendants`,
+    where lineage == ownership); the match is unique by the T1
+    bijection. O(L) overall, geometry only where lineage forces it.
+
+    Batched: vectorised across items per level; foster items grouped by
+    parent, one descendants call per distinct parent. h9-uuid inputs
+    pass through unchanged (the converse of :func:`h9_curve_uuid`).
+    Returns layer-L bin uuids.
+    """
+    from hhg9.h9.curve_tables import (CURVE_AXIOM, CURVE_ROOT_STATE,
+                                      CURVE_T1_INV_FOSTER,
+                                      CURVE_T1_INV_DIGIT, CURVE_T2)
+    single = isinstance(curve_uuids, uuid_mod.UUID)
+    items = [curve_uuids] if single else list(curve_uuids)
+    if not items:
+        return []
+    if reg is None:
+        from hhg9 import Registrar
+        reg = Registrar()
+    b_oct = reg.domain('b_oct')
+    out: list = list(items)                      # h9-uuids pass through
+    act0 = [i for i, u in enumerate(items) if (u.int >> 124) == CURVE_MARK]
+    if not act0:
+        return [out[0]] if single else out
+    nibs = _curve_nibs([items[i] for i in act0])
+    body = nibs[:, 1:]                           # col 0 = slot, col k = rank k
+    if np.any((body != 0x0F) & (body > np.where(
+            np.arange(31) == 0, 11, 8))):
+        raise ValueError('not a curve uuid: digit out of range')
+    layers = UUID_DEPTH - np.argmax((body != 0x0F)[:, ::-1], axis=1)
+    root = CURVE_AXIOM[body[:, 0].astype(np.intp)]
+    # Root uuids: canonical L0 key, mode-0 rep (cf. h9_bin_pts L0 branch).
+    from hhg9.h9 import H9O
+    c2 = np.asarray(H9O.l0hex_back)[root.astype(np.intp), 0][:, 1]
+    cur = np.full((len(act0), 32), 0x0F, dtype=np.uint8)
+    cur[:, 0] = root
+    cur[:, -1] = ((c2 & 0x03) << 1).astype(np.uint8)
+    state = CURVE_ROOT_STATE[root.astype(np.intp)].astype(np.intp)
+    # The 6 valid key-tail values: (p_c2<<1) | r_mo. Canonical keys always
+    # have p_mo == 0 (the fold gives every cell a mode-0 terminal parent);
+    # p_mo=1 guesses are malformed and can crash the region walk.
+    tails6 = np.array([(c << 1) | r for c in (0, 1, 2) for r in (0, 1)],
+                      dtype=np.uint8)
+    for k in range(1, int(layers.max()) + 1):
+        act = np.flatnonzero(layers >= k)
+        r = body[act, k].astype(np.intp)
+        want_f = CURVE_T1_INV_FOSTER[state[act], r].astype(bool)
+        want_d = CURVE_T1_INV_DIGIT[state[act], r]
+        state[act] = CURVE_T2[state[act], r]
+
+        nf = act[~want_f]
+        if len(nf):
+            # Candidate = parent body + digit; recover the tail by decode
+            # + re-bin under all 12 tails at once (vectorised).
+            cand = np.repeat(cur[nf], 6, axis=0)
+            cand[:, k] = np.repeat(want_d[~want_f], 6)
+            cand[:, -1] = np.tile(tails6, len(nf))
+            keyed = h9_bin_pts(_dec_nibs(cand, b_oct), k)
+            kn = _batch_int_to_nibbles([u.int for u in keyed], n=32)
+            hit = (kn[:, :k + 1] == cand[:, :k + 1]).all(axis=1)
+            hit = hit.reshape(len(nf), 6)
+            if not hit.any(axis=1).all():
+                i = int(np.flatnonzero(~hit.any(axis=1))[0])
+                raise RuntimeError(
+                    f'h9_curve_decode: interior child not recovered at '
+                    f'layer {k} (item {int(nf[i])})')
+            first = np.argmax(hit, axis=1) + 6 * np.arange(len(nf))
+            cur[nf] = kn[first]
+
+        fo = act[want_f]
+        if len(fo):
+            groups: dict[int, list] = {}
+            for j, i in zip(np.flatnonzero(want_f), fo):
+                key = batch_nibbles_to_int(cur[i])[0]
+                groups.setdefault(key, []).append((i, int(want_d[j])))
+            parents = [uuid_mod.UUID(int=p) for p in groups]
+            kids = h9_descendants(h9_dec(parents, b_oct), k - 1, 1, reg=reg)
+            for parent, children in zip(parents, kids):
+                pn = _batch_int_to_nibbles([parent.int], n=32)[0]
+                cn = _batch_int_to_nibbles([c.int for c in children], n=32)
+                by_d = {int(cn[j, k]): j for j in range(len(children))
+                        if (cn[j, :k] != pn[:k]).any()}
+                for i, wd in groups[parent.int]:
+                    j = by_d.get(wd)
+                    if j is None:
+                        raise RuntimeError(
+                            f'h9_curve_decode: no foster child of '
+                            f'{h9_label(parent)} with digit {wd} at layer {k}')
+                    cur[i] = cn[j]
+    dec = [uuid_mod.UUID(int=v) for v in batch_nibbles_to_int(cur)]
+    for j, i in enumerate(act0):
+        out[i] = dec[j]
+    return [out[0]] if single else out
+
+
+def h9_curve_label(u: uuid_mod.UUID) -> str:
+    """Human-readable curve address: 'c<slot><ranks>' e.g. 'c112504'.
+
+    Purely positional — char 0 is the marker, char 1 the axiom slot (one
+    hex char, 0..b), the rest base-9 rank digits (empty at L0) — so no
+    separator is needed; length alone carries the layer, mirroring the
+    packed nibble layout.
+    """
+    row = _curve_nibs([u])[0]
+    ranks = ''
+    for r in row[2:]:
+        if r == 0x0F:
+            break
+        ranks += format(int(r), 'x')
+    return f'c{format(int(row[1]), "x")}{ranks}'
+
+
+def h9_curve_from_label(label: str) -> uuid_mod.UUID:
+    """Roundtrip: convert an h9_curve_label string back to a curve-uuid."""
+    if len(label) < 2 or not label.startswith('c'):
+        raise ValueError('not a curve label (no leading c)')
+    slot, ranks = int(label[1], 16), label[2:]
+    if slot > 11:
+        raise ValueError('bad axiom slot')
+    if len(ranks) > UUID_DEPTH:
+        raise ValueError(f'more than {UUID_DEPTH} rank digits')
+    nibs = np.full(32, 0x0F, dtype=np.uint8)
+    nibs[0] = CURVE_MARK
+    nibs[1] = slot
+    for k, c in enumerate(ranks):
+        r = int(c, 9)
+        nibs[2 + k] = r
+    return uuid_mod.UUID(int=_nibbles_to_int(nibs))
 
 
 def _anchor_hex_latlon(anchor: uuid_mod.UUID, at_layer: int, reg, inflate: float = 1.03):
