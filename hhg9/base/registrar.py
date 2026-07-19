@@ -28,6 +28,8 @@ _PAIR_TO_PROJ: dict[frozenset, str] = {
     frozenset(['g_gcd', 'b_raw']): 'gcd_brw',
     frozenset(['b_raw', 'b_oct']): 'brw_bct',
     frozenset(['c_oct', 'c_ell']): 'oct_ell',
+    frozenset(['c_sph', 'g_gcd']): 'aut_gcd',
+    frozenset(['c_oct', 'c_sph']): 'oct_sph',
 }
 
 
@@ -41,6 +43,18 @@ class Registrar:
     def __init__(self):
         self.ellipsoid = Geodesic.WGS84
         self.ellipsoid_name = 'WGS84'
+        # via_sphere: route g_gcd↔b_raw through the unit authalic sphere
+        # (c_sph) — exact authalic-latitude datum reduction at the boundary,
+        # purely spherical octahedral engine (AK a=b=1, Sphere-trained warp)
+        # inside. c_ell keeps the true source ellipsoid either way.
+        # DEFAULT since 2026-07-18: the via-sphere chain (equal-area ~20×
+        # tighter, round-trip parity — see L6_MOBIUS_WARP.md §3.6). The
+        # classic chain (ellipsoid AK + per-ellipsoid trained warp) remains
+        # available via set_ellipsoid(..., via_sphere=False); note the two
+        # chains yield different b_oct coordinates (and hence addresses at
+        # depth), and the libhex9 accelerator currently implements only the
+        # classic WGS84 chain. Set BEFORE the first domain() call.
+        self.via_sphere = True
         self._ellipsoid_area = None
         self._domains = {}
         self._projections = {}
@@ -65,8 +79,15 @@ class Registrar:
                     self._ellipsoid_area = 510065621724088.50944  # WGS84 fallback
         return self._ellipsoid_area
 
-    def set_ellipsoid(self, *, a, f=None, inv_f=None, name='Unknown Ellipsoid'):
-        """Set the reference ellipsoid. Pass either f (flattening) or inv_f (inverse flattening)."""
+    def set_ellipsoid(self, *, a, f=None, inv_f=None, name='Unknown Ellipsoid',
+                      via_sphere=None):
+        """Set the reference ellipsoid. Pass either f (flattening) or inv_f
+        (inverse flattening). via_sphere routes the g_gcd↔b_raw chain
+        through the unit authalic sphere (exact geodetic↔authalic latitude
+        at the boundary; spherical AK core; Sphere-trained warp) — c_ell
+        and geodesic calculations keep the true ellipsoid set here.
+        None (default) preserves the registrar's current setting; pass
+        False explicitly for the classic per-ellipsoid chain."""
         if f is None and inv_f is not None:
             f = 1.0 / inv_f
         elif f is None:
@@ -74,6 +95,8 @@ class Registrar:
         self.ellipsoid = Geodesic(a, f)
         self._ellipsoid_area = None
         self.ellipsoid_name = name
+        if via_sphere is not None:
+            self.via_sphere = bool(via_sphere)
 
     def register_bridge(self, _chain: list):
         """Register a projection chain."""
@@ -190,6 +213,15 @@ class Registrar:
                 case 'oct_ell':
                     from hhg9.projections import AKOctahedralEllipsoid
                     _ = AKOctahedralEllipsoid(self)
+                case 'oct_sph':
+                    # AK on the unit authalic sphere (a=b=1) — the datum-free
+                    # engine of the via-sphere chain.
+                    from hhg9.projections import AKOctahedralEllipsoid
+                    _ = AKOctahedralEllipsoid(self, name='oct_sph',
+                                              a=1.0, b=1.0, cart='c_sph')
+                case 'aut_gcd':
+                    from hhg9.projections import AuthalicGCD
+                    _ = AuthalicGCD(self)
                 case 'ell_gcd':
                     from hhg9.projections import EllipsoidGCD
                     _ = EllipsoidGCD(self)

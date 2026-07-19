@@ -24,9 +24,9 @@ class AKOctahedralEllipsoid(Projection):
     """
     ALPHA = 3.227806237143884260376580  # 𝛂 - vis. Kaseorg.
 
-    def __init__(self, registrar, name='oct_ell', a=None, b=None):
+    def __init__(self, registrar, name='oct_ell', a=None, b=None, cart='c_ell'):
         self.reg = registrar
-        super().__init__(self.reg, name, 'c_oct', 'c_ell')
+        super().__init__(self.reg, name, 'c_oct', cart)
         geo = registrar.ellipsoid
         a = a if a is not None else geo.a
         b = b if b is not None else a * (1.0 - geo.f)
@@ -36,7 +36,11 @@ class AKOctahedralEllipsoid(Projection):
         self.b_oct = self.reg.domain('b_oct')
         self.b_raw = self.reg.domain('b_raw')
         self.c_oct = self.reg.domain('c_oct')
-        self.c_ell = self.reg.domain('c_ell')
+        # The cartesian surface this AK instance maps to: c_ell (registrar
+        # ellipsoid, default) or c_sph (unit authalic sphere, a=b=1 — the
+        # via-sphere engine; see registrar 'oct_sph').
+        self.cart = self.reg.domain(cart)
+        self.c_ell = self.cart
         self.g_gcd = self.reg.domain('g_gcd')
 
         self.vertices = H9O.oct_vrt   # np.array(list(self.rev_cs.vertices.values()))
@@ -150,14 +154,14 @@ class AKOctahedralEllipsoid(Projection):
             self.rev_cs.binning(arr)  # We need the octant identity for each point.
         uvw = arr.copy()
         oid = uvw.oid  # (N,) uint8
-        rll = self.reg.project(uvw, [self.c_ell, self.g_gcd, r_gcd])  # Project to give us GCD reference values (radians).
+        rll = self.reg.project(uvw, [self.cart, self.g_gcd, r_gcd])  # Project to give us GCD reference values (radians).
         ref = rll.coords  # reference addresses
         _, oct_m = uvw.cm()  # we want their modes.
 
         def fwd(xy, octants):
             """Project contender xy (in b_raw) to GCD radians — no warp cost in beam search."""
             coords = Points(xy.reshape(-1, 2), self.b_raw, octants)
-            grx = self.reg.project(coords, [self.b_raw, 'c_oct', 'c_ell', 'g_gcd', r_gcd])
+            grx = self.reg.project(coords, [self.b_raw, 'c_oct', self.cart, 'g_gcd', r_gcd])
             return grx.coords.reshape(xy.shape)
 
         found, _ = find_coords(ref, oct_m, oid, H9C, fwd, haversine_rad, self.accuracy+2, beam_width=6)

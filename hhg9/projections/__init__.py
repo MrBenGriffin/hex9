@@ -8,6 +8,7 @@ from .octahedral_octants import OctahedralOctants
 from .ak_octahedral import AKOctahedralEllipsoid
 from .plate_pix_gcd import PlatePixelGCD
 from .ellipsoid_gcd import EllipsoidGCD, EllipsoidGCDRad
+from .authalic_sphere import AuthalicGCD
 from .plate_pix_net import PlatePixelNet
 from .gcd_bary import GCDBary
 from .rgcd_gcd import RGCD_GCD
@@ -26,6 +27,7 @@ __all__ = [
     "PlatePixelGCD",
     "PlatePixelNet",
     "EllipsoidGCD", "EllipsoidGCDRad",
+    "AuthalicGCD",
     "GCDBary",
     "GCDBraw",
     "BrawBoct",

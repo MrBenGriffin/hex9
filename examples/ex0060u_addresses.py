@@ -130,7 +130,7 @@ if __name__ == '__main__':
             lat, lon = tuple(val)
             ll.append((float(lat), float(lon)))
     seed = 4007
-    samples = 100
+    samples = 100_000
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
     # recover_stats_reset()

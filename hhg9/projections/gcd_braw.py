@@ -30,26 +30,34 @@ except ImportError:
 
 # --- WORKER (top-level for pickling) ---
 
-def _worker_project_gcd_to_braw(chunk_ll: np.ndarray, accuracy: float = 1e-9):
+def _worker_project_gcd_to_braw(chunk_ll: np.ndarray, accuracy: float = 1e-9,
+                                ellipsoid=None, via_sphere: bool = False):
     """
     Process worker: rebuilds the minimal projection stack,
-    and projects one chunk g_gcd -> b_oct.
+    and projects one chunk g_gcd -> b_raw.
     Each worker runs in a separate process with its own GIL.
+    ellipsoid is the parent registrar's (a, f, name) — without it a fresh
+    Registrar() would silently compute WGS84 whatever the parent was using.
     """
     from hhg9 import Registrar, Points
     reg = Registrar()
+    if ellipsoid is not None:
+        a, f, name = ellipsoid
+        reg.set_ellipsoid(a=a, f=f, name=name, via_sphere=via_sphere)
+    cart = 'c_sph' if via_sphere else 'c_ell'
     _ = reg.domain('g_gcd')
-    _ = reg.domain('c_ell')
+    _ = reg.domain(cart)
     _ = reg.domain('c_oct')
     b_raw = reg.domain('b_raw')
-    reg.projection('oct_ell').accuracy = accuracy
+    reg.projection('oct_sph' if via_sphere else 'oct_ell').accuracy = accuracy
     pts = Points(np.ascontiguousarray(chunk_ll, dtype=np.float64), 'g_gcd')
-    bc = reg.project(pts, ['g_gcd', 'c_ell', 'c_oct', b_raw])
+    bc = reg.project(pts, ['g_gcd', cart, 'c_oct', b_raw])
     return (np.ascontiguousarray(bc.coords, dtype=np.float64),
             np.ascontiguousarray(bc.oid))
 
 
-def _project_gcd_to_braw_parallel(ll_array: np.ndarray, accuracy, workers=0, chunk=8_000):
+def _project_gcd_to_braw_parallel(ll_array: np.ndarray, accuracy, workers=0, chunk=8_000,
+                                  ellipsoid=None, via_sphere=False):
     """Orchestrate process-parallel projection over chunks of ll_array."""
     if workers <= 0:
         import os
@@ -60,7 +68,8 @@ def _project_gcd_to_braw_parallel(ll_array: np.ndarray, accuracy, workers=0, chu
     chunks = [np.ascontiguousarray(ll_array[i:i + chunk])
               for i in range(0, len(ll_array), chunk)]
 
-    worker_func = partial(_worker_project_gcd_to_braw, accuracy=accuracy)
+    worker_func = partial(_worker_project_gcd_to_braw, accuracy=accuracy,
+                          ellipsoid=ellipsoid, via_sphere=via_sphere)
 
     out_coords, out_oids = [], []
     with ProcessPoolExecutor(max_workers=workers) as ex:
@@ -98,8 +107,15 @@ class GCDBraw(Projection):
         self.chunk = int(chunk)
         self.threshold = int(threshold)
         self.b_raw = registrar.domain('b_raw')
+        # via-sphere: route through the unit authalic sphere (c_sph) instead
+        # of the source ellipsoid ECEF (c_ell).
+        self._via = bool(getattr(registrar, 'via_sphere', False))
+        self._cart = 'c_sph' if self._via else 'c_ell'
         # Cached for process workers (they can't share the parent's objects)
-        self.accuracy = registrar.projection('oct_ell').accuracy
+        self.accuracy = registrar.projection(
+            'oct_sph' if self._via else 'oct_ell').accuracy
+        geo = registrar.ellipsoid
+        self._ell = (geo.a, geo.f, registrar.ellipsoid_name)
 
     def set_parallel(self, *, workers=None, chunk=None, threshold=None):
         """Configure parallel execution."""
@@ -120,7 +136,7 @@ class GCDBraw(Projection):
 
         # 2. Serial: small batch, or always serial inside PostgreSQL
         if n < self.threshold or _IN_POSTGRES:
-            return self.reg.project(arr, ['g_gcd', 'c_ell', 'c_oct', 'b_raw'])
+            return self.reg.project(arr, ['g_gcd', self._cart, 'c_oct', 'b_raw'])
 
         # 3. Large batch outside PostgreSQL: process pool
         xy, oid = _project_gcd_to_braw_parallel(
@@ -128,8 +144,10 @@ class GCDBraw(Projection):
             accuracy=self.accuracy,
             workers=self.workers or 0,
             chunk=self.chunk,
+            ellipsoid=self._ell,
+            via_sphere=self._via,
         )
         return Points(xy, self.fwd_cs, oid=oid, samples=arr.samples)
 
     def backward(self, arr: Points) -> Points:
-        return self.reg.project(arr, ['b_raw', 'c_oct', 'c_ell', 'g_gcd'])
+        return self.reg.project(arr, ['b_raw', 'c_oct', self._cart, 'g_gcd'])

@@ -41,8 +41,11 @@ def test_project_unregistered_chain_raises():
     reg = Registrar()
     g = reg.domain('g_gcd')
     src = Points(np.array([[51.0, 0.0]]), domain=g)
+    # g_gcd↔c_sph is now a registered pair (AuthalicGCD, the via-sphere
+    # boundary); w_oct is only reachable from b_oct, so this stays invalid.
+    _ = reg.domain('w_oct')
     with pytest.raises(ValueError):
-        reg.project(src, ['g_gcd', 'c_sph'])     # c_sph has no projection edge
+        reg.project(src, ['g_gcd', 'w_oct'])     # w_oct has no g_gcd edge
 
 
 # ---------------------------------------------------------------------------

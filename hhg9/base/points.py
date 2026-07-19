@@ -108,7 +108,7 @@ class Points:
         if self.coords is not None:
             if self.domain.name in ['g_gcd']:
                 (y_min, x_min), (y_max, x_max) = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
-            elif self.domain.name in ['c_ell', 'c_oct']:
+            elif self.domain.name in ['c_ell', 'c_oct', 'c_sph']:
                 p_min, p_max = np.min(self.coords, axis=0), np.max(self.coords, axis=0)
                 return p_min, p_max
             else:

@@ -78,100 +78,100 @@ def _jacobi_all(x, n_max, alpha):
     return out
 
 
-def _pkdo_vandermonde(xy, degree):
-    x, y = xy[:, 0], xy[:, 1]
+# def _pkdo_vandermonde(xy, degree):
+#     x, y = xy[:, 0], xy[:, 1]
+#
+#     # 1. Map to Duffy Coordinates
+#     r = np.sqrt(2) * x + (np.sqrt(6) / 3) * y - 1.0 / 3.0
+#     s = (-2.0 * np.sqrt(6) / 3) * y - 1.0 / 3.0
+#
+#     # CRITICAL: Clamp s and calculate 'a' safely
+#     s_clamped = np.clip(s, -1.0, 1.0 - 1e-15)
+#     # Clamp 'a' to [-1, 1] to prevent Degree 80 explosion
+#     a = np.clip(2.0 * (1.0 + r) / (1.0 - s_clamped) - 1.0, -1.0, 1.0)
+#
+#     N = len(x)
+#     n_basis = (degree + 1) * (degree + 2) // 2
+#     V = np.zeros((N, n_basis))
+#
+#     # 2. Precompute Legendre P_p(a)
+#     poly_a = [np.ones(N), a]
+#     for p in range(2, degree + 1):
+#         # Using the standard recurrence; because |a| <= 1, poly_a stays <= 1.0
+#         p_val = ((2 * p - 1) * a * poly_a[-1] - (p - 1) * poly_a[-2]) / p
+#         poly_a.append(p_val)
+#
+#     col = 0
+#     for p in range(degree + 1):
+#         # 3. Duffy weight stays stable because s is clamped
+#         Jp_weighted = poly_a[p] * ((1.0 - s_clamped) / 2.0) ** p
+#
+#         alpha = 2 * p + 1
+#         beta = 0
+#
+#         # 4. Inner Recurrence for P_q^{(alpha, 0)}(s)
+#         q_prev2 = np.ones(N)
+#         q_prev1 = 0.5 * (alpha - beta + (alpha + beta + 2) * s_clamped)
+#
+#         # Norm for q=0
+#         norm_0 = np.sqrt((2 * p + 1) * (p + 1) / 2.0)
+#         V[:, col] = norm_0 * Jp_weighted * q_prev2
+#         col += 1
+#
+#         if degree - p >= 1:
+#             norm_1 = np.sqrt((2 * p + 1) * (p + 2) / 2.0)
+#             V[:, col] = norm_1 * Jp_weighted * q_prev1
+#             col += 1
+#
+#         for q in range(2, degree + 1 - p):
+#             # Standard Jacobi coefficients
+#             # We use the float64 safe form to prevent intermediate overflows
+#             n = q
+#             apb = alpha + beta
+#             ns2 = 2 * n + apb
+#
+#             c = 2 * n * (n + apb) * (ns2 - 2)
+#             d = (ns2 - 1) * (alpha ** 2 - beta ** 2)
+#             e = (ns2 - 1) * ns2 * (ns2 - 2)
+#             f = 2 * (n + alpha - 1) * (n + beta - 1) * ns2
+#
+#             q_curr = ((d + e * s_clamped) * q_prev1 - f * q_prev2) / c
+#
+#             norm = np.sqrt((2 * p + 1) * (p + q + 1) / 2.0)
+#             V[:, col] = norm * Jp_weighted * q_curr
+#
+#             q_prev2, q_prev1 = q_prev1, q_curr
+#             col += 1
+#     return V
 
-    # 1. Map to Duffy Coordinates
-    r = np.sqrt(2) * x + (np.sqrt(6) / 3) * y - 1.0 / 3.0
-    s = (-2.0 * np.sqrt(6) / 3) * y - 1.0 / 3.0
 
-    # CRITICAL: Clamp s and calculate 'a' safely
-    s_clamped = np.clip(s, -1.0, 1.0 - 1e-15)
-    # Clamp 'a' to [-1, 1] to prevent Degree 80 explosion
-    a = np.clip(2.0 * (1.0 + r) / (1.0 - s_clamped) - 1.0, -1.0, 1.0)
-
-    N = len(x)
-    n_basis = (degree + 1) * (degree + 2) // 2
-    V = np.zeros((N, n_basis))
-
-    # 2. Precompute Legendre P_p(a)
-    poly_a = [np.ones(N), a]
-    for p in range(2, degree + 1):
-        # Using the standard recurrence; because |a| <= 1, poly_a stays <= 1.0
-        p_val = ((2 * p - 1) * a * poly_a[-1] - (p - 1) * poly_a[-2]) / p
-        poly_a.append(p_val)
-
-    col = 0
-    for p in range(degree + 1):
-        # 3. Duffy weight stays stable because s is clamped
-        Jp_weighted = poly_a[p] * ((1.0 - s_clamped) / 2.0) ** p
-
-        alpha = 2 * p + 1
-        beta = 0
-
-        # 4. Inner Recurrence for P_q^{(alpha, 0)}(s)
-        q_prev2 = np.ones(N)
-        q_prev1 = 0.5 * (alpha - beta + (alpha + beta + 2) * s_clamped)
-
-        # Norm for q=0
-        norm_0 = np.sqrt((2 * p + 1) * (p + 1) / 2.0)
-        V[:, col] = norm_0 * Jp_weighted * q_prev2
-        col += 1
-
-        if degree - p >= 1:
-            norm_1 = np.sqrt((2 * p + 1) * (p + 2) / 2.0)
-            V[:, col] = norm_1 * Jp_weighted * q_prev1
-            col += 1
-
-        for q in range(2, degree + 1 - p):
-            # Standard Jacobi coefficients
-            # We use the float64 safe form to prevent intermediate overflows
-            n = q
-            apb = alpha + beta
-            ns2 = 2 * n + apb
-
-            c = 2 * n * (n + apb) * (ns2 - 2)
-            d = (ns2 - 1) * (alpha ** 2 - beta ** 2)
-            e = (ns2 - 1) * ns2 * (ns2 - 2)
-            f = 2 * (n + alpha - 1) * (n + beta - 1) * ns2
-
-            q_curr = ((d + e * s_clamped) * q_prev1 - f * q_prev2) / c
-
-            norm = np.sqrt((2 * p + 1) * (p + q + 1) / 2.0)
-            V[:, col] = norm * Jp_weighted * q_curr
-
-            q_prev2, q_prev1 = q_prev1, q_curr
-            col += 1
-    return V
-
-
-def _o_pkdo_vandermonde(xy, degree):
-    """Vandermonde matrix for L2-orthonormal PKDO basis on b_oct triangle.
-    C_{p,q} = sqrt((2p+1)(p+q+1)/2).  O(degree) Python loops, all inner ops vectorised.
-    """
-    x, y = xy[:, 0], xy[:, 1]
-    r = np.sqrt(2) * x + (np.sqrt(6) / 3) * y - 1.0 / 3.0
-    s = (-2.0 * np.sqrt(6) / 3) * y - 1.0 / 3.0
-    N = len(r)
-    n_basis = (degree + 1) * (degree + 2) // 2
-    V = np.zeros((N, n_basis))
-    s_safe = np.minimum(s, 1.0 - 1e-14)
-    a = 2.0 * (1.0 + r) / (1.0 - s_safe) - 1.0
-
-    Jp_all = _jacobi_all(a, degree, 0)          # (degree+1, N)  P_p^(0,0)(a)
-    half_oms = (1.0 - s_safe) / 2.0             # (N,)
-    hp = np.ones(N)                             # (1-s)/2)^p, starts at p=0
-
-    col = 0
-    for p in range(degree + 1):
-        max_q = degree - p
-        Jph = Jp_all[p] * hp                             # (N,)
-        Jq_all = _jacobi_all(s, max_q, 2 * p + 1)       # (max_q+1, N)
-        norms = np.sqrt((2 * p + 1) * (p + np.arange(max_q + 1) + 1) / 2.0)  # (max_q+1,)
-        V[:, col:col + max_q + 1] = (norms[:, None] * Jq_all * Jph).T
-        col += max_q + 1
-        hp = hp * half_oms                               # accumulate (1-s)/2)^p
-    return V
+# def _o_pkdo_vandermonde(xy, degree):
+#     """Vandermonde matrix for L2-orthonormal PKDO basis on b_oct triangle.
+#     C_{p,q} = sqrt((2p+1)(p+q+1)/2).  O(degree) Python loops, all inner ops vectorised.
+#     """
+#     x, y = xy[:, 0], xy[:, 1]
+#     r = np.sqrt(2) * x + (np.sqrt(6) / 3) * y - 1.0 / 3.0
+#     s = (-2.0 * np.sqrt(6) / 3) * y - 1.0 / 3.0
+#     N = len(r)
+#     n_basis = (degree + 1) * (degree + 2) // 2
+#     V = np.zeros((N, n_basis))
+#     s_safe = np.minimum(s, 1.0 - 1e-14)
+#     a = 2.0 * (1.0 + r) / (1.0 - s_safe) - 1.0
+#
+#     Jp_all = _jacobi_all(a, degree, 0)          # (degree+1, N)  P_p^(0,0)(a)
+#     half_oms = (1.0 - s_safe) / 2.0             # (N,)
+#     hp = np.ones(N)                             # (1-s)/2)^p, starts at p=0
+#
+#     col = 0
+#     for p in range(degree + 1):
+#         max_q = degree - p
+#         Jph = Jp_all[p] * hp                             # (N,)
+#         Jq_all = _jacobi_all(s, max_q, 2 * p + 1)       # (max_q+1, N)
+#         norms = np.sqrt((2 * p + 1) * (p + np.arange(max_q + 1) + 1) / 2.0)  # (max_q+1,)
+#         V[:, col:col + max_q + 1] = (norms[:, None] * Jq_all * Jph).T
+#         col += max_q + 1
+#         hp = hp * half_oms                               # accumulate (1-s)/2)^p
+#     return V
 
 
 class WarpTolerance:
@@ -182,6 +182,56 @@ class WarpTolerance:
     NORM = 1e-14  # ~0.25 mm  — recommended production default
 
 
+def _unfold_fund_face(f_src, f_tgt, layer):
+    """Unfold a D3 fundamental-domain warp field (1/6 wedge) onto the full
+    mode-0 face lattice.
+
+    The fundamental artifact (`*_fund_warp_data.npz`) stores the trained
+    field on the (2 3 4) Möbius wedge only — corners C (pole face corner),
+    M (lateral-edge midpoint), G (centroid). The full-face field is its
+    orbit under the six D3 operations of the face triangle; the unfold is
+    lossless because the trained field is D3-exact by construction,
+    x'(T v) = T x'(v). Mirrors experimental/sinkhorn/pack_unfold_l6.py.
+    """
+    from scipy.spatial import cKDTree
+    from hhg9.h9.polygon import tri_mesh
+
+    r3 = np.sqrt(3.0)
+    c = np.array([0.0, H9K.limits.VF])            # pole face corner
+    b = np.array([H9K.limits.TR, H9K.limits.VC])  # right equatorial corner
+    m = 0.5 * (c + b)                             # lateral-edge midpoint
+    u2 = m / np.linalg.norm(m)                    # G–M median direction
+    n2 = np.array([-u2[1], u2[0]])
+    if n2 @ c < 0:
+        n2 = -n2                                  # wedge side: n2·p >= 0
+    r120 = np.array([[-0.5, -r3 / 2.0], [r3 / 2.0, -0.5]])
+    s_p = np.diag([-1.0, 1.0])
+    group = [np.eye(2), r120, r120.T, s_p, s_p @ r120, s_p @ r120.T]
+
+    verts = tri_mesh(layer, 0)[0]
+    tree = cKDTree(f_src)
+    tgt = np.full_like(verts, np.nan)
+    todo = np.ones(len(verts), dtype=bool)
+    tol = 1e-9
+    for T in group:
+        if not todo.any():
+            break
+        img = verts[todo] @ T.T                   # row form of T @ v
+        ok = (img[:, 0] >= -tol) & (img @ n2 >= -tol)
+        if not ok.any():
+            continue
+        dist, j = tree.query(img[ok], k=1)
+        good = dist < 1e-8
+        ids = np.flatnonzero(todo)[ok][good]
+        # x'(v) = T⁻¹ x'(T v); row form: x'(Tv) @ T (T orthogonal)
+        tgt[ids] = f_tgt[j[good]] @ T
+        todo[ids] = False
+    if todo.any() or np.isnan(tgt).any():
+        raise ValueError(f'{f_src.shape[0]}-pt fundamental unfold incomplete: '
+                         f'{int(todo.sum())} face vertices unmatched')
+    return verts, tgt
+
+
 class AuthalicWarp:
     def __init__(self, file_name=None, interp='ct', tolerance=WarpTolerance.FINE):
         # Load Data
@@ -190,21 +240,28 @@ class AuthalicWarp:
             return
         self.file_name = file_name
 
-        if interp == 'pkdo':
-            repo = np.load(file_name, allow_pickle=True)
-            degree = int(repo['degree'])
-            cx, cy = repo['cx'], repo['cy']
-            self.fwd_dx = lambda xy, _d=degree, _cx=cx: _pkdo_vandermonde(xy, _d) @ _cx
-            self.fwd_dy = lambda xy, _d=degree, _cy=cy: _pkdo_vandermonde(xy, _d) @ _cy
-            # NR inverse: identity seed is safe — max displacement ~0.009 b_oct units
-            self.inv_linear = lambda pts: pts.copy()
-            self.inv_nearest = lambda pts: pts.copy()
-            return
+        # if interp == 'pkdo':
+        #     repo = np.load(file_name, allow_pickle=True)
+        #     degree = int(repo['degree'])
+        #     cx, cy = repo['cx'], repo['cy']
+        #     self.fwd_dx = lambda xy, _d=degree, _cx=cx: _pkdo_vandermonde(xy, _d) @ _cx
+        #     self.fwd_dy = lambda xy, _d=degree, _cy=cy: _pkdo_vandermonde(xy, _d) @ _cy
+        #     # NR inverse: identity seed is safe — max displacement ~0.009 b_oct units
+        #     self.inv_linear = lambda pts: pts.copy()
+        #     self.inv_nearest = lambda pts: pts.copy()
+        #     return
 
         # warp below.
         repo = np.load(file_name, allow_pickle=True)
-        self.src = repo['source_pts']  # Regular Grid (a_p)
-        self.dst = repo['target_pts']  # Deformed Grid (x_prime)
+        if 'corners' in repo.files:
+            # Fundamental-domain artifact (1/6 wedge): unfold to full face.
+            self.src, self.dst = _unfold_fund_face(
+                np.asarray(repo['source_pts'], dtype=np.float64),
+                np.asarray(repo['target_pts'], dtype=np.float64),
+                int(repo['layer']))
+        else:
+            self.src = repo['source_pts']  # Regular Grid (a_p)
+            self.dst = repo['target_pts']  # Deformed Grid (x_prime)
         repo.close()
 
         # --- GHOST ROW PADDING (Equator Stabilization) ---
@@ -607,23 +664,47 @@ class AuthalicWarp:
                 dye = np.where(se > 0.0, dye * se, 0.0)
             return dxe, dye
 
+        # Newton with converged-point retirement, matching libhex9's
+        # warp_undo (core/h9_warp.h): quadratic convergence from the seed
+        # means most points converge in 2-4 iterations, so the convergence
+        # check runs on the pre-step error, BEFORE the Jacobian — retiring
+        # a point costs no further CT evaluations (3 evaluation-pairs per
+        # iteration otherwise, the dominant encode cost; the historic
+        # fixed 25×3 loop is what made Python encode warp-bound).
+        tol = float(self.tolerance)
+        act = np.flatnonzero(~edge_done)
         for _ in range(iterations):
-            dx, dy = _eval_d(curr)
+            if act.size == 0:
+                break
+            sub = curr[act]
+            tgt = target[act]
+            dx, dy = _eval_d(sub)
 
             # If the guess drifted off the interpolation hull, snap it back.
             bad_mask = np.isnan(dx)
             if np.any(bad_mask):
-                curr[bad_mask] = self.inv_nearest(target[bad_mask])
-                dx, dy = _eval_d(curr)
+                sub[bad_mask] = self.inv_nearest(tgt[bad_mask])
+                curr[act] = sub
+                dx, dy = _eval_d(sub)
 
-            error = curr + np.stack([dx, dy], axis=1) - target
+            error = sub + np.stack([dx, dy], axis=1) - tgt
+
+            # Retirement is decided on the PRE-step error (L1, libhex9's
+            # criterion) but applied AFTER the step below: the final Newton
+            # step quadratically crushes a ≤tol residual to the machine
+            # floor, so retired points carry no tolerance-sized tail.
+            # (libhex9 breaks before stepping — saves one Jacobian, leaves
+            # ≤1e-15 residual; here the nm round-trip budget wins.)
+            # Hull-snapped points stay live regardless.
+            l1 = np.abs(error[:, 0]) + np.abs(error[:, 1])
+            keep = (l1 >= tol) | bad_mask
 
             # Full Newton step: (I + J_D) · delta = -error, solved via 2×2 Cramer.
-            # Two extra evaluations: perturb curr in x then y to estimate J_D.
+            # Two extra evaluations: perturb in x then y to estimate J_D.
             _h = 1e-7
-            cp_x = curr.copy()
+            cp_x = sub.copy()
             cp_x[:, 0] += _h
-            cp_y = curr.copy()
+            cp_y = sub.copy()
             cp_y[:, 1] += _h
             dx_px, dy_px = _eval_d(cp_x)
             dx_py, dy_py = _eval_d(cp_y)
@@ -637,10 +718,7 @@ class AuthalicWarp:
             denom = np.where(safe, det, 1.0)
             delta_x = np.where(safe, -(d * ex - b * ey) / denom, -ex)
             delta_y = np.where(safe, -(a * ey - c * ex) / denom, -ey)
-            if np.any(edge_done):
-                delta_x[edge_done] = 0.0
-                delta_y[edge_done] = 0.0
-            curr += np.stack([delta_x, delta_y], axis=1)
+            sub = sub + np.stack([delta_x, delta_y], axis=1)
 
             # Handle out-of-scope or non-finite Newton steps.
             # NaN coordinates fail in_scope (NaN comparisons → False).
@@ -648,21 +726,25 @@ class AuthalicWarp:
             # snapping them to inv_nearest (the apex) breaks convergence.
             # Strategy: NaN → inv_nearest fallback; merely out-of-scope → project
             # onto the DOWN triangle boundary so Newton can continue from there.
-            ẋ = H9K.radical.R3 * curr[:, 0]
-            bad = ~in_scope(ẋ, curr[:, 1], 0)
+            ẋ = H9K.radical.R3 * sub[:, 0]
+            bad = ~in_scope(ẋ, sub[:, 1], 0)
             if np.any(bad):
-                nan_bad = bad & ~np.isfinite(curr).all(axis=1)
+                nan_bad = bad & ~np.isfinite(sub).all(axis=1)
                 oob_bad = bad & ~nan_bad
                 if np.any(nan_bad):
-                    curr[nan_bad] = self.inv_nearest(target[nan_bad])
+                    sub[nan_bad] = self.inv_nearest(tgt[nan_bad])
                 if np.any(oob_bad):
                     _xd = ẋ[oob_bad]
-                    _y = curr[oob_bad, 1]
+                    _y = sub[oob_bad, 1]
                     _W = H9K.Ẇ
                     _y = np.maximum(_y, _xd - _W)   # right lateral edge: y - ẋ >= -Ẇ
                     _y = np.maximum(_y, -_xd - _W)  # left lateral edge:  y + ẋ >= -Ẇ
                     _y = np.minimum(_y, H9K.VC)     # ceiling
-                    curr[oob_bad, 1] = _y
+                    sub[oob_bad, 1] = _y
+                keep = keep | bad                   # repaired points stay live
+
+            curr[act] = sub
+            act = act[keep]
 
         curr[:, 1] *= mode
 
@@ -758,11 +840,23 @@ class OctahedralBarycentric(CompositeDomain):
         # Warp source: the F6-retrained authalic blob, built LAZILY (see the
         # `warp` property). The legacy pkdo / 'linear' warps are fossils — removed.
         pkg = "hhg9.data"
-        layer = 5
-        ell = registrar.ellipsoid_name
-        data = resources.files(pkg).joinpath(f"{ell}_l{layer}_warp_data.npz")
-        if not data.exists():
-            data = resources.files(pkg).joinpath(f"WGS84_l{layer}_warp_data.npz")
+        # via-sphere: the engine is the unit authalic sphere whatever the
+        # source ellipsoid, so the warp is the Sphere-trained field.
+        ell = ('Sphere' if getattr(registrar, 'via_sphere', False)
+               else registrar.ellipsoid_name)
+        # Preference order: deepest available field for this ellipsoid, the
+        # compact fundamental-domain artifact ahead of the full-face unfold
+        # (AuthalicWarp unfolds 1/6 → face on load); WGS84 l5 as the final
+        # fallback for ellipsoids with no trained field of their own.
+        data = None
+        for name in (f"{ell}_l6_fund_warp_data.npz",
+                     f"{ell}_l6_warp_data.npz",
+                     f"{ell}_l5_warp_data.npz",
+                     "WGS84_l5_warp_data.npz"):
+            cand = resources.files(pkg).joinpath(name)
+            if cand.exists():
+                data = cand
+                break
         self._warp_spec = (data, None)
 
         registrar.register_bridge(['c_oct', 'b_raw', 'b_oct'])
@@ -772,20 +866,38 @@ class OctahedralBarycentric(CompositeDomain):
         # AHEAD of the bridge above (a direct projection beats a bridge in
         # _check_chain). It honours no_lib() by falling through to that exact
         # bridge, so the pure-Python path stays the canonical reference.
-        if self._lib is not None:
+        # libhex9 computes the WGS84 + WGS84-warp pipeline only: never
+        # register it for other ellipsoids or the via-sphere route.
+        if (self._lib is not None and registrar.ellipsoid_name == 'WGS84'
+                and not getattr(registrar, 'via_sphere', False)):
             from hhg9.projections.gcd_boct_lib import GcdBoctLib
             GcdBoctLib(registrar)
+        else:
+            self.lib_enabled = False
+
+    # Process-wide built-warp cache. AuthalicWarp is immutable once built,
+    # and building is expensive (unfold + Clough-Tocher on up to 2.4M pts:
+    # ~90 s for the L6 sphere field), so identical (file, method) specs
+    # across registrars — test suites, examples, per-call registrar
+    # construction — share one instance.
+    _warp_cache: dict = {}
 
     @property
     def warp(self):
         """The AuthalicWarp, or None when disabled. Built lazily on first use
-        (the CT/Newton solver is expensive) so the lib path never pays for it.
-        Read live by BrawBoct on the pure-Python path."""
+        (the CT/Newton solver is expensive) so the lib path never pays for it,
+        and cached process-wide by (file, method). Read live by BrawBoct on
+        the pure-Python path."""
         if not self.warp_enabled or self._warp_spec is None:
             return None
         if self._warp_obj is None:
             file, method = self._warp_spec
-            self._warp_obj = AuthalicWarp(file, method)
+            key = (str(file), method)
+            obj = OctahedralBarycentric._warp_cache.get(key)
+            if obj is None:
+                obj = AuthalicWarp(file, method)
+                OctahedralBarycentric._warp_cache[key] = obj
+            self._warp_obj = obj
             self._warp_obj.domain = self
         return self._warp_obj
 

@@ -45,7 +45,15 @@ B_DLL = np.array([
 @pytest.fixture(scope="module")
 def reg():
     from hhg9 import Registrar
-    return Registrar()
+    # Pinned to the CLASSIC chain: the expectations below (octant spans of
+    # clipped meshes, seam-vertex flag sets) were derived under the
+    # WGS84-trained warp; the via-sphere default shifts cell membership at
+    # clip boundaries by the warp-field difference. The local-net logic is
+    # chain-agnostic — revisit expectations when local-net work resumes.
+    r = Registrar()
+    r.set_ellipsoid(a=6378137.0, inv_f=298.257223563, name='WGS84',
+                    via_sphere=False)
+    return r
 
 
 @pytest.fixture(scope="module")
