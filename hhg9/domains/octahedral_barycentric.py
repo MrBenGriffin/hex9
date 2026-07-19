@@ -233,9 +233,11 @@ def _unfold_fund_face(f_src, f_tgt, layer):
 
 
 class AuthalicWarp:
-    def __init__(self, file_name=None, interp='ct', tolerance=WarpTolerance.FINE):
+    def __init__(self, file_name=None, interp='ct', tolerance=WarpTolerance.FINE,
+                 fold=True):
         # Load Data
         self.tolerance = tolerance
+        self._fold_mode = False
         if file_name is None:
             return
         self.file_name = file_name
@@ -254,15 +256,23 @@ class AuthalicWarp:
         # warp below.
         repo = np.load(file_name, allow_pickle=True)
         if 'corners' in repo.files:
-            # Fundamental-domain artifact (1/6 wedge): unfold to full face.
-            self.src, self.dst = _unfold_fund_face(
-                np.asarray(repo['source_pts'], dtype=np.float64),
-                np.asarray(repo['target_pts'], dtype=np.float64),
-                int(repo['layer']))
+            # Fundamental-domain artifact (1/6 wedge).
+            f_src = np.asarray(repo['source_pts'], dtype=np.float64)
+            f_tgt = np.asarray(repo['target_pts'], dtype=np.float64)
+            f_cls = np.asarray(repo['edge_class'], dtype=np.uint8)
+            layer = int(repo['layer'])
+            repo.close()
+            if fold and interp != 'linear':
+                # Wedge-CT: interpolate on the wedge itself, fold queries in.
+                self._build_fold(f_src, f_tgt, f_cls)
+                return
+            # Legacy/reference path: unfold to the full face and continue
+            # through the face-level build below.
+            self.src, self.dst = _unfold_fund_face(f_src, f_tgt, layer)
         else:
             self.src = repo['source_pts']  # Regular Grid (a_p)
             self.dst = repo['target_pts']  # Deformed Grid (x_prime)
-        repo.close()
+            repo.close()
 
         # --- GHOST ROW PADDING (Equator Stabilization) ---
         diff = self.dst - self.src
@@ -505,10 +515,293 @@ class AuthalicWarp:
             self.fwd_dx = fwd_dx
             self.fwd_dy = fwd_dy
 
+        # Paired evaluation — the fold path computes both components in one
+        # pass (a rotated chart mixes them); the face path just wraps the two.
+        self.fwd_d = lambda xy: (self.fwd_dx(xy), self.fwd_dy(xy))
+
         # 2. Inverse Guesser (Linear + Nearest Backup)
         # This provides the "seed" for the solver.
         self.inv_linear = LinearNDInterpolator(self.dst, self.src)
         self.inv_nearest = NearestNDInterpolator(self.dst, self.src)
+
+    def _build_fold(self, src, dst, cls):
+        """Wedge-CT build (h9_proj L6_MOBIUS_WARP.md §3.7): build the CT
+        interpolators on the fundamental wedge plus mirror halos and fold
+        every query into the wedge, instead of unfolding the field onto the
+        full face. ~6× fewer points (2.39M → ~400k + halo), and evaluation
+        D3-exactness holds by construction — the six copies cannot drift.
+
+        Wedge sides (edge_class): 1 = C–G median (x = 0, internal mirror),
+        2 = G–M median (internal mirror), 3 = C–M half lateral edge (octant
+        seam), 4 = corner (pinned). All halo images follow one rule,
+        q = F + R·(p − F), δ(q) = R·δ(p), with R the side's reflection and
+        F a point on its line: for the internal mirrors that is the D3
+        symmetry itself; for the seam edge it reproduces the F6 ghost
+        construction (reflect position, negate the edge-normal δ component).
+        The wedge never touches the equator, so the face-level equator ghost
+        machinery has no analogue here: queries beyond any face boundary
+        fold into the seam-edge halo.
+        """
+        # --- wedge geometry (matches experimental/sinkhorn/stage3b_fund_l6) ---
+        _R3 = H9K.radical.R3
+        c_ = np.array([0.0, H9K.limits.VF])            # pole face corner
+        b_ = np.array([H9K.limits.TR, H9K.limits.VC])  # right equatorial corner
+        m_ = 0.5 * (c_ + b_)                           # lateral-edge midpoint
+        g_ = np.zeros(2)                               # face centroid
+        u2 = m_ / np.linalg.norm(m_)                   # G–M median direction
+        n2 = np.array([-u2[1], u2[0]])
+        if n2 @ c_ < 0:
+            n2 = -n2                                   # wedge side: p·n2 ≥ 0
+        u3 = (b_ - c_) / np.linalg.norm(b_ - c_)       # lateral-edge direction
+        n3 = np.array([-u3[1], u3[0]])
+        if n3 @ (g_ - c_) < 0:
+            n3 = -n3                                   # interior: (p−C)·n3 ≥ 0
+        r120 = np.array([[-0.5, -_R3 / 2.0], [_R3 / 2.0, -0.5]])
+        s1 = np.diag([-1.0, 1.0])                      # x = 0 mirror
+        s2 = 2.0 * np.outer(u2, u2) - np.eye(2)        # G–M median mirror
+        s3 = 2.0 * np.outer(u3, u3) - np.eye(2)        # seam-edge reflection
+        # Same op order as _unfold_fund_face — first wedge test that passes
+        # wins, so on-line fold ties resolve deterministically.
+        group = np.stack([np.eye(2), r120, r120.T, s1, s1 @ r120, s1 @ r120.T])
+
+        # --- exact on-line data (idempotent — training already snapped) ---
+        dst = dst.copy()
+        m = cls == 1
+        dst[m, 0] = 0.0
+        m = cls == 2
+        dst[m] = (dst[m] @ u2)[:, None] * u2
+        m = cls == 3
+        dst[m] = c_ + ((dst[m] - c_) @ u3)[:, None] * u3
+        m = cls == 4
+        dst[m] = src[m]
+        self.src, self.dst = src, dst
+        diff = dst - src
+
+        # --- side halos (strict bands: on-line points reflect onto
+        # themselves; the duplicates would leave Qhull's tie-break to pick
+        # arbitrary diagonals — see the equator note in the face build) ---
+        d1 = src[:, 0]
+        d2 = src @ n2
+        d3 = (src - c_) @ n3
+        GHOST_BAND = 0.05
+        h_src, h_diff = [src], [diff]
+        # (source indices, col-form op A) per halo batch — consumed by the
+        # exact-gradient overwrite after the CT build (see below).
+        halo_prov = []
+        for d, refl, f0 in ((d1, s1, None), (d2, s2, None), (d3, s3, c_)):
+            band = (d > 1e-12) & (d < GHOST_BAND)
+            if not np.any(band):
+                continue
+            p = src[band] if f0 is None else src[band] - f0
+            q = p @ refl                               # refl is symmetric
+            h_src.append(q if f0 is None else q + f0)
+            h_diff.append(diff[band] @ refl)
+            halo_prov.append((np.flatnonzero(band), refl))
+
+        # --- corner orbits: the two side bands fill only the two sectors
+        # adjacent to each corner; close the two incident reflections into
+        # their dihedral group about the corner (order 12 at C, 6 at G, 4 at
+        # M) and fill the back sectors, so the CT gradient estimate at
+        # near-corner vertices is fully symmetric (cf. face-level corner
+        # orbit padding). Orbit images are compositions of valid mirror/seam
+        # continuations, so they are correct field continuations.
+        # Interior points cannot collide (each image lands strictly inside a
+        # sector no other op touches); the ON-LINE points' orbits complete
+        # the back-sector boundary RAYS and DO collide (their stabiliser
+        # makes several ops agree, and the side bands already hold their
+        # first-generation images), so they are position-deduped — first op
+        # wins, deterministically. Without the ray points, Qhull spans the
+        # gaps with filler slivers whose centroids leak into the g-values of
+        # in-wedge triangles at the corner (measured ~3e-6 field wobble at
+        # the corner discs, and a C-mesh mismatch — the libhex9 lattice
+        # enumeration has no fillers).
+        interior = (d1 > 1e-12) & (d2 > 1e-12) & (d3 > 1e-12)
+
+        def _qkeys(a):
+            return np.rint(np.ldexp(a, 34)).astype(np.int64)
+
+        present = set(map(tuple, _qkeys(np.vstack(h_src))))
+        for f0, sa, sb in ((c_, s1, s3), (g_, s1, s2), (m_, s2, s3)):
+            elems = [np.eye(2)]
+            frontier = [np.eye(2)]
+            while frontier:
+                nxt = []
+                for e in frontier:
+                    for r in (sa, sb):
+                        q = r @ e
+                        if not any(np.abs(q - x).max() < 1e-9 for x in elems):
+                            elems.append(q)
+                            nxt.append(q)
+                frontier = nxt
+            extras = [t for t in elems[1:]
+                      if np.abs(t - sa).max() > 1e-9
+                      and np.abs(t - sb).max() > 1e-9]
+            r_c = np.linalg.norm(src - f0, axis=1)
+            near = interior & (r_c < GHOST_BAND)
+            if np.any(near):
+                rel = src[near] - f0
+                near_idx = np.flatnonzero(near)
+                for t in extras:
+                    img = f0 + rel @ t.T
+                    h_src.append(img)
+                    h_diff.append(diff[near] @ t.T)
+                    halo_prov.append((near_idx, t))
+                    present.update(map(tuple, _qkeys(img)))
+            near_line = (~interior) & (r_c > 1e-12) & (r_c < GHOST_BAND)
+            nl_idx = np.flatnonzero(near_line)
+            if nl_idx.size:
+                rel_l = src[nl_idx] - f0
+                for t in extras:
+                    img = f0 + rel_l @ t.T
+                    kq = _qkeys(img)
+                    keep = np.fromiter((tuple(row) not in present for row in kq),
+                                       dtype=bool, count=len(kq))
+                    if not keep.any():
+                        continue
+                    h_src.append(img[keep])
+                    h_diff.append(diff[nl_idx[keep]] @ t.T)
+                    halo_prov.append((nl_idx[keep], t))
+                    present.update(map(tuple, kq[keep]))
+        padded_src = np.vstack(h_src)
+        padded_diff = np.vstack(h_diff)
+
+        # --- interpolators (same tol doctrine as the face build) ---
+        nn_dx = NearestNDInterpolator(src, diff[:, 0])
+        nn_dy = NearestNDInterpolator(src, diff[:, 1])
+        ct_dx = CloughTocher2DInterpolator(padded_src, padded_diff[:, 0],
+                                           tol=1e-12, maxiter=2000)
+        ct_dy = CloughTocher2DInterpolator(padded_src, padded_diff[:, 1],
+                                           tol=1e-12, maxiter=2000)
+        self.ct_dx, self.ct_dy = ct_dx, ct_dy
+
+        # --- fold-C1 / seam-tangency gradient projection ---
+        # A CT triangle depends only on its three vertices' values and
+        # gradients, so the folded field is C1 across an internal mirror
+        # line iff the on-line vertex gradients satisfy the mirror
+        # constraints exactly:
+        #   t̂·∇(δ·n̂) = 0  (δ·n̂ ≡ 0 along the line — Hermite tangency), and
+        #   n̂·∇(δ·t̂) = 0  (δ·t̂ is even across the line).
+        # The seam edge keeps the face-level contract: tangency row only.
+        # Row vectors act on G = (∇δx, ∇δy) ∈ R⁴; the two rows of a mirror
+        # line are n̂⊗t̂ and t̂⊗n̂ — orthonormal, so projection is subtraction.
+        g_dx = ct_dx.grad
+        g_dy = ct_dy.grad
+
+        def _rows(t, n, seam):
+            r1 = np.array([n[0] * t[0], n[0] * t[1], n[1] * t[0], n[1] * t[1]])
+            if seam:
+                return [r1]
+            r2 = np.array([t[0] * n[0], t[0] * n[1], t[1] * n[0], t[1] * n[1]])
+            return [r1, r2]
+
+        lines = {1: _rows(np.array([0.0, 1.0]), np.array([1.0, 0.0]), False),
+                 2: _rows(u2, n2, False),
+                 3: _rows(u3, n3, True)}
+        for k, rows in lines.items():
+            idx = np.flatnonzero(cls == k)
+            if idx.size == 0:
+                continue
+            gm = np.concatenate([g_dx[idx, 0], g_dy[idx, 0]], axis=1)
+            for r in rows:
+                gm -= np.outer(gm @ r, r)
+            g_dx[idx, 0] = gm[:, :2]
+            g_dy[idx, 0] = gm[:, 2:]
+        # Corners sit on two lines: joint null-space projection (pinv — the
+        # four mirror rows at G are rank-3).
+        for f0, ks in ((c_, (1, 3)), (g_, (1, 2)), (m_, (2, 3))):
+            ki = np.flatnonzero(np.linalg.norm(src - f0, axis=1) < 1e-9)
+            if ki.size == 0:
+                continue
+            a = np.vstack([r for k in ks for r in lines[k]])
+            k0 = ki[0]
+            gv = np.concatenate([g_dx[k0, 0], g_dy[k0, 0]])
+            gv -= a.T @ np.linalg.pinv(a @ a.T) @ (a @ gv)
+            g_dx[k0, 0], g_dy[k0, 0] = gv[:2], gv[2:]
+
+        # --- EXACT HALO GRADIENTS (fold consistency) ---
+        # The internal mirror lines are NOT unions of triangulation edges
+        # (x = 0 meets the lattice only on every second row), so the line
+        # cuts THROUGH triangles and on-line tangency of the interpolant —
+        # hence C0/C1 of the folded field — requires the straddling
+        # triangles' data to be EXACTLY mirror-symmetric, not merely
+        # estimation-symmetric. Halo positions and values are exact
+        # transforms by construction; the Bell-Sibson ESTIMATES at halo
+        # vertices are not (band truncation) — measured as a ~1.6e-6
+        # fold-line jump and a non-injective forward map near the
+        # equatorial face corners (undo stall, found by the libhex9 port's
+        # parity reference). Overwrite each halo vertex's gradients with
+        # the exact transform of its source vertex's (projected) values:
+        #     ∇δ_h_a = A·(A_a0·∇δx + A_a1·∇δy),  δ_h = A·δ.
+        # The C side (h9_warp_fund.h) constructs halos this way natively.
+        pos = len(src)
+        for idx, a_op in halo_prov:
+            m_h = len(idx)
+            sdx = g_dx[idx, 0]
+            sdy = g_dy[idx, 0]
+            u_x = a_op[0, 0] * sdx + a_op[0, 1] * sdy
+            u_y = a_op[1, 0] * sdx + a_op[1, 1] * sdy
+            g_dx[pos:pos + m_h, 0] = u_x @ a_op.T
+            g_dy[pos:pos + m_h, 0] = u_y @ a_op.T
+            pos += m_h
+        if pos != len(padded_src):
+            raise ValueError('halo provenance does not cover padded set')
+
+        # --- fold-aware evaluation ---
+        def _fold(xy):
+            """Fold each point into the closed wedge cone: img = T·p for the
+            first T in the D3 group passing the wedge test. Non-finite points
+            keep the identity (CT → NaN, handled by the callers' masks)."""
+            xy = np.asarray(xy, dtype=np.float64)
+            img = np.array(xy, copy=True)
+            k = np.zeros(len(img), dtype=np.int8)
+            todo = np.ones(len(img), dtype=bool)
+            for i in range(6):
+                if not todo.any():
+                    break
+                cand = xy[todo] @ group[i].T
+                ok = (cand[:, 0] >= -1e-9) & (cand @ n2 >= -1e-9)
+                ids = np.flatnonzero(todo)[ok]
+                img[ids] = cand[ok]
+                k[ids] = i
+                todo[ids] = False
+            return img, k
+
+        def fwd_d(xy):
+            img, k = _fold(xy)
+            dwx = ct_dx(img)
+            dwy = ct_dy(img)
+            m = (np.isnan(dwx) | np.isnan(dwy)) & np.isfinite(img).all(axis=1)
+            if np.any(m):
+                dwx[m] = nn_dx(img[m])
+                dwy[m] = nn_dy(img[m])
+            # δ(p) = Tᵀ·δ_w(T·p) — row form: δ_w @ T.
+            t = group[k]
+            return (dwx * t[:, 0, 0] + dwy * t[:, 1, 0],
+                    dwx * t[:, 0, 1] + dwy * t[:, 1, 1])
+
+        self.fwd_d = fwd_d
+        self.fwd_dx = lambda xy: fwd_d(xy)[0]
+        self.fwd_dy = lambda xy: fwd_d(xy)[1]
+
+        # --- inverse seeds: the warp preserves all three side lines, so the
+        # dst wedge occupies the same cone and the same fold test applies;
+        # positions unfold exactly like displacements. ---
+        inv_lin = LinearNDInterpolator(dst, src)
+        inv_nn = NearestNDInterpolator(dst, src)
+
+        def _inv(f):
+            def seed(pts):
+                img, k = _fold(pts)
+                s = f(img)
+                t = group[k]
+                return np.stack(
+                    [s[:, 0] * t[:, 0, 0] + s[:, 1] * t[:, 1, 0],
+                     s[:, 0] * t[:, 0, 1] + s[:, 1] * t[:, 1, 1]], axis=1)
+            return seed
+
+        self.inv_linear = _inv(inv_lin)
+        self.inv_nearest = _inv(inv_nn)
+        self._fold_mode = True
 
     def _edge_undo(self, target, n_iter=52):
         """
@@ -523,12 +816,17 @@ class AuthalicWarp:
         R3 = H9K.radical.R3
         seeds = np.empty_like(target)
 
-        # Find max |x| along each lateral edge in src training data
-        src = self.src
-        on_right = np.abs(src[:, 1] - R3 * src[:, 0] + Ẇ) < 1e-6
-        on_left  = np.abs(src[:, 1] + R3 * src[:, 0] + Ẇ) < 1e-6
-        x_max_right = np.max(src[on_right, 0]) if np.any(on_right) else 0.01
-        x_max_left  = np.min(src[on_left,  0]) if np.any(on_left)  else -0.01
+        # Find max |x| along each lateral edge in src training data.
+        # Fold mode stores only the wedge (right half-edge, x ≤ TR/2): use the
+        # face geometry directly — the edges run to the equatorial corners.
+        if self._fold_mode:
+            x_max_right, x_max_left = H9K.limits.TR, -H9K.limits.TR
+        else:
+            src = self.src
+            on_right = np.abs(src[:, 1] - R3 * src[:, 0] + Ẇ) < 1e-6
+            on_left  = np.abs(src[:, 1] + R3 * src[:, 0] + Ẇ) < 1e-6
+            x_max_right = np.max(src[on_right, 0]) if np.any(on_right) else 0.01
+            x_max_left  = np.min(src[on_left,  0]) if np.any(on_left)  else -0.01
 
         for i in range(target.shape[0]):
             tx, ty = target[i, 0], target[i, 1]
@@ -574,8 +872,7 @@ class AuthalicWarp:
         edge_mask = on_right | on_left
 
         # Interpolate displacement
-        dx = self.fwd_dx(xy)
-        dy = self.fwd_dy(xy)
+        dx, dy = self.fwd_d(xy)
         if LATERAL_EDGE_MODE == "feather":
             s = _edge_feather_scale(xy)
             # where the ramp is 0 the delta is identically 0 — also guards
@@ -656,8 +953,7 @@ class AuthalicWarp:
             """Forward delta at p — the function Newton inverts. The feather
             scale moves with the iterate, so it lives inside the evaluation
             (and therefore inside the finite-difference Jacobian)."""
-            dxe = self.fwd_dx(p)
-            dye = self.fwd_dy(p)
+            dxe, dye = self.fwd_d(p)
             if LATERAL_EDGE_MODE == "feather":
                 se = _edge_feather_scale(p)
                 dxe = np.where(se > 0.0, dxe * se, 0.0)
@@ -866,10 +1162,13 @@ class OctahedralBarycentric(CompositeDomain):
         # AHEAD of the bridge above (a direct projection beats a bridge in
         # _check_chain). It honours no_lib() by falling through to that exact
         # bridge, so the pure-Python path stays the canonical reference.
-        # libhex9 computes the WGS84 + WGS84-warp pipeline only: never
-        # register it for other ellipsoids or the via-sphere route.
+        # libhex9 implements the WGS84 chains only — classic (WGS84-trained
+        # warp) always; via-sphere (authalic series + sphere core + Sphere-L6
+        # wedge-fold) when the build exports hex9_set_via_sphere. Other
+        # ellipsoids stay pure Python.
+        _via = getattr(registrar, 'via_sphere', False)
         if (self._lib is not None and registrar.ellipsoid_name == 'WGS84'
-                and not getattr(registrar, 'via_sphere', False)):
+                and (not _via or getattr(self._lib, 'has_via_sphere', False))):
             from hhg9.projections.gcd_boct_lib import GcdBoctLib
             GcdBoctLib(registrar)
         else:

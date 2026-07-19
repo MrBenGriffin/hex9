@@ -50,8 +50,9 @@ class GcdBoctLib(Projection):
             return self.reg.project(arr, ['g_gcd', 'b_raw', 'b_oct'])
         lon = np.ascontiguousarray(coords[:, 1])   # [lat,lon] → (lon,lat)
         lat = np.ascontiguousarray(coords[:, 0])
-        cx, cy, oid = self.b_oct._lib.project_many(lon, lat,
-                                                   use_warp=self.b_oct.warp_enabled)
+        cx, cy, oid = self.b_oct._lib.project_many(
+            lon, lat, use_warp=self.b_oct.warp_enabled,
+            via_sphere=getattr(self.reg, 'via_sphere', False))
         return Points(np.column_stack([cx, cy]), self.fwd_cs,
                       oid=oid.astype(np.uint8), samples=arr.samples)
 
@@ -66,6 +67,7 @@ class GcdBoctLib(Projection):
         cx = np.ascontiguousarray(coords[:, 0])
         cy = np.ascontiguousarray(coords[:, 1])
         oid = np.ascontiguousarray(np.asarray(arr.oid), dtype=np.int32)
-        lon, lat = self.b_oct._lib.unproject_many(cx, cy, oid,
-                                                  use_warp=self.b_oct.warp_enabled)
+        lon, lat = self.b_oct._lib.unproject_many(
+            cx, cy, oid, use_warp=self.b_oct.warp_enabled,
+            via_sphere=getattr(self.reg, 'via_sphere', False))
         return Points(np.column_stack([lat, lon]), self.rev_cs, samples=arr.samples)

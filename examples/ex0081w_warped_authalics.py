@@ -218,12 +218,12 @@ if __name__ == '__main__':
     depth = 5  # 0,...5 √
     rg = Registrar()  # Manage Domains & Projections
     b_oct = rg.domain('b_oct')
-    ellipsoid = 'WGS84'
-    warps = ['l5_warp_data']
-    for warp in warps:
-        warp_path = Path(f'../hhg9/data/{ellipsoid}_{warp}.npz')
-        b_oct.set_warp(warp_path)
-        data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
-        hexify(rg, data, layers=depth)
+    # ellipsoid = 'WGS84'
+    # warps = ['l5_warp_data']
+    # for warp in warps:
+    #     warp_path = Path(f'../hhg9/data/{ellipsoid}_{warp}.npz')
+    #     b_oct.set_warp(warp_path)
+    data = get_data(rg, depth)  # should be 8*9**depth  (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
+    hexify(rg, data, layers=depth)
 
 

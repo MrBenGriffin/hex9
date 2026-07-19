@@ -91,11 +91,37 @@ class _Lib:
         except AttributeError:
             self.has_cell_ancestor = False
 
+        # Via-sphere chain (authalic-series front-end + unit-sphere core +
+        # Sphere-L6 wedge-fold warp), when this build exports it. Callers
+        # must gate on has_via_sphere.
+        try:
+            self.lib.hex9_set_via_sphere.argtypes = [
+                ctypes.c_int, ctypes.c_char_p, ctypes.c_size_t]
+            self.lib.hex9_set_via_sphere.restype = ctypes.c_int
+            self.has_via_sphere = True
+        except AttributeError:
+            self.has_via_sphere = False
+        self._via_active = False
+
+    def set_via_sphere(self, on: bool):
+        """Flip the lib's via-sphere mode (first enable lazily builds the
+        sphere warp state, ~1 s). No-op when already in the wanted mode."""
+        on = bool(on)
+        if on == self._via_active:
+            return
+        if on and not self.has_via_sphere:
+            raise RuntimeError("libhex9 build has no hex9_set_via_sphere")
+        err = ctypes.create_string_buffer(256)
+        if self.lib.hex9_set_via_sphere(1 if on else 0, err, 256) != 0:
+            raise RuntimeError(
+                f"hex9_set_via_sphere failed: {err.value.decode()}")
+        self._via_active = on
+
     @property
     def version(self) -> str:
         return self.lib.hex9_version().decode()
 
-    def project_many(self, lon, lat, use_warp: bool):
+    def project_many(self, lon, lat, use_warp: bool, via_sphere: bool = False):
         """(lon, lat)° → (cx, cy, oid) b_oct arrays. oid int32 0..7."""
         lo = np.ascontiguousarray(lon, dtype=np.float64)
         la = np.ascontiguousarray(lat, dtype=np.float64)
@@ -103,6 +129,7 @@ class _Lib:
         cx = np.empty(n, dtype=np.float64)
         cy = np.empty(n, dtype=np.float64)
         oid = np.empty(n, dtype=np.int32)
+        self.set_via_sphere(via_sphere)
         self.lib.hex9_set_use_warp(1 if use_warp else 0)
         rc = self.lib.hex9_project_many(
             lo.ctypes.data_as(self._dp), la.ctypes.data_as(self._dp), n,
@@ -124,16 +151,18 @@ class _Lib:
             raise RuntimeError(f"hex9_cell_ancestor_many rc={rc}")
         return out
 
-    def unproject_many(self, cx, cy, oid, use_warp: bool):
+    def unproject_many(self, cx, cy, oid, use_warp: bool,
+                       via_sphere: bool = False):
         """(cx, cy, oid) b_oct → (lon, lat)° arrays. Must use the SAME use_warp
-        the coordinate was produced with, or the round-trip drifts by one warp
-        displacement (the do/undo hazard)."""
+        (and via_sphere) the coordinate was produced with, or the round-trip
+        drifts by one warp displacement (the do/undo hazard)."""
         cxx = np.ascontiguousarray(cx, dtype=np.float64)
         cyy = np.ascontiguousarray(cy, dtype=np.float64)
         oidd = np.ascontiguousarray(oid, dtype=np.int32)
         n = cxx.size
         lon = np.empty(n, dtype=np.float64)
         lat = np.empty(n, dtype=np.float64)
+        self.set_via_sphere(via_sphere)
         self.lib.hex9_set_use_warp(1 if use_warp else 0)
         rc = self.lib.hex9_unproject_many(
             cxx.ctypes.data_as(self._dp), cyy.ctypes.data_as(self._dp),
