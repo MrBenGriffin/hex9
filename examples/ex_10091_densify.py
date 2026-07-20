@@ -3,8 +3,6 @@
 # Licensed under the Apache License, Version 2.0
 
 import numpy as np
-import sys
-sys.path.insert(0, '/Users/ben/Documents/Projects/PyCharm/hex9')
 
 if __name__ == '__main__':
     from hhg9.h9.region import recover_stats_reset, recover_stats_report

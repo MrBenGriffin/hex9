@@ -100,11 +100,11 @@ if __name__ == '__main__':
     # --- Hex layers ---
     layer = 5
     specs = [
-        LayerSpec(level=layer+2, kind='fill', source=bm_sampler,
-                  style={'alpha': 0.15}),
+        LayerSpec(level=layer+3, kind='fill', source=bm_sampler,
+                  style={'alpha': 0.75}),
         # Per-hex heatmap fill (direct RGB from colormap)
         LayerSpec(level=layer, kind='fill', source=dist_source,
-                  style={'alpha': 0.25}),
+                  style={'alpha': 0.20}),
         # Coarser outline layer to segment the heatmap visually
         LayerSpec(level=layer - 1, kind='outline', reference=True,
                   style={'lw': 0.1, 'ec': '#ffffff50'}),
@@ -124,6 +124,7 @@ if __name__ == '__main__':
         # backdrop=backdrop,
         draw_bbox=False,
         north_dir=north_dir,
+        rotate_north=True,
         title='Distance from Stonehenge',
         description=f'plasma colormap · max {MAX_DIST_KM:.0f} km',
     )

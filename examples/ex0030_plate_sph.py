@@ -14,7 +14,8 @@ Converts PlateCarree to ECEF via GCD and displays it
 25 Nov 2025 (passed)
 """
 import numpy as np
-from matplotlib import image, pyplot as plt
+from PIL import Image
+from matplotlib import pyplot as plt
 from hhg9 import Registrar, Points
 
 
@@ -45,8 +46,10 @@ def run():
     p_pix = reg.domain('p_pix')  # PlatePixel
 
 
-    # img = image.imread(f'src/ex0101pc.jpg', 'jpg')
-    img = image.imread(f'src/bm_3600x1800.jpg', 'jpg')
+    # Load as uint8 RGB. matplotlib.imread yields uint8 0..255 for JPEG but
+    # float32 0..1 for PNG, and show_globe scales by /255 — so read via PIL to
+    # get one predictable dtype regardless of the source format.
+    img = np.array(Image.open('src/bm_3600x1800.png').convert('RGB'))
     pc_extent = (-180.0, -90.0, 180.0, 90.0)
     pc_px = p_pix.adopt(img, extent=pc_extent, y_up=True, center=False)
 

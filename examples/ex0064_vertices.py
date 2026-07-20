@@ -294,7 +294,7 @@ def plot_global_error_map(lons, lats, errors_nm, center_lon, center_lat, title, 
     # Create a map projection centered on our test point
     projection = ccrs.LambertAzimuthalEqualArea(central_longitude=center_lon, central_latitude=center_lat)
     ax = fig.add_subplot(1, 1, 1, projection=projection)
-    img = plt.imread('src/bm_3600x1800.jpg')
+    img = plt.imread('src/bm_3600x1800.png')
     ax.imshow(img, origin='upper', transform=ccrs.PlateCarree(), extent=[-180, 180, -90, 90])
     ax.coastlines(resolution='50m', color='white', alpha=0.25)
     ax.set_global()  # Zoom out to see the whole globe

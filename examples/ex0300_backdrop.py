@@ -110,6 +110,7 @@ if __name__ == '__main__':
         backdrop=backdrop,
         draw_bbox=False,
         north_dir=north_dir,
+        rotate_north=True,
         title='Great Britain — OSM backdrop',
         description='L2 ... L5 hex outlines',
     )

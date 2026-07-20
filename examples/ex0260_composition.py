@@ -108,6 +108,7 @@ if __name__ == '__main__':
         plot_hex(
             layers, save_path=f'output/{name}.png', bbox=bbox, backdrop=backdrop,
             draw_bbox=False, north_dir=north_dir, show_north=north,
+            rotate_north=north,
             title=title, description=desc, dpi=200,
         )
 

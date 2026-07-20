@@ -35,7 +35,7 @@ from PIL import Image  # image saving
 from hhg9.h9.tail import tail_unpack_reversible, TailStyle
 
 
-def run(*, flavours=None, file='src/world360x180.png', scale=1350):
+def run(*, flavours=None, file='src/bm_3600x1800.png', scale=1350):
     """Runner"""
     reg = Registrar()                   # Manage Domains & Projections
     p_pix = reg.domain('p_pix')

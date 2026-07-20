@@ -30,7 +30,7 @@ from hhg9.h9.grid import fit, qa_grid
 from PIL import Image  # image saving
 
 
-def run(*, flavours=None, file='src/world360x180.png', scale=1350):
+def run(*, flavours=None, file='src/bm_3600x1800.png', scale=1350):
     """Runner"""
     reg = Registrar()                   # Manage Domains & Projections
     p_pix = reg.domain('p_pix')

@@ -32,7 +32,7 @@ from hhg9.domains import nets
 # from ex_10011_rhp import RHOMBUS_LAYOUT
 
 
-def run(*, file='src/world360x180.png', scale=300):
+def run(*, file='src/bm_3600x1800.png', scale=300):
     """Render a plate carrée world map onto the rhombus octahedral net."""
     reg = Registrar()
     b_oct = reg.domain('b_oct')
