@@ -13,9 +13,7 @@ from matplotlib.ticker import FuncFormatter
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area
 from hhg9.h9 import H9K, H9O
-from hhg9.h9.polygon import tri_mesh
-from hhg9.h9.classifier import location
-from hhg9.h9.protocols import BaryLoc
+from hhg9.h9.polygon import octant_grid
 
 """
 sinkhorn
@@ -209,26 +207,12 @@ def get_grid(layer: int = 3, octant_id: int = 0):
     Triangular grid will be 9 triangles per octant at hex_layer 0.
     At each subsequent hex_layer, the number of triangles will increase by 9 per triangle.
     So the number of triangles will be 9**(1+hex_layer) per octant.
+
+    Thin wrapper over hhg9.h9.polygon.octant_grid, which is the single source
+    of this geometry (the examples build it the same way rather than reading a
+    committed npz). It raises on a structural mismatch where this used to print.
     """
-    mode = H9O.oid_mo[octant_id]
-    m = 3**(layer+1)
-    pts_expected = int((m+1)*(m+2)/2)
-    tri_expected = 9**(layer+1)
-    vtx_expected = 3
-    edg_expected = 3*m-3
-    verts, _, trx = tri_mesh(layer, mode)
-    ẋ, y = verts[:, 0] * H9K.R3, verts[:, 1]
-    locs = location(ẋ, y, mode)
-    oc_vtx = np.flatnonzero(locs == BaryLoc.VTX)  # On an octant vertex (1 of 3)
-    oc_edg = np.flatnonzero(locs == BaryLoc.EDG)  # On the octant seam
-    if verts.shape[0] != pts_expected:
-        print(f"{layer}: octant points {verts.shape[0]} is not {pts_expected}")
-    if trx.shape[0] != tri_expected:
-        print(f"{layer}: octant triangles {trx.shape[0]} is not {tri_expected}")
-    if oc_vtx.shape[0] != vtx_expected:
-        print(f"{layer}: octant vert_pts {oc_vtx.shape[0]} is not {vtx_expected}")
-    if oc_edg.shape[0] != edg_expected:
-        print(f"{layer}: octant seam_pts {oc_edg.shape[0]} is not {edg_expected}")
+    verts, trx, oc_vtx, oc_edg, _ = octant_grid(layer, octant_id)
     return verts, trx, oc_vtx, oc_edg
 
 
