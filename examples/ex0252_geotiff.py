@@ -16,12 +16,19 @@ DATA
 ----
 Runs out of the box: the rasters in ``examples/src/rasters/`` are committed
 public-domain crops cut to this example's window (see NOTICE.md). They are
-~300 KB, against ~200 MB for the full Sierra Nevada hillshade alone.
+~1.4 MB, against ~200 MB for the full Sierra Nevada hillshade alone.
 
-Resolution is matched to the render, not to the source — see the note above
-about centroid sampling. At L12 a hexagon spans ~26 m, so the 1 m hillshade
-is downsampled to 5 m with no visible effect. Raise the level here and you
-will want to re-cut.
+The crops are at SOURCE resolution — the saving is the window, not resampling.
+They cover the area this example actually samples (~1.45 x 1.13 km) plus 12%.
+
+Mind the level when re-cutting. Each layer is sampled once per hex centroid, so
+the raster must be finer than the hexagons of ITS OWN LayerSpec — and the
+hillshade is drawn at `layer + 2`, i.e. L14 here, not L12. An L14 hexagon is
+only 1.47 m across, so the 1 m hillshade gives ~1.5 samples per hexagon and
+cannot usefully be coarsened at all: at 5 m one raster cell would span about
+eleven hexagons. The NLCD layer is the opposite case — its 30 m native
+resolution is already coarser than the L12 hexagons it fills, which is a limit
+of NLCD itself, not of the crop.
 
 To move the window, change `centre`/`size` below, then re-cut from the full
 sources — the crops are window-specific. See examples/src/rasters/README.md
@@ -45,9 +52,19 @@ from hhg9.rendering.composition import LayerSpec, Compositor
 from hhg9.rendering.render import plot_hex
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def demo_out(name: str) -> str:
+    """Resolve an output path beside this script, whatever the working directory."""
+    out = os.path.join(HERE, 'output')
+    os.makedirs(out, exist_ok=True)
+    return os.path.join(out, name)
+
+
 def demo_file(name: str) -> str:
     """Resolve a committed demo raster, independent of the working directory."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'rasters', name)
+    path = os.path.join(HERE, 'src', 'rasters', name)
     if not os.path.exists(path):
         raise FileNotFoundError(
             f'{name} is missing from examples/src/rasters/.\n'
@@ -59,8 +76,7 @@ def demo_file(name: str) -> str:
 def create_nlcd_lut() -> np.ndarray:
     """Load NLCD colour table.  Returns (256, 3) uint8 RGB array."""
     lut = np.zeros((256, 3), dtype=np.uint8)
-    legend = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          '..', 'assets', 'nlcd_legend.json')
+    legend = os.path.join(HERE, '..', 'assets', 'nlcd_legend.json')
     with open(legend) as fp:
         data = json.load(fp)
     for item in data['nlcd_legend']:
@@ -178,6 +194,6 @@ if __name__ == '__main__':
 
         print(f'{layer}: Plotting')
         title = 'Emerald Bay: Tahoe trailhead centre'
-        plot_hex(composed, save_path=f'output/ex0252_sn_B{size_str}L{layer:02d}_{focus}.png',
+        plot_hex(composed, save_path=demo_out(f'ex0252_sn_B{size_str}L{layer:02d}_{focus}.png'),
                  bbox=bbox_n, title=title, north_dir=north_dir)
     recover_stats_report()

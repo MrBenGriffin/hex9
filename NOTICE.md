@@ -77,6 +77,13 @@ the US Government are not subject to copyright under 17 U.S.C. §105.
 - **Hillshade relief** — DEM-derived (`hs_md.tif`, `CA_SierraNevada_hs.tif`).
 - **Geology** — `chiginagak_geology.tif` / `.json` (`ex0251` labels).
 
-These input rasters live under the git-ignored `experimental/personal/`, so
-`ex0251`, `ex0252` and the renders derived from them cannot be reproduced from
-a clean checkout without obtaining the datasets separately.
+Small crops of these datasets, cut to each example's plotted window, ARE
+committed in `examples/src/rasters/` (~5.5 MB in total, at source resolution)
+so that `ex0251` and `ex0252` run from a clean checkout. Being US Government
+works they may be redistributed freely; `examples/src/rasters/README.md`
+records the provenance of each file and how to re-cut it.
+
+The full-resolution originals remain outside the repository under the
+git-ignored `experimental/personal/` — about 13 GB, dominated by the Alaska
+NLCD's 12.8 GB `.ige` spill file. `images/tahoe.jpg` was rendered from those
+originals rather than from the committed crops.

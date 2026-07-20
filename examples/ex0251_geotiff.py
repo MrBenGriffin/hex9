@@ -15,10 +15,16 @@ public-domain crops cut to this example's window (see NOTICE.md). They total
 about 1 MB, against ~13 GB for the full sources — the Alaska NLCD alone is a
 94 MB ``.img`` with a 12.8 GB ``.ige`` spill file beside it.
 
-Resolution is matched to the render, not to the source. Each layer is sampled
-ONCE PER HEX CENTROID, so detail finer than the hex spacing is discarded: at
-L10 a hexagon spans ~110 m, so the 5 m hillshade is downsampled to 20 m with
-no visible effect. Raise the level here and you will want to re-cut.
+The crops are at SOURCE resolution — the saving is the window, not resampling.
+They cover the area this example actually samples (~12.6 x 9.7 km) plus 12%,
+rather than the whole of Alaska.
+
+Mind the level when re-cutting. Each layer is sampled once per hex centroid, so
+the raster must be finer than the hexagons of ITS OWN LayerSpec — and the
+hillshade is drawn at `layer + 2`, i.e. L12 here, not L10. An L12 hexagon is
+13.2 m across, so the 5 m hillshade gives ~2.6 samples per hexagon. Downsample
+it to 20 m and a single raster cell spans two hexagons, which reads as visible
+blocking. See examples/src/rasters/README.md.
 
 The geology layer deliberately covers LESS than the plotted window — it is
 derived from a survey of the mountain itself (~5.9 km around the summit,
@@ -46,9 +52,19 @@ from hhg9.rendering.composition import LayerSpec, Compositor
 from hhg9.rendering.render import plot_hex
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def demo_out(name: str) -> str:
+    """Resolve an output path beside this script, whatever the working directory."""
+    out = os.path.join(HERE, 'output')
+    os.makedirs(out, exist_ok=True)
+    return os.path.join(out, name)
+
+
 def demo_file(name: str) -> str:
     """Resolve a committed demo raster, independent of the working directory."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'rasters', name)
+    path = os.path.join(HERE, 'src', 'rasters', name)
     if not os.path.exists(path):
         raise FileNotFoundError(
             f'{name} is missing from examples/src/rasters/.\n'
@@ -60,8 +76,7 @@ def demo_file(name: str) -> str:
 def create_nlcd_lut() -> np.ndarray:
     """Load NLCD colour table.  Returns (256, 3) uint8 RGB array."""
     lut = np.zeros((256, 3), dtype=np.uint8)
-    legend = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          '..', 'assets', 'nlcd_legend.json')
+    legend = os.path.join(HERE, '..', 'assets', 'nlcd_legend.json')
     with open(legend) as fp:
         data = json.load(fp)
     for item in data['nlcd_legend']:
@@ -185,5 +200,5 @@ if __name__ == '__main__':
 
         print(f'{layer}: Plotting')
         title = 'Chiginagak Volcano, Alaska'
-        plot_hex(composed, save_path=f'output/ex0251_whx_{size_str}L{layer:02d}{focus}.png',
+        plot_hex(composed, save_path=demo_out(f'ex0251_whx_{size_str}L{layer:02d}{focus}.png'),
                  bbox=bbox_n, title=title, north_dir=north_dir)
