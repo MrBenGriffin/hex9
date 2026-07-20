@@ -56,36 +56,63 @@ from numpy.typing import NDArray
 
 from hhg9 import Points
 from hhg9.h9 import H9O
-from hhg9.h9.addressing import tail_unpack_reversible, tail_key_from_reversible
+from hhg9.h9.addressing import (tail_unpack_reversible, tail_key_from_reversible,
+                                hex_layer, x_adr_curve, nibbles_to_hex)
 from hhg9.h9.binning import hex_reduce, hex_parents, ctr_from_pars, hex_from_pars
 from hhg9.h9.grid import poly_net_field, hex_verts_in_noct
 
 
-def _str_prefix(strs: list[str], cap: int) -> str:
-    """Longest shared leading substring across *strs*, capped at *cap* chars."""
-    if not strs:
-        return ''
-    p = strs[0][:cap]
-    for s in strs[1:]:
-        i, m = 0, min(len(p), len(s))
-        while i < m and p[i] == s[i]:
-            i += 1
-        p = p[:i]
-        if not p:
-            break
-    return p
+def _split_prefix(nibs: NDArray) -> tuple[str, list[str]]:
+    """Split a ``(H, P)`` nibble array into its shared prefix and per-row suffixes.
+
+    Column-wise, so it is exact and cheap: the prefix ends at the first column
+    where the rows disagree.
+    """
+    a = np.asarray(nibs)
+    if a.ndim == 1:
+        a = a[None, :]
+    same = np.all(a == a[0], axis=0)
+    n = int(np.argmin(same)) if not same.all() else a.shape[1]
+    return nibbles_to_hex(a[0, :n]), list(nibbles_to_hex(a[:, n:]))
 
 
-def _addr_labels(addrs: list[str], prefix: str, path_len: int, spec) -> Optional[NDArray]:
-    """Per-hex labels from H9 address strings, honouring ``spec.labels`` (mirrors
-    the fixed path's label scheme: None/False, 'layer' digit, or the full suffix)."""
-    if spec.labels in (None, False):
-        return None
-    short = [a[len(prefix):path_len] for a in addrs]
-    if spec.labels == 'layer':
-        idx = spec.level - len(prefix)
-        return np.array([s[idx] if 0 <= idx < len(s) else '' for s in short])
-    return np.array(short)
+def hex_labels(adr, spec, path_nibs: NDArray) -> tuple[str, Optional[NDArray]]:
+    """Resolve ``spec.labels`` into a common prefix and per-hex label strings.
+
+    The single home of the label scheme, shared by both placement paths — the
+    fixed ``n_oct`` net and the dynamic local net — so a ``LayerSpec`` labels
+    identically whichever route its region took.
+
+    Args:
+        adr:       Addresses in any form :func:`~hhg9.h9.addressing.x_adr_curve`
+                   accepts — ``(H, L+2)`` nibble rows (the fixed path), or a
+                   list of ``uuid.UUID`` at one layer (the local path).  Note a
+                   UUID's padded 32-char ``.hex`` is NOT such a form.
+        spec:      The :class:`LayerSpec`; ``spec.labels`` selects the scheme.
+        path_nibs: ``(H, P)`` path digits only, tail column excluded. The tail
+                   encodes c2/net_mode geometry, not address, so it must not
+                   reach a label.
+
+    Returns:
+        ``(prefix, labels)``; *labels* is ``None`` when labelling is off.
+
+    Schemes: ``None``/``False`` — no labels. ``'layer'`` — the single digit at
+    this layer. ``'curve'`` — Hamiltonian curve address (its own prefix, since
+    curve rows are a different numeral). Anything else — the address suffix.
+    """
+    prefix, short = _split_prefix(path_nibs)
+    match spec.labels:
+        case None | False:
+            return prefix, None
+        case 'layer':
+            idx = spec.level - len(prefix)
+            return prefix, np.array(
+                [s[idx] if 0 <= idx < len(s) else '' for s in short])
+        case 'curve':
+            c_prefix, c_short = _split_prefix(np.asarray(x_adr_curve(adr)))
+            return c_prefix, np.array(c_short)
+        case _:
+            return prefix, np.array(short)
 
 
 # One spec, binned to b_oct geometry but not yet placed in the net.  Shared by
@@ -343,6 +370,15 @@ class ComposedLayer:
                    or ``None`` if no source was provided.
         key_tails: Per-hex geometric type key (uint8), shape ``(H,)``.
                    Encodes c2 category and net_mode; used by GIS export.
+        layout:    Local-net layout dict ``{oid: (matrix, offset)}`` when the
+                   layer came from a dynamic local net, else ``None``.  With
+                   :attr:`oids` it makes :attr:`verts` invertible back to b_oct
+                   via :meth:`~hhg9.domains.OctahedralNet.unplace` — a fixed-net
+                   layer needs neither, since its placement is the registered
+                   n_oct projection.
+        oids:      Per-hex octant id, shape ``(H,)``; set alongside
+                   :attr:`layout`.  A local unfolding has no registered face
+                   polygons, so the octant cannot be recovered from position.
         count:     Number of hexes in this layer.
     """
     spec: LayerSpec
@@ -352,6 +388,8 @@ class ComposedLayer:
     labels: Optional[NDArray]
     values: Optional[NDArray]
     key_tails: Optional[NDArray] = None   # (H,) uint8 geometric type key
+    layout: Optional[dict] = None         # local-net {oid: (matrix, offset)}
+    oids: Optional[NDArray] = None        # (H,) octant id, with `layout`
 
     @property
     def count(self) -> int:
@@ -374,7 +412,8 @@ class Compositor:
         specs:  Ordered list of :class:`LayerSpec` describing the composition.
     """
 
-    def __init__(self, reg, b_oct, n_oct, specs: list[LayerSpec], local: bool = False):
+    def __init__(self, reg, b_oct, n_oct, specs: list[LayerSpec],
+                 local: bool = False, nest: bool = True):
         self.reg = reg
         self.b_oct = b_oct
         self.n_oct = n_oct
@@ -383,6 +422,11 @@ class Compositor:
         # hinged from a fundamental octant so a bounded region spanning a seam is
         # laid flat tear-free.  local=False (default) uses the fixed n_oct net.
         self.local = local
+        # nest closes coarser layers over the finest layer's OWNERSHIP ancestry,
+        # so no fine hex is drawn without its containing coarse hex.  Default on:
+        # without it a multi-layer render shows orphaned fine cells.  Local path
+        # only — the fixed path clips per layer by sub-sample count.
+        self.nest = nest
         self.local_residual = None      # tree seam-closure after a local run()
         self.local_cut = None           # cut_residual: >0 ⇒ region wraps a cone vertex
         self.layout = None              # LocalLayout from the last local run()
@@ -420,14 +464,9 @@ class Compositor:
         dom = polygon.domain
 
         if self.local:
-            # Frame-neutral: get the boundary as lat/lon for create_clipped.
-            if dom.name == 'g_gcd':
-                ll = np.asarray(polygon.coords)
-            elif dom.name == 'b_oct':
-                ll = self.reg.project(polygon, [self.b_oct, g_gcd]).coords
-            else:
-                ll = self.reg.project(polygon, [dom, self.b_oct, g_gcd]).coords
-            return self._run_local(np.asarray(ll))
+            # Frame-neutral: create_clipped takes Points in any domain and
+            # projects internally, so no conversion is needed here.
+            return self._run_local(polygon)
 
         # Fixed path: ensure n_oct, then scanline-fill the convex hull.
         if dom is self.n_oct:
@@ -456,6 +495,7 @@ class Compositor:
 
     def _bin_spec(self, b_pts: Points, spec: LayerSpec) -> Optional[BinnedSpec]:
         """Bin b_pts to spec.level -> b_oct geometry + addresses (no placement)."""
+        gg = hex_layer(b_pts, spec.level)
         hex_num, hex_v, hex_inv, _ = hex_reduce(b_pts, spec.level)
         if hex_num == 0:
             return None
@@ -474,17 +514,8 @@ class Compositor:
         ctrs_b = ctr_from_pars(self.b_oct, hex_par, hex_oid, scale, tails)
 
         # Common prefix from path digits (tail column excluded)
-        prefix, short_addrs = _extract_prefix(hex_v_k)
-
-        labels: Optional[NDArray] = None
-        match spec.labels:
-            case None | False:
-                pass
-            case 'layer':
-                idx = spec.level - len(prefix)
-                labels = np.array([a[idx] for a in short_addrs])
-            case _:  # True/short/anything else.
-                labels = np.array(short_addrs)
+        # Path digits only — the last column is the tail (c2/net_mode geometry).
+        prefix, labels = hex_labels(hex_v_k, spec, hex_v_k[:, :-1])
 
         values: Optional[NDArray] = None
         if spec.source is not None:
@@ -508,20 +539,22 @@ class Compositor:
         ctrs_n = self.reg.project(bs.ctrs_b, [self.b_oct, self.n_oct])
         return self._compose(bs, verts_n, ctrs_n)
 
-    def _run_local(self, ll_polygon: NDArray) -> list[ComposedLayer]:
-        """Build all ComposedLayers on a dynamic local net from a lat/lon polygon.
+    def _run_local(self, polygon) -> list[ComposedLayer]:
+        """Build all ComposedLayers on a dynamic local net from a boundary polygon.
 
         Frame-neutral: clips with :meth:`HexMesh.create_clipped` (centroid-in-
         polygon — true non-convex; ``LayerSpec.threshold`` is ignored here),
         builds one :meth:`OctahedralNet.local_layout` for the touched octants, and
         places every layer through it.  The hex-level guard drops any hex that
-        straddles an unclosed seam (``self.local_dropped``).  ``key_tails`` is
-        ``None`` in this mode (GIS export uses the fixed path).
+        straddles an unclosed seam (``self.local_dropped``).
+
+        *polygon* is :class:`~hhg9.Points` in any domain (or a bare ``[lat, lon]``
+        array) — ``create_clipped`` projects it.
         """
         from hhg9.h9.grid import HexMesh
 
         levels = sorted({int(s.level) for s in self.specs})
-        mesh = HexMesh.create_clipped(levels, ll_polygon, self.reg)
+        mesh = HexMesh.create_clipped(levels, polygon, self.reg, nest=self.nest)
         pts_b = np.asarray(mesh.pts.coords)
         pts_oid = np.asarray(mesh.pts.oid)
 
@@ -561,48 +594,29 @@ class Compositor:
             ctrs_n = Points(self.n_oct.place(cen_b, cen_oid, layout.layout),
                             domain=self.n_oct)
 
-            # Addresses: leading level+1 UUID nibbles are the H9 path.
+            # Addresses: leading level+1 UUID nibbles are the H9 path.  Pass the
+            # UUIDs themselves for curve labels — x_adr_curve reads them
+            # directly, whereas the padded 32-char .hex is not an address string.
             al = mesh.addr(spec.level)
-            addrs = [al[i].hex for i in kidx]
+            uuids = [al[i] for i in kidx]
             path_len = spec.level + 1
-            prefix = _str_prefix([a[:path_len] for a in addrs], path_len)
-            labels = _addr_labels(addrs, prefix, path_len, spec)
+            path_nibs = np.array(
+                [[int(c, 16) for c in u.hex[:path_len]] for u in uuids],
+                dtype=np.uint8)
+            prefix, labels = hex_labels(uuids, spec, path_nibs)
+            # Geometric type key (p_c2 << 1) | r_mo, already carried by the
+            # address — no need to recompute the tail.  mesh.addr gives the
+            # full depth-30 UUID: hierarchy nibbles 0xF-padded past the level,
+            # tail in the LAST nibble.  (The compact bin UUID built inside
+            # h9_bin_pts puts it at level+1 instead; that is a different form.)
+            key_tails = np.array([int(u.hex[-1], 16) for u in uuids],
+                                 dtype=np.uint8)
             values = (np.asarray(spec.source(ctrs_b))
                       if spec.source is not None else None)
 
             results.append(ComposedLayer(
                 spec=spec, verts=Points(polys.reshape(-1, 2), domain=self.n_oct),
                 ctrs=ctrs_n, prefix=prefix, labels=labels, values=values,
-                key_tails=None))
+                key_tails=key_tails, layout=layout.layout, oids=cen_oid))
         self.local_dropped = dropped
         return results
-
-
-# ---------------------------------------------------------------------------
-# Address helpers
-# ---------------------------------------------------------------------------
-
-def _extract_prefix(hex_v_k: NDArray) -> tuple[str, list[str]]:
-    """
-    Find the common address prefix shared by all hexes in *hex_v_k*.
-
-    Only the path-digit columns are used (the tail column is excluded — it
-    encodes c2/net_mode geometry, not address).  Column layout from
-    ``hex_layer(..., TailStyle.reversible)``:  ``[octant, d1, d2, ..., dN, tail]``.
-
-    Args:
-        hex_v_k: ``(H, depth+2)`` hex address array (reversible tail in last col).
-
-    Returns:
-        ``(prefix_str, short_addrs)`` where *prefix_str* is the shared hex
-        string and *short_addrs* is a list of per-hex suffixes (path digits only).
-    """
-    path = hex_v_k[:, :-1]              # drop tail column — path digits only
-
-    matches = np.all(path == path[0], axis=0)
-    prefix_len = int(np.argmin(matches)) if not matches.all() else path.shape[1]
-
-    prefix_str = ''.join(f'{int(d):x}' for d in path[0, :prefix_len])
-    sub = path[:, prefix_len:]
-    short_addrs = [''.join(f'{int(d):x}' for d in row) for row in sub]
-    return prefix_str, short_addrs

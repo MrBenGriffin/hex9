@@ -33,6 +33,8 @@ from typing import Optional
 import numpy as np
 from numpy.typing import NDArray
 
+from hhg9 import Points
+
 try:
     from osgeo import gdal, ogr, osr
     gdal.UseExceptions()
@@ -124,9 +126,25 @@ def from_composed(cl, reg, crs: str = 'g_gcd', fields=None) -> HexLayer:
         c_oct = reg.domain('c_oct')
         c_ell = reg.domain('c_ell')
         g_gcd = reg.domain('g_gcd')
-        chain = [n_oct, b_oct, c_oct, c_ell, g_gcd]
-        polys = reg.project(cl.verts, chain).coords.reshape(-1, 6, 2)
-        ctrs  = reg.project(cl.ctrs,  chain).coords
+
+        if getattr(cl, 'layout', None) is not None:
+            # Local-net layer: its coordinates were placed by a fitted
+            # unfolding, not by the registered n_oct projection, so invert that
+            # placement first.  Exact — the layout matrices are det +1
+            # rotations, so unplace is a transpose.  The octant is taken from
+            # the layer (a local unfolding has no face polygons to test).
+            oids = np.asarray(cl.oids)
+            v_oid = np.repeat(oids, 6)
+            v_b = n_oct.unplace(np.asarray(cl.verts.coords), v_oid, cl.layout)
+            c_b = n_oct.unplace(np.asarray(cl.ctrs.coords), oids, cl.layout)
+            chain = [b_oct, c_oct, c_ell, g_gcd]
+            polys = reg.project(Points(v_b, b_oct, oid=v_oid),
+                                chain).coords.reshape(-1, 6, 2)
+            ctrs = reg.project(Points(c_b, b_oct, oid=oids), chain).coords
+        else:
+            chain = [n_oct, b_oct, c_oct, c_ell, g_gcd]
+            polys = reg.project(cl.verts, chain).coords.reshape(-1, 6, 2)
+            ctrs  = reg.project(cl.ctrs,  chain).coords
         # Drop hexes whose projected vertices contain NaN/inf (seam vertices
         # that received OID_INVALID during n_oct→b_oct binning produce
         # degenerate AK results; those hexes are silently excluded).

@@ -96,6 +96,7 @@ def plot_hex(
         show_north: bool = True,
         north_dir: NDArray | None = None,
         rotate_north: bool = False,
+        credits: list | str | bool | None = None,
         backdrop: NDArray | None = None,
         dpi: int = 500,
 ) -> tuple:
@@ -124,6 +125,13 @@ def plot_hex(
                         :func:`numpy.rot90` with no resampling.  The north
                         arrow then shows the residual tilt.  Note the plotted
                         aspect swaps for odd quarter-turns.
+        credits:        Imagery attribution, drawn bottom-right.  ``None``
+                        (default) collects it automatically from the layer
+                        sources, which carry ``.attribution`` / ``.credits``
+                        when built by :mod:`hhg9.rendering.imagery`.  Pass a
+                        string or list to set it explicitly — needed for the
+                        ``backdrop``, which arrives here as a bare array with
+                        its source no longer attached.  ``False`` suppresses.
         backdrop:       Optional ``(px_h, px_w, C)`` image array (float 0–1 or
                         uint8) to display behind all hex layers.  Produced by
                         :func:`~hhg9.rendering.composition.make_backdrop`.
@@ -345,6 +353,20 @@ def plot_hex(
                 ax.add_collection(PolyCollection(
                     ref_polys[bl:bl + 1], linewidths=3.0,
                     facecolors='#ffffff25', edgecolors='#ffff0060', zorder=250))
+
+    # --- imagery credits (bottom-right, opposite the legend panel) ---
+    if credits is False:
+        cred_lines = []
+    elif credits is None:
+        from hhg9.rendering.imagery import credits_of
+        cred_lines = credits_of(*[cl.spec.source for cl in composed])
+    else:
+        cred_lines = [credits] if isinstance(credits, str) else list(credits)
+    if cred_lines:
+        ax.text(rt - 0.02 * bw, bt + 0.02 * bh, '\n'.join(cred_lines),
+                fontsize=6, color='white', va='bottom', ha='right',
+                zorder=300, clip_on=False,
+                bbox=dict(boxstyle='round,pad=0.3', fc='#00000090', ec='none'))
 
     if show_north:
         nd = (np.asarray(north_dir, dtype=float)

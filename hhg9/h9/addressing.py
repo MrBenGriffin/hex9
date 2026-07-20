@@ -1503,6 +1503,22 @@ def hex_layer(vals, layer: int = 18, tail_style: TailStyle = TailStyle.key):
     return hex_digits(pts, layer, tail_style)
 
 
+def nibbles_to_hex(nibs) -> NDArray:
+    """Format address nibbles as hex characters — one char per digit.
+
+    The single place that turns H9 address digits into text. ``nibs`` may be a
+    single row ``(L,)`` — returning one string — or ``(N, L)``, returning an
+    ``(N,)`` string array. Callers formatting address digits should use this
+    rather than rolling their own, so that the digit convention has one home
+    (cf. :func:`hex_str_encode`, which appends the tail char separately because
+    the tail encodes geometry, not path).
+    """
+    a = np.asarray(nibs, dtype=np.uint8)
+    if a.ndim == 1:
+        return ''.join(f'{int(d):01x}' for d in a)
+    return np.array([''.join(f'{int(d):01x}' for d in row) for row in a], dtype=str)
+
+
 def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.reversible,
                    scheme: RegionAddressLike = H9_RA):
     """Convert Points (barycentric) to canonical hex string representation.
@@ -1522,16 +1538,13 @@ def hex_str_encode(pts, layer: int = 36, tail_style: TailStyle = TailStyle.rever
         raise ValueError("hex_digits must return (hex_layer, L) or (hex_layer, L+1)")
 
     if tail_style is TailStyle.none:
-        body = hx
-        return np.array([''.join(f'{int(d):01x}' for d in row) for row in body], dtype=str)
+        return nibbles_to_hex(hx)
 
     if hx.shape[1] < 2:
         raise ValueError("expected hex_digits output to include at least one body digit and a tail")
 
-    body = hx[:, :-1]
-    tail_ids = hx[:, -1]
-    body_str = np.array([''.join(f'{int(d):01x}' for d in row) for row in body], dtype=str)
-    tail_str = np.array([f'{int(t & 0xf):01x}' for t in tail_ids], dtype=str)
+    body_str = nibbles_to_hex(hx[:, :-1])
+    tail_str = np.array([f'{int(t & 0xf):01x}' for t in hx[:, -1]], dtype=str)
     return np.char.add(body_str, tail_str)
 
 

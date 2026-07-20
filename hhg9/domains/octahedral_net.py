@@ -442,6 +442,32 @@ class OctahedralNet(CompositeDomain):
                 out[m] = coords[m] @ mtx + off
         return out
 
+    def unplace(self, placed: NDArray, oids: NDArray, layout: dict) -> NDArray:
+        """Invert :meth:`place`: local-net *placed* coordinates back to b_oct.
+
+        Exact. The layout matrices are the det +1 rotations that hinge each
+        octant onto its parent, so they are orthogonal and the inverse is the
+        transpose — ``(placed - off) @ mtx.T`` — with no solve and no drift.
+
+        The octant cannot be recovered from position alone on a local net (a
+        fitted unfolding has no registered face polygons to test against), so
+        *oids* must be the same per-point octant ids used to place them.
+        Octants absent from the layout map to NaN.
+
+        Args:
+            placed: (N, 2) coordinates as returned by :meth:`place`.
+            oids:   (N,) octant id per coordinate — as passed to :meth:`place`.
+            layout: the ``layout`` dict from :meth:`local_layout`.
+        """
+        placed = np.asarray(placed, dtype=float)
+        oids = np.asarray(oids)
+        out = np.full_like(placed, np.nan)
+        for oid, (mtx, off) in layout.items():
+            m = oids == oid
+            if np.any(m):
+                out[m] = (placed[m] - off) @ np.asarray(mtx, dtype=float).T
+        return out
+
     def register_format(self, af: PointFormat):
         """Decorator to register an AddressFormat for each component."""
         for side in self.sides:

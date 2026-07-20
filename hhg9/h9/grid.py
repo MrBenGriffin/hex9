@@ -937,6 +937,28 @@ class HexMesh:
         offspring.alt = alt
         return offspring
 
+    @staticmethod
+    def _ownership_ancestors(uuids, from_layer: int, target: int) -> set:
+        """Full 32-char UUID hex of the cells at *target* that OWN *uuids*.
+
+        Ownership, not lineage: on the hexagon band the containing coarse cell
+        differs from the address prefix, so this defers to
+        :func:`~hhg9.h9.addressing.x_adr_cell_ancestor` rather than truncating.
+        """
+        from hhg9.h9.addressing import x_adr_cell_ancestor
+        nibs = np.array([[int(c, 16) for c in u.hex[:from_layer + 1]]
+                         for u in uuids], dtype=np.uint8)
+        tails = np.array([int(u.hex[-1], 16) for u in uuids],
+                         dtype=np.uint8).reshape(-1, 1)
+        _, anc = x_adr_cell_ancestor(np.hstack([nibs, tails]), target=target)
+        anc = np.asarray(anc)
+        # rebuild the padded depth-30 hex the bin UUIDs use: body, 0xF fill, tail
+        out = set()
+        for row in anc:
+            body = ''.join(f'{int(d):x}' for d in row[:-1])
+            out.add(body + 'f' * (31 - len(body)) + f'{int(row[-1]):x}')
+        return out
+
     # ---- polygon-clipped construction ---------------------------------
     @classmethod
     def _nodes_overlap(cls, queue, oid, reg, b_oct, g_gcd, div_f, U1, V3, poly_bbox):
@@ -1054,8 +1076,8 @@ class HexMesh:
         return out_uv.astype(np.int64), out_oid
 
     @classmethod
-    def create_clipped(cls, layers, ll_polygon, reg) -> 'HexMesh':
-        """Build a hex mesh clipped to a lat/lon polygon — no global enumeration.
+    def create_clipped(cls, layers, polygon, reg, nest: bool = True) -> 'HexMesh':
+        """Build a hex mesh clipped to a polygon — no global enumeration.
 
         Unlike :meth:`create`, which enumerates every hex on the globe, this
         descends the H9 supercell hierarchy while pruning branches outside the
@@ -1067,9 +1089,23 @@ class HexMesh:
         ----------
         layers : int or iterable of int
             Layer(s) to include.  Coarser layers form the ancestry "nest".
-        ll_polygon : (P, 2) array
-            Polygon vertices as ``[lat, lon]`` in WGS84 degrees.
+        polygon : Points or (P, 2) array
+            Boundary vertices.  :class:`~hhg9.Points` in any domain are
+            projected to lat/lon here; a bare array is read as ``[lat, lon]``
+            in WGS84 degrees.  The clip itself is frame-neutral — it is done
+            in lat/lon precisely so no net flavour is baked in.
         reg : Registrar
+        nest : bool
+            Close the coarser layers over the finest layer's **ownership**
+            ancestry, so every kept fine cell has its containing coarse cell
+            present.  **On by default**, because clipping each layer
+            independently leaves fine cells whose coarse parent was never kept
+            — the "nest" is then not an ancestry at all.  The union with each
+            layer's own in-polygon cells is retained, so this only ever adds,
+            and the finest layer is untouched.  Selection thereby belongs to
+            the hierarchy and the polygon remains a rendering boundary.
+            Pass ``nest=False`` for the old per-layer independent clip.
+            No-op for a single layer.
 
         Returns
         -------
@@ -1091,13 +1127,30 @@ class HexMesh:
         V3 = 3.0 * H9K.lattice.V
         div_f = float(3 ** finest)
 
-        poly = np.asarray(ll_polygon, dtype=np.float64)        # (P, 2) [lat, lon]
+        # Points in any domain → lat/lon; a bare array is taken as lat/lon.
+        if isinstance(polygon, Points):
+            dom = reg._dom(polygon.domain)
+            if dom.name == 'g_gcd':
+                poly = np.asarray(polygon.coords, dtype=np.float64)
+            elif dom.name == 'b_oct':
+                poly = np.asarray(reg.project(polygon, [b_oct, g_gcd]).coords,
+                                  dtype=np.float64)
+            else:
+                poly = np.asarray(
+                    reg.project(polygon, [dom, b_oct, g_gcd]).coords,
+                    dtype=np.float64)
+        else:
+            poly = np.asarray(polygon, dtype=np.float64)       # (P, 2) [lat, lon]
+        if poly.ndim != 2 or poly.shape[1] != 2:
+            raise ValueError('create_clipped: polygon must be (P, 2) [lat, lon] '
+                             f'or Points; got shape {poly.shape}')
         poly_path = _Path(np.column_stack([poly[:, 1], poly[:, 0]]))   # (lon, lat)
         poly_bbox = (poly[:, 0].min(), poly[:, 0].max(),
                      poly[:, 1].min(), poly[:, 1].max())
 
         # --- per-layer pruned descent + exact centroid clip ----------------
         clip_uv7 = {}
+        cand = {}          # L -> (uv7, oid7, inside mask, candidate addresses)
         for L in layers:
             kept = {oid: cls._clip_descent(L, oid, reg, b_oct, g_gcd,
                                            poly_bbox, U1, V3)
@@ -1126,8 +1179,35 @@ class HexMesh:
                 cll = reg.project(cpts, [b_oct, g_gcd]).coords
                 inside = poly_path.contains_points(
                     np.column_stack([cll[:, 1], cll[:, 0]]))
+                if nest and len(layers) > 1:
+                    # Defer the cut: keep the candidates and their addresses so
+                    # coarser layers can be closed over the finest layer's
+                    # ownership ancestry below.
+                    from hhg9.h9.uuid_address import h9_bin_pts as _bin
+                    cand[L] = (uv7, oid7, inside, np.asarray(_bin(cpts, L)))
+                    continue
                 uv7, oid7 = uv7[inside], oid7[inside]
+            elif nest and len(layers) > 1:
+                cand[L] = (uv7, oid7, np.zeros(0, bool), np.zeros(0, object))
+                continue
             clip_uv7[L] = (uv7, oid7)
+
+        if nest and len(layers) > 1:
+            # Coarser layers = the ownership ancestry of the kept finest cells,
+            # unioned with their own in-polygon cells.  Ownership, not lineage:
+            # for hexagon-band cells the containing coarse cell is not the
+            # address prefix (see x_adr_cell_ancestor), so truncating addresses
+            # would mis-assign a sixth of them.
+            f_uv7, f_oid7, f_in, f_adr = cand[finest]
+            clip_uv7[finest] = (f_uv7[f_in], f_oid7[f_in])
+            kept_adr = f_adr[f_in]
+            for L in layers[:-1]:
+                uv7, oid7, inside, adr = cand[L]
+                keep = inside.copy()
+                if len(kept_adr) and len(adr):
+                    want = cls._ownership_ancestors(kept_adr, finest, L)
+                    keep |= np.array([u.hex in want for u in adr], dtype=bool)
+                clip_uv7[L] = (uv7[keep], oid7[keep])
 
         # --- shared vertex pool (finest first, coarser keys scaled up) -----
         vert_dict, vert_xy, vert_oid, ia_list, ib_list = {}, [], [], [], []

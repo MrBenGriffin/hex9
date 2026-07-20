@@ -49,8 +49,12 @@ GeoPackage export (`ex0119`), Tissot (`ex0120`, `ex0121`), printable tiles
 (`ex0122_hex_tiles`), warp continuity check (`ex0122_warp_check`), and the
 vertex census (`ex0124`).
 
-**ex0200–ex0263 — applied composition.** Heatmaps (`ex0200`), GeoTIFF
-composition (`ex0250`–`ex0253`), polygon-clipped grids (`ex0260`, `ex0261`),
+**ex0200–ex0263 — applied composition.** Heatmaps (`ex0200`), imagery and
+GeoTIFF composition (`ex0250`–`ex0254` — `ex0250` is the "any point on Earth"
+one, needing no local data; `ex0254` is the fullest end-to-end: a real
+non-convex polygon across the prime meridian on a dynamic local net, with the
+ownership nest, imagery backdrop and auto-north), polygon-clipped grids
+(`ex0260`, `ex0261`),
 seam handling (`ex0262`, `ex0263_*_seam_*`), and the Bhutan population
 choropleth (`ex0263_bhutan_big`).
 
@@ -81,7 +85,7 @@ Most run against nothing but the repository. The exceptions:
 | `ex0121`, `ex0122_hex_tiles` | Natural Earth layers | downloaded on demand, prompts first |
 | `ex0041`, `ex0045` | `src/tissot_3600x1800.npz` | **not in the repo** — 179 MB projection cache, regenerate with `ex0041_cache.py` (~10 min). It fails with a message telling you so. |
 | `ex0098` | `src/ex0098/` frames | **not in the repo** — the source imagery for the zoom video is not redistributed |
-| `ex0250` | full Alaska NLCD | **not in the repo** — unlike `ex0251`, this one still points into `experimental/personal/` |
+| `ex0250`, `ex0254` | Esri World Imagery | fetched live, cached under `wmts_cache/`; needs a network connection on first run only |
 | `ex0263_bhutan_big` | `src/bhutan.geojson` | **not in the repo** — 161k population points |
 
 ## Two things worth knowing before reading the renders
