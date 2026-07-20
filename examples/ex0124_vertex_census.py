@@ -4,40 +4,56 @@
 
 """
 Vertex-residual census: classify every L5 hexagon by |area deviation| and
-show the neighbourhood of one vertex from each of the three symmetry classes.
+show the neighbourhood of one vertex on each of the three octahedral axes
+(poles, 0°/180°, 90°E/W).
 
-The warped (quasi-authalic) L5 grid deviates from ideal cell area almost
-nowhere: all but 244 of the 708,588 cells lie within 0.1% of ideal. The
-exceptions cluster at the six octahedral vertices, which split into THREE
-pairwise-exact classes (each pair identical to >3 decimals in its sorted
-deviation spectrum, so the split is structural, not numerical noise):
+Under the via-sphere chain (default since 2026-07-18) the warped
+(quasi-authalic) L5 grid deviates from ideal cell area almost nowhere:
+all but 252 of the 708,588 cells lie within 0.1% of ideal, no cell exceeds
+1%, the extreme is −0.289%, and every cell beyond 0.1% is in deficit. The
+exceptions cluster at the six octahedral vertices, which now form ONE
+spectral class: 42 cells >0.1% at each vertex, with all six sorted
+deviation spectra identical to ~1e-5 percentage points — pairwise AND
+across the former classes. Morphology is shared too: every vertex shows
+the same deficit (blue) cross of rays along its four meeting seams around
+a near-white core.
+
+That equivalence is the sphere engine's symmetry showing through: the
+spherical AK core and Sphere-trained warp are equivariant under the full
+octahedral rotation group, which maps any vertex — together with its L0
+join structure — onto any other, and the authalic reduction is exactly
+area-preserving, so the WGS84 census inherits the sphere's vertex
+equivalence unchanged.
+
+Historical (v2, classic per-ellipsoid chain via set_ellipsoid(...,
+via_sphere=False)): the census split into THREE pairwise-exact classes —
 
     North/South Pole   48 cells >0.1% each, 12 >1%, extreme +4.80%
     0°N 0°E / 0°N 180°  38 cells >0.1% each,  2 >1%, extreme  2.10%
     0°N 90°E / 90°W     36 cells >0.1% each,  2 >1%, extreme  2.60%
 
-Morphology differs too: the polar bloom has an excess (red) core and rays on
-all four meeting seams; the equatorial blooms have near-white cores with the
-extreme pair in deficit (blue), and their rays are meridional only — the
-equator seams stay inside tolerance. (The census here is the paper's §11b
-figure; identifying the mechanism of the equatorial split is deferred.)
+— with class-dependent morphology (excess red polar core with rays on all
+four seams; near-white equatorial cores with meridional-only rays). The
+split is therefore a property of the ellipsoidal AK realisation and its
+mirror-only trained field, not of the construction (paper §11b, inverted
+in v3).
 
 Shares the geometry/score cache with ex0081w_warped_authalics.py
-(output/ex0081_cache_5.npz); builds it if absent (~10 min at L5).
+(output/ex0081_cache_5.npz); builds it if absent (~10 min at L5). The
+cache does not record which chain built it — delete it after changing
+engine/chain settings.
 
 Run:
     python examples/ex0124_vertex_census.py         # census table + figure
     python examples/ex0124_vertex_census.py --raw   # control: warp disabled
 
-The --raw control shows the three classes are already present, pairwise-exact,
-in the unwarped AK realisation (raw field ±20%; equatorial-pair separation
-~0.005% absolute). The warp removes the shared bulk deviation and the
-class-dependent residual dominates what remains (equatorial-pair separation
-grows to ~0.5% absolute). The combinatorial seed is the L0 join: exactly two
-root cells meet at each vertex, and the join axis is diagonal at the poles,
-meridional at 0°/180°, and equatorial at 90°E/W (cf. the seed-solid figure).
+The --raw control disables the warp only, so under the via-sphere default
+it measures the raw *spherical* AK realisation. To reproduce the classic
+three-class control (raw ellipsoid field ±20%; equatorial-pair separation
+~0.005% absolute, growing to ~0.5% once the shared bulk is warped away),
+also set via_sphere=False before the first domain call.
 
-Last tested: 2026-07-06 (figure + census + raw control as above).
+Last tested: 2026-07-19 (via-sphere census + figure as above).
 """
 from pathlib import Path
 
@@ -55,9 +71,9 @@ CACHE_RAW = Path(f'output/ex0081_cache_raw_{LAYERS}.npz')  # raw AK (no warp)
 BOUNDS = [-5.0, -1.0, -0.1, 0.1, 1.0, 5.0]
 CLASS_COLOURS = ['#2166ac', '#a6cee8', '#f6f6f4', '#f4a582', '#b2182b']  # CVD-safe RdBu family
 HW = 0.45e6           # panel half-width, m (~900 km across). Classed cells
-                      # reach 315/395/423 km from their vertices, so this is
-                      # the tightest common-scale window that keeps the whole
-                      # census in-frame (~1 cell margin at the 90°E ray tip).
+                      # reach 444 km from their vertices (identical at all
+                      # six under via-sphere; v2 classes reached 315/395/423),
+                      # so the window keeps the census in-frame at the ray tips.
 STROKE = (0.15, 0.15, 0.15, 1.0)
 LINEWIDTH = 0.125
 
@@ -135,7 +151,7 @@ def panels(polys, rgba):
     cbar = fig.colorbar(sm, ax=fig.axes, orientation='horizontal', pad=0.02,
                         fraction=0.030, aspect=50, shrink=0.45, spacing='uniform')
     cbar.set_ticks([-1.0, -0.1, 0.1, 1.0])
-    cbar.set_label('% area deviation class — at L5, all but 244 of 708,588 cells lie in the central (white) class',
+    cbar.set_label('% area deviation class — at L5, all but 252 of 708,588 cells lie in the central (white) class',
                    fontsize=11)
     out = Path(f'output/ex0124_vertex_census_{LAYERS}.png')
     fig.savefig(out, dpi=300, facecolor='white')

@@ -332,7 +332,7 @@ def run(warp_path: str) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--warp', default='../hhg9/data/WGS84_l5_warp_data.npz',
-                        help='Path to .npz warp file (default: WGS84_l5_warp_data.npz)')
+    parser.add_argument('--warp', default='../hhg9/data/Sphere_l6_fund_warp_data.npz',
+                        help='Path to .npz warp file (default: Sphere_l6_fund_warp_data.npz)')
     args = parser.parse_args()
     run(args.warp)

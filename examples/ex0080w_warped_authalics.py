@@ -274,8 +274,8 @@ if __name__ == '__main__':
     data = get_data(rg, depth)  # should be 8*9**depth (eg, depth=0: 72 points, 9 points on each face, and six points in each hexagon)
 
     ellipsoid = rg.ellipsoid_name
-    warps = ['warp_data']
-    for warp in warps:
-        warp_path = Path(f'../hhg9/data/{ellipsoid}_l{layer}_{warp}.npz')
-        b_oct.set_warp(warp_path)
-        hexify(rg, data.copy(), layers=depth, name=f'{warp}')
+    # warps = ['warp_data']
+    # for warp in warps:
+    #     warp_path = Path(f'../hhg9/data/{ellipsoid}_l{layer}_{warp}.npz')
+    #     b_oct.set_warp(warp_path)
+    hexify(rg, data.copy(), layers=depth, name=f'fund')

@@ -36,6 +36,9 @@ os.makedirs('output', exist_ok=True)
 def get_octant_data(reg: Registrar, depth: int):
     """Return (vertices) for all triangles in one octant."""
     grid_file = Path(f'src/grid_l{depth}.npz')
+    if not grid_file.exists():
+        pass
+
     gf = np.load(grid_file, allow_pickle=True)
     verts = gf['xy_vert']
     grid = gf['grid']

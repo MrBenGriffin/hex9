@@ -15,7 +15,7 @@ import numpy as np
 from hhg9.h9 import H9_RA, H9O
 from hhg9.h9.addressing import reg_hex_digits, hex_digits_reg, hex_digits, hex_layer
 from hhg9.base import Registrar, Points
-from hhg9.h9.region import regions_xy, xy_regions
+from hhg9.h9.region import regions_xy
 
 
 def chain_generator(initial_seed, depth, props=H9_RA.props, modes=H9_RA.modes):

@@ -375,7 +375,7 @@ def run():
     # 10_000_000 = hemisphere.
     # 20_000_000 = global. , 3_000_000, 10_000_000.0, 5.0
     # low [0.1, 0.2, 1.0, 5.0, 20.0]
-    for radius in [12_000_000.0]:
+    for radius in [0.1, 12_000_000.0]:
         for name, (lat, lon) in vertices.items():
             centre = Points(np.array([[lat, lon]]), g_gcd)
             ll_pts = geodesic_cap_rnd_ecef(reg, lat, lon, 120_000, radius, seed=4325325)

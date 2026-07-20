@@ -310,6 +310,20 @@ class Registrar:
             key = a.name, b.name
             pair = frozenset(key)
 
+            # via_sphere: the c_oct↔c_ell hop must route through the authalic
+            # sphere (c_oct↔c_sph↔g_gcd↔c_ell). The classic oct_ell map is a
+            # different projection and yields different b_oct coordinates, so
+            # mixing it into a via-sphere chain shifts positions by kilometres.
+            if self.via_sphere and pair == frozenset(('c_oct', 'c_ell')):
+                names = ('c_oct', 'c_sph', 'g_gcd', 'c_ell')
+                if key[0] != 'c_oct':
+                    names = names[::-1]
+                links = [self._dom(n) for n in names]
+                if not chain or chain[-1] != links[0]:
+                    chain.append(links[0])
+                chain.extend(links[1:])
+                continue
+
             # Handle direct projections
             if key in self._domain_projections:
                 # Only add 'a' if it's the start or isn't a duplicate of the last entry
