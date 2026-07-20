@@ -63,6 +63,22 @@ def _format_len(m: float) -> str:
     return f'{m * 1e6:.3g} µm'
 
 
+def _north_quarter_turns(north_dir) -> int:
+    """Quarter-turns that bring ``north_dir`` to within ±45° of up.
+
+    Returns ``k`` in 0..3; the scene is then turned ``k`` × 90° clockwise.
+    Snapping to a quarter turn keeps the whole operation exact: coordinates
+    become swaps and sign flips, and a raster backdrop is reindexed by
+    :func:`numpy.rot90` with no resampling and no interpolation loss. The
+    residual (up to 45°) is what the north arrow then reports.
+    """
+    nd = np.asarray(north_dir, dtype=float).ravel()
+    if nd.size < 2 or not np.any(nd):
+        return 0
+    theta = np.degrees(np.arctan2(nd[0], nd[1]))   # 0 = up, +90 = right
+    return int(np.round(theta / 90.0)) % 4
+
+
 # ---------------------------------------------------------------------------
 # Renderer
 # ---------------------------------------------------------------------------
@@ -79,6 +95,7 @@ def plot_hex(
         show_legend: bool = True,
         show_north: bool = True,
         north_dir: NDArray | None = None,
+        rotate_north: bool = False,
         backdrop: NDArray | None = None,
         dpi: int = 500,
 ) -> tuple:
@@ -100,6 +117,13 @@ def plot_hex(
         show_north:     Draw the north arrow.
         north_dir:      North direction vector in n_oct space.  Falls back to
                         straight up ``[0, 1]`` when ``None``.
+        rotate_north:   Turn the whole scene by a multiple of 90° so that
+                        ``north_dir`` lands within ±45° of up.  Snapping to a
+                        quarter turn keeps it exact — coordinates are swaps and
+                        sign flips, and the backdrop is reindexed by
+                        :func:`numpy.rot90` with no resampling.  The north
+                        arrow then shows the residual tilt.  Note the plotted
+                        aspect swaps for odd quarter-turns.
         backdrop:       Optional ``(px_h, px_w, C)`` image array (float 0–1 or
                         uint8) to display behind all hex layers.  Produced by
                         :func:`~hhg9.rendering.composition.make_backdrop`.
@@ -123,6 +147,43 @@ def plot_hex(
         rt = float(p0[:, :, 0].max())
         bt = float(p0[:, :, 1].min())
         tp = float(p0[:, :, 1].max())
+
+    # --- optional quarter-turn so north lands within ±45° of up ---
+    # Exact by construction: a k*90° turn is a coordinate swap plus sign flips,
+    # and np.rot90 reindexes the backdrop without resampling it.
+    turns = _north_quarter_turns(north_dir) if rotate_north else 0
+    cx, cy = (lt + rt) / 2.0, (bt + tp) / 2.0
+
+    def _turn(xy):
+        """Turn points k*90° anticlockwise about the pre-rotation bbox centre.
+
+        ``turns`` counts how far north sits clockwise of up, so undoing it
+        turns the scene the other way.
+        """
+        if not turns:
+            return np.asarray(xy, dtype=np.float64)
+        p = np.asarray(xy, dtype=np.float64)
+        x, y = p[..., 0] - cx, p[..., 1] - cy
+        for _ in range(turns):
+            x, y = -y, x
+        return np.stack([x + cx, y + cy], axis=-1)
+
+    if turns:
+        corners = _turn(np.array([[lt, bt], [rt, bt], [rt, tp], [lt, tp]]))
+        lt, rt = float(corners[:, 0].min()), float(corners[:, 0].max())
+        bt, tp = float(corners[:, 1].min()), float(corners[:, 1].max())
+        if backdrop is not None:
+            # np.rot90 turns anticlockwise for row-0-at-top, but imshow draws
+            # this with origin='lower', which inverts that sense -- so the sign
+            # is negated to match the anticlockwise coordinate turn. Verified by
+            # round-tripping pixel centres through both paths.
+            backdrop = np.rot90(backdrop, -turns)
+        if north_dir is not None:
+            nd = np.asarray(north_dir, dtype=float).ravel()[:2]
+            x, y = nd[0], nd[1]
+            for _ in range(turns):
+                x, y = -y, x
+            north_dir = np.array([x, y])
 
     bw, bh = rt - lt, tp - bt
 
@@ -154,7 +215,7 @@ def plot_hex(
 
     # --- hex layers ---
     for i, cl in enumerate(composed):
-        polys = np.asarray(cl.verts.coords, dtype=np.float64).reshape(-1, 6, 2)
+        polys = _turn(cl.verts.coords).reshape(-1, 6, 2)
         h = polys.shape[0]
         if h == 0:
             continue
