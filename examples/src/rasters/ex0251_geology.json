@@ -1,0 +1,101 @@
+{
+    "1": {
+        "desc": "Alluvial",
+        "color": [
+            255,
+            255,
+            204
+        ],
+        "label": "Ha"
+    },
+    "2": {
+        "desc": "Colluvium",
+        "color": [
+            255,
+            235,
+            128
+        ],
+        "label": "Hc"
+    },
+    "3": {
+        "desc": "Debris",
+        "color": [
+            255,
+            255,
+            0
+        ],
+        "label": "Hdi"
+    },
+    "4": {
+        "desc": "Gl. till",
+        "color": [
+            204,
+            255,
+            255
+        ],
+        "label": "Hgt"
+    },
+    "5": {
+        "desc": "Andesite",
+        "color": [
+            128,
+            77,
+            128
+        ],
+        "label": "HPbv"
+    },
+    "6": {
+        "desc": "Lava",
+        "color": [
+            179,
+            153,
+            235
+        ],
+        "label": "Hlf"
+    },
+    "7": {
+        "desc": "Basalt",
+        "color": [
+            235,
+            0,
+            255
+        ],
+        "label": "Plo"
+    },
+    "8": {
+        "desc": "Other",
+        "color": [
+            128,
+            255,
+            235
+        ],
+        "label": "Hgo"
+    },
+    "9": {
+        "desc": "Rock",
+        "color": [
+            179,
+            179,
+            179
+        ],
+        "label": "JTu"
+    },
+    "10": {
+        "desc": "Clastic",
+        "color": [
+            153,
+            153,
+            255
+        ],
+        "label": "Hdf"
+    },
+    "11": {
+        "desc": "Ice",
+        "color": [
+            128,
+            128,
+            128
+        ],
+        "label": "dcg"
+    }
+}
