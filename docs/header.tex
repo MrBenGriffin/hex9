@@ -62,6 +62,17 @@
 \usepackage{etoolbox}
 \AtBeginEnvironment{longtable}{\footnotesize}
 
+% --- Long code paths (experimental/halfhex_verify.py etc.): allow hyphenation
+%     inside typewriter text so \texttt doesn't overflow the margin ---
+\usepackage[htt]{hyphenat}
+
+% --- Footnotes: ragged-right. Stretch-justified footnotes containing long
+%     code paths produce ugly inter-word gaps; package-free patch ---
+\makeatletter
+\renewcommand\@makefntext[1]{%
+  \raggedright\parindent 1em\noindent\hb@xt@1.8em{\hss\@makefnmark}#1}
+\makeatother
+
 % --- Graphics ---
 \usepackage{graphicx}
 \graphicspath{{paper_figures/}}

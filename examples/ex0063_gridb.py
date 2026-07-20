@@ -105,7 +105,7 @@ def get_data(reg: Registrar, layer=3, octant_id=None):
         for octant in b_oct.signs.keys():
             o_id = octant_id
             mode = b_oct.oid_mo[o_id]
-            repo.append(Points(tgx[mode].copy(), b_oct, components=octant))
+            repo.append(Points(tgx[mode].copy(), b_oct, oid=octant))
         return Points.concat(repo)
     else:
         o_id = octant_id

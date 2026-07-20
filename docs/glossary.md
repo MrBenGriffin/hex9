@@ -213,6 +213,7 @@ geometry or topology" (4.2, Note 3). The identifier term is *zonal identifier*
 | `x_dig` | — (ordinal of a child within its parent; no Topic 21 term) | — |
 | AK+Warp realisation | surface model of the Earth (4.27); cf. Part 1's Equal Area Earth Reference System (Hex9 is quasi-equal-area) | A |
 | b_oct native space | — (the realisation surface; see the ISO table) | — |
+| `w_oct` (3D lift of b_oct) | — (post-warp 3D octahedral coordinate domain; geometric sibling of `c_oct`, reached warp-free from `b_oct`; not a zone term) | — |
 | mode (0/1 parity) | — (internal face orientation) | — |
 | `c2` edge label | — (sub-face structure; no Topic 21 term) | — |
 | `d_cell` (half-hexagon) | — (sub-cell primitive) | — |

@@ -26,6 +26,13 @@ property); Hex9's rep-9 d_cell carrier gives exactly 9^depth every time.
 S2 and HEALPix are omitted: fully-nested, the two panels would be
 identical.
 
+The Hex9 row also shows the anchor's curve address beside its h9
+address: the Hamiltonian-curve name for the same cell, a true bijection
+(h9_curve_uuid ⇄ h9_curve_decode) kept alongside the h9 address, not in
+place of it — the curve tree is the lineage tree, so curve-prefix
+descendants are exactly the lineage panel, while ownership is the
+geometric relation on the right.
+
 Run:
     python docs/dggs/dggs_ownership.py            # -> docs/dggs/dggs_ownership.png
     python docs/dggs/dggs_ownership.py --gens 3 --lat 40 --lng -3
@@ -111,7 +118,8 @@ def hex9_pair(lat, lng, res, gens):
     from hhg9 import Registrar, Points
     from hhg9.h9.grid import HexMesh
     from hhg9.h9.uuid_address import (h9_descendants, h9_bin_pts,
-                                      h9_cell_parent, _anchor_hex_latlon)
+                                      h9_cell_parent, _anchor_hex_latlon,
+                                      h9_label, h9_curve_uuid, h9_curve_label)
     target = res + gens
     reg = Registrar()
     g_gcd, b_oct = reg.domain('g_gcd'), reg.domain('b_oct')
@@ -133,11 +141,16 @@ def hex9_pair(lat, lng, res, gens):
     for _ in range(gens):
         cur = h9_cell_parent(cur, reg=reg)
     naive_ids = [c for c, a in zip(cand, cur) if a.int == anchor.int]
+    # The anchor's two names: h9 address and curve address — a bijective
+    # pair (h9_curve_uuid ⇄ h9_curve_decode), shown side by side.
+    addresses = (f'anchor h9 {h9_label(anchor)} = '
+                 f'curve {h9_curve_label(h9_curve_uuid([anchor])[0])}')
     return (poly(anchor, res),
             [poly(u, target) for u in naive_ids],
             [poly(u, target) for u in owned_ids],
             f'Hex9 L{res}→L{target}',
-            f'{len(owned_ids)} owned (= 9^{gens}, every anchor)')
+            f'{len(owned_ids)} owned (= 9^{gens}, every anchor)',
+            addresses)
 
 
 PAIRS = {'H3': h3_pair, 'A5': a5_pair, 'ISEA3H': isea3h_pair, 'Hex9': hex9_pair}
@@ -157,7 +170,9 @@ def main(lat, lng, gens, out_path):
 
     for row, name in enumerate(systems):
         res = DEFAULT_RES[name]
-        anchor, naive, owned, label, note = PAIRS[name](lat, lng, res, gens)
+        result = PAIRS[name](lat, lng, res, gens)
+        anchor, naive, owned, label, note = result[:5]
+        subtitle = result[5] if len(result) > 5 else None
         for col, (desc, rel) in enumerate([(naive, 'lineage'),
                                            (owned, 'owned')]):
             ax = axes[row, col]
@@ -172,13 +187,18 @@ def main(lat, lng, gens, out_path):
                                         facecolor=COLOURS[key],
                                         edgecolor='#555555',
                                         linewidth=0.3, alpha=0.85, zorder=2))
+            title = f'{label} — {rel}   (out {counts["out"]}/{len(desc)})'
+            if subtitle:
+                title += f'\n{subtitle}'
             ax.autoscale()
             ax.set_aspect('equal', adjustable='box')
             ax.axis('off')
-            ax.set_title(f'{label} — {rel}   (out {counts["out"]}/{len(desc)})')
+            ax.set_title(title)
             print(f'{name:>6} {rel:>9} {len(desc):>6} {counts["in"]:>7} '
                   f'{counts["straddle"]:>9} {counts["out"]:>8}')
         print(f'{"":>6} {note}')
+        if subtitle:
+            print(f'{"":>6} {subtitle}')
         # Same anchor, same scale: share limits across the row so the two
         # relations are visually comparable.
         ax_l, ax_r = axes[row]
@@ -202,7 +222,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--lat', type=float, default=40.0)
     ap.add_argument('--lng', type=float, default=-3.0)
-    ap.add_argument('--gens', type=int, default=3)
+    ap.add_argument('--gens', type=int, default=4)
     ap.add_argument('--out', default=os.path.join(os.path.dirname(__file__),
                                                   'dggs_ownership.png'))
     args = ap.parse_args()
