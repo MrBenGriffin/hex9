@@ -26,6 +26,9 @@ htmlcov/
 /experimental/personal/
 /examples/**.npy
 /examples/**.tif
+# ...but the ex0251/ex0252 demo rasters ARE committed on purpose: small
+# public-domain crops that make those examples runnable (see NOTICE.md)
+!/examples/src/rasters/*.tif
 /examples/**.zip
 /examples/**.ttf
 /experimental/**/*.png
@@ -41,6 +44,9 @@ htmlcov/
 # 179MB, regenerable — exceeds GitHub 100MB file limit
 /examples/src/tissot_3600x1800.npz
 /examples/xyz_cache/
+# Natural Earth layers — public domain, fetched on demand by
+# hhg9/geo/naturalearth.py rather than committed (see NOTICE.md)
+/examples/src/landmasses/
 /docs/arxiv/
 /docs/**.zip
 .venv-x86/

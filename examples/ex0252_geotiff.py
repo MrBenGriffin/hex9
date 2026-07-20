@@ -3,6 +3,7 @@
 # Licensed under the Apache License, Version 2.0
 
 """
+Emerald Bay, Lake Tahoe
 Showing 3 layers of hexagons:  land-usage, hill-shading, coarse over-grid.
 Uses the Compositor / LayerSpec pipeline from hhg9.rendering.composition.
 
@@ -11,11 +12,28 @@ This is efficient for fine layers (L12 ≈ 10m) where each hex covers only
 a small number of raster pixels; any per-raster-pixel variance within a hex
 is negligible at that scale.
 
+DATA
+----
+Runs out of the box: the rasters in ``examples/src/rasters/`` are committed
+public-domain crops cut to this example's window (see NOTICE.md). They are
+~300 KB, against ~200 MB for the full Sierra Nevada hillshade alone.
+
+Resolution is matched to the render, not to the source — see the note above
+about centroid sampling. At L12 a hexagon spans ~26 m, so the 1 m hillshade
+is downsampled to 5 m with no visible effect. Raise the level here and you
+will want to re-cut.
+
+To move the window, change `centre`/`size` below, then re-cut from the full
+sources — the crops are window-specific. See examples/src/rasters/README.md
+for provenance, the gdal_translate recipe, and where to obtain the originals.
+
 Last Tested
+20 Jul 2026 0.1.3a0 (passed, committed crops)
 23 Jun 2026 0.1.3a0 (passed)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2026 0.1.0a4 (passed)
 """
+import os
 import numpy as np
 import math
 import json
@@ -27,10 +45,23 @@ from hhg9.rendering.composition import LayerSpec, Compositor
 from hhg9.rendering.render import plot_hex
 
 
+def demo_file(name: str) -> str:
+    """Resolve a committed demo raster, independent of the working directory."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'rasters', name)
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f'{name} is missing from examples/src/rasters/.\n'
+            f'It is a committed public-domain crop and should be in the checkout; '
+            f'see examples/src/rasters/README.md to re-cut it from the full source.')
+    return path
+
+
 def create_nlcd_lut() -> np.ndarray:
     """Load NLCD colour table.  Returns (256, 3) uint8 RGB array."""
     lut = np.zeros((256, 3), dtype=np.uint8)
-    with open('../assets/nlcd_legend.json') as fp:
+    legend = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          '..', 'assets', 'nlcd_legend.json')
+    with open(legend) as fp:
         data = json.load(fp)
     for item in data['nlcd_legend']:
         idx = item['id']
@@ -60,13 +91,13 @@ if __name__ == '__main__':
 
     print('Loading geotiffs')
     # Land-usage (NLCD 2024, cropped to Sierra Nevada)
-    src_file = '../experimental/personal/src/Annual_NLCD_LndCov_2024_CU_C1V1_crop.tif'
+    src_file = demo_file('ex0252_nlcd_2024.tif')
     ds = gdal.Open(src_file)
     l_wkt = Wkt(rg, 'l_wkt', ds.GetProjection())
     Wkt_4978(rg, l_wkt)
 
     # Hillshade
-    hs_ds = gdal.Open('../experimental/personal/src/CA_SierraNevada_hs.tif')
+    hs_ds = gdal.Open(demo_file('ex0252_hillshade.tif'))
     s_wkt = Wkt(rg, 's_wkt', hs_ds.GetProjection())
     Wkt_4978(rg, s_wkt)
 

@@ -48,6 +48,7 @@ from shapely.geometry import Point
 from hhg9 import Registrar
 from hhg9.geo.vector import (load_shape_polygons, tile_frame, project_fill_to_tile,
                              tile_subgrid, tile_labels)
+from hhg9.geo.naturalearth import ne_layer
 
 os.makedirs('output/hextiles', exist_ok=True)
 
@@ -55,9 +56,10 @@ HERE = os.path.dirname(__file__)
 # Sea is the hexagon backdrop, so no ocean polygon is needed (it would be sea
 # under land — redundant); the Caspian/endorheic seas are excluded from `land`
 # so they read as backdrop sea.  Land + minor islands are gold; lakes are sea.
-LAND_FILES = [os.path.join(HERE, f'../preparatory/landmasses/{n}.shp')
-              for n in ('ne_10m_land', 'ne_10m_minor_islands')]
-LAKE_FILE = os.path.join(HERE, '../preparatory/landmasses/ne_10m_lakes.shp')
+# Natural Earth layers (public domain); downloaded to examples/src/landmasses
+# on first use, prompting before it reaches the network.
+LAND_FILES = [ne_layer(n, '10m') for n in ('land', 'minor_islands')]
+LAKE_FILE = ne_layer('lakes', '10m')
 
 TILE = 2
 PIXELS = 1000           # long edge of the tile artwork, in px

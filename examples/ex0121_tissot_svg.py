@@ -49,6 +49,7 @@ from hhg9.geo.vector import (load_shape_polygons, load_shape_geoms,
                              graticule_paths, tissot_circle, project_path,
                              split_path_at_seams, project_fill_to_noct,
                              is_c2_split)
+from hhg9.geo.naturalearth import ne_layer
 
 os.makedirs('output', exist_ok=True)
 
@@ -58,9 +59,11 @@ os.makedirs('output', exist_ok=True)
 FLAVOUR = 'butterfly:0500'      # 'butterfly:0500'
 PIXELS = 1200  # triangle side in pixels → controls SVG canvas size
 
-LAND_FILE = os.path.join(os.path.dirname(__file__), '../preparatory/landmasses/ne_50m_land.shp')
-LAKE_FILE = os.path.join(os.path.dirname(__file__), '../preparatory/landmasses/ne_50m_lakes.shp')
-SEAS_FILE = os.path.join(os.path.dirname(__file__), '../preparatory/landmasses/ne_50m_ocean.shp')
+# Natural Earth layers (public domain); downloaded to examples/src/landmasses
+# on first use, prompting before it reaches the network.
+LAND_FILE = ne_layer('land', '50m')
+LAKE_FILE = ne_layer('lakes', '50m')
+SEAS_FILE = ne_layer('ocean', '50m')
 
 # Graticule
 GRAT_STEP = 10  # degrees between parallels / meridians

@@ -8,10 +8,33 @@ Showing 3 layers of hexagons: land-usage, hill-shading, geology (labels)
 Uses the Compositor / LayerSpec pipeline from hhg9.rendering.composition.
 Source callables sample GeoTIFFs at hex centroids (single lookup per hex).
 
+DATA
+----
+Runs out of the box: the rasters in ``examples/src/rasters/`` are committed
+public-domain crops cut to this example's window (see NOTICE.md). They total
+about 1 MB, against ~13 GB for the full sources — the Alaska NLCD alone is a
+94 MB ``.img`` with a 12.8 GB ``.ige`` spill file beside it.
+
+Resolution is matched to the render, not to the source. Each layer is sampled
+ONCE PER HEX CENTROID, so detail finer than the hex spacing is discarded: at
+L10 a hexagon spans ~110 m, so the 5 m hillshade is downsampled to 20 m with
+no visible effect. Raise the level here and you will want to re-cut.
+
+The geology layer deliberately covers LESS than the plotted window — it is
+derived from a survey of the mountain itself (~5.9 km around the summit,
+against this example's 7.5 km half-width), so hexagons near the frame edge
+have no rock label. That is the data, not a bug; do not pad it to fit.
+
+To move the window, change `centre`/`size` below, then re-cut from the full
+sources — the crops are window-specific. See examples/src/rasters/README.md
+for provenance, the gdal_translate recipe, and where to obtain the originals.
+
 Last Tested
+20 Jul 2026 0.1.3a0 (passed, committed crops)
 13 Mar 2026 0.1.1a1 (passed)
 26 Dec 2026 0.1.0a4 (passed)
 """
+import os
 import numpy as np
 import math
 import json
@@ -23,10 +46,23 @@ from hhg9.rendering.composition import LayerSpec, Compositor
 from hhg9.rendering.render import plot_hex
 
 
+def demo_file(name: str) -> str:
+    """Resolve a committed demo raster, independent of the working directory."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'rasters', name)
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f'{name} is missing from examples/src/rasters/.\n'
+            f'It is a committed public-domain crop and should be in the checkout; '
+            f'see examples/src/rasters/README.md to re-cut it from the full source.')
+    return path
+
+
 def create_nlcd_lut() -> np.ndarray:
     """Load NLCD colour table.  Returns (256, 3) uint8 RGB array."""
     lut = np.zeros((256, 3), dtype=np.uint8)
-    with open('../assets/nlcd_legend.json') as fp:
+    legend = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          '..', 'assets', 'nlcd_legend.json')
+    with open(legend) as fp:
         data = json.load(fp)
     for item in data['nlcd_legend']:
         idx = item['id']
@@ -53,18 +89,18 @@ if __name__ == '__main__':
     n_oct = rg.domain('n_oct:diamonds')   # keeps north pole north
 
     nlcd_lut = create_nlcd_lut()
-    rock_lut = create_label_lut('../experimental/personal/src/chiginagak_geology.json')
+    rock_lut = create_label_lut(demo_file('ex0251_geology.json'))
 
     print('Loading geotiffs')
-    # Land-usage (NLCD 2016, Alaska)
-    src_file = '../experimental/personal/src/NLCD_2016_Land_Cover_AK_20200724.img'
+    # Land-usage (NLCD 2016, Alaska) — cropped to this example's window
+    src_file = demo_file('ex0251_nlcd_ak_2016.tif')
     ds = gdal.Open(src_file)
     g_wkt = Wkt(rg, 'g_wkt', ds.GetProjection())
     Wkt_4978(rg, g_wkt)
 
     # Hillshade and geology share the same CRS as the NLCD
-    hs_ds = gdal.Open('../experimental/personal/src/hs_md.tif')
-    rocks = gdal.Open('../experimental/personal/src/chiginagak_geology.tif')
+    hs_ds = gdal.Open(demo_file('ex0251_hillshade.tif'))
+    rocks = gdal.Open(demo_file('ex0251_geology.tif'))
 
     print('Building area polygon')
     focus = 'APNPr'

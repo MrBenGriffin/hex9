@@ -28,20 +28,13 @@ from matplotlib.collections import PolyCollection
 from hhg9 import Registrar, Points
 from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84
 from hhg9.h9 import H9O
-from hhg9.h9.polygon import region_grid, H9P
-from pathlib import Path
+from hhg9.h9.polygon import octant_grid
 
 os.makedirs('output', exist_ok=True)
 
 def get_octant_data(reg: Registrar, depth: int):
-    """Return (vertices) for all triangles in one octant."""
-    grid_file = Path(f'src/grid_l{depth}.npz')
-    if not grid_file.exists():
-        pass
-
-    gf = np.load(grid_file, allow_pickle=True)
-    verts = gf['xy_vert']
-    grid = gf['grid']
+    """Return (vertices, triangles) for all triangles in one octant."""
+    verts, grid, _, _, _ = octant_grid(depth, octant_id=0)
     b_oct = reg.domain('b_oct')
     pts = Points(verts, b_oct, oid=0)
     return pts, grid
