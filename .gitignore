@@ -35,6 +35,7 @@ htmlcov/
 
 # generated outputs / build artifacts (added 2026-06-14)
 /docs/_build/
+/dogs/paper.tex
 /examples/output/
 /examples/hh_heatmaps/
 /experimental/sinkhorn/output/
