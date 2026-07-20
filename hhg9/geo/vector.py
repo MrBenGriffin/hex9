@@ -57,6 +57,7 @@ l0_tile_subgrid
 """
 
 import numpy as np
+from pathlib import Path
 from hhg9.h9 import H9K
 from hhg9.algorithms.distance import densify_poly_geodesic_by_step, wgs84_offset
 
@@ -189,7 +190,7 @@ def tissot_circle(lat: float, lon: float,
 # Land polygon loading
 # ---------------------------------------------------------------------------
 
-def load_shape_polygons(path: str,
+def load_shape_polygons(path: str | Path,
                         interior: bool = False) -> list:
     """Load shape polygons from a shapefile and return as lat/lon arrays.
 
@@ -202,12 +203,18 @@ def load_shape_polygons(path: str,
 
     Parameters
     ----------
-    path : str
-        Path to the ``.shp`` file.  Suggested sources in ``preparatory/landmasses/``:
+    path : str or Path
+        Path to the ``.shp`` file.  Prefer :func:`hhg9.geo.naturalearth.ne_layer`,
+        which resolves a layer to ``examples/src/landmasses`` and downloads the
+        official public-domain archive if it is absent::
 
-        * ``ne_10m_land.shp``   — Natural Earth 10 m (~7 MB), good for paper figures
-        * ``ne_50m_land.shp``   — Natural Earth 50 m (~1 MB), quick renders
-        * ``land_polygons_1m.shp`` — OSM simplified (~1 m precision)
+            ne_layer('land', '50m')   # 1420 features, quick renders
+            ne_layer('land', '10m')   # 11 dissolved landmasses, paper figures
+            ne_layer('minor_islands', '10m')   # 2795 islands, use alongside land
+
+        OSM land-polygon extracts (osmdata.openstreetmap.de) also load here, but
+        are ODbL — share-alike and attribution-required — so they are not
+        bundled or fetched automatically.  See NOTICE.md.
     interior : bool
         If True, also include interior rings (lakes / holes).  Default False.
 
@@ -338,7 +345,7 @@ def clip_polygon_to_octants(ring_latlon: np.ndarray) -> list:
     return pieces
 
 
-def load_shape_geoms(path: str) -> list:
+def load_shape_geoms(path: str | Path) -> list:
     """Load polygons (with holes) from a shapefile as shapely Polygons.
 
     Unlike :func:`load_shape_polygons` (which flattens to exterior/interior

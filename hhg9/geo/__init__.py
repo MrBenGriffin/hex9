@@ -24,4 +24,8 @@ the core Hex9 dependencies.  Import only what you need:
 :mod:`hhg9.geo.vector`
     Format-agnostic vector geometry utilities: seam-splitting projected paths,
     geodesic path projection, Tissot circle generation, graticule generation.
+
+:mod:`hhg9.geo.naturalearth`
+    Resolve Natural Earth layers to local shapefiles, downloading the official
+    public-domain archives on demand rather than committing them.
 """

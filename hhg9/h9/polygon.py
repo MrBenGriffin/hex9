@@ -28,7 +28,8 @@ from numpy.typing import NDArray
 from typing import Tuple, List, Optional
 
 from hhg9.h9 import H9C, H9K, H9O
-from hhg9.h9.protocols import H9ConstLike, H9PolygonLike
+from hhg9.h9.classifier import location
+from hhg9.h9.protocols import H9ConstLike, H9PolygonLike, BaryLoc
 
 
 @dataclass(frozen=True, slots=True)
@@ -466,6 +467,55 @@ def tri_mesh(levels: int = 5, mode: int = 0, h9p: H9Polygon = H9P):
     edges_sorted = np.sort(edges_all, axis=1)
     edges = np.unique(edges_sorted, axis=0)
     return verts, edges, tris
+
+
+def octant_grid(levels: int = 3, octant_id: int = 0, h9p: H9Polygon = H9P):
+    """Triangular mesh for one octant, with its boundary vertices classified.
+
+    The mesh holds 9**(levels+1) triangles: 9 per octant at levels 0, and 9 per
+    triangle at each subsequent level.
+
+    Args:
+        levels: Subdivision depth.
+        octant_id: Octant index (0-7); selects the root mode and components.
+        h9p: Polygon LUT.
+
+    Returns:
+        tuple: (verts, tris, oc_vtx, oc_edg, cmp)
+            verts: (V, 2) b_oct vertex coordinates.
+            tris: (T, 3) triangle indices into verts.
+            oc_vtx: indices of verts on an octant vertex (3 of them).
+            oc_edg: indices of verts on an octant seam.
+            cmp: the octant's component signature, for Points(...).
+
+    Raises:
+        ValueError: if the mesh does not have the structure the level implies —
+            the counts below are exact, so a mismatch means the mesh is wrong,
+            not merely unexpected.
+    """
+    if not (0 <= octant_id < 8):
+        raise ValueError(f'octant_id must be in [0, 7], got {octant_id}')
+    mode = H9O.oid_mo[octant_id]
+    cmp = H9O.oid_cmp[octant_id]
+    verts, _, tris = tri_mesh(levels, mode, h9p=h9p)
+
+    # Classify each vertex: on an octant corner (VTX), on a seam (EDG), or interior.
+    x3, y = verts[:, 0] * H9K.R3, verts[:, 1]
+    locs = location(x3, y, mode)
+    oc_vtx = np.flatnonzero(locs == BaryLoc.VTX)
+    oc_edg = np.flatnonzero(locs == BaryLoc.EDG)
+
+    m = 3 ** (levels + 1)
+    for got, want, what in (
+        (verts.shape[0], (m + 1) * (m + 2) // 2, 'vertices'),
+        (tris.shape[0], 9 ** (levels + 1), 'triangles'),
+        (oc_vtx.shape[0], 3, 'octant corner vertices'),
+        (oc_edg.shape[0], 3 * m - 3, 'octant seam vertices'),
+    ):
+        if got != want:
+            raise ValueError(f'octant_grid(levels={levels}, octant_id={octant_id}): '
+                             f'{what} count {got} is not {want}')
+    return verts, tris, oc_vtx, oc_edg, cmp
 
 
 def net_polys(reg, n_oct):
