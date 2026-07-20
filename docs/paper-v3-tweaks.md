@@ -382,6 +382,50 @@ mark ☑ when applied to `paper-draft.md`.
 
 ## Pending
 
+- ◐ **OGC API–DGGS issue + outreach (2026-07-11)**: index-vs-geometric
+  relation ambiguity in zone parents/children; propose
+  ancestors/descendants + depth (default 1, EXACTLY-AT-DEPTH — no
+  range/chain, settled) + mandatory conformance DECLARATION of the
+  relation (no per-request param, settled) + 4 conformance properties
+  (transitivity/count/containment/partition) + carrier documentation.
+  Draft: docs/ogc-api-dggs-issue-draft.md (Ben generalised wording to
+  "non-congruent systems"). Reproducible H3 divergence example minted
+  (leaf 87390d509ffffff: cell_to_parent 85390d53fffffff vs geometric
+  container 85390d57fffffff). INSIGHT NOTE for informal seeding drafted:
+  docs/dggs-two-hierarchies-note.md (geoplegma Signal board / AJ Friend
+  on H3 Slack); co-signing (Felix) parked pending negotiation.
+  PAPER v3 EDIT DONE: non-transitivity price stated — §10b forward-ref
+  (split x_cells ⇒ multi-level ancestry ≠ composed parentage; transitive
+  tree lives on d_cells) + §12 passage after the nesting figure prose
+  (coherence vs transitivity impossibility, 1/6 non-converging composed
+  measure, H3/S2 as the other corners, located-not-lost, roll-up
+  consumer guidance); PDF rebuilds clean. Repo/script/implementation
+  links FILLED in both drafts (github.com/MrBenGriffin/hex9, verified
+  present on public main).
+  REWORKED 2026-07-11 after Ben spotted issue #106 (jerstlouis,
+  "Correct sub-zone definition"): the target is the APPROVED Standard
+  21-038r1, which has NO parents/children endpoints — hierarchy =
+  sub-zones (term 4.11 = COVERAGE, partial containment, a THIRD
+  relation) via parent-zone/zone-level/zone-depth + deterministic
+  sub-zone ordering; and Note 2 to 4.11 already ADMITS the
+  non-transitivity symptom. Old endpoint proposal dissolved (zone-level
+  already gives exactly-at-depth); new ask = taxonomy
+  (lineage/coverage/ownership) + "owned sub-zone" term + optional
+  owned-only Zone Query capability + DGGRS property declarations;
+  cross-references and supports #106. Insight note updated to match.
+  ISSUE FILED by Ben 2026-07-11 (tweaked + sent); insight note updated
+  to past tense.
+  NEW FIGURE (2026-07-11): docs/dggs/dggs_ownership.py →
+  dggs_ownership.png — lineage vs owned side by side, same anchor, same
+  scale per row, H3/A5/Hex9 (S2 omitted: panels identical). Ownership
+  for H3/A5 = centre-point rule via their PUBLIC APIs (no library
+  changes). Counts at gens 3: H3 12/343 out → 0/344; A5 22/64 out →
+  0/66; Hex9 108/729 → 0/729. Note the owned counts: H3 344 ≠ 7³,
+  A5 66 ≠ 4³ (no carrier ⇒ partition but NO count regularity), Hex9
+  exactly 9³ (carrier) — the conformance-properties argument in one
+  table. Figure link added to the note (valid once pushed).
+  REMAINING: push dggs_ownership.* ; paper link (arXiv queue — grep
+  both drafts); optionally attach the figure to the filed OGC issue.
 - ☐ **Address-arithmetic h9_cell_ancestor (Ben's rid/mode idea, confirmed
   2026-07-09)**: current impl (Py+C) is GEOMETRIC (decode → mode-0 nudge →
   re-bin); correct + byte-verified, but nudge margins scale 3⁻ᴸ so it
@@ -399,9 +443,60 @@ mark ☑ when applied to `paper-draft.md`.
   p_mo=50%). Pure-address ancestor = truncate + symbolic
   neighbour-hop cascade (odometer-style carry; C has the machinery in
   k_ring/resolve_frames, Python would need it built). Prototypes:
-  scratchpad rid_chain_proto.py / rid_fold_analysis.py. Options: (a)
-  expose rid/mode chain only, (b) full pure-address ancestor Py+C, (c)
-  keep geometric + document depth caveat.
+  scratchpad rid_chain_proto.py / rid_fold_analysis.py.
+  LANDED (2026-07-09, Ben's option "have the conversions anyway"):
+  x_adr⇔r_adr⇔d_adr as first-class functions in hhg9/h9/addressing.py —
+  hex_digits_reg/reg_hex_digits refactored onto shared engines
+  (_x_adr_backwalk / _r_adr_forward, byte-identical behaviour);
+  x_adr_to_r_adr / r_adr_to_x_adr / x_adr_to_d_adr / d_adr_to_x_adr /
+  d_adr_to_r_adr / r_adr_to_d_adr. Semantics pinned by tests
+  (tests/test_h9_adr_conversions.py, 16 tests; suite 486 green):
+  r_adr = the encoder's thread-region chain [proto, e_0..e_L] (e_L
+  normalised to the canonical '3' terminal); digit i's mode =
+  parity(e_{i-1}) (mode-recover resurrected — Ben optimised it out ~a
+  year ago); d_adr = (digit, mode) pairs, row 0 = (root hex, r_mo),
+  self-contained via the unique (digit, parent-ctx, child-mode) →
+  child-c2 inverse (_hex_reg_inv).
+  COMPLETED (2026-07-09): address-space canonicalise DONE —
+  addressing.x_adr_cell_ancestor: truncate the recovered region thread at
+  the target layer; fold mode-1 presentations via region_neighbours'
+  upward cascade (the existing symbolic odometer!); octant-crossing folds
+  via a NEW symbolic seam mirror (_y_mirror: classifier-cell y-flip
+  involution — chains mirror entry-wise because every level's frame
+  transform commutes with the flip — replacing canonicalise's geometric
+  xy_regions(flipped) re-descend); L0 targets canonicalise to the mode-0
+  octant rep. h9_cell_ancestor/h9_cell_parent now run this pure-address
+  path (reg param kept but unused); geometric _mode0_interior_pts+bin
+  retained as the cross-check oracle (test_cell_ancestor_address_equals_
+  geometric). VERIFIED byte-identical to the geometric derivation AND to
+  libhex9 C: all cells L1–L4 × every target (10 pairs), both KATs, all 6
+  vertex regions; suite 487 green. Perf (78k cells L4→L1): Py-address
+  0.56s, Py-geometric 0.36s, C 0.003s. d_cell⇔x_cell: no direct table
+  exists — conversions route via t_cell/r_adr (the walks), per Ben
+  acceptable.
+  BOTH FOLLOW-UPS DONE (2026-07-09): (a) C PORT of the address-space
+  fold — libhex9 h9kring::h9_cell_fold_uuid (h9_kring.h): backward pass
+  (already computed the rid chain) → truncate → region_neighbours
+  cascade → y-mirror on octant hops → forward walk; tables generated
+  from hhg9 by NEW tools/gen_fold_tables.py → core/h9_fold_tables.h
+  (CMC2N, TERM_C2 with nearest-group fallback baked in, CHILD_TRM,
+  PROTO, CMODE, YMIRROR; hhg9 = single source of truth). parent/ancestor
+  wrappers now call the fold; geometric h9_cell_bin_at_uuid KEPT as the
+  C-side oracle. Byte-identical to Python: all cells L1–L4 × every
+  target, KATs, vertices; 9^g exact over 708,588 L5 cells; ctest 11/11.
+  Perf: 708k cells in ~3ms (faster than the geometric C descent — pure
+  table walks, no doubles). (b) DELEGATION — hhg9 h9_cell_ancestor/
+  h9_cell_parent delegate to libhex9 hex9_cell_ancestor_many via the
+  accel backend (hhg9/accel/libhex9.py cell_ancestor_many; ctypes),
+  GATED on the nested-split KAT 5267.4→52.4 probed once per process (an
+  out-of-date lib silently falls back to the Python fold — no drift).
+  End-to-end 78k cells: 0.34s delegated vs 0.56s Python (~1.7× — the
+  remaining cost is Python uuid-object marshalling, the C call is 3ms).
+  Pure-Python fold stays covered by a direct test
+  (test_x_adr_cell_ancestor_equals_geometric); suite 488 green. NOTE:
+  accel discovery has no disable switch (env path can't veto the
+  conventional-dir fallback) — a HEX9_NO_ACCEL env would be a nice
+  follow-up.
 - ☑ **RESOLVED (2026-07-09, Ben's d_cell doctrine) — h9_cell_ancestor is
   the DIRECT leaf-reified d_cell relation, not parent∘parent**: the
   2026-07-08 composition implementation was wrong doctrine, exposed by
@@ -433,6 +528,265 @@ mark ☑ when applied to `paper-draft.md`.
   KATs, ctest 11/11.
 - ☐ Continue Ben's full offline read-through pass (carried over from v2
   tracker); further findings land here.
+
+## Queued 2026-07-19 — assertion audit after the via-sphere / wedge-CT /
+## libhex9-port week (L6_MOBIUS_WARP.md §§3.6–3.9)
+
+The engine changed under the paper: the default chain is now
+**via-sphere** — geodetic latitude → authalic latitude (Karney 6th-order
+series, the same reduction PROJ's `pj_authalic_lat` uses) → true-sphere
+core → ONE sphere-trained L6 warp (fundamental-domain wedge artifact,
+D3-exact fold evaluation) — and libhex9 implements the whole chain with
+1e-16 field parity. Items marked [RERUN] need regenerated example
+outputs (Ben's current examples sweep) before numbers can be replaced;
+[CALL] items need Ben's judgement on framing.
+
+### Claims now stale or wrong
+
+- ☐ **§14e "Other reference bodies" is now materially WRONG in Hex9's
+  favour**: "require only their own warp files … one-time cost of
+  roughly a day of unattended compute" — under via-sphere NO new warp
+  is computed for any body. The ellipsoid-specific part of the chain is
+  the *analytic* authalic-latitude series (full float64 accuracy for
+  |n| < 0.01 — every geodetic and IAU two-axis body; Mars n ≈ 0.0029,
+  Moon ≈ 0). One sphere-trained field serves them all; per-body cost is
+  a pair of series coefficients, i.e. zero. Rewrite §14e and the §15
+  "warp files for legacy ellipsoids … would demonstrate the generality
+  claim" item (the demonstration is now the construction itself).
+  Suggest citing Karney 2024 (Survey Review, "On auxiliary latitudes").
+  ALSO (agreed 2026-07-19): add a triaxial sentence — triaxial
+  *ellipsoids* (Phobos, Deimos, Amalthea as IAU triaxial fits) move
+  from unmentioned to in-scope-in-principle. The analytic series is
+  inapplicable (its exactness rests on rotational symmetry: only then
+  is the area element latitude-only and a 1D remap area-true), but the
+  §5 D2h economy holds — the three coordinate-plane mirrors act
+  transitively on the 8 octants, so ONE numerically computed field per
+  body serves all octants (the mode-1 y-flip IS one of those mirrors);
+  the face's internal symmetry is gone (three corners on three
+  different axes ⇒ trivial stabiliser ⇒ full-face training, no wedge).
+  Two routes: per-body transport warp against triaxial geodesic areas
+  (§11d's existing promise), or a one-time numeric 2D equal-area
+  reduction triaxial→sphere composed with the universal sphere field
+  (the via-sphere lesson generalised; cf. Nyrtsov et al. triaxial
+  equal-area cartography for Phobos). Missing ingredient is metrology,
+  not mathematics: triaxial surface-area machinery (our geodesic-area
+  code is biaxial). Genuinely irregular bodies stay out of scope as
+  now.
+
+- ☐ **§12 "Reference body" row needs reframing [CALL]**: it currently
+  *contrasts* Hex9 ("defined against any ellipsoid directly; warp
+  recomputed per body") with H3/S2/HEALPix ("sphere + auxiliary-latitude
+  transformation with its own distortion budget"). The default chain now
+  IS an auxiliary-latitude route — so the honest distinction shifts:
+  the authalic reduction is *exactly area-preserving by construction*
+  (it is the definition of authalic latitude), so for an equal-area
+  system it is lossless where it matters; the trade is a small,
+  characterised shape/distance effect (gcd RT parity restored by the
+  series to full equality with the classic chain: max 6.5 nm). Also
+  "trained warps currently exist for WGS84 and the sphere; the C
+  implementation is tuned for WGS84" → C now implements BOTH chains
+  (classic WGS84-trained field is legacy, EOL pending Ben's examples
+  sweep).
+
+- ☐ **§11b "precomputed once per ellipsoid and stored"** → precomputed
+  once, on the authalic sphere; stored as the fundamental-domain (1/6
+  wedge) artifact; evaluation folds by the D3 group so the six copies
+  cannot drift (equivariance at machine epsilon). One field, every
+  ellipsoid.
+
+- ☐ **§11b canonical statistics are stale [RERUN]**: the quoted census
+  (mean 0.000%, min −3.57%/max +4.80%, σ_log 1.99e-4, "all but 244 of
+  708,588 within 0.1%", the 48/12, 38/2, 36/2 class counts) describes
+  the WGS84-L5-trained field. Under the via-sphere default the
+  chain-level equal-area spread is ~20× tighter (battery FD probe:
+  p1–p99 0.999971–1.000038 vs 0.999142–1.000815) and the vertex tails
+  collapse (field ±0.4% vs the old ±4–5%). Replace with the regenerated
+  ex0081w / ex0118 / ex0124 numbers once the examples sweep produces
+  them; figures f-ex0081wau/f-ex0118/f-ex0124 regenerate with them.
+  **ex0124 numbers IN (2026-07-19, rebuilt via-sphere cache)**: 252 of
+  708,588 cells >0.1% (was 244), **0 cells >1%** (was 16), extreme
+  **−0.289%** all-deficit (was +4.80%), RMS |dev| 0.00385%, p99.9
+  0.031%; classed cells reach 444 km from their vertices (identical at
+  all six). ex0081w / ex0118 numbers still pending.
+
+- ☑ **§11b three-class vertex census: the equatorial-pair split likely
+  DISSOLVES [RERUN, then rewrite]**: the current text argues the
+  0°/180° vs 90°E/W split "cannot follow from oblateness … and is
+  structural in origin". The wedge-fold evaluation is exactly
+  D3-equivariant and the sphere core is rotationally symmetric, so
+  under via-sphere the only vertex differentiation left is
+  poles-vs-equator through the authalic reduction: the two equatorial
+  pairs should now be EXACTLY equal, and the old split is revealed as a
+  property of the *trained-field asymmetry* (the WGS84 field had only
+  the mirror, not D3) rather than of the construction. If ex0124
+  confirms, the paragraph inverts into a stronger story: the symmetric
+  construction *removes* a residual the asymmetric field had — and the
+  control-run footnote needs the same update. If the split survives,
+  that is genuinely interesting and the text stands with new numbers.
+
+  **CONFIRMED 2026-07-19 — and stronger than predicted**: ex0124 rerun
+  (rebuilt via-sphere cache) shows not just the equatorial pairs but
+  ALL SIX vertices spectrally identical — sorted top-40 |dev|% spectra
+  agree pairwise to 0.00000 and across the former classes to ≤0.00001
+  percentage points. The anticipated poles-vs-equator residual through
+  the authalic reduction is absent too, and had to be: the reduction is
+  exactly area-preserving, so it cannot differentiate an area census at
+  all — the WGS84 census inherits the sphere's vertex equivalence
+  unchanged. 42 cells >0.1% per vertex (6×42 = 252), morphology shared
+  (deficit cross of rays on all four meeting seams, near-white core).
+  ex0124 docstring + hardcoded colourbar caption updated to match; the
+  `--raw` control note updated (under the via-sphere default it now
+  measures raw *spherical* AK; the classic three-class control needs
+  via_sphere=False as well). PROPOSED §11b replacement text (Ben to
+  fine-tooth-comb):
+
+  > Under the via-sphere chain the vertex census collapses to a single
+  > class. At L5, all but 252 of 708,588 cells lie within 0.1% of ideal
+  > area, no cell reaches 1%, and the extreme deviation is −0.29%. The
+  > exceptions still cluster at the six octahedral vertices — but the
+  > three classes of the per-ellipsoid realisation are gone: each
+  > vertex carries the same 42 cells beyond 0.1%, and the six sorted
+  > deviation spectra agree to 1×10⁻⁵ percentage points, pairwise and
+  > across the former classes. The mechanism is the symmetry argument
+  > run in reverse. The spherical core and its trained field are
+  > equivariant under the full octahedral rotation group, which carries
+  > any vertex — together with its L0 join structure — onto any other;
+  > and because the authalic reduction is exactly area-preserving, the
+  > ellipsoidal census inherits the spherical one unchanged: not even a
+  > polar-versus-equatorial residual survives. The v2 three-class split
+  > (48/38/36 cells per vertex beyond 0.1%, extremes +4.8%, 2.1%,
+  > 2.6%) is thereby identified as a property of the per-ellipsoid
+  > field — trained against an oblate target that retains only a
+  > mirror of the octant's symmetry — and not of the construction. The
+  > symmetric chain does not merely shorten the deviation tails
+  > seventeen-fold; it removes a class structure the asymmetric field
+  > could not.
+
+- ☐ **§15 "Warp refinement" future-work items are DONE**: "deeper-layer
+  warps (L6+ derived rather than interpolated) would reduce the
+  inter-mode residual" — the L6 Möbius fundamental-domain field is
+  trained, deployed, and default (wMAE 3× better than WGS84-L5; vertex
+  tails ±10–13% → ±0.4% at field level). Move from future work to
+  §11b/§13 as delivered, keep the strictly-authalic trade-off curve and
+  the vertex-zone radius measurement as the remaining items.
+
+- ☐ **§15 "Verification" C1 item is DONE — and sharper than asserted**:
+  "C1 continuity of the warp at octant boundaries is asserted from the
+  construction and should be characterised explicitly" → now
+  machine-verified: seam tangency exact by construction (edge-tangent
+  data + Hermite argument), and a dense Jacobian sweep (180,901 pts)
+  certifies det(J) ≥ +0.898, zero folds, max anisotropy 1.39 — i.e.
+  C1, orientation-preserving, and INJECTIVE. Honesty note available if
+  wanted: C1 across the wedge fold lines requires exactly-symmetric
+  halo data (a subtlety found and fixed 2026-07-19 when a non-exact
+  construction produced a measured 1.6e-6 non-injectivity near the
+  equatorial vertices — L6_MOBIUS_WARP.md §3.7c). §10e/§A "the warp is
+  C1 by the Clough-Tocher construction" line can now carry the
+  verification citation instead of the bare assertion.
+
+- ☐ **§13c library description**: "with the trained WGS84 warp embedded
+  in the library" → libhex9 now embeds two fields: the classic WGS84 v3
+  blob and the Sphere-L6 fundamental-domain v4 blob (wedge deltas +
+  final gradients; the C side rebuilds halos and the triangulation
+  deterministically — no Qhull, no gradient estimation — and matches
+  the Python reference at 1.1e-16, i.e. machine epsilon; end-to-end
+  chain parity 1.4e-15 b_oct units, zero octant mismatches). Worth a
+  sentence: this is a stronger reproducibility statement than v2's
+  "bit-identical through level 4" ancestry claim.
+
+- ☐ **§11d "no working implementation of the octahedral Snyder having
+  been found to test against" is STALE**: an octahedral variant now
+  exists — contributed by us to Felix Palmer's polyhedral-Snyder PROJ
+  PR (#4758, OSEA); its seams align exactly with the h9_boct octant
+  boundaries and equal-area holds to FD noise. Soften or update
+  depending on PR status at v3 submission time [CALL — OSEA push is
+  itself pending].
+
+- ☐ **§11d "WGS84 and GRS80 … a single warp file serves both"** — true
+  but now understated: a single warp file serves *every* body (the
+  series carries the difference). Merge into the via-sphere rewrite.
+
+- ☐ **§11d rewrite: retire "defined against the ellipsoid directly",
+  tell the journey instead (AGREED with Ben 2026-07-19, contingent on
+  the WGS84-field EOL landing before v3)**. Retitle §11d to
+  "Projection and Body Independence"; the per-ellipsoid design is
+  described *as the journey* — preserving the v2 record honestly
+  without keeping it as a live claim. The census inversion (if ex0124
+  confirms) lands in §11b, where the census lives. PROPOSED text
+  (Ben to fine-tooth-comb):
+
+  > The realisation did not begin body-independent. The first design
+  > trained the transport warp per ellipsoid, against geodesic areas
+  > on WGS84 directly — workable, but the ellipsoid's oblateness
+  > reduces the octant's dihedral symmetry to a single mirror, so the
+  > trained field could neither exploit the grid's full symmetry nor
+  > serve any other body without retraining. The present chain factors
+  > the body out first: the authalic latitude carries the entire
+  > ellipsoid-dependence in one exact, analytic map (area-true by
+  > definition), leaving a single spherical problem with the octant's
+  > full D3 symmetry. That symmetry pays repeatedly: the field is
+  > trained on a 1/6 fundamental wedge and evaluated by folding,
+  > making equivariance exact rather than approximate; the vertex
+  > tails drop an order of magnitude; and any two-axis body with
+  > |n| < 0.01 — every geodetic and IAU ellipsoid — is served by the
+  > same field through its own series coefficients. The lesson we
+  > would offer other grid builders: choose the auxiliary latitude
+  > that is exact for the property your system optimises, and train
+  > against the symmetric core it exposes.
+
+  Framing decisions recorded: (a) the §12 "Reference body" row is
+  rewritten per the item above (the surviving contrast is "the
+  reduction is specified, exact for the claimed property, and the
+  composite is measured" — NOT "we use no auxiliary latitude");
+  (b) the paper commits to the one-chain (via-sphere) story once EOL
+  lands — the classic chain appears only in the journey paragraph and,
+  if kept anywhere technical, as the two-independent-chains validation
+  note (agreement ≤ 6.5 nm).
+
+- ☐ **Abstract + §11 intro framing**: "only the warp is specific to the
+  reference body, and it is recomputable for any ellipsoid, terrestrial
+  or planetary" → "the realisation is body-independent up to an
+  analytic latitude reduction; a single sphere-computed warp serves
+  every reference ellipsoid". Simpler and stronger. Pipeline figure
+  F11 gains the authalic-latitude front-end box (g → ξ → sphere core →
+  b_raw → warp → b_oct).
+
+- ☐ **§12 survey number "0.10% area variation" [RERUN]**: regenerate the
+  survey table under the via-sphere default (dggs_survey tooling) — the
+  Hex9 row tightens; H3/S2 rows unchanged.
+
+- ☐ **§11b round-trip number**: "returns to within 1.8 nm" was the old
+  validation-point set; current battery (20,093 pts incl. ±89.9999°):
+  gcd RT med 1.06 / p99 3.4 / max 6.5 nm — same conclusion, fresher and
+  more adversarial provenance. Update number + footnote source.
+
+### Candidate additions [CALL]
+
+- ☐ **Curve/linearisation work is entirely absent from the paper.** Now
+  in both libraries: a deterministic hierarchical space-filling curve
+  from the proven 5-pattern self-similar grammar over the Hamiltonian
+  cycles, a CLOSED row-automaton result (exactly 36 states,
+  machine-verified), uuid ↔ curve-address translation at any depth
+  (sortable key column; round-trip demos in examples). Options: (a) a
+  §13 tooling paragraph + a §12 locality remark (S2 has Hilbert, H3 has
+  none native, Hex9 now has a native curve); (b) defer wholly to the
+  planned companion note (product-automaton proof + narrative) and just
+  forward-reference it. Recommend (a) minimal + forward reference —
+  the full theory deserves its own venue.
+
+- ☐ **§13e PROJ paragraph could cite the `+authalic` prototype result**:
+  one sphere field behind an exact latitude reduction inside PROJ
+  itself, p1–p99 area ratio 0.9979–1.0023 on WGS84 at 1024² — direct
+  evidence for the "registrable projected CRS" deferral being real
+  rather than aspirational. Also strengthens §13e/App B's ISO 19111
+  track framing.
+
+### Rerun dependency list (Ben's examples sweep feeds these)
+
+ex0080w (canonical warp stats), ex0081w (vertex bloom figure + stats),
+ex0118 (Mollweide pattern view), ex0124 (+ `--raw` control; three-class
+census — the equatorial-pair question above), dggs survey table (§12),
+battery numbers already in hand (L6_MOBIUS_WARP.md §3.6b/§3.8).
 
 ## When v3 goes up
 
