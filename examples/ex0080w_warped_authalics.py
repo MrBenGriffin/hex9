@@ -14,14 +14,11 @@ Last Tested
 16 Dec 2025 0.1.0a3 (passed)
 25 Nov 2025 (passed)
 """
-import csv
-from pathlib import Path
-
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from hhg9 import Registrar, Points
-from hhg9.algorithms.distance import wgs84_area, ellipsoid_area_wgs84, wgs84
+from hhg9.algorithms.distance import wgs84_area, wgs84
 from hhg9.h9 import H9_RA, H9O
 from hhg9.h9.region import regions_xy
 from hhg9.h9.polygon import hex_poly_layer

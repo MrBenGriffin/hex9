@@ -14,7 +14,6 @@ Last Tested
 16 Dec 2025 0.1.0a3 (passed)
 25 Nov 2025 (passed)
 """
-import csv
 import numpy as np
 from matplotlib import pyplot as plt, colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection

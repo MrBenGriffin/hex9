@@ -35,9 +35,11 @@ import os
 from pathlib import Path
 
 import numpy as np
-import json
+import csv
+from matplotlib import colormaps
 
 from hhg9 import Registrar, Points
+from hhg9.h9.uuid_address import h9_bin_pts
 from hhg9.rendering.composition import (LayerSpec, Compositor,
                                         make_local_backdrop,
                                         estimate_backdrop_size)
@@ -46,11 +48,9 @@ from hhg9.rendering.render import plot_hex
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
 ESRI_WMTS = ('https://services.arcgisonline.com/arcgis/rest/services/'
              'World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml')
 ESRI_CREDIT = 'Esri World Imagery · Esri, Maxar, Earthstar Geographics'
-
 LEVELS = (5, 6, 7)         # L11 ≈ 22.8 m/side, L13 ≈ 2.5 m/side
 BACKDROP_M_PER_PX = 80.0     # Esri imagery is ~0.3 m here
 
@@ -74,6 +74,30 @@ if __name__ == '__main__':
     imagery = make_wmts_source(ESRI_WMTS, 'World_Imagery', rg, b_oct,
                                cache_dir=os.path.join(HERE, 'wmts_cache'),
                                attribution=ESRI_CREDIT)
+    pop_repo = np.load(f'{HERE}/src/bhutan_pop.npz', allow_pickle=True)
+    b_pop = pop_repo['bhutan_pop']
+    bhutan_pop = Points(b_pop[:, [0, 1]], samples=b_pop[:, 2], domain=g_gcd)
+
+    FILL_LEVEL = LEVELS[2]
+
+    # once, before building specs
+    pop_b = rg.project(bhutan_pop, [g_gcd, b_oct])
+    keys = h9_bin_pts(pop_b, FILL_LEVEL)  # one UUID per point
+    pop_sum: dict = {}
+    for k, w in zip(keys, b_pop[:, 2]):
+        pop_sum[k] = pop_sum.get(k, 0.0) + float(w)
+    pop_vmax = np.log1p(max(pop_sum.values()))
+    pop_cmap = colormaps['cividis']       # luminance-monotone blue→yellow
+
+
+    def pop_source(ctrs: Points) -> np.ndarray:
+        cell_keys = h9_bin_pts(ctrs, FILL_LEVEL)  # ctrs already b_oct + oid
+        sums = np.fromiter((pop_sum.get(k, 0.0) for k in cell_keys),
+                           dtype=np.float64, count=len(cell_keys))
+        rgba = pop_cmap(np.log1p(sums) / pop_vmax)
+        rgba[:, 3] = 0.85
+        rgba[sums == 0.0] = np.nan        # empty cells → transparent
+        return rgba
 
     specs = [
         LayerSpec(level=LEVELS[0], kind='outline', labels=True, reference=True,
@@ -81,7 +105,7 @@ if __name__ == '__main__':
                          'label_color': '#ffcc00'}),
         LayerSpec(level=LEVELS[1], kind='outline',
                   style={'lw': 0.4, 'ec': '#66ccff90'}),
-        LayerSpec(level=LEVELS[2], kind='outline',
+        LayerSpec(level=LEVELS[2], kind='fill', source=pop_source,
                   style={'lw': 0.2, 'ec': '#ffffff40'}),
     ]
 

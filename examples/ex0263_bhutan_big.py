@@ -44,15 +44,17 @@ from hhg9.h9 import H9O
 from hhg9.h9.grid import HexMesh
 from hhg9.h9.uuid_address import h9_bin_pts
 
-LAYER = 7                                   # ~3.5 km hexes over Bhutan
+LAYER = 6                                   # ~3.5 km hexes over Bhutan
 
 
 def load_population(path):
     """Return (lon, lat, pop) arrays from the point GeoJSON."""
-    feats = json.load(open(path))['features']
-    lon = np.array([f['properties']['longitude'] for f in feats])
-    lat = np.array([f['properties']['latitude'] for f in feats])
-    pop = np.array([f['properties']['population'] for f in feats], dtype=float)
+    pop_repo = np.load(path, allow_pickle=True)
+    b_pop = pop_repo['bhutan_pop']
+    # bhutan_pop = Points(b_pop[:, [0, 1]], samples=b_pop[:, 2], domain=g_gcd)
+    lon = b_pop[:, 1]
+    lat = b_pop[:, 0]
+    pop = b_pop[:, 2]
     return lon, lat, pop
 
 
@@ -70,7 +72,7 @@ if __name__ == '__main__':
     b_oct = reg.domain('b_oct')
     g_gcd = reg.domain('g_gcd')
 
-    lon, lat, pop = load_population('src/bhutan.geojson')
+    lon, lat, pop = load_population(f'src/bhutan_pop.npz')
     print(f'{len(pop)} points, total population {pop.sum():,.0f}')
 
     # Aggregate population by canonical layer-L bin of each point.
