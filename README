@@ -8,6 +8,20 @@ Examples and further documentation may be found on the git repository.
 
 #### Changelog
 ```
+0.3.0a1   One projection chain (BREAKING): the classic per-ellipsoid regime is
+          retired and set_ellipsoid() no longer takes via_sphere. All addressing
+          runs through the unit authalic sphere, so one trained field serves
+          every ellipsoid. The two chains minted different addresses below
+          layer 5 with nothing in the address to say which; only the via-sphere
+          ones remain valid.
+          libhex9 acceleration works again, and now needs libhex9 2.0.0+: 2.0.0
+          dropped the regime toggle hhg9 had been probing for, so the backend
+          had been silently falling back to pure Python (~200x slower on
+          lat/lon -> b_oct). Parity with the Python reference is 1.7e-15.
+          Fixed: a region spanning a meridian seam rendered empty under the
+          dynamic local net - octant corner coincidence was tested in
+          (lat, lon), where a pole corner has arbitrary longitude.
+          Obsolete reference-engine tests removed. 532 tests passing.
 0.3.0a0 New authalising warp (BREAKING):
         sphere symmetric warp + authalic latitude substantially reduces
         remaining area deficit. Now no area is >±1% equal-area, and only
