@@ -635,9 +635,12 @@ outputs (Ben's current examples sweep) before numbers can be replaced;
   unchanged. 42 cells >0.1% per vertex (6×42 = 252), morphology shared
   (deficit cross of rays on all four meeting seams, near-white core).
   ex0124 docstring + hardcoded colourbar caption updated to match; the
-  `--raw` control note updated (under the via-sphere default it now
-  measures raw *spherical* AK; the classic three-class control needs
-  via_sphere=False as well). PROPOSED §11b replacement text (Ben to
+  `--raw` control note updated (it now measures raw *spherical* AK). The
+  classic three-class control can no longer be re-run at all: the
+  per-ellipsoid chain was retired on 2026-07-21 (its trained WGS84 field
+  no longer ships and libhex9 dropped the regime at 2.0.0), and the
+  `via_sphere` argument went with it. The v2 numbers above stand as
+  recorded history. PROPOSED §11b replacement text (Ben to
   fine-tooth-comb):
 
   > Under the via-sphere chain the vertex census collapses to a single

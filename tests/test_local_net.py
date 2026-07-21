@@ -45,15 +45,14 @@ B_DLL = np.array([
 @pytest.fixture(scope="module")
 def reg():
     from hhg9 import Registrar
-    # Pinned to the CLASSIC chain: the expectations below (octant spans of
-    # clipped meshes, seam-vertex flag sets) were derived under the
-    # WGS84-trained warp; the via-sphere default shifts cell membership at
-    # clip boundaries by the warp-field difference. The local-net logic is
-    # chain-agnostic — revisit expectations when local-net work resumes.
-    r = Registrar()
-    r.set_ellipsoid(a=6378137.0, inv_f=298.257223563, name='WGS84',
-                    via_sphere=False)
-    return r
+    # The DEFAULT via-sphere chain. This was pinned to the classic
+    # (WGS84-trained) chain, but that regime is retired on both sides — no
+    # WGS84_*_warp_data.npz ships any more, and libhex9 2.0.0 dropped the
+    # regime toggle. The pin only appeared to work because the lib was being
+    # handed classic requests and quietly answering with via-sphere numbers;
+    # the expectations below (octant spans, seam-vertex flag sets) were
+    # therefore always via-sphere ones. They hold unchanged here.
+    return Registrar()
 
 
 @pytest.fixture(scope="module")
@@ -109,6 +108,26 @@ def test_guard_discriminates(n_oct):
     assert whole.unreached == []        # all reachable via oid_nb
     assert whole.residual < 1e-9        # tree closes (rotation hinge), net-independent
     assert whole.cut_residual > 0.1     # but wrapping cone vertices needs cuts
+
+
+def test_meridian_hinges_close_on_the_default_chain():
+    """Corner coincidence must be tested on the sphere, not on (lat, lon).
+
+    The fixtures above pin the classic chain; the DEFAULT via-sphere chain hands
+    back an arbitrary longitude for an octant apex (it IS a pole), so a (lat,
+    lon) match missed every meridian hinge — the far octant went unreached, its
+    cells placed to NaN, and a whole region silently vanished (ex0254).
+    """
+    from hhg9 import Registrar
+    n_oct = Registrar().domain('n_oct:butterfly')       # default chain
+    for a, b in ((0, 2), (0, 1), (1, 3), (4, 5)):       # pole-sharing pairs
+        ll = n_oct.local_layout([a, b])
+        assert ll.unreached == [], f'{a}->{b} not hinged'
+        assert set(ll.layout) == {a, b}
+        assert ll.residual < 1e-12
+    whole = n_oct.local_layout(range(8), fundamental=0)  # ±180 fold too
+    assert whole.unreached == []
+    assert whole.residual < 1e-9
 
 
 def test_local_layout_is_net_independent(reg):

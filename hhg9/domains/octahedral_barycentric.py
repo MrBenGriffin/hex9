@@ -1136,23 +1136,23 @@ class OctahedralBarycentric(CompositeDomain):
         # Warp source: the F6-retrained authalic blob, built LAZILY (see the
         # `warp` property). The legacy pkdo / 'linear' warps are fossils — removed.
         pkg = "hhg9.data"
-        # via-sphere: the engine is the unit authalic sphere whatever the
-        # source ellipsoid, so the warp is the Sphere-trained field.
-        ell = ('Sphere' if getattr(registrar, 'via_sphere', False)
-               else registrar.ellipsoid_name)
-        # Preference order: deepest available field for this ellipsoid, the
-        # compact fundamental-domain artifact ahead of the full-face unfold
-        # (AuthalicWarp unfolds 1/6 → face on load); WGS84 l5 as the final
-        # fallback for ellipsoids with no trained field of their own.
+        # The engine is the unit authalic sphere whatever the source
+        # ellipsoid, so the warp is ALWAYS the Sphere-trained field — one
+        # field for every ellipsoid, which is the whole point of the chain.
+        # Preference order: the compact fundamental-domain artifact ahead of
+        # the full-face unfold (AuthalicWarp unfolds 1/6 → face on load).
         data = None
-        for name in (f"{ell}_l6_fund_warp_data.npz",
-                     f"{ell}_l6_warp_data.npz",
-                     f"{ell}_l5_warp_data.npz",
-                     "WGS84_l5_warp_data.npz"):
+        for name in ("Sphere_l6_fund_warp_data.npz",
+                     "Sphere_l6_warp_data.npz"):
             cand = resources.files(pkg).joinpath(name)
             if cand.exists():
                 data = cand
                 break
+        if data is None:
+            raise FileNotFoundError(
+                f"no Sphere warp field in {pkg}: expected "
+                "Sphere_l6_fund_warp_data.npz. Without it the octahedral "
+                "engine has no area-balancing field and cannot project.")
         self._warp_spec = (data, None)
 
         registrar.register_bridge(['c_oct', 'b_raw', 'b_oct'])
@@ -1162,13 +1162,12 @@ class OctahedralBarycentric(CompositeDomain):
         # AHEAD of the bridge above (a direct projection beats a bridge in
         # _check_chain). It honours no_lib() by falling through to that exact
         # bridge, so the pure-Python path stays the canonical reference.
-        # libhex9 implements the WGS84 chains only — classic (WGS84-trained
-        # warp) always; via-sphere (authalic series + sphere core + Sphere-L6
-        # wedge-fold) when the build exports hex9_set_via_sphere. Other
-        # ellipsoids stay pure Python.
-        _via = getattr(registrar, 'via_sphere', False)
+        # The build must implement the via-sphere chain (authalic series +
+        # sphere core + Sphere-L6 wedge-fold): 2.0.0+ always does, a pre-2.0.0
+        # build only if it exports the hex9_set_via_sphere toggle. libhex9
+        # front-ends the WGS84 ellipsoid only; others stay pure Python.
         if (self._lib is not None and registrar.ellipsoid_name == 'WGS84'
-                and (not _via or getattr(self._lib, 'has_via_sphere', False))):
+                and getattr(self._lib, 'has_via_sphere', False)):
             from hhg9.projections.gcd_boct_lib import GcdBoctLib
             GcdBoctLib(registrar)
         else:

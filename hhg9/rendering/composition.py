@@ -197,10 +197,17 @@ def _coherent_mask(polys: NDArray, factor: float = 3.0) -> NDArray:
     if len(polys) == 0:
         return np.zeros(0, dtype=bool)
     edges = np.linalg.norm(polys - polys[:, [1, 2, 3, 4, 5, 0]], axis=2)   # (N,6)
-    med = float(np.median(edges))
+    # A hex with a vertex in an unplaced octant is NaN — drop it, but keep it
+    # out of the median (one NaN would otherwise poison the whole layer).
+    finite = np.isfinite(edges).all(axis=1)
+    if not finite.any():
+        return finite
+    med = float(np.median(edges[finite]))
     if med == 0:
-        return np.ones(len(polys), dtype=bool)
-    return edges.max(axis=1) <= factor * med
+        return finite
+    keep = np.zeros(len(polys), dtype=bool)
+    keep[finite] = edges[finite].max(axis=1) <= factor * med
+    return keep
 
 
 def _point_in_tri(pts: NDArray, tri: NDArray) -> NDArray:
@@ -569,6 +576,13 @@ class Compositor:
             return []
 
         layout = self.n_oct.local_layout(sorted(octs))
+        if layout.unreached:
+            # Everything in an unreached octant places to NaN and is dropped by
+            # the coherence guard — silently, and it looks like a clip failure.
+            import warnings
+            warnings.warn(
+                f'local_layout could not hinge octants {layout.unreached} onto '
+                f'{sorted(octs)[0]}; their cells will be dropped.', RuntimeWarning)
         self.layout = layout
         self.local_residual = layout.residual
         self.local_cut = layout.cut_residual

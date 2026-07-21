@@ -31,7 +31,7 @@ except ImportError:
 # --- WORKER (top-level for pickling) ---
 
 def _worker_project_gcd_to_bary(chunk_ll: np.ndarray, warp_file: str = None, accuracy: float = 1e-9,
-                                ellipsoid=None, via_sphere: bool = False):
+                                ellipsoid=None):
     """
     Process worker: rebuilds the minimal projection stack, injects the warp
     file, and projects one chunk g_gcd -> b_oct.
@@ -43,13 +43,13 @@ def _worker_project_gcd_to_bary(chunk_ll: np.ndarray, warp_file: str = None, acc
     reg = Registrar()
     if ellipsoid is not None:
         a, f, name = ellipsoid
-        reg.set_ellipsoid(a=a, f=f, name=name, via_sphere=via_sphere)
-    cart = 'c_sph' if via_sphere else 'c_ell'
+        reg.set_ellipsoid(a=a, f=f, name=name)
+    cart = 'c_sph'
     _ = reg.domain('g_gcd')
     _ = reg.domain(cart)
     _ = reg.domain('c_oct')
     b_oct = reg.domain('b_oct')
-    reg.projection('oct_sph' if via_sphere else 'oct_ell').accuracy = accuracy
+    reg.projection('oct_sph').accuracy = accuracy
     if warp_file:
         b_oct.set_warp(warp_file)
     pts = Points(np.ascontiguousarray(chunk_ll, dtype=np.float64), 'g_gcd')
@@ -59,7 +59,7 @@ def _worker_project_gcd_to_bary(chunk_ll: np.ndarray, warp_file: str = None, acc
 
 
 def _project_gcd_to_boct_parallel(ll_array: np.ndarray, warp_file, accuracy, workers=0, chunk=8_000,
-                                  ellipsoid=None, via_sphere=False):
+                                  ellipsoid=None):
     """Orchestrate process-parallel projection over chunks of ll_array."""
     if workers <= 0:
         import os
@@ -71,7 +71,7 @@ def _project_gcd_to_boct_parallel(ll_array: np.ndarray, warp_file, accuracy, wor
               for i in range(0, len(ll_array), chunk)]
 
     worker_func = partial(_worker_project_gcd_to_bary, warp_file=warp_file, accuracy=accuracy,
-                          ellipsoid=ellipsoid, via_sphere=via_sphere)
+                          ellipsoid=ellipsoid)
 
     out_coords, out_oids = [], []
     with ProcessPoolExecutor(max_workers=workers) as ex:
@@ -123,12 +123,10 @@ class GCDBary(Projection):
         # Use the cheap warp_file property — reading .warp would force the lazy
         # CT/Newton build (see OctahedralBarycentric.warp).
         self.warp_file = self.b_oct.warp_file
-        # via-sphere: route through the unit authalic sphere (c_sph) instead
-        # of the source ellipsoid ECEF (c_ell).
-        self._via = bool(getattr(registrar, 'via_sphere', False))
-        self._cart = 'c_sph' if self._via else 'c_ell'
-        self.accuracy = registrar.projection(
-            'oct_sph' if self._via else 'oct_ell').accuracy
+        # The engine always runs on the unit authalic sphere (c_sph), never
+        # the source ellipsoid ECEF (c_ell) — Registrar.via_sphere is constant.
+        self._cart = 'c_sph'
+        self.accuracy = registrar.projection('oct_sph').accuracy
         geo = registrar.ellipsoid
         self._ell = (geo.a, geo.f, registrar.ellipsoid_name)
 
@@ -161,7 +159,6 @@ class GCDBary(Projection):
             workers=self.workers or 0,
             chunk=self.chunk,
             ellipsoid=self._ell,
-            via_sphere=self._via,
         )
         return Points(xy, self.fwd_cs, oid=oid, samples=arr.samples)
 

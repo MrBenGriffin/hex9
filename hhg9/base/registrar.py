@@ -40,21 +40,26 @@ class Registrar:
     • projections (as classes)
     """
 
+    #: The g_gcd↔b_raw chain always routes through the unit authalic sphere.
+    #: Constant, not a setting — see __init__ for why the classic chain went.
+    via_sphere = True
+
     def __init__(self):
         self.ellipsoid = Geodesic.WGS84
         self.ellipsoid_name = 'WGS84'
-        # via_sphere: route g_gcd↔b_raw through the unit authalic sphere
-        # (c_sph) — exact authalic-latitude datum reduction at the boundary,
-        # purely spherical octahedral engine (AK a=b=1, Sphere-trained warp)
-        # inside. c_ell keeps the true source ellipsoid either way.
-        # DEFAULT since 2026-07-18: the via-sphere chain (equal-area ~20×
-        # tighter, round-trip parity — see L6_MOBIUS_WARP.md §3.6). The
-        # classic chain (ellipsoid AK + per-ellipsoid trained warp) remains
-        # available via set_ellipsoid(..., via_sphere=False); note the two
-        # chains yield different b_oct coordinates (and hence addresses at
-        # depth), and the libhex9 accelerator currently implements only the
-        # classic WGS84 chain. Set BEFORE the first domain() call.
-        self.via_sphere = True
+        # g_gcd↔b_raw routes through the unit authalic sphere (c_sph): exact
+        # authalic-latitude datum reduction at the boundary, purely spherical
+        # octahedral engine (AK a=b=1, Sphere-trained warp) inside. c_ell
+        # keeps the true source ellipsoid.
+        #
+        # This is the ONLY chain. It became the default on 2026-07-18 (equal
+        # area ~20× tighter, round-trip parity — L6_MOBIUS_WARP.md §3.6) and
+        # the classic per-ellipsoid chain was retired on 2026-07-21: its
+        # trained WGS84 field no longer ships, and libhex9 dropped the regime
+        # at 2.0.0 because the two chains mint DIFFERENT addresses below
+        # layer 5 with nothing in a 16-byte address to record which made it.
+        # The attribute is kept (read by the projection factories) but is a
+        # constant — there is no longer a via_sphere argument anywhere.
         self._ellipsoid_area = None
         self._domains = {}
         self._projections = {}
@@ -79,15 +84,15 @@ class Registrar:
                     self._ellipsoid_area = 510065621724088.50944  # WGS84 fallback
         return self._ellipsoid_area
 
-    def set_ellipsoid(self, *, a, f=None, inv_f=None, name='Unknown Ellipsoid',
-                      via_sphere=None):
+    def set_ellipsoid(self, *, a, f=None, inv_f=None, name='Unknown Ellipsoid'):
         """Set the reference ellipsoid. Pass either f (flattening) or inv_f
-        (inverse flattening). via_sphere routes the g_gcd↔b_raw chain
-        through the unit authalic sphere (exact geodetic↔authalic latitude
-        at the boundary; spherical AK core; Sphere-trained warp) — c_ell
-        and geodesic calculations keep the true ellipsoid set here.
-        None (default) preserves the registrar's current setting; pass
-        False explicitly for the classic per-ellipsoid chain."""
+        (inverse flattening).
+
+        The ellipsoid set here is the true one: it drives the authalic
+        latitude reduction at the g_gcd boundary, c_ell, and all geodesic
+        calculation. The octahedral engine itself always runs on the unit
+        authalic sphere (see :attr:`via_sphere`), so one trained warp field
+        serves every ellipsoid. Set BEFORE the first domain() call."""
         if f is None and inv_f is not None:
             f = 1.0 / inv_f
         elif f is None:
@@ -95,8 +100,6 @@ class Registrar:
         self.ellipsoid = Geodesic(a, f)
         self._ellipsoid_area = None
         self.ellipsoid_name = name
-        if via_sphere is not None:
-            self.via_sphere = bool(via_sphere)
 
     def register_bridge(self, _chain: list):
         """Register a projection chain."""
@@ -310,11 +313,11 @@ class Registrar:
             key = a.name, b.name
             pair = frozenset(key)
 
-            # via_sphere: the c_oct↔c_ell hop must route through the authalic
-            # sphere (c_oct↔c_sph↔g_gcd↔c_ell). The classic oct_ell map is a
-            # different projection and yields different b_oct coordinates, so
-            # mixing it into a via-sphere chain shifts positions by kilometres.
-            if self.via_sphere and pair == frozenset(('c_oct', 'c_ell')):
+            # The c_oct↔c_ell hop must route through the authalic sphere
+            # (c_oct↔c_sph↔g_gcd↔c_ell). The direct oct_ell map is a different
+            # projection and yields different b_oct coordinates, so letting it
+            # into the chain would shift positions by kilometres.
+            if pair == frozenset(('c_oct', 'c_ell')):
                 names = ('c_oct', 'c_sph', 'g_gcd', 'c_ell')
                 if key[0] != 'c_oct':
                     names = names[::-1]

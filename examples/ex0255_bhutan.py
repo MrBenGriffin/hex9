@@ -32,7 +32,10 @@ Last Tested
 20 Jul 2026 0.1.3a0 (passed)
 """
 import os
+from pathlib import Path
+
 import numpy as np
+import json
 
 from hhg9 import Registrar, Points
 from hhg9.rendering.composition import (LayerSpec, Compositor,
@@ -41,7 +44,6 @@ from hhg9.rendering.composition import (LayerSpec, Compositor,
 from hhg9.rendering.imagery import make_wmts_source, credits_of
 from hhg9.rendering.render import plot_hex
 
-from ex0262_greenwich_seam import GREENWICH
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -49,8 +51,8 @@ ESRI_WMTS = ('https://services.arcgisonline.com/arcgis/rest/services/'
              'World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml')
 ESRI_CREDIT = 'Esri World Imagery · Esri, Maxar, Earthstar Geographics'
 
-LEVELS = (11, 12, 13)      # L11 ≈ 22.8 m/side, L13 ≈ 2.5 m/side
-BACKDROP_M_PER_PX = 0.3    # Esri imagery is ~0.3 m here
+LEVELS = (5, 6, 7)         # L11 ≈ 22.8 m/side, L13 ≈ 2.5 m/side
+BACKDROP_M_PER_PX = 80.0     # Esri imagery is ~0.3 m here
 
 
 def demo_out(name: str) -> str:
@@ -66,7 +68,8 @@ if __name__ == '__main__':
     g_gcd = rg.domain('g_gcd')
     b_oct = rg.domain('b_oct')
     n_oct = rg.domain('n_oct:diamonds')
-
+    border_repo = np.load(f'{HERE}/src/bhutan_border_lon_lat.npz', allow_pickle=True)
+    bhutan_border = Points(border_repo['bhutan'][:, [1, 0]], g_gcd)
     print('Building imagery source')
     imagery = make_wmts_source(ESRI_WMTS, 'World_Imagery', rg, b_oct,
                                cache_dir=os.path.join(HERE, 'wmts_cache'),
@@ -86,7 +89,7 @@ if __name__ == '__main__':
     # need not convert. local=True fits the net to the region; nest defaults on.
     print('Running compositor (local net)')
     comp = Compositor(rg, b_oct, n_oct, specs, local=True)
-    layers = comp.run(Points(GREENWICH, g_gcd))
+    layers = comp.run(bhutan_border)
     print('  counts:', {cl.spec.level: cl.count for cl in layers})
     print(f'  octants {sorted(set(np.concatenate([cl.oids for cl in layers]).tolist()))}'
           f' · seam residual {comp.local_residual:.1e} · dropped {comp.local_dropped}')
@@ -103,7 +106,7 @@ if __name__ == '__main__':
     backdrop = make_local_backdrop(rg, b_oct, comp.layout.layout, bbox, px_w, px_h, imagery)
 
     # Local north: a small northward step, placed through the SAME layout.
-    lat, lon = float(GREENWICH[:, 0].mean()), float(GREENWICH[:, 1].mean())
+    lat, lon = float(bhutan_border.coords[:, 0].mean()), float(bhutan_border.coords[:, 1].mean())
     c0 = rg.project(Points(np.array([[lat, lon]]), g_gcd), [g_gcd, b_oct])
     c1 = rg.project(Points(np.array([[lat + 0.002, lon]]), g_gcd), [g_gcd, b_oct])
     p0 = n_oct.place(c0.coords, c0.oid, comp.layout.layout)[0]
@@ -112,14 +115,14 @@ if __name__ == '__main__':
     print('Plotting')
     plot_hex(
         layers,
-        save_path=demo_out('ex0254_greenwich.png'),
+        save_path=demo_out('ex0255_bhutan.png'),
         bbox=bbox,
         backdrop=backdrop,
         draw_bbox=False,
         north_dir=p1 - p0,
         rotate_north=True,
         credits=credits_of(imagery),
-        title='Greenwich Park — Hex9 L11–L13 across the prime meridian',
-        description='local net · ownership nest · Esri imagery · north auto-rotated',
+        title='Bhutan',
+        # description='local net · ownership nest · Esri imagery · north auto-rotated',
         dpi=150,
     )

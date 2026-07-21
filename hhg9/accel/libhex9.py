@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -92,21 +93,56 @@ class _Lib:
             self.has_cell_ancestor = False
 
         # Via-sphere chain (authalic-series front-end + unit-sphere core +
-        # Sphere-L6 wedge-fold warp), when this build exports it. Callers
-        # must gate on has_via_sphere.
+        # Sphere-L6 wedge-fold warp). Two build shapes provide it:
+        #
+        #   < 2.0.0   both regimes compiled in, selected at runtime through
+        #             hex9_set_via_sphere.
+        #   >= 2.0.0  via-sphere is the ONLY regime and the toggle is GONE
+        #             (it minted addresses that differed below layer 5 with
+        #             nothing in the address to record which regime made
+        #             them).  hex9_warp_init builds it unconditionally.
+        #
+        # Probing for the toggle alone therefore reads a 2.0.0 build as
+        # "cannot do via-sphere" and silently drops the whole accelerated
+        # path back to pure Python.  Callers still gate on has_via_sphere;
+        # via_only additionally says the CLASSIC regime is unavailable.
         try:
             self.lib.hex9_set_via_sphere.argtypes = [
                 ctypes.c_int, ctypes.c_char_p, ctypes.c_size_t]
             self.lib.hex9_set_via_sphere.restype = ctypes.c_int
-            self.has_via_sphere = True
+            self._has_toggle = True
         except AttributeError:
-            self.has_via_sphere = False
-        self._via_active = False
+            self._has_toggle = False
+        self.via_only = not self._has_toggle and self._version_tuple() >= (2, 0, 0)
+        self.has_via_sphere = self._has_toggle or self.via_only
+        self.has_classic = not self.via_only
+        self._via_active = self.via_only
 
-    def set_via_sphere(self, on: bool):
+    def _version_tuple(self) -> tuple:
+        """(major, minor, patch) from 'libhex9 2.0.0 (...)'; (0,0,0) if unparseable."""
+        m = re.search(r'(\d+)\.(\d+)\.(\d+)', self.version)
+        return tuple(int(g) for g in m.groups()) if m else (0, 0, 0)
+
+    def set_via_sphere(self, on):
         """Flip the lib's via-sphere mode (first enable lazily builds the
-        sphere warp state, ~1 s). No-op when already in the wanted mode."""
+        sphere warp state, ~1 s). No-op when already in the wanted mode.
+
+        ``on=None`` means "whatever regime this build implements" — the right
+        choice for callers that do not care, since a 2.0.0+ build has only one.
+        """
+        if on is None:
+            return
         on = bool(on)
+        if self.via_only:
+            # 2.0.0+: via-sphere is the only regime. Asking for classic must
+            # NOT quietly hand back via-sphere numbers — they are different
+            # addresses below layer 5.
+            if not on:
+                raise RuntimeError(
+                    f"{self.version} implements the via-sphere regime only; "
+                    "the classic (WGS84-trained) regime was removed at 2.0.0. "
+                    "Use the pure-Python chain (b_oct.no_lib()) for classic.")
+            return
         if on == self._via_active:
             return
         if on and not self.has_via_sphere:
@@ -121,7 +157,7 @@ class _Lib:
     def version(self) -> str:
         return self.lib.hex9_version().decode()
 
-    def project_many(self, lon, lat, use_warp: bool, via_sphere: bool = False):
+    def project_many(self, lon, lat, use_warp: bool, via_sphere=None):
         """(lon, lat)° → (cx, cy, oid) b_oct arrays. oid int32 0..7."""
         lo = np.ascontiguousarray(lon, dtype=np.float64)
         la = np.ascontiguousarray(lat, dtype=np.float64)
@@ -152,7 +188,7 @@ class _Lib:
         return out
 
     def unproject_many(self, cx, cy, oid, use_warp: bool,
-                       via_sphere: bool = False):
+                       via_sphere=None):
         """(cx, cy, oid) b_oct → (lon, lat)° arrays. Must use the SAME use_warp
         (and via_sphere) the coordinate was produced with, or the round-trip
         drifts by one warp displacement (the do/undo hazard)."""

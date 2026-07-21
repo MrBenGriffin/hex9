@@ -25,10 +25,9 @@ PTS = np.column_stack([np.degrees(np.arcsin(rng.uniform(-1, 1, N))),
                        rng.uniform(-180, 180, N)])
 
 
-def bench(label, via, warp_file=None, no_warp=False):
+def bench(label, warp_file=None, no_warp=False):
     reg = Registrar()
-    reg.set_ellipsoid(a=6378137.0, inv_f=298.257223563, name='WGS84',
-                      via_sphere=via)
+    reg.set_ellipsoid(a=6378137.0, inv_f=298.257223563, name='WGS84')
     b_oct = reg.domain('b_oct')
     b_oct.no_lib()
     reg.projection('gcd_brw').set_parallel(threshold=1_000_000)  # stay serial
@@ -56,7 +55,6 @@ def bench(label, via, warp_file=None, no_warp=False):
 
 
 if __name__ == '__main__':
-    bench('classic  WGS84-L5   ', via=False)
-    bench('via_sph  Sphere-L6  ', via=True)
-    bench('via_sph  Sphere-L5  ', via=True, warp_file='Sphere_l5_warp_data.npz')
-    bench('via_sph  no-warp    ', via=True, no_warp=True)
+    bench('Sphere-L6  ')
+    bench('Sphere-L5  ', warp_file='Sphere_l5_warp_data.npz')
+    bench('no-warp    ', no_warp=True)

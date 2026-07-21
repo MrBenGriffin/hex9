@@ -25,10 +25,9 @@ VERTICES = np.array([[90.0, 0.0], [-90.0, 0.0],
                      [0.0, 0.0], [0.0, 90.0], [0.0, -90.0], [0.0, 180.0]])
 
 
-def build(via):
+def build():
     reg = Registrar()
-    reg.set_ellipsoid(a=6378137.0, inv_f=298.257223563, name='WGS84',
-                      via_sphere=via)
+    reg.set_ellipsoid(a=6378137.0, inv_f=298.257223563, name='WGS84')
     b = reg.domain('b_oct')
     b.no_lib()
     _ = b.warp                      # force the lazy CT build up front
@@ -106,9 +105,9 @@ if __name__ == '__main__':
     pts = np.vstack([np.array(ll), gcd_rnd(20_000)])
     print(f'{len(pts)} points (landmarks + seeded random)', flush=True)
 
-    for via, label in ((False, 'WGS84 classic   '), (True, 'WGS84 via_sphere')):
-        reg, b_oct = build(via)
-        print(f'--- {label}  warp={str(b_oct.warp_file).rsplit("/", 1)[-1]}',
-              flush=True)
-        rt_battery(reg, b_oct, label, pts)
-        area_battery(reg, label)
+    label = 'WGS84 via_sphere'
+    reg, b_oct = build()
+    print(f'--- {label}  warp={str(b_oct.warp_file).rsplit("/", 1)[-1]}',
+          flush=True)
+    rt_battery(reg, b_oct, label, pts)
+    area_battery(reg, label)

@@ -13,9 +13,10 @@ suite survives a refactor of the internals: if a future change preserves the
 observable contract the tests stay green, and if it silently breaks the
 contract they fail.
 
-NB: the older ``tests/test_h9_engine.py`` exercises an in-test *reimplementation*
-of this engine (the obsolete "ugc" reference: GridConstants/GridRegions/...),
-not the shipping code.  This module covers the real ``hhg9.h9.region``.
+This module supersedes the old ``tests/test_h9_engine.py`` (deleted 2026-07-21),
+which exercised an in-test *reimplementation* of this engine — the obsolete
+"ugc" reference, GridConstants/GridRegions/GridNeighbours — and never imported
+hhg9 at all, so it could not have caught a regression in the shipping code.
 """
 import numpy as np
 import pytest

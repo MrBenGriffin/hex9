@@ -339,6 +339,19 @@ class OctahedralNet(CompositeDomain):
             fundamental = octants[0]
         g_gcd = self._registrar.domain('g_gcd')
 
+        def _unit(ll: NDArray) -> NDArray:
+            """(N, 2) [lat, lon] degrees -> (N, 3) unit direction vectors.
+
+            Corner coincidence is tested on the sphere, not on the (lat, lon)
+            plate: an octant apex IS a pole, where longitude is arbitrary (the
+            via-sphere chain returns a different one per octant), and the
+            equatorial corners of the Pacific pair sit on the ±180 fold.  Both
+            are the same point in 3-D and neither is in (lat, lon).
+            """
+            lat, lon = np.deg2rad(ll[:, 0]), np.deg2rad(ll[:, 1])
+            c = np.cos(lat)
+            return np.stack([c * np.cos(lon), c * np.sin(lon), np.sin(lat)], 1)
+
         cb, cg = {}, {}
         for oid in octants:
             side = H9O.oid_str[oid]
@@ -349,16 +362,20 @@ class OctahedralNet(CompositeDomain):
                     'use a non-c2 flavour such as butterfly.')
             corners = np.asarray(H9P.sv[self.b_oct.sides[side].mode], dtype=float)
             cb[oid] = corners                                   # (3, 2) native b_oct
-            cg[oid] = self._registrar.project(
-                Points(corners, self.b_oct, oid), [self.b_oct, g_gcd]).coords
+            cg[oid] = _unit(self._registrar.project(
+                Points(corners, self.b_oct, oid), [self.b_oct, g_gcd]).coords)
+
+        # tol is a degree tolerance; on the unit sphere the chord of a small
+        # angle is the angle itself to first order.
+        ctol = float(np.deg2rad(tol))
 
         def shared_corners(a, b):
-            """Indices (ia, ib) of the corners a and b share (g_gcd coincidence)."""
+            """Indices (ia, ib) of the corners a and b share (on-sphere coincidence)."""
             ia, ib = [], []
             for i in range(3):
                 d = np.linalg.norm(cg[b] - cg[a][i], axis=1)
                 j = int(np.argmin(d))
-                if d[j] < tol:
+                if d[j] < ctol:
                     ia.append(i)
                     ib.append(j)
             return ia, ib

@@ -25,8 +25,8 @@ join structure — onto any other, and the authalic reduction is exactly
 area-preserving, so the WGS84 census inherits the sphere's vertex
 equivalence unchanged.
 
-Historical (v2, classic per-ellipsoid chain via set_ellipsoid(...,
-via_sphere=False)): the census split into THREE pairwise-exact classes —
+Historical (v2, the classic per-ellipsoid chain — retired 2026-07-21 and no
+longer reachable): the census split into THREE pairwise-exact classes —
 
     North/South Pole   48 cells >0.1% each, 12 >1%, extreme +4.80%
     0°N 0°E / 0°N 180°  38 cells >0.1% each,  2 >1%, extreme  2.10%
@@ -40,18 +40,18 @@ in v3).
 
 Shares the geometry/score cache with ex0081w_warped_authalics.py
 (output/ex0081_cache_5.npz); builds it if absent (~10 min at L5). The
-cache does not record which chain built it — delete it after changing
-engine/chain settings.
+cache does not record which engine built it — delete it after changing
+engine settings.
 
 Run:
     python examples/ex0124_vertex_census.py         # census table + figure
     python examples/ex0124_vertex_census.py --raw   # control: warp disabled
 
-The --raw control disables the warp only, so under the via-sphere default
-it measures the raw *spherical* AK realisation. To reproduce the classic
-three-class control (raw ellipsoid field ±20%; equatorial-pair separation
-~0.005% absolute, growing to ~0.5% once the shared bulk is warped away),
-also set via_sphere=False before the first domain call.
+The --raw control disables the warp only, so it measures the raw *spherical*
+AK realisation. The classic three-class control (raw ellipsoid field ±20%;
+equatorial-pair separation ~0.005% absolute, growing to ~0.5% once the shared
+bulk is warped away) is recorded above for the paper's sake but can no longer
+be re-run: that chain is gone.
 
 Last tested: 2026-07-19 (via-sphere census + figure as above).
 """
