@@ -28,14 +28,11 @@ import time
 import numpy as np
 from pathlib import Path
 from hhg9 import Registrar, Points
-from hhg9.domains.octahedral_barycentric import WarpTolerance
 from hhg9.formats import OctahedralH9
 from hhg9.algorithms.distance import wgs84
 from hhg9.algorithms.pickers import gcd_rnd
 from hhg9.h9 import H9K
-from hhg9.h9.addressing import reg_hex_digits, TailStyle
 from hhg9.h9.classifier import location
-from hhg9.h9.region import xy_regions
 
 
 class CSVLogger:

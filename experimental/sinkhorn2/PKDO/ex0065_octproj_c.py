@@ -17,6 +17,10 @@ gives σ ≈ 8×10⁻⁴ and p99 ≈ 0.07% — about 15× worse — and the gap 
 a global polynomial cannot capture the local distortion concentrated near the
 6 octahedral poles without Runge-like oscillation everywhere else.
 
+RE-TESTED 2026-07-21 against the L6 fundamental-domain artifact
+(Sphere_l6_fund_warp_data.npz): conclusion unchanged and starker —
+see feasibility.py in this directory for the full sweep and notes.
+
 GENUINE USE CASE:
 The polynomial does provide a smooth, analytic Jacobian (warp_jacobian_2d), useful
 for metric-tensor / area-distortion analysis where a differentiable approximation
