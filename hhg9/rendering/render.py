@@ -345,9 +345,8 @@ def plot_hex(
         for ref_level in ref_levels:
             ref_cl = next((cl for cl in composed if cl.spec.level == ref_level), None)
             if ref_cl is not None:
-                ref_polys = np.asarray(
-                    ref_cl.verts.coords, dtype=np.float64).reshape(-1, 6, 2)
-                ref_ctrs = np.asarray(ref_cl.ctrs.coords, dtype=np.float64)
+                ref_polys = _turn(ref_cl.verts.coords).reshape(-1, 6, 2)
+                ref_ctrs = _turn(ref_cl.ctrs.coords)
                 target = np.array([lt + 0.05 * bw, bt + 0.08 * bh])
                 bl = int(np.argmin(np.sum((ref_ctrs - target) ** 2, axis=1)))
                 ax.add_collection(PolyCollection(

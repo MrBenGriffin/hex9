@@ -94,8 +94,9 @@ if __name__ == '__main__':
         cell_keys = h9_bin_pts(ctrs, FILL_LEVEL)  # ctrs already b_oct + oid
         sums = np.fromiter((pop_sum.get(k, 0.0) for k in cell_keys),
                            dtype=np.float64, count=len(cell_keys))
-        rgba = pop_cmap(np.log1p(sums) / pop_vmax)
-        rgba[:, 3] = 0.85
+        t = np.clip(np.log1p(sums) / pop_vmax, 0.0, 1.0)
+        rgba = pop_cmap(t)
+        rgba[:, 3] = 0.30 + 0.65 * t      # alpha carries value: sparse fades
         rgba[sums == 0.0] = np.nan        # empty cells → transparent
         return rgba
 
