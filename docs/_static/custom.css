@@ -1,0 +1,76 @@
+/* Hex9 tutorial — marginalia styling.
+ *
+ * Colour-vision constraint: nothing here may depend on distinguishing red from
+ * green. Every device is separated on three independent channels:
+ *   1. luminance   (background lightness)
+ *   2. hue         (blue vs gold vs neutral only — never red/green)
+ *   3. border form (left-border WIDTH and style differ per device)
+ * Reading any one channel alone is enough to tell the devices apart.
+ */
+
+:root {
+  --h9-blue:    #1f4e8c;   /* evidence / verification            */
+  --h9-blue-bg: #eef3fa;
+  --h9-gold:    #8a6100;   /* newcomer scaffolding               */
+  --h9-gold-bg: #fbf5e6;
+  --h9-grey:    #4a4f55;   /* comparative / "coming from H3"     */
+  --h9-grey-bg: #f2f3f5;
+}
+
+/* --- Device 1: scaffolding aside (gold, thin border) ---------------------- */
+/* For newcomers. The expert eye skips it; nothing here is a prerequisite for
+   the sentence that follows, because at narrow widths it collapses inline.   */
+.h9-scaffold {
+  border-left: 3px solid var(--h9-gold);
+  background: var(--h9-gold-bg);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9em;
+}
+
+/* --- Device 2: evidence dropdown (blue, thick border) --------------------- */
+/* Optional but substantial: derivations, measured numbers, proofs.           */
+.h9-evidence {
+  border-left: 6px solid var(--h9-blue);
+  background: var(--h9-blue-bg);
+}
+
+/* --- Device 3: comparative note (neutral, dashed border) ------------------ */
+/* "If you already use H3/S2/rHEALPix…". Dashed = a different KIND of aside,
+   legible even in greyscale print.                                           */
+.h9-compare {
+  border-left: 3px dashed var(--h9-grey);
+  background: var(--h9-grey-bg);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.92em;
+}
+
+/* --- Margin placement ----------------------------------------------------- */
+/* sphinx-book-theme collapses .margin inline below ~1200px. That is the
+   reason for the "never a prerequisite" rule above.                          */
+.margin.h9-scaffold,
+.margin.h9-compare {
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+
+/* Override the theme's red/green admonition semantics so no meaning is
+   carried by hue alone. */
+div.admonition.warning > .admonition-title,
+div.admonition.tip > .admonition-title {
+  background-color: var(--h9-gold-bg);
+  color: #000;
+}
+div.admonition.warning,
+div.admonition.tip {
+  border-left-color: var(--h9-gold);
+}
+
+/* Dark mode: keep the same three channels, shifted in luminance. */
+html[data-theme="dark"] {
+  --h9-blue-bg: #16202e;
+  --h9-gold-bg: #2a2416;
+  --h9-grey-bg: #1e2124;
+  --h9-blue:    #6fa8dc;
+  --h9-gold:    #d4a017;
+  --h9-grey:    #9aa0a6;
+}

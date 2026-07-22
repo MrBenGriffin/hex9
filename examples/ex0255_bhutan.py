@@ -3,13 +3,8 @@
 # Licensed under the Apache License, Version 2.0
 
 """
-Greenwich Park — a real polygon, across the prime meridian.
+Bhutan Population Chloropleth — across the +90.
 
-The Compositor end to end on the hard case: a 93-vertex non-convex boundary
-that straddles 0° longitude, which is an octant seam. A fixed n_oct net cannot
-frame that (the region has no single b_oct plot), so this uses the **dynamic
-local net** — octants hinged flat from a fundamental — and lets every other
-part of the pipeline fall out of it:
 
     Compositor(..., local=True)   fitted unfolding, tear-free across the seam
     nest (default)                coarse layers closed over OWNERSHIP ancestry,
@@ -19,9 +14,6 @@ part of the pipeline fall out of it:
     rotate_north                  scene quarter-turned so north is within ±45°
     credits                       attribution carried on the sampler itself
 
-The polygon is imported from ex0262 rather than duplicated — that example draws
-the same boundary at a single fine layer without imagery.
-
 Ownership, not lineage: the coarse cell containing a fine cell is *not* its
 address prefix on the hexagon band (they differ for roughly a sixth of cells),
 so the nest is closed with ``x_adr_cell_ancestor``.  See INDEX.md.
@@ -29,13 +21,10 @@ so the nest is closed with ``x_adr_cell_ancestor``.  See INDEX.md.
 Needs a network connection on first run; tiles cache under ``wmts_cache/``.
 
 Last Tested
-20 Jul 2026 0.1.3a0 (passed)
+22 Jul 2026 0.1.3a0 (passed)
 """
 import os
-from pathlib import Path
-
 import numpy as np
-import csv
 from matplotlib import colormaps
 
 from hhg9 import Registrar, Points
@@ -51,8 +40,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ESRI_WMTS = ('https://services.arcgisonline.com/arcgis/rest/services/'
              'World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml')
 ESRI_CREDIT = 'Esri World Imagery · Esri, Maxar, Earthstar Geographics'
-LEVELS = (5, 6, 7)         # L11 ≈ 22.8 m/side, L13 ≈ 2.5 m/side
-BACKDROP_M_PER_PX = 80.0     # Esri imagery is ~0.3 m here
+LEVELS = (5, 6, 7)           # L11 ≈ 22.8 m/side, L13 ≈ 2.5 m/side
+BACKDROP_M_PER_PX = 80.0     # This will affect final image size.
 
 
 def demo_out(name: str) -> str:
