@@ -13,9 +13,8 @@ dist/
 .coverage
 .claude
 .ai
-.idea
 htmlcov/
-
+/.idea/**
 /output/
 /preparatory/
 /historic/
@@ -55,4 +54,4 @@ htmlcov/
 .venv-x86/
 /examples/src/ex0098/
 /examples/src/ex0101pc.jpg
-/.idea/
+
