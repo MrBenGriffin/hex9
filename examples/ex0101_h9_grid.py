@@ -80,6 +80,5 @@ def run(layout, scale, depths):
 
 if __name__ == "__main__":
     from hhg9.domains.nets import net_layouts
-    for layout in ['turbine']:
-    # for layout in net_layouts:
-        run(layout, 1200, depths=[0])
+    for layout in net_layouts:
+        run(layout, 200, depths=[0])

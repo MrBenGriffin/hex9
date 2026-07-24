@@ -115,7 +115,7 @@ def draw_globe(poly_groups: Points, layers='x'):
 
 if __name__ == '__main__':
     LAYER = 0  # 0,...5 √
-    MAX_LAYER = 6
+    MAX_LAYER = 1
     reg = Registrar()  # Manage Domains & Projections
     mesh = HexMesh.create(range(MAX_LAYER), reg)
     layer_f = mesh.faces

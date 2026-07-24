@@ -39,22 +39,6 @@ net_layouts = {
             (-1, -1, -1): [(6., 3., 3), (0., 0., 0), (-6., 0, 0), (0, 0, 0)],   # SWP
         }
     },
-    'oct_rhombus': {
-        'width': 30,  # number of full triangles across * 6
-        'height':27,  # number of full triangles up * 9
-        'grid': {
-            (-1, -1, -1): (2., 4., 4),  # SWP
-            (-1, -1, +1): (3., 5., 4),  # NWP
-            (+1, -1, +1): (4., 4., 0),  # NWA
-            (+1, +1, +1): (5., 5., 2),  # NEA
-            (+1, +1, -1): (6., 4., 2),  # SEA
-            (-1, +1, -1): (7., 5., 0),  # SEP
-
-            (+1, -1, -1): (2., 2., 2),  # SWA
-            (-1, +1, +1): (7., 7., 0),  # NEP
-
-        }
-    },
     'diamonds_native': {
         'width': 24,  # number of full triangles across * 6
         'height': 18,  # number of full triangles up * 9

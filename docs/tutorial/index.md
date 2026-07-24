@@ -26,7 +26,7 @@ behaves differently from what you are used to are the hierarchy and the
 addressing.
 
 +++
-[Chapter 3 — Changing resolution](ch01_first_cell.md) ·
+[Chapter 3 — Changing resolution](ch03_changing_resolution.md) ·
 [Chapter 7 — Storing and querying](ch01_first_cell.md)
 :::
 ::::
@@ -38,6 +38,7 @@ addressing.
 
 ch01_first_cell
 ch02_points_to_counts
+ch03_changing_resolution
 ```
 
-*Chapters 3–7 are outlined but not yet written.*
+*Chapters 4–7 are outlined but not yet written.*
