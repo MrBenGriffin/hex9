@@ -4,7 +4,7 @@
 from hhg9.h9.grid import hex_props
 
 if __name__ == '__main__':
-    for level in range(32):
+    for level in range(36):
         #             area: area in m^2
         #             side: side length s (aka) circumradius: (vertex-centre)
         #             inradius: r (flat-centre)
