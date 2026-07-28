@@ -1,0 +1,85 @@
+Sheet 1: Measured distributions
+Measure,What it tests,Preferred result
+Cell count and mean area,Resolution sanity / comparability,Match nominal target area
+Authalic area CV,Variation in WGS84 ellipsoidal cell area: (100sigma_A/bar A),(0%)
+Area percentiles,"(A_i/bar A): p50, p90, p95, p99, p99.9",(1.0)
+Area range,(max(A)/min(A)),(1.0)
+Threshold exceedance,"Count and share outside, e.g., (pm0.1%) authalicity",Small and spatially localized
+Cone-point profile,Area error as a function of distance from each cone point,"Smooth, bounded, reproducible"
+Finite-cell aspect ratio / circularity,enclosing-cone score; (1.0) is circular,(1.0)
+Compactness,E.g. isoperimetric quotient (4pi A/P^2),(1.0)
+Edge-length range,Longest / shortest geodesic boundary edge,(1.0)
+Interior-angle range,Variation in rendered cell corner angles,"Small, no pathological tails"
+Tissot field,"Local Jacobian: area scale, angular distortion, and ellipse axis ratio","Smooth spatial variation, bounded maxima"
+Projection continuity,"Jump in position, scale, bearing, or Jacobian across seams",Zero or explicitly bounded
+
+Sheet 1: Structural Measures
+Measure,What it establishes
+Cell-type uniformity,Number and list of first-class cell types
+Neighbour-degree distribution,"Counts of degree 6, degree 5, etc.; making units of curvature explicit"
+Defect localization,Where differing cell-type instances occur and whether their treatment is uniform
+Face/seam complexity,"Base faces, seam edges, seam-crossing transforms, and maximum transitions for a query/path"
+Two-colour validity,Every triangular adjacency flips colour; no parity contradiction around a closed loop
+Orientation stability,"Inter-level axis rotation; (0^circ) for stable-frame systems, or explicit parity transport otherwise"
+Symbolic transport,"Whether direction, neighbour, and local-frame symbols retain a level-independent meaning"
+Exact lineage,Parent/child relation is exact under address truncation or refinement
+Exact ownership,"Inverse partition assigns every point to one geometrically containing cell, including seams"
+Lineage–ownership agreement,Rate at which symbolic descendants are geometrically contained in parents; report disagreements explicitly
+Partition validity,"No gaps, no overlaps, and a deterministic boundary-ownership rule"
+Address round-trip,Address → geometry/partition → address success rate and worst numerical residual
+Coordinate round-trip,Clearly distinguish point → cell centre error from true inverse-map reconstruction error
+Numerical stability,Worst residual near cone points and seams.
+Complexity,"Point-to-cell, neighbour, parent/child, and inverse-partition time; state fixed-width assumptions for (O(1))"
+Address storage,"Bits per address, maximum supported level, and whether operations require arbitrary precision"
+Exception burden,"Number of special branches, lookup tables, face-specific transforms, and predicates such as is_pentagon()"
+Moore-curve locality,"Neighbour-code distance, interval fragmentation for a region query, and prefix/truncation behaviour"
+
+Sheet 1: Computational costs
+Operation,What to measure
+Point → owner cell,Throughput and p50/p95/p99 latency; allocations; boundary-rule behaviour
+Address → centre/boundary,Latency and numerical residual; six-corner generation cost
+Inverse partition,Cost of geometric ownership lookup
+Parent / ancestor,Lineage vs Ownership availability and cost
+Truncation ,What does truncation do.
+Child enumeration,Time to produce children; output-sensitive but bounded
+Neighbour lookup /K-Ring,including special cases and worst-case
+Cell geometry / area,"Karney-area cost, geodesic boundary cost, and cacheability"
+Region covering,"Number of output cells or ranges, false-positive area, and runtime"
+Moore traversal,"Forward generation, prefix truncation, locality, and inverse cost separately"
+Batch aggregation,Cells/sec for roll-up and drill-down across resolutions
+Memory,"Bytes per cell ID, per temporary lookup, and any seam/face tables"
+Branch burden,Exceptional branches per operation; pentagon/corner/seam predicates
+Parallel scaling,"Throughput vs threads, determinism, and shared-state requirements"
+
+Sheet 1: Data formats
+Purpose,Recommended representation
+Canonical ID,Versioned binary 128-bit ID; textual Base32/Base64url/hex form for APIs
+Human-readable address,hex9:<version>:<level>:<address> with an explicitly defined canonical alphabet
+Analytical tables,"Parquet/GeoParquet with hex9_id, level, value columns, and optional geometry"
+Database storage,Native binary ID or fixed-length byte column; index by canonical ID and optional Moore key
+API response,"Canonical ID plus level, centre, area, optional boundary, and provenance metadata"
+Geometry exchange,"GeoJSON, WKB/GeoPackage, or GeoParquet—but always include the authoritative Hex9 ID"
+Map rendering,"Vector tiles or simplified GeoJSON; treat these as display artifacts, not authoritative geometry"
+Range scans,"Moore-order interval ranges, clearly labelled as an optional ordering index"
+Raster-like arrays,"Cell-ID keyed arrays / Parquet / Zarr-style chunks, rather than forcing a rectangular raster"
+
+Sheet 1: Scale and range
+Measure,What to report
+Resolution range,"Minimum and maximum supported levels, e.g. L0–L30"
+Refinement law,"eg 9 children per cell; linear scale changes by (3), area by (9) per level"
+Cell-count law,eg (N=12*9^L)
+Physical scale,"Mean/min/max cell area, diameter, and edge length at every level"
+Usable precision range,"Highest level at which ownership, geometry, and round trips meet stated numerical tolerances"
+Cross-level regularity,Whether the same partition/address rule applies at every level
+Cross-level distortion stability,Area and shape statistics by level; ensure cone-point error does not grow unexpectedly
+Address-width range,Bits required per level and the maximum level supported by fixed-width IDs
+
+Sheet 1: Address invertibility and round trips
+Test,Required result
+address → canonical geometry → address,Exact identity for every valid address: same address returns
+lat/lon → address → ownership test,"The original point is owned by the decoded cell, including seams and cone points"
+lat/lon → polyhedral coordinates → lat/lon,Continuous-map reconstruction residual; report maximum and percentiles in metres/nanometres
+address → centre/vertices → inverse partition,Centre returns the same address; vertices follow the documented deterministic boundary rule
+Address identity,Encode(decode(address)) == address exactly
+Coordinate determinism,Decoded canonical lat/lon bytes are identical across supported platforms
+Numerical fidelity,Continuous forward/inverse coordinate mapping stays below the stated error bound
