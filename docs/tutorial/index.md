@@ -6,6 +6,13 @@ appears only as the means to that end.
 
 You do not need to read it in order, but it is written so that you can.
 
+The chapters are ordinary markdown — nothing to install, nothing to run — but
+converted chapters are also *executable*: each is a jupytext-paired notebook
+ending in a machine-verification cell that re-derives every printed value in
+the chapter. To run one yourself, `pip install jupytext nbclient ipykernel`
+and use `docs/tutorial/verify.sh`, or open the derived `.ipynb` in Jupyter.
+Reading requires none of that.
+
 ## Two ways in
 
 ::::{grid} 1 1 2 2

@@ -29,6 +29,26 @@ myst_enable_extensions = [
 # Marginalia are asides: never let one silently become a heading target.
 myst_heading_anchors = 3
 
+# Tutorial chapters are jupytext-paired MyST notebooks: their executable cells
+# are ```{code-cell} directives, which plain myst_parser does not know. Render
+# them as ordinary python code blocks; swapping myst_parser for myst_nb later
+# (which executes them during the build) replaces this shim without touching
+# the chapters. Verification lives in docs/tutorial/verify.sh meanwhile.
+from sphinx.directives.code import CodeBlock
+
+
+class _CodeCell(CodeBlock):
+    required_arguments = 0
+    optional_arguments = 1
+
+    def run(self):
+        self.arguments = ['python']
+        return super().run()
+
+
+def setup(app):
+    app.add_directive('code-cell', _CodeCell)
+
 templates_path = ['_templates']
 # docs/ also holds the paper drafts and working notes as Markdown. MyST would
 # otherwise pick every one of them up as an orphan page, so the docs build is

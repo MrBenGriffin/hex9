@@ -1,3 +1,15 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Chapter 1 — Your first cell
 
 **Task:** take a location on the Earth and find the grid cell that contains it.
@@ -7,7 +19,7 @@ covering a region, joining two datasets — is built out of this one operation.
 
 ## Encode a point
 
-```python
+```{code-cell} ipython3
 from hhg9.h9.uuid_address import h9_encode
 
 print(h9_encode([52.520934], [13.405314]))
@@ -29,7 +41,7 @@ written, and the opposite of the `x, y` order used by GeoJSON and PostGIS.
 That UUID *is* the cell. It is not a key into a table somewhere: the digits are
 the address, and they decode back to a position without consulting anything.
 
-```python
+```{code-cell} ipython3
 from hhg9.h9.uuid_address import h9_decode
 
 lats, lons = h9_decode(h9_encode([52.520934], [13.405314]))
@@ -100,7 +112,7 @@ recording that you never knew the last twenty digits.
 `h9_bin` truncates an address to a given layer, which is how you say what you
 actually mean:
 
-```python
+```{code-cell} ipython3
 import numpy as np
 from hhg9.h9.uuid_address import h9_encode, h9_bin
 
@@ -151,7 +163,7 @@ You cannot settle this by counting digits.
 
 Measure the residual on the ground instead:
 
-```python
+```{code-cell} ipython3
 import numpy as np
 from hhg9.h9.uuid_address import h9_encode, h9_decode
 from hhg9.algorithms.distance import wgs84
@@ -162,7 +174,7 @@ print(f'{wgs84(src, np.column_stack([lats, lons]))[0]:.3e} m')
 ```
 
 ```text
-1.841e-08 m
+1.797e-08 m
 ```
 
 Eighteen nanometres. That is not floating-point noise, and it is not luck —
@@ -218,11 +230,44 @@ Both arguments are array-like, so the first answer is to encode in bulk rather
 than one point at a time. Where you genuinely need repeated calls, construct
 the registrar once and pass it in:
 
-```python
+```{code-cell} ipython3
 from hhg9 import Registrar
+
 reg = Registrar()
-u1 = h9_encode(lats_a, lons_a, reg=reg)
-u2 = h9_encode(lats_b, lons_b, reg=reg)
+u1 = h9_encode(lat, lon, reg=reg)
+u2 = h9_encode(lat + 0.001, lon, reg=reg)
+```
+
+## Machine verification
+
+Every printed value in this chapter is a claim, and claims should be checked
+by machine, not by proofreading. This cell re-derives each one and fails
+loudly if the chapter ever drifts from the code:
+
+```{code-cell} ipython3
+import numpy as np
+from hhg9.h9.uuid_address import h9_encode, h9_decode, h9_bin
+from hhg9.algorithms.distance import wgs84
+
+# Encode a point, and the exact round trip
+u = h9_encode([52.520934], [13.405314])
+assert str(u[0]) == '43472104-7065-3436-4868-812417650202'
+la, lo = h9_decode(u)
+assert f'{la[0]:.9f}, {lo[0]:.9f}' == '52.520934000, 13.405314000'
+
+# Layers: four distinct cells at layer 30, one at layer 8
+vlat = np.array([52.5203, 52.5199, 52.5206, 52.5201])
+vlon = np.array([13.4003, 13.3998, 13.4006, 13.4000])
+u4 = h9_encode(vlat, vlon)
+assert len(set(u4)) == 4 and len(set(h9_bin(u4, 8))) == 1
+assert str(h9_bin(u4, 8)[0]) == '43472104-7fff-ffff-ffff-fffffffffff0'
+
+# Ground residual is the cell's own extent — tens of nanometres
+src = np.array([[52.520934, 13.405314]])
+back = np.column_stack(h9_decode(h9_encode(src[:, 0], src[:, 1])))
+assert wgs84(src, back)[0] < 2.5e-8
+
+print('chapter 1 verified')
 ```
 
 ## Next
