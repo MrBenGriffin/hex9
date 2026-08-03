@@ -453,7 +453,7 @@ child's geometric direction class, as the state-frame and chart rules
 both do. It does NOT forbid matched labellings altogether: the
 per-cell cut freedom (each hexagon constrains only its two half
 triples, so abc|acb splits are legal) breaks the direction-field
-rigidity, and the CSAT harness `experimental/e4h_fourth_letter.py`
+rigidity, and the CSAT harness `../experimental/e4h/e4h_fourth_letter.py`
 finds globally matched THREE-letter labellings on the real closed
 octahedron — CP-SAT OPTIMAL at layers 1 and 2, perfectly balanced
 (108×3 / 972×3), independently re-validated. Ben's fourth/fifth
@@ -463,7 +463,7 @@ realisable as ONE local state-computable rule, identical at every
 depth (substitution-stable) — existence per layer is a gauge choice,
 not yet an addressing rule; at 3 letters no equivariant rule exists
 (the holonomy). First resolution (same day,
-`experimental/e4h_rule_table.py`, depth-1 rule form
+`../experimental/e4h/e4h_rule_table.py`, depth-1 rule form
 digit = T[state_class, ring_slot]): tail state alone (p_mo/c2/r_mo,
 ±octant mode) is UNSAT at k = 3, 4 AND 5; adding the octant id
 (24 classes, layer-closed) stays UNSAT at k = 3 and 4 but is SAT at
@@ -566,7 +566,7 @@ its own axis digit). The cross-host Thimphu pair that opened the
 whole question now reads 5428401E12 <-> 5428461E12.
 
 The rotating-centre {0..4} variant is now SETTLED
-(`experimental/e4h_rotating.py`): with centre pairs as first-class
+(`../experimental/e4h/e4h_rotating.py`): with centre pairs as first-class
 constraints (they cross hosts from depth 2), five total symbols is
 UNSAT jointly at depths 1-3 under the same depth-uniform context as
 the promoted rule — the depth-1 SAT was another shallow-case mirage —
