@@ -75,7 +75,7 @@ convention* made concrete):
 |---|---|---|---|
 | S2, HEALPix, rHEALPix, ISEA4T/9R (quad/9-rhombus) | the zones themselves | 1 | trivially VERIFIED (fully-nested) |
 | Hex9 (9) | rep-9 half-hexagon (d_cell) | 2 | **VERIFIED** — exact integer lattice, `h9_cell_ancestor`/`h9_descendants` |
-| ISEA4H-class (4) | half-hexagon (triamond trapezoid) | 2 | **VERIFIED planar 2026-07-10** (machine, transport_check.py): the trapezoid is rep-4 — 4 direct-similar half-scale copies, rotations {0,120,180,240}, exact to 1e-15 at depth 3. Split assignment propagates by role (centre child inherits the parent split; edge child splits along the shared coarse edge — the parent diameter rides child-grid edges via the radial-third-edge property, so no sibling is sliced). Spherical caveat in §4 |
+| ISEA4H-class (4) | half-hexagon (triamond trapezoid) | 2 | **VERIFIED planar 2026-07-10** (machine, transport_check.py): the trapezoid is rep-4 — 4 direct-similar half-scale copies, rotations {0,120,180,240}, exact to 1e-15 at depth 3. Split assignment propagates by role (centre child inherits the parent split; edge child splits along the shared coarse edge — the parent diameter rides child-grid edges via the radial-third-edge property, so no sibling is sliced). Spherical caveat in §4. **Mode-0 ownership balance VERIFIED 2026-07-29** (`check_e4h_mode_ownership`, Hex9+E4H hybrid): the two halves of every bisected edge child carry opposite parity/mode, host-side modes alternate around each coarse cell, so "owner = host holding the mode-0 half" gives every host exactly 1+3 = 4 children (the aperture count, for free from two-colour parity) and every straddler exactly one owner |
 | ISEA3H-class (3) | pentagonal tiling at 1/3 hexagon area | 3 | TO VERIFY (Sahr 2011 fig. 4, planar); see §3 note on level parity |
 | H3, ISEA7H (7) | none lattice-aligned at any stride (THEOREM, §3) — but H3 has an exact stride-2 centre-triangle transport (§3b, m = 6), and a Class-S (pinwheel-type) per-level carrier is OPEN | — | Class L settled; Class S open; ownership always exact via lattice arithmetic |
 | A5 (pentagon, 4) | unknown | — | OPEN — worth asking Felix Palmer |
@@ -314,6 +314,269 @@ Sahr's planar figures "drop to some form of icosahedral" on the sphere
   which is exactly why DGGRS metadata should declare what its
   implementation actually provides.
 
+## 4b. The triad closure lemma (Ben, 2026-07-31)
+
+Why is Hex9 "exact globally" despite failing §4's naive vertex count?
+Because S2 is discharged by a symmetry, not by a count.
+
+**Lemma (triad closure).** The side-3 triangle (9 t_cells) is tiled by
+three half-hex trapezoids related by ±120° rotation about its
+centroid, in exactly two mirror chiralities; each triangle edge
+carries exactly one trapezoid long side. Hence:
+
+1. **Uniform edge enumeration.** Developing any hinge (reflecting the
+   face across an edge line) completes each edge trapezoid to an exact
+   hexagon — the straddling edge child, with its opposite-mode other
+   half (the pair verified in §2's table) — identically on all three
+   edges. Gluing is the same local event everywhere, so face
+   identifications are label-preserving; and since reflections flip
+   chirality, edge-adjacent faces carry opposite triad chiralities
+   (the octahedron's face 2-colouring).
+
+2. **The octahedral vertex twist is a triad symmetry.** The four hinge
+   reflections around an octahedral vertex compose to rotation by
+   240° = −120° about the cone point — precisely the triad rotation.
+   The composition is orientation-preserving (even number of
+   reflections), maps face i onto face i+2 by rot 120°, and the
+   re-entrant face 5 lands exactly on rot 240° of face 1: enumeration
+   is single-valued around the cone. The twist that closes the
+   octahedron is not a perturbation the labelling must survive; it is
+   a symmetry the labelling already has.
+
+3. **"5 is odd" (why the icosahedron fails).** Five hinge reflections
+   compose to an orientation-REVERSING map, and a 5-cycle of faces
+   cannot alternate two chiralities. Both parity obstructions are the
+   same fact: the icosahedral vertex twist is odd in the 60° rotation
+   group, so it flips mode/chirality — no consistent enumeration
+   exists. This is the group-theoretic content of Hex9's move from
+   the icosahedron to the octahedron.
+
+Machine-verified: `check_triad_closure` in
+`docs/dggs/transport_check.py` — triad tiling in both chiralities with
+the long-side/edge assignment; hinge development completing exact
+hexagons on all three edges; 4-hinge composition equal to rot 240°
+with exact face matches and single-valued re-entry; 5-hinge
+composition orientation-reversing. All PASS.
+Figure: `docs/dggs/triad_closure.png` (one panel per component;
+regenerate with `python docs/dggs/triad_closure.py`).
+
+Consequences. (a) §4's naive integrality test is superseded for Hex9:
+S2 holds by symmetry, which is what "the fold/d_cell construction
+resolves vertices" was gesturing at. (b) The corner-registration of
+the layer grids (2 hosts × 120° per octahedral vertex, 12
+cone-touching hexes per layer; probed 2026-07-31) is the cell-level
+shadow of the lemma — the defect lands on cell corners, and both apex
+hosts anchor their state corner 0 at the cone point (visible in
+H9P.hx). (c) An E4H-style aperture-4 tail on the half-hex carrier
+inherits global closure for free: the vertex twist permutes whole
+descent trees without touching tail digits. Now machine-checked at
+tail level by `check_e4h_closure` (same file): with placements of the
+canonical a4 dissection anchored by the corner-end rule, rot 120°
+carries digits k→k+1 across the triad exactly; the hinge-developed
+placement is the hinge mirror of the host's, the dissections mate
+exactly along all three hinges at depth (no hanging nodes), and the
+canonical digit rule under reflection is the wing swap (1 3); and
+around the vertex the enumeration is carried face f→f+2 by rot 120°
+with digit-for-digit re-entry at rot 240° — as equalities of maps, so
+closure holds at ALL tail depths, not a sampled few. All PASS.
+Figure: `docs/dggs/e4h_closure.png` (generated by
+`docs/dggs/e4h_closure.py`).
+
+## 4c. E4H digit naming — matched pairs via the c2 classes (Ben, 2026-07-31)
+
+The positional a4 digit cycle (0 centre, 2 same-axis, 1/3 wings) cannot
+give the two halves of every fine hexagon the same digit: machine
+census of a face patch shows hinge matings pair like-with-like (0-0,
+3-3) but intra-face matings pair wing-with-AXIS (1-2) — and this is
+structural, not a labelling accident. The triad's pinwheel puts
+adjacent coarse cuts at 120°, so a shared edge child is parallel to
+one neighbour's cut (axis) and at 60° to the other's (wing). Triad
+closure (§4b) and same-number pairs are in direct conflict for any
+positional scheme.
+
+The resolution names the child by its COARSE EDGE, not its position:
+digits 1..3 = the face's three lattice direction classes (digit 0 =
+centre child). Locally this is automatic and strong: a half-hex's
+three edges are one of each class, so per-half distinctness holds; and
+around EVERY fine vertex the three meeting cells carry distinct digits
+(in particular the three centre-touching children of each face are
+{1,2,3} — their diameters run at 0°/60°/120°). The digit is simply
+which sublattice the fine centre belongs to: coarse centres (0) ∪
+edge midpoints in three direction classes (1..3) — the a4
+combinatorial ledger doing duty as the numbering.
+
+Globally the per-face class→digit namings must agree on every hinge's
+own class (shared children lie ON the hinge). Machine-checked in
+`docs/dggs/e4h_digit_csp.py` against hex9's own constants
+(H9O.edges_by_id / oid_nb / oid_mo — edge slots ARE the c2 classes):
+the 12-hinge CSP over the 8 faces is SAT with 24 namings = 6 global
+relabellings × 4 gauge (the equator is class 0 everywhere, so e.g. a
+hemisphere-wide (1 2) swap is invisible to the equatorial hinges).
+The canonical pick is the MODE LAW: phi = identity on mode-0 octants,
+the (1 2) class swap on mode-1 octants — which is precisely hex9's
+existing c2 seam apparatus ("nb.c2=1 == self.c2=2"). The E4H digits
+come from the same place the h9 enumeration came from; the symbols
+are free but the schema is rigid. All PASS.
+Figure: `docs/dggs/e4h_digit_names.png` (before/after/vertex;
+regenerate with `python docs/dggs/e4h_digit_names.py`).
+
+What is given up: "2 = same-axis" stops being a fixed per-cell rule
+(which class is a cell's axis piece varies with its cut). The
+positional alternative — keep the cycle, name shared children by
+their mode-0 owner only — remains available as the ownership reading
+(the two-verbs doctrine), but matched pairs is the stronger property
+and it is achievable.
+
+Implementation addendum (h9e PoC, same day): the per-octant naming
+above satisfies the hinge constraints but NOT per-half distinctness
+for seam-straddling trapezoids — hex9's actual seam transports
+(nb_c2p / nb_c2map) PRESERVE classes on the axial seams rather than
+swapping them, and the transport monodromy around the non-A/P-type
+vertices is a 3-cycle, so no global per-octant chart naming survives
+the full constraint set. The production rule (hhg9/h9/e4h.py) instead
+reads the class in the host's canonical STATE frame (the H9P.hx ring
+mapped onto the fixed canonical ring: ring-edge pair i runs at
+(150 + 60·i)° there, digit = i + 1): the class is carried by state,
+exactly as c2 always was — never read off a chart. Per-half
+distinctness, roundtrip stability (interior / equator seam / cone
+point, even and odd depths) and the 2·4^B count law are exercised
+end-to-end by tests/test_h9e.py — all PASS.
+
+Correction (2026-08-03, surfaced by an odd-depth run): matched pairs
+under the state-frame rule hold WITHIN a host only. Cross-host
+partners disagree systematically (adjacent hosts' state rings rotate
+with c2). The obstruction is real but has a precise scope: the
+direction-class field has 3-cycle holonomy around the cone points
+(the closing rot 240° permutes the classes), which forbids any
+DIRECTION-EQUIVARIANT naming — any rule that reads the digit off the
+child's geometric direction class, as the state-frame and chart rules
+both do. It does NOT forbid matched labellings altogether: the
+per-cell cut freedom (each hexagon constrains only its two half
+triples, so abc|acb splits are legal) breaks the direction-field
+rigidity, and the CSAT harness `experimental/e4h_fourth_letter.py`
+finds globally matched THREE-letter labellings on the real closed
+octahedron — CP-SAT OPTIMAL at layers 1 and 2, perfectly balanced
+(108×3 / 972×3), independently re-validated. Ben's fourth/fifth
+letter is not needed for existence. The open question (Ben,
+2026-08-03) is hierarchic stability: whether any such labelling is
+realisable as ONE local state-computable rule, identical at every
+depth (substitution-stable) — existence per layer is a gauge choice,
+not yet an addressing rule; at 3 letters no equivariant rule exists
+(the holonomy). First resolution (same day,
+`experimental/e4h_rule_table.py`, depth-1 rule form
+digit = T[state_class, ring_slot]): tail state alone (p_mo/c2/r_mo,
+±octant mode) is UNSAT at k = 3, 4 AND 5; adding the octant id
+(24 classes, layer-closed) stays UNSAT at k = 3 and 4 but is SAT at
+k = 5 — and the layer-1 table satisfies layer 2 VERBATIM. Ben's fifth
+symbol is precisely where the transitive rule appears: three letters
+for existence, five for a state-computable rule. Open: canonical /
+minimal-4-5 table, and extension below depth 1. Depth 2
+alone masked this: there, every host-boundary child carries digit 0;
+from depth 3 onward a thinning but never-empty population of
+cross-host class-digit pairs exists at EVERY depth (census: 450 / 50 /
+16 / 10 mismatched pairs at depths 1/3/4/5 over a fixed 600-point
+sample, zero agreeing at any depth — systematic, not marginal; the
+boundary child mix is the limit-periodicity of the transport boundary
+made flesh). Consequences: the
+ADDRESS layer (trapezoid uniqueness, truncation = binning,
+invertibility) is untouched; matched pairs is demoted from global
+invariant to within-host property; hexagon-level canonical naming is
+the ownership pin (mode-0 half), which never needed digit agreement.
+
+## 4d. The five-symbol enumeration (Ben + machine, 2026-08-03)
+
+How the matched-pairs question resolved — kept as a journey, because
+each wrong turn carried the next result.
+
+1. A depth-parity artefact in the PoC example exposed that matched
+   pairs under the state-frame rule fail across host boundaries
+   (census: 0%% agreement at every depth with cross-host class pairs;
+   depth 2 alone masked, its boundary children all centre-type).
+2. First over-claim: "globally matched naming is topologically
+   obstructed" (cone holonomy 3-cycles the direction classes). True
+   only for DIRECTION-EQUIVARIANT rules: the per-cell cut freedom
+   (abc|acb halves) evades the rigidity, and `e4h_fourth_letter.py`
+   found matched THREE-letter labellings on the closed octahedron
+   (CP-SAT, layers 1-2, perfectly balanced). Existence is cheap;
+   Ben's real question was the HIERARCHICALLY STABLE / TRANSITIVE
+   rule — local state in, digit out, same rule at every depth.
+3. Rule-table CSAT (`e4h_rule_table.py`): with tail state alone,
+   UNSAT at k = 3, 4, 5. With octant-aware state, k = 5 SAT and the
+   layer-1 table transfers verbatim to layer 2. Ben's fifth symbol is
+   the rule threshold: THREE letters for existence, FIVE for a
+   transitive rule. Rotating the centre digit (no reserved 0 — Ben)
+   compresses the total alphabet to five symbols {0..4}, optimal.
+   The minimised table: 27 physical 5-edges of 324 (proven minimum)
+   in a regular superlattice; slots s3/s4 uniformly digit 2 (the two
+   edges flanking one cut end — the old positional "2 = axis"
+   surviving inside the transitive rule); effective state is just
+   (octant, c2).
+4. Substitution stability (`e4h_stability.py`, address machinery
+   only, patches spanning all 8 octants + equator seam + cone vertex
+   + both poles): ONE five-letter table T[octant, c2, half, class]
+   (144 entries) is JOINTLY SAT for tail depths 1+2+3+4; k = 4 is
+   jointly UNSAT. The half digit is load-bearing context (joint
+   UNSAT without it at any k). Witnesses:
+   `experimental/e4h_rule_T5.json` (depths 1-3),
+   `e4h_rule_T5_d4.json` (depths 1-4).
+5. The closed form, PINNED (`e4h_closed_form.py`): adding the
+   structural clauses S1-S4 to the real depth-1..4 constraint sets is
+   SAT, and with the gauge fixed (the axis→digit bijection and a
+   single octant's phase) the solution is UNIQUE — every other phase
+   is forced. The rule, in full:
+   - S1: digit 1 anchors at class (1 + half);
+   - S2: class 3 carries the same digit q in both halves;
+   - S3: the per-(octant, c2) triple (p, q, r) rotates right as c2
+     steps;
+   - S4: each octant works over {2,3,4,5} minus its AXIS digit (the
+     four octahedral axes biject onto the four non-anchor digits);
+   - S5 (read off the forced solution): antipodal octants satisfy
+     base(o') = (q, p, r) — swap p↔q, keep r — so four base cycles,
+     one per axis, generate everything.
+   A pure-python implementation of the formula reproduces the unique
+   table exactly and independently satisfies every gathered
+   constraint (CLEAN). Axis, mode, c2, half: each ingredient is a
+   constant hex9 already carries.
+
+6. The canonical derivation (`e4h_canonical.py`): the base cycles are
+   not residual data — they derive from hex9's own adjacency:
+
+       base(o) = reversed( axis-digit of oid_nb[o][slot], slot 0..2 )
+
+   Each edge-class points at a neighbour octant; THE DIGIT NAMES THAT
+   NEIGHBOUR'S OCTAHEDRAL AXIS. The own-axis omission (S4) is then a
+   triviality (no octant neighbours its own antipode), and the
+   antipodal swap (S5) is oid_nb symmetry. The derived table equals
+   the pinned unique table exactly, is CLEAN against 41,367 gathered
+   constraints (depths 1-4, all octants + seam + vertex + poles), and
+   a dense depth-4 micro-patch with 406 complete trapezoid triples is
+   also CLEAN — the earlier depth-4 caveat is closed. The one true
+   gauge is the global axis→digit bijection: a relabelling, nothing
+   more. The five-symbol enumeration is generated, in full, by
+   S1-S3 mechanics + oid_nb + oid_cmp.
+
+PROMOTED (2026-08-03): the rule now IS the h9e digit semantics
+(hhg9/h9/e4h.py `_digit5` over `_bases()` from H9O; tail digits 0..5,
+values 6..D invalid after the E). The suite's matched-pairs test is
+global — every partner, cross-host included, at depths 1..3 with
+depth 1 asserted all-cross-host — 10/10 PASS, and the PoC example's
+enumeration panel shows solid hexagons across every border on the
+sphere, with S4 visible to the naked eye (each octant's palette lacks
+its own axis digit). The cross-host Thimphu pair that opened the
+whole question now reads 5428401E12 <-> 5428461E12.
+
+The rotating-centre {0..4} variant is now SETTLED
+(`experimental/e4h_rotating.py`): with centre pairs as first-class
+constraints (they cross hosts from depth 2), five total symbols is
+UNSAT jointly at depths 1-3 under the same depth-uniform context as
+the promoted rule — the depth-1 SAT was another shallow-case mirage —
+and becomes SAT only if the rule takes one symbol of memory (the
+first tail digit in context). Alphabet width trades against context
+memory; the reserved-0 six-value form is minimal and necessary for a
+memoryless per-level rule, and stays the production choice. Still
+open, non-blocking: vectorising the encoder; the all-depths
+stability lemma; the O4H pure-aperture-4 reading (§ pending).
+
 ## 5. Machine verification plan
 
 CSAT-style, per candidate system:
@@ -326,7 +589,9 @@ CSAT-style, per candidate system:
 3. Spherical: S1/S2 at one face edge and one vertex of the polyhedron.
 
 Artifacts so far: `docs/dggs/transport_check.py` (H3 stride-2 counts +
-½-weights + the aperture-4 half-hex rep-4 check, all PASS) and
+½-weights + the aperture-4 half-hex rep-4 check + e4h mode-0 ownership
+balance + the §4b triad-closure and e4h-closure checks, all PASS),
+`docs/dggs/e4h_digit_csp.py` (the §4c digit-naming CSP, SAT) and
 `docs/dggs/dggs_transport.py` →
 `dggs_transport.png` (the visual, six panels spanning the taxonomy,
 with pale reference-zone fills at both scales — top row
