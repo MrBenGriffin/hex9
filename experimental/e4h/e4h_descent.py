@@ -78,7 +78,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'docs' / 'dggs'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'docs' / 'dggs'))
 from transport_check import a4_halfhex_canonical
 from e4h_forward import A, BOX, build_frame
 

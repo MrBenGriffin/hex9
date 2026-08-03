@@ -17,7 +17,7 @@ Design provenance (2026-07-31, machine-verified):
   * cells are DEFINED top-down by residual classification on the
     half-hex rep-4 carrier — exact nesting, straight edges at every
     level; truncation = containment below the E (suffix-local, unlike
-    the a9 digits). Spike: experimental/e4h_descent.py, all PASS.
+    the a9 digits). Spike: experimental/e4h/e4h_descent.py, all PASS.
   * global closure over the octahedron incl. cone points:
     docs/dggs-transport-tilings.md §4b/§4c + transport_check.py
     (triad closure, e4h closure, digit CSP — all PASS/SAT).
@@ -35,7 +35,7 @@ Design provenance (2026-07-31, machine-verified):
     share their final digit, and around every fine vertex the three
     cells differ. Machine provenance: rule uniqueness mod gauge +
     CLEAN vs 41,367 constraints to depth 4
-    (experimental/e4h_closed_form.py, e4h_canonical.py; journey in
+    (experimental/e4h/e4h_closed_form.py, e4h_canonical.py; journey in
     §4c-§4d of the transport note). Hexagon-level canonical naming
     (one address per hexagon) remains the ownership pin (mode-0
     half); h9e_partner_point walks the pair.
@@ -198,7 +198,7 @@ def _bases():
     """base(o) = reversed(axis-digit of oid_nb[o][slot], slot 0..2):
     each edge class points at a neighbour octant, and the digit names
     that neighbour's octahedral axis. Derived from H9O alone;
-    machine-verified unique mod gauge (experimental/e4h_canonical.py)."""
+    machine-verified unique mod gauge (experimental/e4h/e4h_canonical.py)."""
     global _BASES
     if _BASES is None:
         from hhg9.h9.constants import H9O

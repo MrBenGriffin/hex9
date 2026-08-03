@@ -60,7 +60,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 LAYER = 6
 PATCHES = [  # (name, lat0, lat1, lon0, lon1) — octant + seam + vertex mix

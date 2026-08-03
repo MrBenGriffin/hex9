@@ -517,7 +517,7 @@ each wrong turn carried the next result.
    (144 entries) is JOINTLY SAT for tail depths 1+2+3+4; k = 4 is
    jointly UNSAT. The half digit is load-bearing context (joint
    UNSAT without it at any k). Witnesses:
-   `experimental/e4h_rule_T5.json` (depths 1-3),
+   `experimental/e4h/e4h_rule_T5.json` (depths 1-3),
    `e4h_rule_T5_d4.json` (depths 1-4).
 5. The closed form, PINNED (`e4h_closed_form.py`): adding the
    structural clauses S1-S4 to the real depth-1..4 constraint sets is

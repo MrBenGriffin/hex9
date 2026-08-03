@@ -4,16 +4,22 @@
 
 """Figure for E4H closure — enumeration matching through the a4 tail
 (docs/dggs-transport-tilings.md §4b consequence (c), machine-checked by
-transport_check.check_e4h_closure).
+transport_check.check_e4h_closure). Labels show the DIRECTION CLASSES
+(c1..c3, centre = 0) carried by the placements; production tail digits
+map each class through the five-symbol enumeration of §4d (digit =
+the octahedral axis of the neighbour octant the class points at).
 
 Three panels, one per check component:
 
   1. TRIAD  — the a4 dissection drawn in every triad trapezoid; the
-              120° triad rotation carries digits k→k+1 exactly.
+              120° triad rotation carries the classes k→k+1 exactly.
   2. EDGE   — hinge development mirrors the host placement; depth-2
-              dissections mate exactly along the hinge; in the direct
-              frame the wing digits swap (1↔3).
-  3. VERTEX — around the octahedral vertex the digits are carried
+              dissections mate exactly along the hinge. Read in one
+              frame, the wing classes SWAP under the reflection while
+              the hinge-parallel class survives — the panel displays
+              the very mechanism that makes class digits host-local
+              (§4c) and motivates the five-symbol rule (§4d).
+  3. VERTEX — around the octahedral vertex the classes are carried
               face f→f+2 by rot 120°, re-entry = rot 240°, chirality
               alternating — closure at all tail depths.
 
@@ -28,9 +34,15 @@ import numpy as np
 from transport_check import a4_halfhex_canonical
 
 S3 = math.sqrt(3)
-# digit palette (CVD-safe): 0 mid blue, 1 gold, 2 light blue, 3 dark gold
-DIG = ['#2a5fa5', '#DDAA33', '#b7d0ee', '#a97f14']
-RED, DARK = '#BB5566', '#1a1a1a'
+# Fill colour per canonical PIECE INDEX (0 = centre half-child, 1..3 =
+# edge-child halves in a4_halfhex_canonical order). CVD-safe (r/g-safe):
+# blue/gold families only, neighbours separated by lightness.
+DIG = ['#2a5fa5',   # piece 0 · mid blue
+       '#DDAA33',   # piece 1 · bright gold
+       '#b7d0ee',   # piece 2 · light blue
+       '#a97f14']   # piece 3 · dark gold
+RED = '#BB5566'     # rotation arrows, re-entry dashes, the apex star
+DARK = '#1a1a1a'    # cell edges and face outlines
 TOL = 1e-9
 
 T0, CMAPS = a4_halfhex_canonical()
@@ -106,6 +118,17 @@ def cells(pl, depth):
     return out
 
 
+def _cls_label(digs, z):
+    """Direction-class label of a cell: '0' for the centre chain, else
+    c1..c3 by the long side's face-frame direction (z runs v0..v3 with
+    the long side v3->v0)."""
+    if digs[-1] == 0:
+        return '0'
+    e = z[0] - z[3]
+    th = math.degrees(math.atan2(e.imag, e.real)) % 180
+    return f'c{int(round(th / 60.0)) % 3 + 1}'
+
+
 def draw_cells(ax, pl, depth, alpha=1.0, label=False, lw=0.8, fill=True):
     from matplotlib.patches import Polygon as MP
     for digs, z in cells(pl, depth):
@@ -115,7 +138,7 @@ def draw_cells(ax, pl, depth, alpha=1.0, label=False, lw=0.8, fill=True):
                         ec=DARK, lw=lw, alpha=alpha))
         if label:
             c = z.mean()
-            ax.annotate(''.join(map(str, digs)), (c.real, c.imag),
+            ax.annotate(_cls_label(digs, z), (c.real, c.imag),
                         fontsize=9, ha='center', va='center', color='k',
                         bbox=dict(fc='white', alpha=0.55, ec='none',
                                   pad=0.8))
@@ -144,7 +167,7 @@ def main():
     ax.annotate('120°', g + (0.55, 0.55), color=RED, fontsize=11,
                 ha='center')
     ax.set_title('1 · the a4 dissection rides the triad:\n'
-                 'rot 120° carries digits k→k+1 exactly', fontsize=11.5)
+                 'rot 120° carries the classes k→k+1 exactly', fontsize=11.5)
 
     # ---------------- 2. EDGE ----------------
     ax = axes[1]
@@ -159,8 +182,11 @@ def main():
     ax.plot([a[0] - 0.3, b[0] + 0.3], [a[1], b[1]], color=DARK, lw=1.0,
             ls='--')
     ax.annotate('hinge', (2.55, 0.07), fontsize=9, color='0.35')
-    ax.annotate('mirror mating: digits face their\nown mirror; direct-frame '
-                'rule = (1 3)', (1.0, -1.45), ha='center', fontsize=10)
+    ax.annotate('mating is exact; in one frame the wing classes SWAP\n'
+                'under reflection (c2|c3) while the hinge-parallel class\n'
+                'survives (c1|c1) — why class digits are host-local (§4c)\n'
+                'and the five-symbol rule exists (§4d)',
+                (1.0, -1.75), ha='center', fontsize=9.5)
     ax.set_title('2 · hinge development mates the dissections\n'
                  'exactly at every depth (depth 2 outlined)', fontsize=11.5)
 
@@ -182,7 +208,7 @@ def main():
             ax.add_patch(MP(np.column_stack([z.real, z.imag]), closed=True,
                             fc='none', ec=RED, lw=1.0, ls='--'))
     ax.plot(0, 0, marker='*', color=RED, ms=17, zorder=6)
-    ax.annotate('f1 re-entry = rot 240° (f1),\ndigit-for-digit  ✓',
+    ax.annotate('f1 re-entry = rot 240° (f1),\nclass-for-class  ✓',
                 (2.75, -2.0), fontsize=10, ha='center', color=RED)
     ax.set_title('3 · vertex closure carries the enumeration:\n'
                  'faces f→f+2 by rot 120°, chirality alternating',
