@@ -840,7 +840,16 @@ class Fox(Mover):
     # knob governed shredding speed rather than income — they do not
     # transfer.  Retuned against the corrected model; see sweep in the
     # session notes.
-    efficiency = 0.340  # was 0.5 - but lower bunny pop. 0.45 with higher init still gens buns.
+    efficiency = 0.55   # retuned against the CORRECTED feed(); now a
+    #                     slope, not a cliff.  Sweep (seeds 201 & 4,
+    #                     2500 ticks, carrion 55):
+    #   eff 0.50  foxM 22.4/22.1  litters 21F/23F   bunM 111/141
+    #   eff 0.55  <- chosen: between the two below
+    #   eff 0.60  foxM 35.9/27.1  litters 43F/30F   bunM 138/110
+    #   eff 0.70  foxM 38.7/40.8  litters 53F/66F   bunM 136/124 (shark-ward)
+    # Foxes now BREED at every setting (21-66 litters vs 21 in 7500
+    # ticks under the old model) — the infertile decline was the
+    # artifact, not the ecology.
     # 0.33 isn't enough to sustain a pop - it's a slow lingering extinction
     # 16k ticks foxes 9, bunnies 473, grass 0   (litters 4990B / 15F)
     #              eye_k eye_angle      dash    ardour     scent   n

@@ -516,6 +516,16 @@ def project_fill_to_noct(geom,
                 confined.extend(_iter_polys(pg_n.intersection(region)))
     if not confined:
         return []
+    # The two sides of a join trace the same triangle edge with different
+    # vertex subdivisions (offsets ~1e-12), and the exact-arithmetic union
+    # then keeps micro-sliver components instead of dissolving the shared
+    # chord.  Snap to a grid far below max_step_m (1e-9 n_oct units ≈ mm on
+    # Earth) so coincident chords are exactly coincident before the union.
+    try:
+        from shapely import set_precision
+        confined = [set_precision(p, 1e-9) for p in confined]
+    except ImportError:      # shapely < 2.0: fall back to the exact union
+        pass
     return list(_iter_polys(unary_union(confined)))
 
 

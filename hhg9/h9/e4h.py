@@ -43,10 +43,29 @@ Design provenance (2026-07-31, machine-verified):
     nibble alignment (dense packing belongs to the optional u64 layer);
     values 2..0xD after the E are invalid — a free validity check.
 
-Provisional pins (PoC): the canonical half-0 side is the T0-image of
-the state ring (H9P.hx corner order, corner-0 anchored); frames for
-seam-overhang octants are fitted with 0.9-inset ring points to break
-the two-corner chirality degeneracy.
+SYMBOLIC/STRUCTURAL (2026-08-05): no geometric probes remain — every
+constant below derives from H9P/H9O tables at import/first use:
+  * the state frame of a host is a CONSTANT similarity per
+    (p_mo, c2) — the centred H9P.hx ring is exactly the canonical
+    ring under conjugation (H9P.hx winds clockwise, the canonical
+    ring counter-clockwise, so the reflection is structural) — scaled
+    by 3^layer and translated by the host centre. No fitting, no
+    chirality search, no inset points; one exact h9_dec per host.
+  * points in a neighbouring octant are UNFOLDED into the host's
+    frame by the exact inverse of fold_to_octant's per-seam isometry
+    (residuals are taken in the host's unfolded frame — the local-net
+    doctrine). Binned points never sit two seams from their host
+    (census: experimental/e4h/e4h_symbolic.py).
+  * class is an integer rotation accumulator: the rep-4 child maps
+    rotate by (0, 120, 180, 240) degrees, the half-1 map by 180, and
+    class = ((s - 1) mod 3) + 1 in 60-degree units s. No angles are
+    measured; decode inverts digit→class→piece by the same integers.
+Byte-parity vs the geometric PoC: 856-point global census (all
+octants, equator seam, cone-point rings, poles) × four (layer, depth)
+regimes — identical everywhere off cut lines; the only diffs are
+knife-edge points ON a cut (piece margin ~1e-13, frames agree to
+2.6e-13) where either side is a valid answer. Decode parity ≤4e-10,
+symbolic roundtrip 100%.
 
 Public API: h9e_encode, h9e_decode, h9e_label, h9e_split,
 h9e_partner_point.
@@ -58,7 +77,6 @@ import numpy as np
 
 E_MARK = 0xE
 _TGT = np.exp(1j * (np.pi / 6 + np.pi / 3 * np.arange(6)))  # canonical ring
-_TOL = 1e-9
 
 
 # ---------------------------------------------------------------- canonical
@@ -95,6 +113,29 @@ _Z0, _MAPS, _HALVES, _EDGES = _canonical()
 _CEN = complex(-2.0 / (3.0 * math.sqrt(3.0)), 0.0)
 
 
+def _rotations():
+    """Rotation (units of 60°) of each rep-4 child map: (0, 2, 3, 4),
+    asserted against the canonical maps. Class transport is these
+    integers — no angle is ever measured at runtime."""
+    rot = []
+    for a, _b in _MAPS:
+        u = (math.degrees(math.atan2(a.imag, a.real)) % 360) / 60.0
+        assert abs(u - round(u)) < 1e-9, 'child map rotation off-lattice'
+        rot.append(int(round(u)) % 6)
+    assert rot == [0, 2, 3, 4], f'unexpected child rotations {rot}'
+    return tuple(rot)
+
+
+_ROT = _rotations()
+_ROT3_PIECE = {2: 1, 0: 2, 1: 3}   # rot mod 3 -> edge piece (distinct mod 3)
+
+
+def _cls(s):
+    """Direction class (1..3) of a composition whose accumulated
+    rotation is s units of 60° (the half-1 map contributes 3)."""
+    return ((s - 1) % 3) + 1
+
+
 def _score(w, edges=_EDGES):
     return min(((e.conjugate() * (w - p)).imag for p, e in edges))
 
@@ -107,11 +148,69 @@ def _classify(w, cand):
 
 
 # ------------------------------------------------------------------- state
-def _ring(host, reg, b_oct):
-    """State ring of a host: corners folded to true octants, plus the
-    host centre and primary octant. Mirrors _anchor_hex_latlon."""
-    from hhg9.h9 import H9P
-    from hhg9.h9.polygon import fold_to_octant
+_A = None
+
+
+def _state_frames():
+    """A[p_mo, c2]: the constant similarity taking the CENTRED H9P.hx
+    ring (host chart, clockwise) onto the canonical ring _TGT (CCW)
+    under conjugation — the reflection is structural, not searched.
+    Verified on all 6 corners at first use."""
+    global _A
+    if _A is None:
+        from hhg9.h9 import H9P
+        A = np.zeros((2, 3), dtype=np.complex128)
+        for mo in range(2):
+            for c2 in range(3):
+                hx = H9P.hx[mo, c2]
+                rel = hx - hx.mean(axis=0)
+                z = rel[:, 0] + 1j * rel[:, 1]
+                a = _TGT[0] / np.conj(z[0])
+                assert np.max(np.abs(a * np.conj(z) - _TGT)) < 1e-9, \
+                    f'hx[{mo},{c2}] ring is not canonical under conj'
+                A[mo, c2] = a
+        _A = A
+    return _A
+
+
+_UNFOLD = None
+
+
+def _unfolds():
+    """UNFOLD[o, g]: 3x2 affine taking neighbour octant g's canonical
+    frame into o's EXTENDED frame — the exact inverse of
+    fold_to_octant's per-seam isometry (same corner-matching
+    construction, solved backwards)."""
+    global _UNFOLD
+    if _UNFOLD is None:
+        from hhg9.h9 import H9P
+        from hhg9.h9.constants import H9O
+        from hhg9.h9.polygon import SV_CORNER_AXIS
+        tab = {}
+        for o in range(8):
+            mode = int(H9O.oid_mo[o])
+            tri = H9P.sv[mode]
+            ax = SV_CORNER_AXIS[mode]
+            tri_b = H9P.sv[1 - mode]
+            axis_b = SV_CORNER_AXIS[1 - mode]
+            for k in range(3):
+                a, b = tri[(k + 1) % 3], tri[(k + 2) % 3]
+                e = b - a
+                e = e / np.hypot(e[0], e[1])
+                d = tri[k] - a
+                refl = a + 2.0 * float(d @ e) * e - d
+                src = np.array([a, b, refl])
+                axes = (ax[(k + 1) % 3], ax[(k + 2) % 3], ax[k])
+                dst = np.array([tri_b[axis_b.index(x)] for x in axes])
+                m = np.linalg.solve(np.column_stack([dst, np.ones(3)]), src)
+                tab[o, o ^ (1 << ax[k])] = m
+        _UNFOLD = tab
+    return _UNFOLD
+
+
+def _host_info(host, b_oct):
+    """(centre, oid, c2, p_mo, layer) of a host: one exact h9_dec plus
+    the tail-nibble state unpack. No ring corners, no folding."""
     from hhg9.h9.tail import tail_unpack_reversible
     from hhg9.h9.uuid_address import h9_dec
     layer = _host_layer(host)
@@ -120,41 +219,15 @@ def _ring(host, reg, b_oct):
     oid = int(dpts.oid[0])
     c2, _r, p_mo = tail_unpack_reversible(
         np.array([host.int & 0xF], dtype=np.uint8))
-    hx = H9P.hx[int(p_mo[0]), int(c2[0])]
-    ring_rel = (hx - hx.mean(axis=0)) * (3.0 ** -layer)
-    fxy, foid = fold_to_octant(c[None, :] + ring_rel, oid)
-    ixy, ioid = fold_to_octant(c[None, :] + 0.9 * ring_rel, oid)
-    return (fxy, np.asarray(foid), ixy, np.asarray(ioid), c, oid,
-            int(c2[0]))
+    return c, oid, int(c2[0]), int(p_mo[0]), layer
 
 
-def _frame(ring, g):
-    """Similarity chart-of-octant-g -> canonical for a host's ring: fit
-    on the ring corners in g plus the 0.9-inset points (the insets
-    break the 2-point chirality degeneracy for seam-overhang frames)."""
-    fxy, foid, ixy, ioid = ring[0], ring[1], ring[2], ring[3]
-    m, mi = foid == g, ioid == g
-    if m.sum() + mi.sum() < 3:
-        raise NotImplementedError(
-            'octant shares too little of the host ring for a frame')
-    src = np.vstack([fxy[m], ixy[mi]])
-    tgt = np.concatenate([_TGT[m], 0.9 * _TGT[mi]])
-    return _fit(src, tgt)
-
-
-def _fit(src_xy, tgt):
-    """Similarity (reflection allowed) src -> tgt; ((a, b, refl))."""
-    s = src_xy[:, 0] + 1j * src_xy[:, 1]
-    best = None
-    for rf in (False, True):
-        ss = np.conj(s) if rf else s
-        M = np.column_stack([ss, np.ones(len(ss))])
-        sol = np.linalg.lstsq(M, tgt, rcond=None)[0]
-        r = np.max(np.abs(M @ sol - tgt))
-        if best is None or r < best[0]:
-            best = (r, (sol[0], sol[1], rf))
-    assert best[0] < 1e-6, 'state ring is not similar to the canonical ring'
-    return best[1]
+def _host_frame(info):
+    """State frame of a host in its own octant chart:
+    fr = (a, b, rf=True) with a = A[p_mo, c2]·3^layer, b = −a·conj(c)."""
+    c, _oid, c2, p_mo, layer = info
+    a = _state_frames()[p_mo, c2] * (3.0 ** layer)
+    return a, -a * np.conj(complex(c[0], c[1])), True
 
 
 def _fwd(fr, z):
@@ -173,20 +246,6 @@ def _host_layer(host):
     nib = _batch_int_to_nibbles([host.int], n=32)[0]
     sent = np.flatnonzero(nib[:31] == 0x0F)
     return int(sent[0]) - 1 if len(sent) else 30
-
-
-def _class_of(comp):
-    """Direction class of the current piece from its diameter direction
-    in the CANONICAL (state ring) frame. Ring edges i / i+3 run at
-    (150 + 60 i) mod 180 in canonical coordinates; the piece's long
-    side is parallel to exactly one pair. Class = i + 1 (1..3).
-    Frame-independent, fold-free, suffix-local, depth-invariant."""
-    e = comp[0] * (_Z0[0] - _Z0[3])
-    th = math.degrees(math.atan2(e.imag, e.real)) % 180
-    i = int(round((th - 150.0) / 60.0)) % 3
-    assert abs((th - 150.0 - 60.0 * ((round((th - 150.0) / 60.0)))) ) < 1.0, \
-        f'diameter direction {th} off the canonical lattice'
-    return i + 1
 
 
 # ---- the five-symbol enumeration (transport note §4d, canonical) ----
@@ -223,6 +282,14 @@ def _digit5(oid, c2, half, cls):
     if cls == 3:
         return b[(1 - c2) % 3]
     return b[(0 - c2) % 3] if half == 0 else b[(2 - c2) % 3]
+
+
+def _digit_to_class(oid, c2, half):
+    """Inverse of _digit5 for a context: {digit: class}. The three
+    classes always carry three distinct digits (rule property)."""
+    d2c = {_digit5(oid, c2, half, cl): cl for cl in (1, 2, 3)}
+    assert len(d2c) == 3, 'digit rule lost injectivity'
+    return d2c
 
 
 # -------------------------------------------------------------------- API
@@ -275,26 +342,29 @@ def h9e_encode(lats, lons, layer=6, depth=2, reg=None):
     O = np.asarray(bp.oid)
     hosts = h9_bin_pts(bp, layer)
 
-    rings, frames = {}, {}
+    infos, frames = {}, {}
     out = [None] * len(hosts)
     for i, (u, p, g) in enumerate(zip(hosts, P, O)):
-        kf = (u.int, int(g))
-        if kf not in frames:
-            if u.int not in rings:
-                rings[u.int] = _ring(u, reg, b_oct)
-            frames[kf] = _frame(rings[u.int], int(g))
-        fr = frames[kf]
-        oid_h, c2_h = rings[u.int][5], rings[u.int][6]
-        w = _fwd(fr, complex(p[0], p[1]))
+        if u.int not in infos:
+            infos[u.int] = _host_info(u, b_oct)
+            frames[u.int] = _host_frame(infos[u.int])
+        _c, o, c2_h, _mo, _lay = infos[u.int]
+        g = int(g)
+        if g != o:
+            m = _unfolds().get((o, g))
+            if m is None:
+                raise ValueError(
+                    'point lies two seams from its host — unreachable '
+                    'for binned points (census: e4h_symbolic.py)')
+            p = np.array([p[0], p[1], 1.0]) @ m
+        w = _fwd(frames[u.int], complex(p[0], p[1]))
         half, w = _classify(w, _HALVES)
-        comp = _HALVES[half]                       # canonical -> canonical
+        s = 3 * half
         digits = []
         for _ in range(depth):
             k, w = _classify(w, _MAPS)
-            a2, b2 = _MAPS[k]
-            comp = (comp[0] * a2, comp[0] * b2 + comp[1])
-            digits.append(0 if k == 0 else
-                          _digit5(oid_h, c2_h, half, _class_of(comp)))
+            s += _ROT[k]
+            digits.append(0 if k == 0 else _digit5(o, c2_h, half, _cls(s)))
         nib = _batch_int_to_nibbles([u.int], n=32)[0].copy()
         nib[layer + 1] = E_MARK
         nib[layer + 2] = half
@@ -306,41 +376,34 @@ def h9e_encode(lats, lons, layer=6, depth=2, reg=None):
 
 def h9e_decode(uuids, reg=None, _probe=_CEN):
     """Decode E4H addresses to representative lat/lon (leaf trapezoid
-    centroids). Exact suffix-local fold; one h9_dec per unique host."""
+    centroids). Exact suffix-local fold; one h9_dec per unique host;
+    digit→piece inversion is pure integers."""
     from hhg9 import Points, Registrar
     from hhg9.h9.polygon import fold_to_octant
     reg = reg or Registrar()
     g_gcd, b_oct = reg.domain('g_gcd'), reg.domain('b_oct')
-    rings, frames = {}, {}
+    infos, frames = {}, {}
     lats, lons = np.zeros(len(uuids)), np.zeros(len(uuids))
     for i, u in enumerate(uuids):
         host, half, digits = h9e_split(u)
-        if host.int not in rings:
-            rings[host.int] = _ring(host, reg, b_oct)
-            frames[host.int] = _frame(rings[host.int],
-                                      rings[host.int][5])
-        oid = rings[host.int][5]
-        c2h = rings[host.int][6]
+        if host.int not in infos:
+            infos[host.int] = _host_info(host, b_oct)
+            frames[host.int] = _host_frame(infos[host.int])
+        _c, oid, c2h, _mo, _lay = infos[host.int]
         fr = frames[host.int]
         comp = _HALVES[half]
+        s = 3 * half
+        d2c = _digit_to_class(oid, c2h, half)
         for d in digits:
             if d == 0:
-                a2, b2 = _MAPS[0]
+                k = 0
             else:
-                want = [cl for cl in (1, 2, 3)
-                        if _digit5(oid, c2h, half, cl) == d]
-                if len(want) != 1:
+                if d not in d2c:
                     raise ValueError(f'digit {d} invalid in this context')
-                pick = None
-                for k in (1, 2, 3):
-                    a2, b2 = _MAPS[k]
-                    t = (comp[0] * a2, comp[0] * b2 + comp[1])
-                    if _class_of(t) == want[0]:
-                        assert pick is None, 'ambiguous class'
-                        pick = (a2, b2)
-                assert pick is not None, f'class {want[0]} matches no child'
-                a2, b2 = pick
+                k = _ROT3_PIECE[(d2c[d] - s) % 3]
+            a2, b2 = _MAPS[k]
             comp = (comp[0] * a2, comp[0] * b2 + comp[1])
+            s += _ROT[k]
         rep = _inv(fr, comp[0] * _probe + comp[1])
         xy, roid = fold_to_octant(np.array([[rep.real, rep.imag]]), oid)
         gp = reg.project(Points(xy, b_oct, oid=np.asarray(roid)),

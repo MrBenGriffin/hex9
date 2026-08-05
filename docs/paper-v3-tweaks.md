@@ -765,6 +765,51 @@ outputs (Ben's current examples sweep) before numbers can be replaced;
 
 ### Candidate additions [CALL]
 
+- ☐ **Front-door fold construction ("the hexagons choose the octahedron")**,
+  discussed 2026-08-04. Twelve regular hexagons, each folded along a long
+  diagonal, glued in pairs into six V-cups (one per octahedral vertex,
+  2 × 120° = 240° cone), closed into the regular octahedron. Existence =
+  the papercraft; uniqueness = Alexandrov's gluing theorem (all cone
+  angles < 360° ⇒ convex metric ⇒ unique convex realisation; symmetry ⇒
+  regular octahedron); exclusivity = 240° is the only Platonic
+  triangle-vertex angle divisible by the hexagon's 120° (tet 180°, icosa
+  300° — "5 is odd" made tactile). Honesty note: a single cup is a
+  degree-4 origami vertex (four 60° sectors) with one DOF — the *closure*
+  is what pins the dihedral arccos(−1/3); local move free, global
+  closure determined (the paper's thesis enacted). Edge accounting at
+  edge-length 3: 24 of 36 unit segments are hexagon creases, the other
+  12 are cup seams — every octahedron-edge segment bent, nothing else
+  bent. Poles/cone points land at hexagon CORNERS, not cells ("poles are
+  corners, not cells" — no-exceptional-cell-type, visible). Proposed
+  placement: short intuition passage BEFORE the axioms, answering "why
+  the octahedron?" constructively; full expansion (Alexandrov
+  formalities, chirality census) deferred to a standalone note if space
+  is tight. ASSETS: print template docs/paper_figures/hex_map2.pdf
+  (3 pp × 4 tabbed hexagons, AK-projected world + graticule + hex grid);
+  photo of the built model docs/IMG_7586.png (figure candidate — a
+  photograph in a proofs paper is disarming; Ben believes this build IS
+  the current template — updated Caspian/lakes — though an earlier
+  print+photo also existed; he plans a cleaner reshoot without the desk
+  background for the figure); generator examples/ex0122_hex_tiles.py
+  (L0 12-tile template done; a 108-tile L1 print variant is mooted but
+  not yet produced). Companion 3D print:
+  experimental/openscad/h9_hinged_hex.scad — a TRUE-SCALE cell (level
+  param; L16 = 187.93 mm long diameter from the authalic-ideal area)
+  hinged on its long diagonal, living-hinge V-groove whose bevel faces
+  butt at exactly acos(-1/3) (hinge land width derived, not tuned),
+  magnet-boss closure; modes flat/folded, both render manifold, folded
+  dihedral machine-checked 109.468° vs 109.4712° target (normal-rounding
+  residual only). Map engraving: gen_engrave.py (same dir) reuses the
+  ex0122 pipeline to cut land edges + L1 cell boundaries (Ben's
+  editorial cut) 0.4 mm into the outer face, hinge-on-X aligned,
+  X-mirrored so it reads correctly on the print; engrave_data.scad is
+  the generated include (engrave_<addr>.scad copies kept; '0' = the
+  Africa/Guinea-to-Arabia tile, verified visually + manifold). TODO at drafting time: variant PDF with
+  dashed crease lines (long diagonals, all mountain folds, map outward),
+  edge-matching labels on tabs, and an instructions page that doubles as
+  the two-sentence proof; ship template as arXiv ancillary (anc/).
+  Leave hex_map2.pdf itself untouched.
+
 - ☐ **Curve/linearisation work is entirely absent from the paper.** Now
   in both libraries: a deterministic hierarchical space-filling curve
   from the proven 5-pattern self-similar grammar over the Hamiltonian
