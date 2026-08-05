@@ -24,6 +24,16 @@
 // or PP hinge survives many folds; PLA manages a handful — fold gently once the
 // magnets are in. Magnets: 6 x 2 mm discs, pockets sized 6.2 x 2.1 with a 0.2 mm
 // proud face; check polarity (attracting across the seam) before gluing.
+//
+// Edge joining: with use_edge_magnets, the six outer edges get two pockets each
+// (12 more discs) so neighbouring tiles snap together — in-face neighbours are
+// coplanar, so the edge faces mate square. Polarity is antisymmetric: adjacent
+// tiles are related by a 180 deg flip about the shared edge midpoint, which maps
+// the +s/4 pocket onto the -s/4 pocket, so gluing N-out at the dimpled pocket
+// and S-out at the plain one makes ANY edge attract ANY edge of any tile. (One
+// centred magnet per edge cannot do this — hex-tiling parity defeats every
+// single-magnet convention.) The pockets bore horizontally; the small bridge
+// over a 6.2 mm bore prints fine without support.
 
 /* [Model] */
 mode = "flat"; // [flat: print-in-place hinged, folded: display solid at the dihedral]
@@ -53,6 +63,14 @@ boss_h = 5.0; // boss height above the plate (deepens the bevel face for pockets
 boss_w = 14.0; // boss width along the hinge
 boss_d = 9.0; // boss depth away from the hinge
 
+/* [Edge magnets] */
+// Tile-to-tile joining pockets on the six outer edges — see header note on the
+// antisymmetric polarity convention (N-out at the dimpled pocket).
+use_edge_magnets = true;
+edge_boss_w = 12.0; // boss width along the edge
+edge_boss_d = 6.0; // boss depth inward from the edge face
+edge_boss_h = 5.0; // boss height above the plate (bore needs magnet_d + ~2 walls)
+
 /* [Quality] */
 $fn = 48;
 
@@ -73,6 +91,44 @@ boss_x = [-s / 2, s / 2];
 echo(str("Hex9 L", level, ": side ", s, " mm, long diameter ", 2 * s,
          " mm, across flats ", 2 * h, " mm, hinge land ", 2 * gap0, " mm"));
 
+// ---- edge magnets ----------------------------------------------------------
+// Outer edges of the +y half, in CCW boundary order (interior LEFT of a->b).
+edge_ab = [[[s, 0], [s / 2, h]], [[s / 2, h], [-s / 2, h]], [[-s / 2, h], [-s, 0]]];
+edge_off = s / 4; // pocket stations at +-s/4: the 180 deg flip that mates two
+                  // tiles about an edge midpoint maps one station onto the other
+z_edge = (thickness + edge_boss_h) / 2; // bore axis height above the bed
+
+// Place children() at pocket station t (-1 or +1) along edge a->b, in a frame
+// with +x along the edge and +y pointing into the tile.
+module at_edge(a, b, t) {
+    u = (b - a) / norm(b - a);
+    translate((a + b) / 2 + t * edge_off * u)
+        rotate([0, 0, atan2(u[1], u[0])])
+            children();
+}
+
+module edge_bosses() {
+    for (e = edge_ab, t = [-1, 1])
+        at_edge(e[0], e[1], t)
+            translate([-edge_boss_w / 2, 0, thickness - 0.2])
+                cube([edge_boss_w, edge_boss_d, edge_boss_h + 0.2]);
+}
+
+// Horizontal bore from the edge face inward, plus the polarity dimple on the
+// boss top at station dimple_t. dimple_t is per-half: the -y half is a mirror,
+// which reverses boundary orientation, so its dimple must sit at the OTHER
+// station or three of the six edges would break the polarity convention.
+module edge_pockets(dimple_t) {
+    for (e = edge_ab, t = [-1, 1])
+        at_edge(e[0], e[1], t) {
+            translate([0, magnet_depth, z_edge]) rotate([90, 0, 0])
+                cylinder(d = magnet_d, h = magnet_depth + 0.1);
+            if (t == dimple_t)
+                translate([0, edge_boss_d / 2, thickness + edge_boss_h - 0.6])
+                    cylinder(d = 2, h = 0.7);
+        }
+}
+
 // ---- one half (+y), hinge along the x axis ---------------------------------
 module half_body() {
     linear_extrude(thickness)
@@ -81,6 +137,7 @@ module half_body() {
         for (xb = boss_x)
             translate([xb - boss_w / 2, 0, thickness - 0.2])
                 cube([boss_w, boss_d, boss_h + 0.2]);
+    if (use_edge_magnets) edge_bosses();
 }
 
 // V-groove bevel: removes everything on this half's hinge side above the web,
@@ -103,17 +160,22 @@ module pocket(xb) {
 
 module label_cut() {
     depth = 0.4;
+    // Include the tile address when engrave data is loaded, so a printed set
+    // of the 12 tiles stays tellable apart from the inner face.
+    lbl = str("Hex9 L", level,
+              len(engrave_polys) > 0 ? str("  tile ", engrave_address) : "");
     translate([0, h * 0.55, thickness - depth])
         linear_extrude(depth + 0.1)
-            text(str("Hex9 L", level), size = min(8, s / 10),
+            text(lbl, size = min(8, s / 10),
                  halign = "center", valign = "center");
 }
 
-module half(with_label = false) {
+module half(with_label = false, dimple_t = -1) {
     difference() {
         half_body();
         bevel_cut();
         if (use_magnets) for (xb = boss_x) pocket(xb);
+        if (use_edge_magnets) edge_pockets(dimple_t);
         if (with_label && label_text) label_cut();
     }
 }
@@ -161,5 +223,5 @@ module maybe_folded(sgn) {
         children();
 }
 
-maybe_folded(1) engraved(1) half(with_label = true);
-maybe_folded(-1) engraved(-1) mirror([0, 1, 0]) half(with_label = false);
+maybe_folded(1) engraved(1) half(with_label = true, dimple_t = -1);
+maybe_folded(-1) engraved(-1) mirror([0, 1, 0]) half(with_label = false, dimple_t = 1);
