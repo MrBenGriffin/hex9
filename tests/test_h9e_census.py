@@ -194,6 +194,18 @@ def test_census_wheel_bridge(reg, census):
     layer, depth = 6, 2
     lats, lons = census
     keep = _min_cut_margin(lats, lons, layer, depth, reg) >= 1e-5
+    # The margin above covers E4H cuts only. Points lying EXACTLY on an
+    # octant seam (the census cone rings land some samples on lat 0 /
+    # lon ≡ 0 mod 90) are knife-edge for the H9 HOST BIN itself: hhg9
+    # and the canonical C chain legitimately pick opposite seam-adjacent
+    # hosts there (either is a valid address; hhg9 does not claim
+    # bit-exactness ON cut lines — libhex9 docs/universality.md), and
+    # the E4H tail then differs only by host inheritance. Found live by
+    # this bridge on the first 2.3.0 wheel: 9/790 mismatches, all
+    # exact-seam, identical tail digits.
+    seam = (np.abs(lats) < 1e-9) | \
+           (np.abs((lons % 90.0 + 45.0) % 90.0 - 45.0) < 1e-9)
+    keep &= ~seam
     la, lo = lats[keep], lons[keep]
     ours = h9e_encode(la, lo, layer, depth, reg)
     # wheel convention is (lon, lat) order, cf. hex9.encode

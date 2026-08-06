@@ -38,7 +38,7 @@ aim; super_petals -> k_ring(2); the own-hex -> ring1 -> ring2 search
 -> vision_cone membership by distance; HexGrid -> the wheel.
 
 Run:  python examples/ex_0511_hexen.py
-  ->  output/hexen.gif (animation), output/hexen.png (state + curves)
+  ->  output/hexen.mp4 (animation), output/hexen.png (state + curves)
       python examples/ex_0511_hexen.py --live
   ->  real-time window (runs until closed; ~25 fps, 3 ticks/frame)
 """
@@ -60,7 +60,9 @@ hex9.init()
 RNG = np.random.default_rng(2012)
 
 # ── world ────────────────────────────────────────────────────────────
-CENTRE = (35.0, 0.02)              # (lon, lat): field straddles the seam
+# centre = 41222.3
+CENTRE = (-44.72293969064113, 35.77428161106299)
+# CENTRE = (35.0, 0.02)              # (lon, lat): field straddles the seam
 FIELD_K = 18                        # field = k-disk of the centre hex
 
 # ── the hierarchy: each process at the grain it deserves ─────────────
@@ -840,7 +842,7 @@ class Fox(Mover):
     # knob governed shredding speed rather than income — they do not
     # transfer.  Retuned against the corrected model; see sweep in the
     # session notes.
-    efficiency = 0.55   # retuned against the CORRECTED feed(); now a
+    efficiency = 0.345   # retuned against the CORRECTED feed(); now a
     #                     slope, not a cliff.  Sweep (seeds 201 & 4,
     #                     2500 ticks, carrion 55):
     #   eff 0.50  foxM 22.4/22.1  litters 21F/23F   bunM 111/141
@@ -1121,12 +1123,12 @@ def main(ticks=3000, frame_every=12, live=False):
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
     from matplotlib.patches import Polygon as MplPoly
-    from matplotlib.animation import FuncAnimation, PillowWriter
+    from matplotlib.animation import FuncAnimation, FFMpegWriter
 
     sim = Hexen()
     w = sim.world
 
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(8, 8), dpi=200)
     lonc, latc = centroids(sorted(w.field))
     pad = w.pitch * 1.2
     for kk in sorted(w.field):
@@ -1216,12 +1218,12 @@ def main(ticks=3000, frame_every=12, live=False):
         expecting.set_data([m.lon for m in mums], [m.lat for m in mums])
         draw_agents()
         nf, nb, gs = sim.history[-1][:3]
-        title.set_text(f'Hexen (2012 -> hex9)   tick {len(sim.history)}   '
-                       f'foxes {nf}  bunnies {nb}  grass {gs:.0f}k   '
-                       f'expecting {len(mums)}  litters '
-                       f'{sim.litters["B"]}B/{sim.litters["F"]}F  '
-                       f'genocides F{sim.genocides["F"]}'
-                       f'/B{sim.genocides["B"]}/G{sim.genocides["S"]}')
+        title.set_text(f'{len(sim.history):05}; '
+                       f'F{nf:03} B{nb:05} G{gs:03.0f}k '
+                       # f'exp. {len(mums)} litters; '
+                       # f'{sim.litters["B"]}B/{sim.litters["F"]}F; '
+                       f'☠F{sim.genocides["F"]} '
+                       f'☠B{sim.genocides["B"]} ☠G{sim.genocides["S"]}')
         return []
 
     if live:
@@ -1235,8 +1237,10 @@ def main(ticks=3000, frame_every=12, live=False):
         return
 
     anim = FuncAnimation(fig, step, frames=frames, blit=False)
-    anim.save('output/hexen.gif', writer=PillowWriter(fps=12), dpi=80)
-    print(f'wrote output/hexen.gif ({frames} frames, {ticks} ticks)')
+    writer = FFMpegWriter(fps=12, codec='h264',
+                          extra_args=['-pix_fmt', 'yuv420p'])
+    anim.save('output/hexen.mp4', writer=writer, dpi=200)
+    print(f'wrote output/hexen.mp4 ({frames} frames, {ticks} ticks)')
 
     h = np.array(sim.history)
     fig2, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -1289,5 +1293,5 @@ def report(sim):
 if __name__ == '__main__':
     LIVE = '--live' in sys.argv
     SEED = '--seed' in sys.argv
-    np.random.seed(SEED if SEED else 4007)
-    main(ticks=6000, frame_every=3 if LIVE else 10, live=LIVE)
+    np.random.seed(SEED if SEED else 201)
+    main(ticks=9000, frame_every=3 if LIVE else 3, live=LIVE)
