@@ -49,7 +49,6 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import hex9
 from ex_0510_fox_and_rabbits import (LAYER, aim, centroids, encode_keys,
                                      encode_keys_multi, gc_angle, gc_bearing,

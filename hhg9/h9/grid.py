@@ -988,8 +988,18 @@ class HexMesh:
             latmin, latmax = np.nanmin(lat, axis=1), np.nanmax(lat, axis=1)
             lonmin, lonmax = np.nanmin(lon, axis=1), np.nanmax(lon, axis=1)
         plat0, plat1, plon0, plon1 = poly_bbox
-        keep = ((latmin <= plat1) & (latmax >= plat0) &
-                (lonmin <= plon1) & (lonmax >= plon0))
+        # Seam fold: projection wraps beyond-octant vertices to the far
+        # side of the antimeridian, so a node hugging +/-180 yields a
+        # WRAPPED lon interval whose [min, max] reads as its complement
+        # (observed: a node covering lon 167.7..180 reporting
+        # [-180, 167.7], wrongly pruned against a 176..180 polygon —
+        # dropping every cell of a small seam-hugging cover). A span
+        # > 180 deg is the unmistakable wrap signature: treat such a
+        # node's lon footprint as "may overlap anything" — pruning
+        # stays exact-conservative, the leaf test remains the decider.
+        lon_hit = ((lonmax - lonmin > 180.0) |
+                   ((lonmin <= plon1) & (lonmax >= plon0)))
+        keep = (latmin <= plat1) & (latmax >= plat0) & lon_hit
         return np.nan_to_num(keep, nan=False)
 
     @classmethod

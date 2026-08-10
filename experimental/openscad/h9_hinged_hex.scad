@@ -57,9 +57,9 @@ face_clearance = 0.0; // extra half-gap, mm; >0 stops short of the exact dihedra
 
 /* [Magnets] */
 use_magnets = true;
-magnet_d = 6.2; // pocket diameter for 6 mm discs
-magnet_depth = 2.1; // pocket depth for 2 mm discs
-boss_h = 5.0; // boss height above the plate (deepens the bevel face for pockets)
+magnet_d = 10.1; // pocket diameter for 6 mm discs
+magnet_depth = 2.0; // pocket depth for 2 mm discs
+boss_h = 8.0; // boss height above the plate (deepens the bevel face for pockets)
 boss_w = 14.0; // boss width along the hinge
 boss_d = 9.0; // boss depth away from the hinge
 
@@ -69,10 +69,10 @@ boss_d = 9.0; // boss depth away from the hinge
 use_edge_magnets = true;
 edge_boss_w = 12.0; // boss width along the edge
 edge_boss_d = 6.0; // boss depth inward from the edge face
-edge_boss_h = 5.0; // boss height above the plate (bore needs magnet_d + ~2 walls)
+edge_boss_h = 8.0; // boss height above the plate (bore needs magnet_d + ~2 walls)
 
 /* [Quality] */
-$fn = 48;
+$fn = 128;
 
 // ---- derived geometry ------------------------------------------------------
 R_AUTH = 6371007.1810; // WGS84 authalic radius, m
